@@ -53,3 +53,7 @@ export const getICPProfiles = () => api.get('/icp')
 export const createICPProfile = (data) => api.post('/icp', data)
 export const updateICPProfile = (id, data) => api.patch(`/icp/${id}`, data)
 export const deleteICPProfile = (id) => api.delete(`/icp/${id}`)
+// ─── PERSONAS ────────────────────────────────────────────────
+export const getPersonas = () => api.get('/personas')
+export const createPersona = (data) => api.post('/personas', data)
+export const deletePersona = (id) => api.delete(`/personas/${id}`)

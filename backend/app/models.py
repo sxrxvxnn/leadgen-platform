@@ -64,3 +64,11 @@ class ICPUpdate(BaseModel):
     fit_score: Optional[int] = None
     fit_reason: Optional[str] = None
     notes: Optional[str] = None
+
+class PersonaCreate(BaseModel):
+    name: str
+    filters: Optional[dict] = {}
+
+class PersonaUpdate(BaseModel):
+    name: Optional[str] = None
+    filters: Optional[dict] = None

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate
+from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate
 from .database import supabase
 
 router = APIRouter()
@@ -224,6 +224,53 @@ async def delete_icp_profile(
             .eq("user_id", user_id)\
             .execute()
         return {"message": "ICP profile deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # ─── PERSONA ROUTES ──────────────────────────────────────────
+
+@router.get("/personas")
+async def get_personas(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    try:
+        response = supabase.table("personas")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .order("created_at", desc=True)\
+            .execute()
+        return {"personas": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/personas")
+async def create_persona(
+    persona: PersonaCreate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        data = persona.dict()
+        data["user_id"] = user_id
+        response = supabase.table("personas").insert(data).execute()
+        return {"persona": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/personas/{persona_id}")
+async def delete_persona(
+    persona_id: str,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        supabase.table("personas")\
+            .delete()\
+            .eq("id", persona_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"message": "Persona deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
