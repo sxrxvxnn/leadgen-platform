@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "LeadGen Engine",
+  "version": "1.0.0",
+  "description": "Extract leads from LinkedIn into your dashboard",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LeadGen Engine"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
