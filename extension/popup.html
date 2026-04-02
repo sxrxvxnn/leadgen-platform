@@ -2,144 +2,232 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LeadGen Engine</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
 
       body {
-        width: 320px;
-        min-height: 200px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #ffffff;
-        color: #1a1a1a;
-        padding: 16px;
+        width: 340px;
+        min-height: 220px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+        background: #0a0a0a;
+        color: #f0ede8;
       }
 
+      .screen { display: none; padding: 20px; }
+      .screen.active { display: block; }
+
+      /* Header */
       .header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid #f0f0f0;
+        gap: 10px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #222;
       }
+      .brand-mark {
+        width: 26px; height: 26px;
+        background: #f0ede8;
+        border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 9px; font-weight: 900; color: #0a0a0a;
+        letter-spacing: 0.5px;
+      }
+      .brand-name {
+        font-size: 10px; font-weight: 700;
+        letter-spacing: 3px; color: #555;
+      }
+      .status-dot {
+        margin-left: auto;
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #333;
+      }
+      .status-dot.online { background: #00e676; box-shadow: 0 0 6px #00e676; }
 
-      .logo {
-        width: 24px;
-        height: 24px;
-        background: #2563eb;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 12px;
-        font-weight: 700;
+      /* Login screen */
+      .login-title {
+        font-size: 18px; font-weight: 900;
+        letter-spacing: -0.5px;
+        margin-bottom: 4px;
       }
-
-      .header h1 {
-        font-size: 14px;
-        font-weight: 600;
-        color: #1a1a1a;
+      .login-sub {
+        font-size: 11px; color: #555;
+        margin-bottom: 20px; letter-spacing: 0.5px;
       }
-
-      .page-type {
-        font-size: 11px;
-        color: #6b7280;
-        margin-bottom: 12px;
+      .field { margin-bottom: 12px; }
+      .field label {
+        display: block;
+        font-size: 9px; font-weight: 600;
+        letter-spacing: 2px; color: #444;
+        text-transform: uppercase;
+        margin-bottom: 6px;
       }
-
-      .page-type span {
-        background: #eff6ff;
-        color: #2563eb;
-        padding: 2px 8px;
-        border-radius: 99px;
-        font-weight: 500;
+      .field input {
+        width: 100%; padding: 10px 12px;
+        background: #161616; border: 1px solid #222;
+        border-radius: 4px; font-size: 12px;
+        color: #f0ede8; outline: none;
+        font-family: inherit;
       }
+      .field input:focus { border-color: #444; }
 
       .btn {
-        width: 100%;
-        padding: 10px;
-        border: none;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity 0.15s;
+        width: 100%; padding: 11px;
+        background: #f0ede8; border: none;
+        border-radius: 4px; font-size: 12px;
+        font-weight: 700; color: #0a0a0a;
+        cursor: pointer; font-family: inherit;
+        display: flex; align-items: center;
+        justify-content: space-between;
+        margin-top: 4px;
+      }
+      .btn:disabled { opacity: 0.5; }
+      .btn-secondary {
+        background: transparent;
+        border: 1px solid #222;
+        color: #555; margin-top: 8px;
+        justify-content: center;
+      }
+
+      /* Main screen */
+      .page-badge {
+        display: inline-flex; align-items: center;
+        gap: 6px; padding: 4px 10px;
+        background: #161616; border: 1px solid #222;
+        border-radius: 2px; font-size: 9px;
+        font-weight: 600; letter-spacing: 2px;
+        color: #555; margin-bottom: 16px;
+      }
+      .page-badge .dot {
+        width: 4px; height: 4px;
+        border-radius: 50%; background: #555;
+      }
+      .page-badge.linkedin .dot { background: #00e676; }
+      .page-badge.linkedin { color: #f0ede8; border-color: #333; }
+
+      .extract-btn {
+        width: 100%; padding: 14px 16px;
+        background: #f0ede8; border: none;
+        border-radius: 4px; font-size: 12px;
+        font-weight: 700; color: #0a0a0a;
+        cursor: pointer; font-family: inherit;
+        display: flex; align-items: center;
+        justify-content: space-between;
         margin-bottom: 8px;
       }
+      .extract-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-      .btn:hover { opacity: 0.85; }
-      .btn:active { opacity: 0.7; }
-
-      .btn-primary {
-        background: #2563eb;
-        color: white;
+      .secondary-btn {
+        width: 100%; padding: 10px 16px;
+        background: transparent; border: 1px solid #222;
+        border-radius: 4px; font-size: 11px;
+        font-weight: 600; color: #555;
+        cursor: pointer; font-family: inherit;
+        letter-spacing: 1px;
+        display: flex; align-items: center;
+        justify-content: space-between;
       }
 
-      .btn-secondary {
-        background: #f3f4f6;
-        color: #374151;
-      }
-
-      .status {
-        font-size: 12px;
-        padding: 8px 10px;
-        border-radius: 6px;
-        margin-top: 8px;
+      .status-msg {
+        margin-top: 12px; padding: 10px 12px;
+        border-radius: 4px; font-size: 11px;
         display: none;
       }
-
-      .status.success {
-        background: #f0fdf4;
-        color: #166534;
-        display: block;
+      .status-msg.show { display: block; }
+      .status-msg.success {
+        background: rgba(0,230,118,0.08);
+        border: 1px solid #00e676; color: #00e676;
+      }
+      .status-msg.error {
+        background: rgba(255,45,45,0.08);
+        border: 1px solid #ff2d2d; color: #ff2d2d;
       }
 
-      .status.error {
-        background: #fef2f2;
-        color: #991b1b;
-        display: block;
+      .footer {
+        display: flex; align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        border-top: 1px solid #161616;
+        margin-top: 4px;
       }
-
       .lead-count {
-        font-size: 12px;
-        color: #6b7280;
-        text-align: center;
-        margin-top: 10px;
+        font-size: 10px; color: #444;
+        letter-spacing: 1px;
+      }
+      .lead-count span { color: #f0ede8; font-weight: 700; }
+      .logout-btn {
+        background: none; border: none;
+        font-size: 10px; color: #333;
+        cursor: pointer; font-family: inherit;
+        letter-spacing: 1px;
       }
 
-      .lead-count strong {
-        color: #2563eb;
+      .error-msg {
+        font-size: 11px; color: #ff2d2d;
+        margin-top: 8px; display: none;
       }
+      .error-msg.show { display: block; }
     </style>
   </head>
   <body>
+
+    <!-- Header (always visible) -->
     <div class="header">
-      <div class="logo">L</div>
-      <h1>LeadGen Engine</h1>
+      <div class="brand-mark">LE</div>
+      <span class="brand-name">LEADGEN ENGINE</span>
+      <div class="status-dot" id="statusDot"></div>
     </div>
 
-    <p class="page-type">
-      Page: <span id="pageType">Detecting...</span>
-    </p>
+    <!-- Login screen -->
+    <div class="screen active" id="loginScreen">
+      <div style="height:16px"></div>
+      <p class="login-title">Sign in</p>
+      <p class="login-sub">Connect to your dashboard</p>
 
-    <button class="btn btn-primary" id="scrapeBtn">
-      Extract Leads from This Page
-    </button>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="you@company.com" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" />
+      </div>
 
-    <button class="btn btn-secondary" id="viewBtn">
-      View Saved Leads
-    </button>
+      <p class="error-msg" id="loginError"></p>
 
-    <div class="status" id="status"></div>
+      <button class="btn" id="loginBtn">
+        <span>Sign in</span>
+        <span>→</span>
+      </button>
+    </div>
 
-    <p class="lead-count" id="leadCount"></p>
+    <!-- Main screen -->
+    <div class="screen" id="mainScreen">
+      <div style="height:16px"></div>
+
+      <div class="page-badge" id="pageBadge">
+        <div class="dot"></div>
+        <span id="pageTypeLabel">Detecting...</span>
+      </div>
+
+      <button class="extract-btn" id="extractBtn">
+        <span>Extract leads from page</span>
+        <span>→</span>
+      </button>
+
+      <button class="secondary-btn" id="dashboardBtn">
+        <span>Open dashboard</span>
+        <span>↗</span>
+      </button>
+
+      <div class="status-msg" id="statusMsg"></div>
+
+      <div class="footer">
+        <p class="lead-count" id="leadCount">— leads synced</p>
+        <button class="logout-btn" id="logoutBtn">SIGN OUT</button>
+      </div>
+    </div>
 
     <script src="popup.js"></script>
   </body>
