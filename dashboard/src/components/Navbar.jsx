@@ -6,121 +6,46 @@ export default function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
-
+  const handleLogout = () => { logout(); navigate('/login') }
   const isActive = (path) => location.pathname === path
 
   return (
-    <nav style={styles.nav}>
-      <div style={styles.left}>
-        <div style={styles.logo}>L</div>
-        <span style={styles.brand}>LeadGen Engine</span>
-      </div>
-
-      <div style={styles.links}>
-        <Link
-          to="/dashboard"
-          style={{
-            ...styles.link,
-            ...(isActive('/dashboard') ? styles.linkActive : {})
-          }}
-        >
-          Dashboard
-        </Link>
-        <Link
-          to="/leads"
-          style={{
-            ...styles.link,
-            ...(isActive('/leads') ? styles.linkActive : {})
-          }}
-        >
-          Leads
+    <nav style={s.nav}>
+      <div style={s.left}>
+        <Link to="/dashboard" style={s.brand} data-hover="true">
+          <span style={s.brandMark}>LE</span>
+          <span style={s.brandName}>LEADGEN ENGINE</span>
         </Link>
       </div>
-
-      <div style={styles.right}>
-        <span style={styles.email}>{user?.email}</span>
-        <button onClick={handleLogout} style={styles.logoutBtn}>
-          Logout
+      <div style={s.center}>
+        {[['OVERVIEW', '/dashboard'], ['LEADS', '/leads']].map(([label, path]) => (
+          <Link key={path} to={path} style={{ ...s.link, ...(isActive(path) ? s.linkActive : {}) }} data-hover="true">
+            {label}
+            {isActive(path) && <span style={s.activeLine} />}
+          </Link>
+        ))}
+      </div>
+      <div style={s.right}>
+        <span style={s.userTag}>{user?.email?.split('@')[0]}</span>
+        <button onClick={handleLogout} style={s.logoutBtn} data-hover="true">
+          Sign out
         </button>
       </div>
     </nav>
   )
 }
 
-const styles = {
-  nav: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 24px',
-    height: '56px',
-    background: '#ffffff',
-    borderBottom: '1px solid #e5e7eb',
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-  },
-  left: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  logo: {
-    width: '30px',
-    height: '30px',
-    background: '#2563eb',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'white',
-    fontSize: '14px',
-    fontWeight: '700',
-  },
-  brand: {
-    fontSize: '15px',
-    fontWeight: '600',
-    color: '#111827',
-  },
-  links: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  link: {
-    padding: '6px 14px',
-    borderRadius: '6px',
-    fontSize: '14px',
-    color: '#6b7280',
-    textDecoration: 'none',
-    fontWeight: '500',
-    transition: 'all 0.15s',
-  },
-  linkActive: {
-    background: '#eff6ff',
-    color: '#2563eb',
-  },
-  right: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  email: {
-    fontSize: '13px',
-    color: '#6b7280',
-  },
-  logoutBtn: {
-    padding: '6px 14px',
-    background: 'transparent',
-    border: '1px solid #e5e7eb',
-    borderRadius: '6px',
-    fontSize: '13px',
-    color: '#374151',
-    cursor: 'pointer',
-    fontWeight: '500',
-  },
+const s = {
+  nav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', height: '60px', background: 'var(--black)', borderBottom: '1px solid var(--gray-2)', position: 'sticky', top: 0, zIndex: 100 },
+  left: { display: 'flex', alignItems: 'center' },
+  brand: { display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' },
+  brandMark: { width: '28px', height: '28px', background: 'var(--white)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '900', color: 'var(--black)', letterSpacing: '0.5px' },
+  brandName: { fontSize: '11px', fontWeight: '700', letterSpacing: '3px', color: 'var(--gray-4)' },
+  center: { display: 'flex', alignItems: 'center', gap: '4px' },
+  link: { position: 'relative', padding: '6px 16px', fontSize: '11px', fontWeight: '600', letterSpacing: '2px', color: 'var(--gray-4)', textDecoration: 'none', transition: 'color 0.2s' },
+  linkActive: { color: 'var(--white)' },
+  activeLine: { position: 'absolute', bottom: '-1px', left: '16px', right: '16px', height: '1px', background: 'var(--white)' },
+  right: { display: 'flex', alignItems: 'center', gap: '20px' },
+  userTag: { fontSize: '11px', fontWeight: '600', letterSpacing: '1px', color: 'var(--gray-4)', textTransform: 'lowercase' },
+  logoutBtn: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--gray-4)', cursor: 'none', letterSpacing: '1px', transition: 'all 0.2s' },
 }

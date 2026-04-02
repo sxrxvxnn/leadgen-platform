@@ -7,119 +7,100 @@ import Navbar from '../components/Navbar'
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [stats, setStats] = useState({
-    totalLeads: 0,
-    newLeads: 0,
-    totalCompanies: 0,
-  })
+  const [stats, setStats] = useState({ totalLeads: 0, newLeads: 0, contacted: 0, companies: 0 })
   const [recentLeads, setRecentLeads] = useState([])
   const [loading, setLoading] = useState(true)
+  const [time, setTime] = useState(new Date())
 
   useEffect(() => {
-    async function fetchData() {
+    const t = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    async function load() {
       try {
-        const [leadsRes, companiesRes] = await Promise.all([
-          getLeads(),
-          getCompanies(),
-        ])
-        const leads = leadsRes.data.leads
-        const companies = companiesRes.data.companies
+        const [lr, cr] = await Promise.all([getLeads(), getCompanies()])
+        const leads = lr.data.leads
         setStats({
           totalLeads: leads.length,
           newLeads: leads.filter((l) => l.status === 'new').length,
-          totalCompanies: companies.length,
+          contacted: leads.filter((l) => l.status === 'contacted').length,
+          companies: cr.data.companies.length,
         })
-        setRecentLeads(leads.slice(0, 5))
-      } catch (err) {
-        console.error('Failed to fetch dashboard data', err)
+        setRecentLeads(leads.slice(0, 8))
+      } catch (e) {
+        console.error(e)
       } finally {
         setLoading(false)
       }
     }
-    fetchData()
+    load()
   }, [])
 
+  const pad = (n) => String(n).padStart(2, '0')
+  const timeStr = `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
+
   return (
-    <div style={styles.page}>
+    <div style={s.page}>
       <Navbar />
-      <div style={styles.container}>
-        <div style={styles.header}>
-          <h1 style={styles.title}>
-            Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''} 👋
+
+      {/* Hero bar */}
+      <div style={s.hero}>
+        <div style={s.heroLeft}>
+          <p style={s.heroEyebrow}>INTELLIGENCE OVERVIEW</p>
+          <h1 style={s.heroTitle}>
+            {loading ? '—' : stats.totalLeads}
+            <span style={s.heroUnit}> leads</span>
           </h1>
-          <p style={styles.subtitle}>Here's your lead generation overview</p>
+        </div>
+        <div style={s.heroRight}>
+          <p style={s.clock}>{timeStr}</p>
+          <p style={s.heroOperator}>{user?.email?.split('@')[0]}</p>
+        </div>
+      </div>
+
+      <div style={s.container}>
+        {/* Stats row */}
+        <div style={s.statsRow}>
+          {[
+            { label: 'NEW', value: stats.newLeads, color: 'var(--white)' },
+            { label: 'CONTACTED', value: stats.contacted, color: 'var(--amber)' },
+            { label: 'COMPANIES', value: stats.companies, color: 'var(--white)' },
+            { label: 'TOTAL', value: stats.totalLeads, color: 'var(--white)' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={s.statCard}>
+              <p style={s.statLabel}>{label}</p>
+              <p style={{ ...s.statValue, color }}>{loading ? '—' : value}</p>
+            </div>
+          ))}
         </div>
 
-        {/* Stats */}
-        <div style={styles.statsGrid}>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Total Leads</p>
-            <p style={styles.statValue}>{loading ? '—' : stats.totalLeads}</p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>New Leads</p>
-            <p style={{...styles.statValue, color: '#2563eb'}}>
-              {loading ? '—' : stats.newLeads}
-            </p>
-          </div>
-          <div style={styles.statCard}>
-            <p style={styles.statLabel}>Companies</p>
-            <p style={styles.statValue}>
-              {loading ? '—' : stats.totalCompanies}
-            </p>
-          </div>
-        </div>
-
-        {/* Recent Leads */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>Recent Leads</h2>
-            <button
-              style={styles.viewAllBtn}
-              onClick={() => navigate('/leads')}
-            >
+        {/* Recent leads table */}
+        <div style={s.section}>
+          <div style={s.sectionHead}>
+            <p style={s.sectionLabel}>RECENT TARGETS</p>
+            <button style={s.sectionBtn} onClick={() => navigate('/leads')} data-hover="true">
               View all →
             </button>
           </div>
 
           {loading ? (
-            <p style={styles.empty}>Loading...</p>
+            <p style={s.empty}>Loading...</p>
           ) : recentLeads.length === 0 ? (
-            <div style={styles.emptyState}>
-              <p style={styles.emptyTitle}>No leads yet</p>
-              <p style={styles.emptyText}>
-                Use the Chrome extension on LinkedIn to extract your first leads.
-              </p>
+            <div style={s.emptyState}>
+              <p style={s.emptyTitle}>No leads yet</p>
+              <p style={s.emptyText}>Use the Chrome extension on LinkedIn to extract your first leads.</p>
             </div>
           ) : (
-            <div style={styles.table}>
-              <div style={styles.tableHeader}>
-                <span style={{...styles.tableCell, flex: 2}}>Name</span>
-                <span style={{...styles.tableCell, flex: 2}}>Title</span>
-                <span style={{...styles.tableCell, flex: 2}}>Company</span>
-                <span style={{...styles.tableCell, flex: 1}}>Status</span>
+            <div style={s.table}>
+              <div style={s.thead}>
+                {['TARGET', 'ROLE', 'COMPANY', 'STATUS'].map((h) => (
+                  <span key={h} style={{ ...s.th, flex: h === 'STATUS' ? 1 : 2 }}>{h}</span>
+                ))}
               </div>
-              {recentLeads.map((lead) => (
-                <div key={lead.id} style={styles.tableRow}>
-                  <span style={{...styles.tableCell, flex: 2}}>
-                    {lead.name || '—'}
-                  </span>
-                  <span style={{...styles.tableCell, flex: 2, color: '#6b7280'}}>
-                    {lead.title || '—'}
-                  </span>
-                  <span style={{...styles.tableCell, flex: 2, color: '#6b7280'}}>
-                    {lead.company || '—'}
-                  </span>
-                  <span style={{...styles.tableCell, flex: 1}}>
-                    <span style={{
-                      ...styles.badge,
-                      background: lead.status === 'new' ? '#eff6ff' : '#f3f4f6',
-                      color: lead.status === 'new' ? '#2563eb' : '#6b7280',
-                    }}>
-                      {lead.status}
-                    </span>
-                  </span>
-                </div>
+              {recentLeads.map((lead, i) => (
+                <LeadRow key={lead.id} lead={lead} index={i} />
               ))}
             </div>
           )}
@@ -129,127 +110,55 @@ export default function Dashboard() {
   )
 }
 
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: '#f9fafb',
-  },
-  container: {
-    maxWidth: '1100px',
-    margin: '0 auto',
-    padding: '32px 24px',
-  },
-  header: {
-    marginBottom: '32px',
-  },
-  title: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: '0 0 6px',
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#6b7280',
-    margin: 0,
-  },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '16px',
-    marginBottom: '32px',
-  },
-  statCard: {
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '12px',
-    padding: '20px 24px',
-  },
-  statLabel: {
-    fontSize: '13px',
-    color: '#6b7280',
-    margin: '0 0 8px',
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: '28px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-  },
-  section: {
-    background: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '12px',
-    padding: '24px',
-  },
-  sectionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px',
-  },
-  sectionTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-  },
-  viewAllBtn: {
-    background: 'transparent',
-    border: 'none',
-    color: '#2563eb',
-    fontSize: '13px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    padding: 0,
-  },
-  table: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0px',
-  },
-  tableHeader: {
-    display: 'flex',
-    padding: '8px 12px',
-    background: '#f9fafb',
-    borderRadius: '8px',
-    marginBottom: '4px',
-  },
-  tableRow: {
-    display: 'flex',
-    padding: '12px 12px',
-    borderBottom: '1px solid #f3f4f6',
-    alignItems: 'center',
-  },
-  tableCell: {
-    fontSize: '13px',
-    color: '#111827',
-    fontWeight: '400',
-  },
-  badge: {
-    padding: '2px 10px',
-    borderRadius: '99px',
-    fontSize: '11px',
-    fontWeight: '600',
-  },
-  empty: {
-    color: '#6b7280',
-    fontSize: '14px',
-  },
-  emptyState: {
-    textAlign: 'center',
-    padding: '40px 0',
-  },
-  emptyTitle: {
-    fontSize: '15px',
-    fontWeight: '500',
-    color: '#374151',
-    margin: '0 0 8px',
-  },
-  emptyText: {
-    fontSize: '13px',
-    color: '#6b7280',
-    margin: 0,
-  },
+const statusColors = {
+  new: 'var(--white)',
+  contacted: 'var(--amber)',
+  qualified: 'var(--green)',
+  disqualified: 'var(--gray-4)',
+}
+
+function LeadRow({ lead, index }) {
+  return (
+    <div className="fade-up" style={{ ...s.trow, animationDelay: index * 0.04 + 's' }}>
+      <span style={{ ...s.td, flex: 2, color: 'var(--white)', fontWeight: '500' }}>{lead.name || '—'}</span>
+      <span style={{ ...s.td, flex: 2 }}>{lead.title || '—'}</span>
+      <span style={{ ...s.td, flex: 2 }}>{lead.company || '—'}</span>
+      <span style={{ ...s.td, flex: 1 }}>
+        <span style={{ ...s.badge, color: statusColors[lead.status] || 'var(--white)', borderColor: statusColors[lead.status] || 'var(--gray-3)' }}>
+          {(lead.status || 'new').toUpperCase()}
+        </span>
+      </span>
+    </div>
+  )
+}
+
+const s = {
+  page: { minHeight: '100vh', background: 'var(--black)' },
+  hero: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '48px 32px 32px', borderBottom: '1px solid var(--gray-2)' },
+  heroLeft: {},
+  heroEyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '12px' },
+  heroTitle: { fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '900', letterSpacing: '-3px', color: 'var(--white)', lineHeight: 1 },
+  heroUnit: { fontSize: 'clamp(24px, 3vw, 40px)', fontWeight: '300', color: 'var(--gray-4)', letterSpacing: '-1px' },
+  heroRight: { textAlign: 'right' },
+  clock: { fontSize: '28px', fontWeight: '300', letterSpacing: '-1px', color: 'var(--gray-3)', fontVariantNumeric: 'tabular-nums' },
+  heroOperator: { fontSize: '11px', letterSpacing: '2px', color: 'var(--gray-4)', marginTop: '8px' },
+  container: { padding: '32px' },
+  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '1px', background: 'var(--gray-2)', border: '1px solid var(--gray-2)', borderRadius: '4px', overflow: 'hidden', marginBottom: '32px' },
+  statCard: { background: 'var(--black)', padding: '24px 28px' },
+  statLabel: { fontSize: '10px', fontWeight: '600', letterSpacing: '3px', color: 'var(--gray-4)', marginBottom: '10px' },
+  statValue: { fontSize: '36px', fontWeight: '900', letterSpacing: '-2px' },
+  section: { background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', overflow: 'hidden' },
+  sectionHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--gray-2)' },
+  sectionLabel: { fontSize: '10px', fontWeight: '600', letterSpacing: '3px', color: 'var(--gray-4)' },
+  sectionBtn: { background: 'none', border: 'none', fontSize: '12px', color: 'var(--gray-4)', cursor: 'none', fontWeight: '500' },
+  table: { display: 'flex', flexDirection: 'column' },
+  thead: { display: 'flex', padding: '10px 24px', background: 'var(--black)' },
+  th: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--gray-4)' },
+  trow: { display: 'flex', padding: '14px 24px', borderTop: '1px solid var(--gray-2)', alignItems: 'center' },
+  td: { fontSize: '13px', color: 'var(--gray-5)' },
+  badge: { fontSize: '9px', fontWeight: '700', letterSpacing: '1px', border: '1px solid', padding: '2px 8px', borderRadius: '2px' },
+  empty: { padding: '32px 24px', fontSize: '13px', color: 'var(--gray-4)' },
+  emptyState: { padding: '60px 24px', textAlign: 'center' },
+  emptyTitle: { fontSize: '16px', fontWeight: '600', color: 'var(--gray-3)', marginBottom: '8px' },
+  emptyText: { fontSize: '13px', color: 'var(--gray-4)', lineHeight: 1.6 },
 }
