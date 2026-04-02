@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin
+from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate
 from .database import supabase
 
 router = APIRouter()
@@ -158,6 +158,72 @@ async def create_company(
         data["user_id"] = user_id
         response = supabase.table("companies").insert(data).execute()
         return {"company": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # ─── ICP ROUTES ──────────────────────────────────────────────
+
+@router.get("/icp")
+async def get_icp_profiles(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    try:
+        response = supabase.table("icp_profiles")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .order("created_at", desc=True)\
+            .execute()
+        return {"profiles": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/icp")
+async def create_icp_profile(
+    profile: ICPCreate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        data = profile.dict()
+        data["user_id"] = user_id
+        response = supabase.table("icp_profiles").insert(data).execute()
+        return {"profile": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/icp/{profile_id}")
+async def update_icp_profile(
+    profile_id: str,
+    profile: ICPUpdate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        data = {k: v for k, v in profile.dict().items() if v is not None}
+        response = supabase.table("icp_profiles")\
+            .update(data)\
+            .eq("id", profile_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"profile": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/icp/{profile_id}")
+async def delete_icp_profile(
+    profile_id: str,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        supabase.table("icp_profiles")\
+            .delete()\
+            .eq("id", profile_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"message": "ICP profile deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

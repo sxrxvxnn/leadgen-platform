@@ -41,3 +41,26 @@ class UserSignup(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class ICPCreate(BaseModel):
+    company_name: str
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    headquarters: Optional[str] = None
+    website: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    target_roles: Optional[list] = []
+    pain_points: Optional[list] = []
+    tech_stack: Optional[list] = []
+    fit_score: Optional[int] = 0
+    fit_reason: Optional[str] = None
+    notes: Optional[str] = None
+    company_id: Optional[str] = None
+
+class ICPUpdate(BaseModel):
+    target_roles: Optional[list] = None
+    pain_points: Optional[list] = None
+    tech_stack: Optional[list] = None
+    fit_score: Optional[int] = None
+    fit_reason: Optional[str] = None
+    notes: Optional[str] = None

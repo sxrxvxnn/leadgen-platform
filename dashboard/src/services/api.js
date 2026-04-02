@@ -48,3 +48,8 @@ export const getCompanies = () => api.get('/companies')
 export const createCompany = (data) => api.post('/companies', data)
 
 export default api
+// ─── ICP ─────────────────────────────────────────────────────
+export const getICPProfiles = () => api.get('/icp')
+export const createICPProfile = (data) => api.post('/icp', data)
+export const updateICPProfile = (id, data) => api.patch(`/icp/${id}`, data)
+export const deleteICPProfile = (id) => api.delete(`/icp/${id}`)

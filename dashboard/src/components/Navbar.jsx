@@ -18,7 +18,7 @@ export default function Navbar() {
         </Link>
       </div>
       <div style={s.center}>
-        {[['OVERVIEW', '/dashboard'], ['LEADS', '/leads']].map(([label, path]) => (
+        {[['OVERVIEW', '/dashboard'], ['LEADS', '/leads'], ['ICP', '/icp']].map(([label, path]) => (
           <Link key={path} to={path} style={{ ...s.link, ...(isActive(path) ? s.linkActive : {}) }} data-hover="true">
             {label}
             {isActive(path) && <span style={s.activeLine} />}
