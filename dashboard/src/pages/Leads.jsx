@@ -245,7 +245,7 @@ export default function Leads() {
 
   const columns = [
     { key: 'name', label: 'TARGET', flex: 2 },
-    { key: 'title', label: 'ROLE', flex: 2 },
+    { key: 'title', label: 'HEADLINE / ROLE', flex: 2 },
     { key: 'company', label: 'COMPANY', flex: 2 },
     { key: 'location', label: 'LOCATION', flex: 2 },
     { key: 'email', label: 'EMAIL', flex: 2 },

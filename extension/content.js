@@ -88,7 +88,7 @@ function scrapeCompanyPage() {
 }
 
 function scrapeCompanyPeoplePage() {
-  // Get company name from page title — remove colon and "People" suffix
+  // Get company name from page title — remove colon and trailing words
   let companyName = ''
   const titleTag = document.title
   if (titleTag) {
@@ -122,20 +122,16 @@ function scrapeCompanyPeoplePage() {
       scrapedAt: new Date().toISOString()
     }
 
-    // Split text into lines and filter empty ones
     const lines = li.innerText
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
 
-    // Skip patterns — these are not name or title
-    const skipPatterns = /^(1st|2nd|3rd|\·\s*1st|\·\s*2nd|\·\s*3rd|Connect|Follow|Message|LinkedIn Member|Pending|withdraw|mutual connection|and \d+ other|View full profile)$/i
+    const skipPatterns = /^(1st|2nd|3rd|\·\s*1st|\·\s*2nd|\·\s*3rd|Connect|Follow|Message|LinkedIn Member|Pending|withdraw|View full profile)$/i
     const connectionPattern = /degree connection|mutual connection|other mutual/i
 
-    // First non-empty line is always the name
     if (lines.length > 0) lead.name = lines[0]
 
-    // Find title — first line after name that is not a connection/skip line
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]
       if (
@@ -143,9 +139,9 @@ function scrapeCompanyPeoplePage() {
         !connectionPattern.test(line) &&
         !line.startsWith('·') &&
         !line.startsWith('•') &&
-        line.length > 3
+        line.length > 2
       ) {
-        lead.title = line
+        lead.title = line.length > 80 ? line.substring(0, 77) + '...' : line
         break
       }
     }
@@ -157,6 +153,7 @@ function scrapeCompanyPeoplePage() {
 
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
+
 function scrapeProfilePage() {
   const data = {
     type: 'profile',
@@ -168,96 +165,86 @@ function scrapeProfilePage() {
     scrapedAt: new Date().toISOString()
   }
 
-  // Name from page title — most reliable
+  // Name from page title
   const pageTitle = document.title
   if (pageTitle) {
     data.name = pageTitle.split('|')[0].trim()
   }
 
-  // These patterns indicate we should skip the line
-  const skipLine = (line) => {
-    const skip = [
-      /^(1st|2nd|3rd|connect|follow|message|linkedin|pending|withdraw)$/i,
-      /degree connection/i,
-      /mutual connection/i,
-      /^(view|open to|highlights|about|experience|education|skills|activity|featured|interests|recommendations)$/i,
-      /^(notification|message|search|home|my network|jobs|messaging|bell)$/i,
-      /newsletter/i,
-      /^\d+\s*(followers|connections|following)/i,
-      /^(she\/her|he\/him|they\/them)$/i,
-    ]
-    return skip.some(pattern => pattern.test(line))
-  }
-
-  // Location patterns — short lines with city/country indicators
-  const isLocation = (line) => {
-    return (
-      line.length < 60 &&
-      (
-        /,/.test(line) || // "Kochi, Kerala" has a comma
-        /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote)/i.test(line)
-      )
-    )
-  }
-
-  // Get all text from page
   const lines = document.body.innerText
     .split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 1)
 
-  // Find name position in page text
-  const nameIndex = lines.findIndex(l =>
-    data.name && (l === data.name || l.startsWith(data.name))
-  )
+  // Find name position
+  const nameIndex = lines.findIndex(l => l === data.name)
 
   if (nameIndex !== -1) {
-    let titleFound = false
-    let locationFound = false
+    // Based on LinkedIn's structure we know:
+    // nameIndex+0 = name
+    // nameIndex+1 = headline (title)
+    // nameIndex+2 = 'Message' or button — skip
+    // nameIndex+3 = name again (duplicate)
+    // nameIndex+4 = '· 1st/2nd' — skip
+    // nameIndex+5 = headline again — skip (same as title)
+    // nameIndex+6 = location
+    // nameIndex+7 = 'Contact info' — skip
+    // nameIndex+8 = company
 
-    for (let i = nameIndex + 1; i < Math.min(nameIndex + 15, lines.length); i++) {
+    const skipWords = /^(message|connect|follow|pending|contact info|highlights|open to|· 1st|· 2nd|· 3rd|1st|2nd|3rd|view profile|more|send|save)$/i
+    const connectionPattern = /degree connection|mutual connection|followers|connections/i
+
+    let step = 0 // 0=looking for title, 1=looking for location, 2=looking for company
+
+    for (let i = nameIndex + 1; i < Math.min(nameIndex + 20, lines.length); i++) {
       const line = lines[i]
 
-      if (skipLine(line)) continue
+      // Skip the duplicate name, skip patterns, connection info
+      if (line === data.name) continue
+      if (skipWords.test(line)) continue
+      if (connectionPattern.test(line)) continue
+      if (line.startsWith('·')) continue
+      if (/^\d+$/.test(line)) continue
 
-      // Title — first valid line after name, trim at pipe or newline
-      if (!titleFound && line.length > 3 && line.length < 200) {
-        // Take only the first part before | or at
-        const cleanTitle = line.split('|')[0].trim()
-        data.title = cleanTitle
-        titleFound = true
-
-        // Try to extract company from title if it contains "at CompanyName"
-        const atMatch = cleanTitle.match(/\bat\s+(.+)$/i)
-        if (atMatch) {
-          data.company = atMatch[1].trim()
-        }
+      if (step === 0) {
+        // First valid line = headline/title
+        const rawTitle = line.split('|')[0].trim()
+        data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle
+        step = 1
         continue
       }
 
-      // Location — short line after title
-      if (titleFound && !locationFound && isLocation(line)) {
-        data.location = line
-        locationFound = true
-        break
-      }
-    }
-  }
-
-  // Fallback — try to get company from Experience section
-  if (!data.company) {
-    const expIndex = lines.findIndex(l => l === 'Experience')
-    if (expIndex !== -1) {
-      for (let i = expIndex + 1; i < Math.min(expIndex + 8, lines.length); i++) {
-        const line = lines[i]
+      if (step === 1) {
+        // Skip if same as title (LinkedIn shows headline twice)
+        if (line === data.title || line.startsWith(data.title.substring(0, 20))) continue
+        // Location check — short line or contains location keywords
         if (
-          line.length > 2 &&
+          line.length < 60 && (
+            /,/.test(line) ||
+            /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|asia)/i.test(line) ||
+            line === 'India' ||
+            line === 'Remote'
+          )
+        ) {
+          data.location = line
+          step = 2
+          continue
+        }
+        // Could also be company if no location found
+        if (line.length < 80 && !line.includes('mutual') && !line.includes('connection')) {
+          data.company = line
+          break
+        }
+      }
+
+      if (step === 2) {
+        // After location — next valid short line is company
+        if (
           line.length < 80 &&
-          !line.includes('year') &&
-          !line.includes('month') &&
-          !line.includes('Present') &&
-          !line.includes('Full-time') &&
-          !line.includes('Part-time')
+          !line.includes('mutual') &&
+          !line.includes('connection') &&
+          !line.includes('follower') &&
+          !/^\d+\+?$/.test(line)
         ) {
           data.company = line
           break
@@ -268,7 +255,6 @@ function scrapeProfilePage() {
 
   return data
 }
-
 function scrapeSearchPage() {
   const leads = []
   const cards = document.querySelectorAll('li.reusable-search__result-container')
@@ -288,7 +274,10 @@ function scrapeSearchPage() {
     if (nameEl) lead.name = nameEl.innerText.trim()
 
     const titleEl = card.querySelector('.entity-result__primary-subtitle')
-    if (titleEl) lead.title = titleEl.innerText.trim()
+    if (titleEl) {
+      const t = titleEl.innerText.trim()
+      lead.title = t.length > 80 ? t.substring(0, 77) + '...' : t
+    }
 
     const companyEl = card.querySelector('.entity-result__secondary-subtitle')
     if (companyEl) lead.company = companyEl.innerText.trim()
@@ -305,7 +294,7 @@ function scrapeSearchPage() {
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
-// Listen for messages
+// Listen for messages from background/popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scrape') {
     const pageType = getPageType()
