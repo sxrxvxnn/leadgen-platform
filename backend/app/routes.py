@@ -273,6 +273,130 @@ async def delete_persona(
         return {"message": "Persona deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    # ─── ENRICHMENT ROUTES ───────────────────────────────────────
+
+@router.post("/leads/{lead_id}/enrich")
+async def enrich_lead_route(
+    lead_id: str,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        # Get the lead first
+        lead_res = supabase.table("leads")\
+            .select("*")\
+            .eq("id", lead_id)\
+            .eq("user_id", user_id)\
+            .execute()
+
+        if not lead_res.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead = lead_res.data[0]
+
+        # Get company website if available
+        website = None
+        if lead.get("company"):
+            company_res = supabase.table("companies")\
+                .select("website")\
+                .eq("user_id", user_id)\
+                .ilike("name", lead["company"])\
+                .execute()
+            if company_res.data:
+                website = company_res.data[0].get("website")
+
+        # Run enrichment
+        from .enrichment import enrich_lead
+        enriched = enrich_lead(
+            name=lead.get("name", ""),
+            company=lead.get("company", ""),
+            website=website
+        )
+
+        if not enriched:
+            return {"message": "No enrichment data found", "lead": lead}
+
+        # Update lead with enriched data
+        update_data = {}
+        if enriched.get("email") and not lead.get("email"):
+            update_data["email"] = enriched["email"]
+        if enriched.get("phone") and not lead.get("phone"):
+            update_data["phone"] = enriched["phone"]
+
+        if update_data:
+            updated = supabase.table("leads")\
+                .update(update_data)\
+                .eq("id", lead_id)\
+                .eq("user_id", user_id)\
+                .execute()
+            return {"message": "Lead enriched successfully", "enriched": update_data, "lead": updated.data[0]}
+
+        return {"message": "Lead already has contact data", "lead": lead}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/leads/enrich/bulk")
+async def bulk_enrich_leads(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    lead_ids = payload.get("lead_ids", [])
+
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+    from .enrichment import enrich_lead
+    enriched_count = 0
+    skipped_count = 0
+
+    for lead_id in lead_ids:
+        try:
+            lead_res = supabase.table("leads")\
+                .select("*")\
+                .eq("id", lead_id)\
+                .eq("user_id", user_id)\
+                .execute()
+
+            if not lead_res.data:
+                skipped_count += 1
+                continue
+
+            lead = lead_res.data[0]
+
+            if lead.get("email"):
+                skipped_count += 1
+                continue
+
+            enriched = enrich_lead(
+                name=lead.get("name", ""),
+                company=lead.get("company", ""),
+            )
+
+            if enriched.get("email"):
+                supabase.table("leads")\
+                    .update({"email": enriched["email"]})\
+                    .eq("id", lead_id)\
+                    .eq("user_id", user_id)\
+                    .execute()
+                enriched_count += 1
+            else:
+                skipped_count += 1
+
+        except Exception:
+            skipped_count += 1
+            continue
+
+    return {
+        "enriched": enriched_count,
+        "skipped": skipped_count,
+        "total": len(lead_ids)
+    }
 
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────

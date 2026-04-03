@@ -44,40 +44,102 @@ function CellSelect({ value, onChange, onBlur }) {
   )
 }
 
-function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartEdit, onSaveEdit, onCancelEdit, onDelete, isSelected, onToggleSelect }) {
+function LeadRow({
+  lead, columns, editingCell, editValue, setEditValue,
+  onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEnrich,
+  enrichingId, isSelected, onToggleSelect
+}) {
+  const isEnriching = enrichingId === lead.id
+
   return (
     <div style={{ ...s.trow, background: isSelected ? 'var(--gray-1)' : 'transparent' }}>
       <div style={{ width: '40px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-        <input type="checkbox" checked={isSelected} onChange={onToggleSelect} style={sub.checkbox} onClick={(e) => e.stopPropagation()} />
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={onToggleSelect}
+          style={sub.checkbox}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
+
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
         return (
-          <div key={col.key} style={{ ...s.td, flex: col.flex, cursor: 'text' }} onClick={() => onStartEdit(lead.id, col.key, lead[col.key])}>
+          <div
+            key={col.key}
+            style={{ ...s.td, flex: col.flex, cursor: 'text' }}
+            onClick={() => onStartEdit(lead.id, col.key, lead[col.key])}
+          >
             {isEditing && col.key === 'status' && (
-              <CellSelect value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} />
+              <CellSelect
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => onSaveEdit(lead.id)}
+              />
             )}
             {isEditing && col.key !== 'status' && (
               <CellInput
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={() => onSaveEdit(lead.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(lead.id); if (e.key === 'Escape') onCancelEdit() }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onSaveEdit(lead.id)
+                  if (e.key === 'Escape') onCancelEdit()
+                }}
               />
             )}
             {!isEditing && col.key === 'status' && <StatusBadge status={lead.status} />}
             {!isEditing && col.key === 'name' && (
-              <span style={{ fontSize: '13px', color: 'var(--white)', fontWeight: '500' }}>{lead.name || '—'}</span>
+              <span style={{ fontSize: '13px', color: 'var(--white)', fontWeight: '500' }}>
+                {lead.name || '—'}
+              </span>
             )}
             {!isEditing && col.key !== 'status' && col.key !== 'name' && (
-              <span style={{ fontSize: '13px', color: 'var(--gray-5)' }}>{lead[col.key] || '—'}</span>
+              <span style={{ fontSize: '13px', color: 'var(--gray-5)' }}>
+                {lead[col.key] || '—'}
+              </span>
             )}
           </div>
         )
       })}
-      <div style={{ width: '80px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+      <div style={{ width: '120px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
         {lead.profile_url && <ViewLink url={lead.profile_url} />}
-        <button style={sub.deleteBtn} onClick={(e) => { e.stopPropagation(); onDelete(lead.id) }}>✕</button>
+        {!lead.email && (
+          <button
+            style={{
+              fontSize: '11px',
+              color: isEnriching ? 'var(--gray-4)' : 'var(--amber)',
+              background: 'transparent',
+              border: '1px solid var(--gray-2)',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontWeight: '700',
+              padding: '2px 8px',
+            }}
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onEnrich(lead.id)
+            }}
+          >
+            {isEnriching ? '...' : '⚡'}
+          </button>
+        )}
+        {lead.email && (
+          <span style={{ fontSize: '10px', color: 'var(--green)', fontWeight: '700' }}>✓</span>
+        )}
+        <button
+          style={sub.deleteBtn}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onDelete(lead.id)
+          }}
+        >
+          ✕
+        </button>
       </div>
     </div>
   )
@@ -91,6 +153,8 @@ export default function Leads() {
   const [editingCell, setEditingCell] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [selected, setSelected] = useState([])
+  const [enrichingId, setEnrichingId] = useState(null)
+  const [enrichMsg, setEnrichMsg] = useState('')
 
   useEffect(() => { fetchLeads() }, [])
 
@@ -102,7 +166,10 @@ export default function Leads() {
     finally { setLoading(false) }
   }
 
-  function startEdit(leadId, field, value) { setEditingCell({ leadId, field }); setEditValue(value || '') }
+  function startEdit(leadId, field, value) {
+    setEditingCell({ leadId, field })
+    setEditValue(value || '')
+  }
 
   async function saveEdit(leadId) {
     if (!editingCell) return
@@ -122,8 +189,42 @@ export default function Leads() {
     } catch (e) { console.error(e) }
   }
 
-  function toggleSelect(id) { setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]) }
-  function toggleSelectAll() { setSelected(selected.length === filtered.length ? [] : filtered.map((l) => l.id)) }
+  async function handleEnrich(leadId) {
+    setEnrichingId(leadId)
+    setEnrichMsg('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('http://localhost:8000/api/leads/' + leadId + '/enrich', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        }
+      })
+      const data = await res.json()
+      console.log('Enrich response:', data)
+      if (data.lead) {
+        setLeads((prev) => prev.map((l) => l.id === leadId ? data.lead : l))
+        setEnrichMsg(data.enriched ? 'Email found: ' + data.enriched.email : data.message)
+      } else {
+        setEnrichMsg(data.message || 'No data found')
+      }
+    } catch (e) {
+      console.error('Enrichment error:', e)
+      setEnrichMsg('Enrichment failed — check backend')
+    } finally {
+      setEnrichingId(null)
+      setTimeout(() => setEnrichMsg(''), 4000)
+    }
+  }
+
+  function toggleSelect(id) {
+    setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id])
+  }
+
+  function toggleSelectAll() {
+    setSelected(selected.length === filtered.length ? [] : filtered.map((l) => l.id))
+  }
 
   function handleExport() {
     const rows = (selected.length ? filtered.filter((l) => selected.includes(l.id)) : filtered)
@@ -159,12 +260,21 @@ export default function Leads() {
           <p style={s.eyebrow}>LEAD INTELLIGENCE</p>
           <h1 style={s.heroTitle}>
             {filtered.length}
-            <span style={s.heroUnit}> targets{selected.length > 0 ? ', ' + selected.length + ' selected' : ''}</span>
+            <span style={s.heroUnit}>
+              {' targets' + (selected.length > 0 ? ', ' + selected.length + ' selected' : '')}
+            </span>
           </h1>
         </div>
-        <button style={s.exportBtn} onClick={handleExport} data-hover="true">
-          Export {selected.length > 0 ? '(' + selected.length + ')' : 'all'} →
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {enrichMsg && (
+            <span style={{ fontSize: '12px', color: enrichMsg.includes('found') ? 'var(--green)' : 'var(--amber)', fontWeight: '600' }}>
+              {enrichMsg}
+            </span>
+          )}
+          <button style={s.exportBtn} onClick={handleExport} data-hover="true">
+            {'Export ' + (selected.length > 0 ? '(' + selected.length + ')' : 'all') + ' →'}
+          </button>
+        </div>
       </div>
 
       <div style={s.container}>
@@ -185,7 +295,10 @@ export default function Leads() {
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
-                style={{ ...s.filterTab, ...(statusFilter === f ? s.filterTabActive : {}) }}
+                style={{
+                  ...s.filterTab,
+                  ...(statusFilter === f ? s.filterTabActive : {}),
+                }}
                 data-hover="true"
               >
                 {f.toUpperCase()}
@@ -197,12 +310,17 @@ export default function Leads() {
         <div style={s.table}>
           <div style={s.thead}>
             <div style={{ width: '40px', flexShrink: 0 }}>
-              <input type="checkbox" onChange={toggleSelectAll} checked={selected.length === filtered.length && filtered.length > 0} style={sub.checkbox} />
+              <input
+                type="checkbox"
+                onChange={toggleSelectAll}
+                checked={selected.length === filtered.length && filtered.length > 0}
+                style={sub.checkbox}
+              />
             </div>
             {columns.map((col) => (
               <span key={col.key} style={{ ...s.th, flex: col.flex }}>{col.label}</span>
             ))}
-            <span style={{ ...s.th, width: '80px', flexShrink: 0 }}>ACTIONS</span>
+            <span style={{ ...s.th, width: '120px', flexShrink: 0 }}>ACTIONS</span>
           </div>
 
           {loading && <p style={s.empty}>Loading...</p>}
@@ -219,6 +337,8 @@ export default function Leads() {
               onSaveEdit={saveEdit}
               onCancelEdit={() => setEditingCell(null)}
               onDelete={handleDelete}
+              onEnrich={handleEnrich}
+              enrichingId={enrichingId}
               isSelected={selected.includes(lead.id)}
               onToggleSelect={() => toggleSelect(lead.id)}
             />
@@ -235,14 +355,14 @@ const s = {
   eyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '12px' },
   heroTitle: { fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '900', letterSpacing: '-2px', color: 'var(--white)', lineHeight: 1 },
   heroUnit: { fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '300', color: 'var(--gray-4)', letterSpacing: '-1px' },
-  exportBtn: { padding: '12px 24px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '700', color: 'var(--black)', cursor: 'none' },
+  exportBtn: { padding: '12px 24px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer' },
   container: { padding: '24px 32px' },
   filters: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', flex: 1, minWidth: '200px' },
   searchIcon: { padding: '0 14px', color: 'var(--gray-4)', fontSize: '16px' },
   searchInput: { flex: 1, padding: '11px 14px 11px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--white)' },
   filterTabs: { display: 'flex', gap: '4px' },
-  filterTab: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', color: 'var(--gray-4)', fontSize: '10px', fontWeight: '600', letterSpacing: '1px', cursor: 'none' },
+  filterTab: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', color: 'var(--gray-4)', fontSize: '10px', fontWeight: '600', letterSpacing: '1px', cursor: 'pointer', fontFamily: 'inherit' },
   filterTabActive: { background: 'var(--white)', color: 'var(--black)', border: '1px solid var(--white)' },
   table: { background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', overflow: 'hidden' },
   thead: { display: 'flex', padding: '10px 24px', background: 'var(--black)', borderBottom: '1px solid var(--gray-2)', alignItems: 'center' },
@@ -255,7 +375,7 @@ const s = {
 const sub = {
   link: { fontSize: '10px', fontWeight: '700', letterSpacing: '1px', color: 'var(--gray-4)', textDecoration: 'none' },
   badge: { fontSize: '9px', fontWeight: '700', letterSpacing: '1px', border: '1px solid', padding: '2px 8px', borderRadius: '2px' },
-  deleteBtn: { fontSize: '11px', color: 'var(--gray-4)', background: 'transparent', border: 'none', cursor: 'none', fontWeight: '700', padding: '2px 4px' },
+  deleteBtn: { fontSize: '11px', color: 'var(--gray-4)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '700', padding: '2px 4px' },
   checkbox: { cursor: 'pointer', accentColor: 'var(--white)' },
   cellInput: { width: '100%', padding: '4px 8px', border: '1px solid var(--gray-3)', borderRadius: '2px', fontSize: '12px', outline: 'none', background: 'var(--gray-2)', color: 'var(--white)' },
   cellSelect: { padding: '4px 8px', border: '1px solid var(--gray-3)', borderRadius: '2px', fontSize: '12px', outline: 'none', background: 'var(--gray-2)', color: 'var(--white)' },
