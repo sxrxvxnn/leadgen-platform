@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate
+from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate
 from .database import supabase
 
 router = APIRouter()
@@ -397,6 +397,45 @@ async def bulk_enrich_leads(
         "skipped": skipped_count,
         "total": len(lead_ids)
     }
+
+# ─── STAR / UNSTAR LEAD ──────────────────────────────────────
+
+@router.patch("/leads/{lead_id}/star")
+async def star_lead(
+    lead_id: str,
+    data: LeadStarUpdate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        response = supabase.table("leads")\
+            .update({"starred": data.starred})\
+            .eq("id", lead_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"lead": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── CONNECTION STATUS ────────────────────────────────────────
+
+@router.patch("/leads/{lead_id}/connection-status")
+async def update_connection_status(
+    lead_id: str,
+    data: LeadConnectionStatusUpdate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        response = supabase.table("leads")\
+            .update({"connection_status": data.connection_status})\
+            .eq("id", lead_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"lead": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────

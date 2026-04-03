@@ -72,3 +72,9 @@ class PersonaCreate(BaseModel):
 class PersonaUpdate(BaseModel):
     name: Optional[str] = None
     filters: Optional[dict] = None
+
+class LeadStarUpdate(BaseModel):
+    starred: bool
+
+class LeadConnectionStatusUpdate(BaseModel):
+    connection_status: str

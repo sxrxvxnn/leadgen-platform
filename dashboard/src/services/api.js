@@ -57,3 +57,6 @@ export const deleteICPProfile = (id) => api.delete(`/icp/${id}`)
 export const getPersonas = () => api.get('/personas')
 export const createPersona = (data) => api.post('/personas', data)
 export const deletePersona = (id) => api.delete(`/personas/${id}`)
+// ─── STAR & CONNECTION STATUS ─────────────────────────────────
+export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
+export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
