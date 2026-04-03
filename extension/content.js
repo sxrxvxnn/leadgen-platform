@@ -88,14 +88,20 @@ function scrapeCompanyPage() {
 }
 
 function scrapeCompanyPeoplePage() {
+  // Get company name from page title — remove colon and "People" suffix
   let companyName = ''
   const titleTag = document.title
-  if (titleTag) companyName = titleTag.split('|')[0].replace('People', '').trim()
+  if (titleTag) {
+    companyName = titleTag
+      .split('|')[0]
+      .replace(/people/gi, '')
+      .replace(/:/g, '')
+      .trim()
+  }
 
   const leads = []
   const seen = new Set()
 
-  // Use the exact ul class LinkedIn uses for people listing
   const listItems = document.querySelectorAll('ul.display-flex.list-style-none.flex-wrap > li')
 
   listItems.forEach((li) => {
@@ -116,20 +122,29 @@ function scrapeCompanyPeoplePage() {
       scrapedAt: new Date().toISOString()
     }
 
-    // Parse text from the li — LinkedIn puts name + title in innerText
-    const allText = li.innerText.trim()
-    const lines = allText.split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
+    // Split text into lines and filter empty ones
+    const lines = li.innerText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
 
-    // First line is always the name
+    // Skip patterns — these are not name or title
+    const skipPatterns = /^(1st|2nd|3rd|\·\s*1st|\·\s*2nd|\·\s*3rd|Connect|Follow|Message|LinkedIn Member|Pending|withdraw|mutual connection|and \d+ other|View full profile)$/i
+    const connectionPattern = /degree connection|mutual connection|other mutual/i
+
+    // First non-empty line is always the name
     if (lines.length > 0) lead.name = lines[0]
 
-    // Skip connection degree lines (2nd, 3rd, 1st, ·) and find title
-    const skipPatterns = /^(2nd|3rd|1st|Connect|Follow|Message|LinkedIn Member|View|·|•)$/i
+    // Find title — first line after name that is not a connection/skip line
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]
-      if (!skipPatterns.test(line) && !line.startsWith('·') && !line.startsWith('•') && line.length > 2) {
+      if (
+        !skipPatterns.test(line) &&
+        !connectionPattern.test(line) &&
+        !line.startsWith('·') &&
+        !line.startsWith('•') &&
+        line.length > 3
+      ) {
         lead.title = line
         break
       }
