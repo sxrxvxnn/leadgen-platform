@@ -168,45 +168,102 @@ function scrapeProfilePage() {
     scrapedAt: new Date().toISOString()
   }
 
-  const nameSelectors = [
-    'h1.text-heading-xlarge',
-    '.pv-text-details__left-panel h1',
-    'h1[class*="heading"]',
-    'h1',
-  ]
-  for (const sel of nameSelectors) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break }
+  // Name from page title — most reliable
+  const pageTitle = document.title
+  if (pageTitle) {
+    data.name = pageTitle.split('|')[0].trim()
   }
 
-  const titleSelectors = [
-    'div.text-body-medium',
-    '.pv-text-details__left-panel .text-body-medium',
-    '[class*="text-body-medium"]',
-  ]
-  for (const sel of titleSelectors) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.title = el.innerText.trim(); break }
+  // These patterns indicate we should skip the line
+  const skipLine = (line) => {
+    const skip = [
+      /^(1st|2nd|3rd|connect|follow|message|linkedin|pending|withdraw)$/i,
+      /degree connection/i,
+      /mutual connection/i,
+      /^(view|open to|highlights|about|experience|education|skills|activity|featured|interests|recommendations)$/i,
+      /^(notification|message|search|home|my network|jobs|messaging|bell)$/i,
+      /newsletter/i,
+      /^\d+\s*(followers|connections|following)/i,
+      /^(she\/her|he\/him|they\/them)$/i,
+    ]
+    return skip.some(pattern => pattern.test(line))
   }
 
-  const locationSelectors = [
-    'span.text-body-small.inline.t-black--light.break-words',
-    '.pv-text-details__left-panel span.t-black--light',
-    '[class*="t-black--light"]',
-  ]
-  for (const sel of locationSelectors) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.location = el.innerText.trim(); break }
+  // Location patterns — short lines with city/country indicators
+  const isLocation = (line) => {
+    return (
+      line.length < 60 &&
+      (
+        /,/.test(line) || // "Kochi, Kerala" has a comma
+        /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote)/i.test(line)
+      )
+    )
   }
 
-  const companySelectors = [
-    'span[aria-hidden="true"].t-14.t-normal',
-    '.pv-entity__secondary-title',
-    '.experience-item__meta-item',
-  ]
-  for (const sel of companySelectors) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.company = el.innerText.trim(); break }
+  // Get all text from page
+  const lines = document.body.innerText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 1)
+
+  // Find name position in page text
+  const nameIndex = lines.findIndex(l =>
+    data.name && (l === data.name || l.startsWith(data.name))
+  )
+
+  if (nameIndex !== -1) {
+    let titleFound = false
+    let locationFound = false
+
+    for (let i = nameIndex + 1; i < Math.min(nameIndex + 15, lines.length); i++) {
+      const line = lines[i]
+
+      if (skipLine(line)) continue
+
+      // Title — first valid line after name, trim at pipe or newline
+      if (!titleFound && line.length > 3 && line.length < 200) {
+        // Take only the first part before | or at
+        const cleanTitle = line.split('|')[0].trim()
+        data.title = cleanTitle
+        titleFound = true
+
+        // Try to extract company from title if it contains "at CompanyName"
+        const atMatch = cleanTitle.match(/\bat\s+(.+)$/i)
+        if (atMatch) {
+          data.company = atMatch[1].trim()
+        }
+        continue
+      }
+
+      // Location — short line after title
+      if (titleFound && !locationFound && isLocation(line)) {
+        data.location = line
+        locationFound = true
+        break
+      }
+    }
+  }
+
+  // Fallback — try to get company from Experience section
+  if (!data.company) {
+    const expIndex = lines.findIndex(l => l === 'Experience')
+    if (expIndex !== -1) {
+      for (let i = expIndex + 1; i < Math.min(expIndex + 8, lines.length); i++) {
+        const line = lines[i]
+        if (
+          line.length > 2 &&
+          line.length < 80 &&
+          !line.includes('year') &&
+          !line.includes('month') &&
+          !line.includes('Present') &&
+          !line.includes('Full-time') &&
+          !line.includes('Part-time')
+        ) {
+          data.company = line
+          break
+        }
+      }
+    }
   }
 
   return data
