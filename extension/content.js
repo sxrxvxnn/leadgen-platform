@@ -1,12 +1,14 @@
-// Runs on every LinkedIn page automatically
-// Extracts data based on what type of page we're on
-
 function getPageType() {
   const url = window.location.href
-  if (url.includes('/company/')) return 'company'
-  if (url.includes('/in/')) return 'profile'
-  if (url.includes('/search/results/people')) return 'search'
+  if (url.includes('linkedin.com/company/') && url.includes('/people')) return 'company-people'
+  if (url.includes('linkedin.com/company/')) return 'company'
+  if (url.includes('linkedin.com/in/')) return 'profile'
+  if (url.includes('linkedin.com/search/results/people')) return 'search'
   return 'unknown'
+}
+
+function cleanUrl(url) {
+  return url.split('?')[0].split('#')[0]
 }
 
 function scrapeCompanyPage() {
@@ -18,18 +20,31 @@ function scrapeCompanyPage() {
     website: '',
     headquarters: '',
     description: '',
-    url: window.location.href,
+    url: cleanUrl(window.location.href),
     scrapedAt: new Date().toISOString()
   }
 
-  // Company name
-  const nameEl = document.querySelector('h1.org-top-card-summary__title')
-  if (nameEl) data.name = nameEl.innerText.trim()
+  const nameSelectors = [
+    'h1.org-top-card-summary__title',
+    '.org-top-card-summary__title',
+    'h1[class*="org-top-card"]',
+    '.ember-view h1',
+    'h1',
+  ]
+  for (const sel of nameSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break }
+  }
 
-  // Industry, size, HQ — these sit in the info card
-  const infoItems = document.querySelectorAll(
-    '.org-top-card-summary-info-list__info-item'
-  )
+  const infoSelectors = [
+    '.org-top-card-summary-info-list__info-item',
+    '[class*="org-top-card-summary-info-list"] dt',
+  ]
+  let infoItems = []
+  for (const sel of infoSelectors) {
+    infoItems = document.querySelectorAll(sel)
+    if (infoItems.length > 0) break
+  }
   infoItems.forEach((item, index) => {
     const text = item.innerText.trim()
     if (index === 0) data.industry = text
@@ -37,19 +52,96 @@ function scrapeCompanyPage() {
     if (index === 2) data.headquarters = text
   })
 
-  // Website
-  const websiteEl = document.querySelector(
-    'a[data-control-name="topbox_website"]'
-  )
-  if (websiteEl) data.website = websiteEl.href
+  if (!data.industry) {
+    const dts = document.querySelectorAll('.org-about-module__margin-bottom dt, .artdeco-def-list__item dt')
+    const dds = document.querySelectorAll('.org-about-module__margin-bottom dd, .artdeco-def-list__item dd')
+    dts.forEach((dt, i) => {
+      const key = dt.innerText.trim().toLowerCase()
+      const val = dds[i] ? dds[i].innerText.trim() : ''
+      if (key.includes('industry')) data.industry = val
+      if (key.includes('size') || key.includes('employees')) data.size = val
+      if (key.includes('headquarter')) data.headquarters = val
+      if (key.includes('website')) data.website = val
+    })
+  }
 
-  // Description
-  const descEl = document.querySelector('p.org-top-card-summary__tagline')
-  if (descEl) data.description = descEl.innerText.trim()
+  const websiteSelectors = [
+    'a[data-control-name="topbox_website"]',
+    '.org-top-card-primary-actions__inner a',
+  ]
+  for (const sel of websiteSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.href && !el.href.includes('linkedin')) { data.website = el.href; break }
+  }
+
+  const descSelectors = [
+    'p.org-top-card-summary__tagline',
+    '.org-top-card-summary__tagline',
+    '.org-about-us-organization-description__text',
+  ]
+  for (const sel of descSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.description = el.innerText.trim(); break }
+  }
 
   return data
 }
 
+function scrapeCompanyPeoplePage() {
+  let companyName = ''
+  const titleTag = document.title
+  if (titleTag) companyName = titleTag.split('|')[0].replace('People', '').trim()
+
+  const leads = []
+  const seen = new Set()
+
+  // Use the exact ul class LinkedIn uses for people listing
+  const listItems = document.querySelectorAll('ul.display-flex.list-style-none.flex-wrap > li')
+
+  listItems.forEach((li) => {
+    const profileLink = li.querySelector('a[href*="/in/"]')
+    if (!profileLink) return
+
+    const url = cleanUrl(profileLink.href)
+    if (!url || seen.has(url)) return
+    seen.add(url)
+
+    const lead = {
+      type: 'profile',
+      name: '',
+      title: '',
+      company: companyName,
+      location: '',
+      profileUrl: url,
+      scrapedAt: new Date().toISOString()
+    }
+
+    // Parse text from the li — LinkedIn puts name + title in innerText
+    const allText = li.innerText.trim()
+    const lines = allText.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+
+    // First line is always the name
+    if (lines.length > 0) lead.name = lines[0]
+
+    // Skip connection degree lines (2nd, 3rd, 1st, ·) and find title
+    const skipPatterns = /^(2nd|3rd|1st|Connect|Follow|Message|LinkedIn Member|View|·|•)$/i
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i]
+      if (!skipPatterns.test(line) && !line.startsWith('·') && !line.startsWith('•') && line.length > 2) {
+        lead.title = line
+        break
+      }
+    }
+
+    if (lead.name && lead.name !== 'LinkedIn Member') {
+      leads.push(lead)
+    }
+  })
+
+  return { type: 'search', leads, scrapedAt: new Date().toISOString() }
+}
 function scrapeProfilePage() {
   const data = {
     type: 'profile',
@@ -57,39 +149,57 @@ function scrapeProfilePage() {
     title: '',
     company: '',
     location: '',
-    profileUrl: window.location.href,
+    profileUrl: cleanUrl(window.location.href),
     scrapedAt: new Date().toISOString()
   }
 
-  // Full name
-  const nameEl = document.querySelector('h1.text-heading-xlarge')
-  if (nameEl) data.name = nameEl.innerText.trim()
+  const nameSelectors = [
+    'h1.text-heading-xlarge',
+    '.pv-text-details__left-panel h1',
+    'h1[class*="heading"]',
+    'h1',
+  ]
+  for (const sel of nameSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break }
+  }
 
-  // Job title
-  const titleEl = document.querySelector('div.text-body-medium')
-  if (titleEl) data.title = titleEl.innerText.trim()
+  const titleSelectors = [
+    'div.text-body-medium',
+    '.pv-text-details__left-panel .text-body-medium',
+    '[class*="text-body-medium"]',
+  ]
+  for (const sel of titleSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.title = el.innerText.trim(); break }
+  }
 
-  // Location
-  const locationEl = document.querySelector(
-    'span.text-body-small.inline.t-black--light.break-words'
-  )
-  if (locationEl) data.location = locationEl.innerText.trim()
+  const locationSelectors = [
+    'span.text-body-small.inline.t-black--light.break-words',
+    '.pv-text-details__left-panel span.t-black--light',
+    '[class*="t-black--light"]',
+  ]
+  for (const sel of locationSelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.location = el.innerText.trim(); break }
+  }
 
-  // Current company from experience section
-  const companyEl = document.querySelector(
-    'span[aria-hidden="true"].t-14.t-normal'
-  )
-  if (companyEl) data.company = companyEl.innerText.trim()
+  const companySelectors = [
+    'span[aria-hidden="true"].t-14.t-normal',
+    '.pv-entity__secondary-title',
+    '.experience-item__meta-item',
+  ]
+  for (const sel of companySelectors) {
+    const el = document.querySelector(sel)
+    if (el && el.innerText.trim()) { data.company = el.innerText.trim(); break }
+  }
 
   return data
 }
 
 function scrapeSearchPage() {
   const leads = []
-
-  const cards = document.querySelectorAll(
-    'li.reusable-search__result-container'
-  )
+  const cards = document.querySelectorAll('li.reusable-search__result-container')
 
   cards.forEach(card => {
     const lead = {
@@ -102,9 +212,7 @@ function scrapeSearchPage() {
       scrapedAt: new Date().toISOString()
     }
 
-    const nameEl = card.querySelector(
-      'span.entity-result__title-text a span[aria-hidden="true"]'
-    )
+    const nameEl = card.querySelector('span.entity-result__title-text a span[aria-hidden="true"]')
     if (nameEl) lead.name = nameEl.innerText.trim()
 
     const titleEl = card.querySelector('.entity-result__primary-subtitle')
@@ -117,7 +225,7 @@ function scrapeSearchPage() {
     if (locationEl) lead.location = locationEl.innerText.trim()
 
     const linkEl = card.querySelector('a.app-aware-link')
-    if (linkEl) lead.profileUrl = linkEl.href
+    if (linkEl) lead.profileUrl = cleanUrl(linkEl.href)
 
     if (lead.name) leads.push(lead)
   })
@@ -125,18 +233,18 @@ function scrapeSearchPage() {
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
-// Listen for messages from popup.js
+// Listen for messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scrape') {
     const pageType = getPageType()
     let result = null
 
-    if (pageType === 'company') result = scrapeCompanyPage()
+    if (pageType === 'company-people') result = scrapeCompanyPeoplePage()
+    else if (pageType === 'company') result = scrapeCompanyPage()
     else if (pageType === 'profile') result = scrapeProfilePage()
     else if (pageType === 'search') result = scrapeSearchPage()
     else result = { error: 'Navigate to a LinkedIn company, profile, or search page first.' }
 
-    // Save to chrome local storage
     chrome.storage.local.get({ leads: [] }, (existing) => {
       if (result && !result.error) {
         const updated = [...existing.leads, result]
@@ -151,7 +259,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     chrome.storage.local.get({ leads: [] }, (data) => {
       sendResponse({ leads: data.leads })
     })
-    return true // Required for async response
+    return true
   }
 
   return true

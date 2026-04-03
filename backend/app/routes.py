@@ -417,21 +417,49 @@ async def bulk_create_leads(
     for lead in leads:
         try:
             lead["user_id"] = user_id
-            if lead.get("scraped_at"):
-                pass  # already a string from extension
-            # Check for duplicates
-            if lead.get("profile_url"):
+
+            # Clean up profile_url
+            profile_url = lead.get("profile_url")
+            if profile_url:
+                profile_url = profile_url.strip()
+                lead["profile_url"] = profile_url
+
+            # Only check duplicates if profile_url exists and is not empty
+            if profile_url and len(profile_url) > 10:
                 existing = supabase.table("leads")\
                     .select("id")\
                     .eq("user_id", user_id)\
-                    .eq("profile_url", lead["profile_url"])\
+                    .eq("profile_url", profile_url)\
                     .execute()
                 if existing.data:
                     skipped += 1
                     continue
-            response = supabase.table("leads").insert(lead).execute()
+
+            # Skip if no name
+            if not lead.get("name") or not lead["name"].strip():
+                skipped += 1
+                continue
+
+            # Clean the data
+            clean_lead = {
+                "user_id": user_id,
+                "name": lead.get("name", "").strip(),
+                "title": lead.get("title", "").strip() if lead.get("title") else None,
+                "company": lead.get("company", "").strip() if lead.get("company") else None,
+                "location": lead.get("location", "").strip() if lead.get("location") else None,
+                "email": lead.get("email") or None,
+                "phone": lead.get("phone") or None,
+                "profile_url": profile_url or None,
+                "status": lead.get("status", "new"),
+                "notes": lead.get("notes") or None,
+                "scraped_at": lead.get("scraped_at") or None,
+            }
+
+            response = supabase.table("leads").insert(clean_lead).execute()
             inserted.append(response.data[0])
-        except Exception:
+
+        except Exception as e:
+            print(f"Lead insert error: {e}")
             skipped += 1
             continue
 
@@ -440,3 +468,23 @@ async def bulk_create_leads(
         "skipped": skipped,
         "leads": inserted
     }
+
+@router.post("/leads/debug-bulk")
+async def debug_bulk(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    leads = payload.get("leads", [])
+    results = []
+    for lead in leads[:3]:  # Only check first 3
+        profile_url = lead.get("profile_url", "").strip() if lead.get("profile_url") else None
+        existing = []
+        if profile_url and len(profile_url) > 10:
+            res = supabase.table("leads").select("id").eq("user_id", user_id).eq("profile_url", profile_url).execute()
+            existing = res.data
+        results.append({
+            "name": lead.get("name"),
+            "profile_url": profile_url,
+            "existing_count": len(existing),
+            "would_skip": len(existing) > 0
+        })
+    total_in_db = supabase.table("leads").select("id").eq("user_id", user_id).execute()
+    return {"leads_in_db": len(total_in_db.data), "check_results": results, "payload_count": len(leads)}

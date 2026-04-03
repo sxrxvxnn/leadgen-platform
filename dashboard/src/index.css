@@ -15,11 +15,23 @@
   --gray-4: #555555;
   --gray-5: #888888;
   --red: #ff2d2d;
-  --red-dim: rgba(255, 45, 45, 0.08);
+  --red-dim: rgba(255,45,45,0.08);
   --green: #00e676;
-  --green-dim: rgba(0, 230, 118, 0.08);
+  --green-dim: rgba(0,230,118,0.08);
   --amber: #ffab00;
-  --amber-dim: rgba(255, 171, 0, 0.08);
+  --amber-dim: rgba(255,171,0,0.08);
+  --cursor-color: #f0ede8;
+}
+
+[data-theme="light"] {
+  --black: #ffffff;
+  --white: #0a0a0a;
+  --gray-1: #f5f5f5;
+  --gray-2: #e0e0e0;
+  --gray-3: #cccccc;
+  --gray-4: #888888;
+  --gray-5: #555555;
+  --cursor-color: #0a0a0a;
 }
 
 html, body {
@@ -35,26 +47,25 @@ a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: none; }
 input, select, textarea { font-family: inherit; }
 
-/* Custom cursor */
 #cursor {
   position: fixed;
   width: 12px;
   height: 12px;
-  background: var(--white);
+  background: var(--cursor-color);
   border-radius: 50%;
   pointer-events: none;
   z-index: 99999;
   transform: translate(-50%, -50%);
   transition: width 0.2s, height 0.2s, background 0.2s;
-  mix-blend-mode: difference;
 }
 
 #cursor.hovering {
   width: 40px;
   height: 40px;
+  background: var(--cursor-color);
+  opacity: 0.3;
 }
 
-/* Grain overlay */
 body::before {
   content: '';
   position: fixed;
@@ -65,12 +76,10 @@ body::before {
   opacity: 0.5;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--black); }
 ::-webkit-scrollbar-thumb { background: var(--gray-3); border-radius: 2px; }
 
-/* Animations */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -89,8 +98,4 @@ body::before {
 .fade-up { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .fade-in { animation: fadeIn 0.4s ease forwards; }
 
-/* Selection */
-::selection {
-  background: var(--white);
-  color: var(--black);
-}
+::selection { background: var(--white); color: var(--black); }

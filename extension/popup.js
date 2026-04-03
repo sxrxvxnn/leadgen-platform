@@ -1,7 +1,5 @@
 const API = 'http://localhost:8000/api'
 
-// ─── Helpers ─────────────────────────────────────────────────
-
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'))
   document.getElementById(id).classList.add('active')
@@ -14,8 +12,7 @@ function setStatus(msg, type) {
 }
 
 function clearStatus() {
-  const el = document.getElementById('statusMsg')
-  el.className = 'status-msg'
+  document.getElementById('statusMsg').className = 'status-msg'
 }
 
 function showLoginError(msg) {
@@ -26,16 +23,15 @@ function showLoginError(msg) {
 
 function detectPageType(url) {
   if (!url) return 'unknown'
-  if (url.includes('/company/')) return 'company'
-  if (url.includes('/in/')) return 'profile'
-  if (url.includes('/search/results/people')) return 'search'
+  if (url.includes('linkedin.com/company/') && url.includes('/people')) return 'company-people'
+  if (url.includes('linkedin.com/company/')) return 'company'
+  if (url.includes('linkedin.com/in/')) return 'profile'
+  if (url.includes('linkedin.com/search/results/people')) return 'search'
   return 'unknown'
 }
 
 function updateLeadCount(token) {
-  fetch(API + '/leads', {
-    headers: { Authorization: 'Bearer ' + token }
-  })
+  fetch(API + '/leads', { headers: { Authorization: 'Bearer ' + token } })
     .then((r) => r.json())
     .then((data) => {
       const count = data.leads ? data.leads.length : 0
@@ -45,9 +41,7 @@ function updateLeadCount(token) {
     .catch(() => {})
 }
 
-// ─── Auth ─────────────────────────────────────────────────────
-
-async function login(email, password) {
+async function loginApi(email, password) {
   const res = await fetch(API + '/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -56,8 +50,6 @@ async function login(email, password) {
   if (!res.ok) throw new Error('Invalid credentials')
   return res.json()
 }
-
-// ─── Init ─────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['token', 'userEmail'], (data) => {
@@ -72,11 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initMainScreen(token, email) {
   show('mainScreen')
-
-  // Online dot
   document.getElementById('statusDot').className = 'status-dot online'
 
-  // Detect page type
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const url = tabs[0] ? tabs[0].url : ''
     const type = detectPageType(url)
@@ -84,12 +73,19 @@ function initMainScreen(token, email) {
     const label = document.getElementById('pageTypeLabel')
     const extractBtn = document.getElementById('extractBtn')
 
+    const typeLabels = {
+      'company': 'COMPANY PAGE',
+      'company-people': 'PEOPLE PAGE ✓ READY',
+      'profile': 'PROFILE PAGE',
+      'search': 'SEARCH RESULTS'
+    }
+
     if (type === 'unknown') {
       label.textContent = 'NOT A LINKEDIN PAGE'
       extractBtn.disabled = true
       extractBtn.style.opacity = '0.3'
     } else {
-      label.textContent = type.toUpperCase() + ' PAGE'
+      label.textContent = typeLabels[type] || type.toUpperCase()
       badge.className = 'page-badge linkedin'
       extractBtn.disabled = false
       extractBtn.style.opacity = '1'
@@ -98,8 +94,6 @@ function initMainScreen(token, email) {
 
   updateLeadCount(token)
 }
-
-// ─── Login button ─────────────────────────────────────────────
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
   const email = document.getElementById('loginEmail').value.trim()
@@ -115,11 +109,8 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   btn.querySelector('span').textContent = 'Signing in...'
 
   try {
-    const data = await login(email, password)
-    chrome.storage.local.set({
-      token: data.access_token,
-      userEmail: data.user.email
-    }, () => {
+    const data = await loginApi(email, password)
+    chrome.storage.local.set({ token: data.access_token, userEmail: data.user.email }, () => {
       initMainScreen(data.access_token, data.user.email)
     })
   } catch (err) {
@@ -129,8 +120,6 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   }
 })
 
-// ─── Extract button ───────────────────────────────────────────
-
 document.getElementById('extractBtn').addEventListener('click', () => {
   const btn = document.getElementById('extractBtn')
   btn.disabled = true
@@ -138,99 +127,136 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   clearStatus()
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    chrome.tabs.sendMessage(tabs[0].id, { action: 'scrape' }, (response) => {
-      btn.disabled = false
-      btn.querySelector('span').textContent = 'Extract leads from page'
+    const tabId = tabs[0].id
 
-      if (chrome.runtime.lastError) {
-        setStatus('Refresh the LinkedIn page and try again.', 'error')
-        return
-      }
+    chrome.runtime.sendMessage(
+      { action: 'injectAndScrape', tabId },
+      (bgResponse) => {
+        btn.disabled = false
+        btn.querySelector('span').textContent = 'Extract leads from page'
 
-      if (!response || !response.success) {
-        setStatus('Extraction failed. Try again.', 'error')
-        return
-      }
-
-      const data = response.data
-
-      if (data.error) {
-        setStatus(data.error, 'error')
-        return
-      }
-
-      chrome.storage.local.get(['token'], (stored) => {
-        const token = stored.token
-        if (!token) {
-          setStatus('Session expired. Please sign in again.', 'error')
-          show('loginScreen')
+        if (chrome.runtime.lastError || !bgResponse) {
+          setStatus('Could not connect. Refresh LinkedIn and try again.', 'error')
           return
         }
 
-        // Build leads array from scraped data
-        let leads = []
-
-        if (data.type === 'search') {
-          leads = data.leads.map((l) => ({
-            name: l.name,
-            title: l.title,
-            company: l.company,
-            location: l.location,
-            profile_url: l.profileUrl,
-            scraped_at: l.scrapedAt,
-            status: 'new'
-          }))
-        } else if (data.type === 'profile') {
-          leads = [{
-            name: data.name,
-            title: data.title,
-            company: data.company,
-            location: data.location,
-            profile_url: data.profileUrl,
-            scraped_at: data.scrapedAt,
-            status: 'new'
-          }]
-        } else if (data.type === 'company') {
-          // Company pages — save as company not lead
-          saveCompany(data, token)
-          setStatus('Company "' + data.name + '" saved to dashboard.', 'success')
+        if (!bgResponse.success) {
+          setStatus('Extraction failed: ' + (bgResponse.error || 'Unknown error'), 'error')
           return
         }
 
-        if (leads.length === 0) {
-          setStatus('No leads found on this page.', 'error')
+        const data = bgResponse.data
+
+        if (!data) {
+          setStatus('No data returned. Try again.', 'error')
           return
         }
 
-        // Send to backend
-        fetch(API + '/leads/bulk', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + token
-          },
-          body: JSON.stringify({ leads })
-        })
-          .then((r) => r.json())
-          .then((result) => {
-            const inserted = result.inserted || 0
-            const skipped = result.skipped || 0
-            if (inserted > 0) {
-              setStatus(inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved to dashboard.' + (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''), 'success')
-            } else {
-              setStatus('All leads already exist in your dashboard.', 'error')
+        if (data.error) {
+          setStatus(data.error, 'error')
+          return
+        }
+
+        chrome.storage.local.get(['token'], (stored) => {
+          const token = stored.token
+          if (!token) {
+            setStatus('Session expired. Please sign in again.', 'error')
+            show('loginScreen')
+            return
+          }
+
+          // Handle company page
+          if (data.type === 'company') {
+            if (!data.name) {
+              setStatus('Could not read company name. Scroll and retry.', 'error')
+              return
             }
+            saveCompany(data, token)
+            setStatus('Company "' + data.name + '" saved.', 'success')
             updateLeadCount(token)
+            return
+          }
+
+          // Build leads array
+          let leads = []
+
+          if (data.type === 'search') {
+            if (!data.leads || data.leads.length === 0) {
+              setStatus('No profiles found. Scroll down to load profiles first.', 'error')
+              return
+            }
+            leads = data.leads
+              .filter((l) => l.name && l.name.trim().length > 0)
+              .map((l) => ({
+                name: l.name.trim(),
+                title: l.title ? l.title.trim() : null,
+                company: l.company ? l.company.trim() : null,
+                location: l.location ? l.location.trim() : null,
+                profile_url: l.profileUrl ? l.profileUrl.trim() : null,
+                scraped_at: l.scrapedAt || new Date().toISOString(),
+                status: 'new'
+              }))
+          } else if (data.type === 'profile') {
+            if (!data.name) {
+              setStatus('Could not read profile. Scroll down and retry.', 'error')
+              return
+            }
+            leads = [{
+              name: data.name.trim(),
+              title: data.title ? data.title.trim() : null,
+              company: data.company ? data.company.trim() : null,
+              location: data.location ? data.location.trim() : null,
+              profile_url: data.profileUrl ? data.profileUrl.trim() : null,
+              scraped_at: data.scrapedAt || new Date().toISOString(),
+              status: 'new'
+            }]
+          }
+
+          if (leads.length === 0) {
+            setStatus('No valid leads found. Scroll down and retry.', 'error')
+            return
+          }
+
+          // Show found count immediately
+          setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
+
+          // Send directly to backend — no local duplicate check
+          fetch(API + '/leads/bulk', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({ leads: leads })
           })
-          .catch(() => {
-            setStatus('Failed to sync. Is your backend running?', 'error')
-          })
-      })
-    })
+            .then((r) => {
+              if (!r.ok) throw new Error('HTTP ' + r.status)
+              return r.json()
+            })
+            .then((result) => {
+              const inserted = result.inserted || 0
+              const skipped = result.skipped || 0
+              if (inserted > 0) {
+                setStatus(
+                  '✓ ' + inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved.' +
+                  (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''),
+                  'success'
+                )
+              } else if (skipped > 0) {
+                setStatus(skipped + ' leads already in dashboard.', 'error')
+              } else {
+                setStatus('No leads were saved. Try again.', 'error')
+              }
+              updateLeadCount(token)
+            })
+            .catch((err) => {
+              setStatus('Sync failed: ' + err.message + '. Is backend running?', 'error')
+            })
+        })
+      }
+    )
   })
 })
-
-// ─── Save company helper ──────────────────────────────────────
 
 function saveCompany(data, token) {
   fetch(API + '/companies', {
@@ -241,23 +267,19 @@ function saveCompany(data, token) {
     },
     body: JSON.stringify({
       name: data.name,
-      industry: data.industry,
-      size: data.size,
-      website: data.website,
-      headquarters: data.headquarters,
-      description: data.description,
-      linkedin_url: data.url
+      industry: data.industry || null,
+      size: data.size || null,
+      website: data.website || null,
+      headquarters: data.headquarters || null,
+      description: data.description || null,
+      linkedin_url: data.url || null
     })
-  }).catch(() => {})
+  }).catch((e) => console.error('Company save error:', e))
 }
-
-// ─── Dashboard button ─────────────────────────────────────────
 
 document.getElementById('dashboardBtn').addEventListener('click', () => {
   chrome.tabs.create({ url: 'http://localhost:5173' })
 })
-
-// ─── Logout button ────────────────────────────────────────────
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
   chrome.storage.local.remove(['token', 'userEmail'], () => {
