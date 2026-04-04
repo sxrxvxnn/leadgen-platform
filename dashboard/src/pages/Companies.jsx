@@ -7,6 +7,8 @@ const CLASSIFICATIONS = [
   'Fintech',
   'Healthtech',
   'SaaS',
+  'Cybersecurity',
+  'IT Services',
   'E-commerce',
   'Edtech',
   'Logistics',
@@ -14,8 +16,14 @@ const CLASSIFICATIONS = [
   'Banking',
   'Insurance',
   'VC / Investment',
+  'Media',
+  'Consulting',
+  'Retail',
+  'Real Estate',
   'Government',
+  'Non-profit',
   'Other',
+  'Custom...',
 ]
 
 const PROSPECT_STATUSES = [
@@ -32,16 +40,24 @@ const classificationColors = {
   'Fintech': '#00d4ff',
   'Healthtech': 'var(--green)',
   'SaaS': 'var(--amber)',
-  'E-commerce': '#a78bfa',
-  'Edtech': '#fb923c',
+  'Cybersecurity': '#ff2d2d',
+  'IT Services': '#a78bfa',
+  'E-commerce': '#fb923c',
+  'Edtech': '#34d399',
   'Logistics': '#94a3b8',
   'Manufacturing': '#94a3b8',
   'Banking': 'var(--gray-4)',
   'Insurance': 'var(--gray-4)',
-  'VC / Investment': 'var(--accent-red, #ff2d2d)',
+  'VC / Investment': '#ff2d2d',
+  'Media': '#f472b6',
+  'Consulting': '#60a5fa',
+  'Retail': '#fbbf24',
+  'Real Estate': '#a3e635',
   'Government': 'var(--gray-4)',
+  'Non-profit': 'var(--green)',
   'Unclassified': 'var(--gray-3)',
   'Other': 'var(--gray-4)',
+  'Custom...': 'var(--white)',
 }
 
 const prospectColors = {
@@ -58,14 +74,18 @@ function classifyCompany(company) {
   const text = [company.name, company.industry, company.description].join(' ').toLowerCase()
   if (/fintech|payment|lending|neobank|wallet|crypto|blockchain|insurtech/.test(text)) return 'Fintech'
   if (/health|medical|pharma|clinic|hospital|biotech|telemedicine/.test(text)) return 'Healthtech'
-  if (/saas|software|cloud|platform|api|developer|devops|cybersecurity|security/.test(text)) return 'SaaS'
+  if (/cyber|security|vapt|penetration|vulnerability|compliance|soc|siem/.test(text)) return 'Cybersecurity'
+  if (/it services|it consulting|information technology|managed service|msp/.test(text)) return 'IT Services'
+  if (/saas|cloud platform|api|developer tools|devops/.test(text)) return 'SaaS'
   if (/ecommerce|e-commerce|retail|shopping|marketplace/.test(text)) return 'E-commerce'
   if (/edtech|education|learning|school|university|training/.test(text)) return 'Edtech'
   if (/logistics|supply chain|shipping|freight|transport/.test(text)) return 'Logistics'
   if (/manufactur|factory|industrial|hardware/.test(text)) return 'Manufacturing'
-  if (/bank|banking|financial services/.test(text)) return 'Banking'
+  if (/bank|banking/.test(text)) return 'Banking'
   if (/insurance|insurer/.test(text)) return 'Insurance'
   if (/venture|capital|investment|fund|private equity/.test(text)) return 'VC / Investment'
+  if (/media|news|publishing|broadcast/.test(text)) return 'Media'
+  if (/consult|advisory/.test(text)) return 'Consulting'
   if (/government|ministry|department|public sector/.test(text)) return 'Government'
   return 'Unclassified'
 }
@@ -76,6 +96,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
   const [notes, setNotes] = useState(company.notes || '')
   const [editingNotes, setEditingNotes] = useState(false)
   const [leadsCount, setLeadsCount] = useState(null)
+  const [showCustomInput, setShowCustomInput] = useState(false)
 
   useEffect(() => {
     // Auto-classify on mount if unclassified
@@ -118,15 +139,43 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
           <p style={card.industry}>{company.industry || 'Industry unknown'}</p>
         </div>
         <div style={card.headerRight}>
-          <select
-            value={classification}
-            onChange={(e) => handleClassificationChange(e.target.value)}
-            style={{ ...card.select, color: classColor, borderColor: classColor }}
-          >
-            {CLASSIFICATIONS.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          {showCustomInput ? (
+            <input
+              type="text"
+              placeholder="Type industry..."
+              autoFocus
+              style={{ ...card.select, width: '140px', color: 'var(--white)', borderColor: 'var(--amber)' }}
+              onBlur={(e) => {
+                const val = e.target.value.trim()
+                if (val) { handleClassificationChange(val) }
+                setShowCustomInput(false)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const val = e.target.value.trim()
+                  if (val) handleClassificationChange(val)
+                  setShowCustomInput(false)
+                }
+                if (e.key === 'Escape') setShowCustomInput(false)
+              }}
+            />
+          ) : (
+            <select
+              value={classification}
+              onChange={(e) => {
+                if (e.target.value === 'Custom...') {
+                  setShowCustomInput(true)
+                } else {
+                  handleClassificationChange(e.target.value)
+                }
+              }}
+              style={{ ...card.select, color: classColor, borderColor: classColor }}
+            >
+              {CLASSIFICATIONS.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)}>✕</button>
         </div>
       </div>
