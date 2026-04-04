@@ -78,3 +78,23 @@ class LeadStarUpdate(BaseModel):
 
 class LeadConnectionStatusUpdate(BaseModel):
     connection_status: str
+
+class LeadSpreadsheetUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    title: Optional[str] = None
+    company: Optional[str] = None
+    profile_url: Optional[str] = None
+    employee_count: Optional[str] = None
+    org_size: Optional[str] = None
+    website: Optional[str] = None
+    followers_count: Optional[str] = None
+    revenue: Optional[str] = None
+    has_security_team: Optional[str] = None
+    compliance: Optional[str] = None
+    account_manager: Optional[str] = None
+    linkedin_status_rahul: Optional[str] = None
+    linkedin_status_rejah: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    remarks: Optional[str] = None

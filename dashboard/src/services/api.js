@@ -60,3 +60,5 @@ export const deletePersona = (id) => api.delete(`/personas/${id}`)
 // ─── STAR & CONNECTION STATUS ─────────────────────────────────
 export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
+// ─── SPREADSHEET ──────────────────────────────────────────────
+export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)

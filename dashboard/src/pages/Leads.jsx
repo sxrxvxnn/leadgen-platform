@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus } from '../services/api'
 import Navbar from '../components/Navbar'
+import SpreadsheetView from '../components/SpreadsheetView'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'disqualified']
 
@@ -33,10 +34,10 @@ const connectionStatusColors = {
   'Follow-up 2': 'var(--amber)',
   'Follow-up 3': 'var(--amber)',
   'Connected': 'var(--green)',
-  'Not Interested': 'var(--red, #ff2d2d)',
+  'Not Interested': '#ff2d2d',
   'No Response': 'var(--gray-4)',
-  'Transferred to Rahul': 'var(--accent, #00d4ff)',
-  'Transferred to Rejah': 'var(--accent, #00d4ff)',
+  'Transferred to Rahul': '#00d4ff',
+  'Transferred to Rejah': '#00d4ff',
 }
 
 function StarButton({ starred, onClick }) {
@@ -134,7 +135,6 @@ function LeadRow({
       background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent',
       borderLeft: lead.starred ? '2px solid var(--amber)' : '2px solid transparent',
     }}>
-      {/* Checkbox */}
       <div style={{ width: '32px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <input
           type="checkbox"
@@ -145,7 +145,6 @@ function LeadRow({
         />
       </div>
 
-      {/* Star */}
       <div style={{ width: '28px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <StarButton
           starred={lead.starred}
@@ -153,7 +152,6 @@ function LeadRow({
         />
       </div>
 
-      {/* Data columns */}
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
         return (
@@ -195,7 +193,6 @@ function LeadRow({
         )
       })}
 
-      {/* Connection status */}
       <div style={{ width: '170px', flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: '8px' }}>
         <ConnectionStatusDropdown
           status={lead.connection_status || 'Not Requested'}
@@ -203,7 +200,6 @@ function LeadRow({
         />
       </div>
 
-      {/* Actions */}
       <div style={{ width: '100px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
         {lead.profile_url && <ViewLink url={lead.profile_url} />}
         {!lead.email && (
@@ -243,6 +239,7 @@ export default function Leads() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [starredOnly, setStarredOnly] = useState(false)
+  const [showSpreadsheet, setShowSpreadsheet] = useState(false)
   const [editingCell, setEditingCell] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [selected, setSelected] = useState([])
@@ -391,6 +388,13 @@ export default function Leads() {
           >
             ★ {starredCount} STARRED
           </button>
+          <button
+            style={s.spreadsheetBtn}
+            onClick={() => setShowSpreadsheet(true)}
+            data-hover="true"
+          >
+            ⊞ Spreadsheet
+          </button>
           <button style={s.exportBtn} onClick={handleExport} data-hover="true">
             Export {selected.length > 0 ? '(' + selected.length + ')' : 'all'} →
           </button>
@@ -425,7 +429,6 @@ export default function Leads() {
         </div>
 
         <div style={s.table}>
-          {/* Header */}
           <div style={s.thead}>
             <div style={{ width: '32px', flexShrink: 0 }}>
               <input
@@ -473,6 +476,16 @@ export default function Leads() {
           ))}
         </div>
       </div>
+
+      {showSpreadsheet && (
+        <SpreadsheetView
+          leads={leads}
+          onClose={() => setShowSpreadsheet(false)}
+          onLeadUpdate={(id, data) => {
+            setLeads(prev => prev.map(l => l.id === id ? { ...l, ...data } : l))
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -484,6 +497,7 @@ const s = {
   heroTitle: { fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '900', letterSpacing: '-2px', color: 'var(--white)', lineHeight: 1 },
   heroUnit: { fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '300', color: 'var(--gray-4)', letterSpacing: '-1px' },
   starFilterBtn: { padding: '8px 16px', border: '1px solid', borderRadius: '4px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', letterSpacing: '1px', fontFamily: 'inherit', transition: 'all 0.15s' },
+  spreadsheetBtn: { padding: '10px 20px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '13px', fontWeight: '600', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit' },
   exportBtn: { padding: '10px 24px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer' },
   container: { padding: '24px 32px' },
   filters: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate
+from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
 from .database import supabase
 
 router = APIRouter()
@@ -436,6 +436,26 @@ async def update_connection_status(
         return {"lead": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+# ─── SPREADSHEET UPDATE ───────────────────────────────────────
+
+@router.patch("/leads/{lead_id}/spreadsheet")
+async def spreadsheet_update_lead(
+    lead_id: str,
+    data: LeadSpreadsheetUpdate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        response = supabase.table("leads")\
+            .update(update_data)\
+            .eq("id", lead_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"lead": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
@@ -480,9 +500,17 @@ async def bulk_create_leads(
                 continue
 
             # Clean the data
+            # Auto split name into first and last
+            name = lead.get("name", "").strip()
+            name_parts = name.split(" ", 1)
+            first_name = name_parts[0] if name_parts else ""
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+
             clean_lead = {
                 "user_id": user_id,
-                "name": lead.get("name", "").strip(),
+                "name": name,
+                "first_name": first_name,
+                "last_name": last_name,
                 "title": lead.get("title", "").strip() if lead.get("title") else None,
                 "company": lead.get("company", "").strip() if lead.get("company") else None,
                 "location": lead.get("location", "").strip() if lead.get("location") else None,
