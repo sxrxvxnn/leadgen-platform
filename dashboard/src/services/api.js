@@ -66,3 +66,6 @@ export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/sprea
 export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
 export const deleteCompany = (id) => api.delete(`/companies/${id}`)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
+// ─── COMPLIANCE CHECKER ───────────────────────────────────────
+export const checkCompliance = (companyId, groqKey) =>
+  api.post(`/companies/${companyId}/check-compliance`, { groq_api_key: groqKey })

@@ -95,6 +95,9 @@ async def create_lead(lead: LeadCreate, authorization: str = Header(...)):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print(f"COMPLIANCE ERROR: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -579,6 +582,123 @@ async def bulk_create_companies(
         "skipped": skipped,
         "companies": inserted
     }
+
+# ─── COMPLIANCE CHECKER ───────────────────────────────────────
+
+@router.post("/companies/{company_id}/check-compliance")
+async def check_compliance(
+    company_id: str,
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+
+    try:
+        from groq import Groq
+        import json
+        import traceback
+
+        # Get company details
+        company_res = supabase.table("companies")\
+            .select("*")\
+            .eq("id", company_id)\
+            .eq("user_id", user_id)\
+            .execute()
+
+        if not company_res.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        company = company_res.data[0]
+        company_name = company.get("name", "")
+        industry = company.get("industry", "")
+        groq_api_key = payload.get("groq_api_key", "")
+
+        if not groq_api_key:
+            raise HTTPException(status_code=400, detail="Groq API key required")
+
+        client = Groq(api_key=groq_api_key)
+
+        prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
+
+Research the following compliance standards for {company_name}:
+- ISO 27001 (Information Security Management)
+- SOC 2 (Service Organization Control)
+- GDPR (General Data Protection Regulation)
+- HIPAA (Health Insurance Portability and Accountability Act)
+- PCI DSS (Payment Card Industry Data Security Standard)
+- OWASP (Open Web Application Security Project)
+
+Respond in JSON format only with no explanation:
+{{
+  "compliance": "comma-separated list of certifications this company likely has or needs",
+  "has_security_team": "Yes or No or Unknown",
+  "security_notes": "brief one sentence note about their security posture",
+  "confidence": "high, medium, or low"
+}}
+
+If you have no information about this company, return confidence as low and make reasonable guesses based on their industry."""
+
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=300,
+        )
+
+        response_text = completion.choices[0].message.content.strip()
+
+        try:
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            result = json.loads(response_text)
+        except Exception:
+            result = {
+                "compliance": "Unknown",
+                "has_security_team": "Unknown",
+                "security_notes": "Could not parse response",
+                "confidence": "low"
+            }
+
+        update_data = {}
+        if result.get("compliance"):
+            update_data["compliance"] = result["compliance"]
+
+        if result.get("compliance"):
+            supabase.table("leads")\
+                .update({"compliance": result["compliance"]})\
+                .eq("user_id", user_id)\
+                .ilike("company", company_name)\
+                .execute()
+
+        existing_notes = company.get("notes", "") or ""
+        security_note = result.get("security_notes", "")
+        if security_note and security_note not in existing_notes:
+            update_data["notes"] = (existing_notes + "\n\n[AI Compliance Check]: " + security_note).strip()
+
+        if update_data:
+            supabase.table("companies")\
+                .update(update_data)\
+                .eq("id", company_id)\
+                .execute()
+
+        return {
+            "company": company_name,
+            "compliance": result.get("compliance", "Unknown"),
+            "has_security_team": result.get("has_security_team", "Unknown"),
+            "security_notes": result.get("security_notes", ""),
+            "confidence": result.get("confidence", "low"),
+            "updated": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"COMPLIANCE ERROR: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
 

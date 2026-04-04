@@ -7,28 +7,23 @@ export default function Settings() {
   const [fullName, setFullName] = useState('')
   const [hunterKey, setHunterKey] = useState('')
   const [apolloKey, setApolloKey] = useState('')
+  const [groqKey, setGroqKey] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [darkMode, setDarkMode] = useState(true)
 
   useEffect(() => {
-  const saved = localStorage.getItem('theme')
-  setDarkMode(saved !== 'light')
-  const savedName = localStorage.getItem('fullName')
-  if (savedName) setFullName(savedName)
-  const savedHunter = localStorage.getItem('hunterKey')
-  if (savedHunter) setHunterKey(savedHunter)
-  const savedApollo = localStorage.getItem('apolloKey')
-  if (savedApollo) setApolloKey(savedApollo)
-
-  // Listen for name updates from navbar
-  const onNameUpdate = () => {
-    const n = localStorage.getItem('fullName')
-    if (n) setFullName(n)
-  }
-  window.addEventListener('nameUpdated', onNameUpdate)
-  return () => window.removeEventListener('nameUpdated', onNameUpdate)
-}, [])
+    const saved = localStorage.getItem('theme')
+    setDarkMode(saved !== 'light')
+    const savedName = localStorage.getItem('fullName')
+    if (savedName) setFullName(savedName)
+    const savedHunter = localStorage.getItem('hunterKey')
+    if (savedHunter) setHunterKey(savedHunter)
+    const savedApollo = localStorage.getItem('apolloKey')
+    if (savedApollo) setApolloKey(savedApollo)
+    const savedGroq = localStorage.getItem('groqKey')
+    if (savedGroq) setGroqKey(savedGroq)
+  }, [])
 
   function handleSaveName(e) {
     e.preventDefault()
@@ -37,7 +32,7 @@ export default function Settings() {
     window.dispatchEvent(new Event('nameUpdated'))
     setTimeout(() => {
       setSaving(false)
-      setMsg('Name updated.')
+      setMsg('name')
       setTimeout(() => setMsg(''), 3000)
     }, 400)
   }
@@ -46,7 +41,8 @@ export default function Settings() {
     e.preventDefault()
     localStorage.setItem('hunterKey', hunterKey)
     localStorage.setItem('apolloKey', apolloKey)
-    setMsg('API keys saved locally.')
+    localStorage.setItem('groqKey', groqKey)
+    setMsg('keys')
     setTimeout(() => setMsg(''), 3000)
   }
 
@@ -73,9 +69,7 @@ export default function Settings() {
           <p style={s.sectionLabel}>PROFILE</p>
           <div style={s.sectionBody}>
             <div style={s.avatar}>
-              <span style={s.avatarText}>
-                {(fullName || user?.email || 'U')[0].toUpperCase()}
-              </span>
+              <span style={s.avatarText}>{(fullName || user?.email || 'U')[0].toUpperCase()}</span>
             </div>
             <div>
               <p style={s.profileName}>{fullName || user?.email?.split('@')[0] || 'User'}</p>
@@ -85,20 +79,13 @@ export default function Settings() {
           <form onSubmit={handleSaveName} style={s.form}>
             <div style={s.field}>
               <label style={s.label}>DISPLAY NAME</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your full name"
-                style={s.input}
-                data-hover="true"
-              />
+              <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your full name" style={s.input} data-hover="true" />
             </div>
             <button type="submit" style={s.saveBtn} disabled={saving} data-hover="true">
               <span>{saving ? 'Saving...' : 'Save name'}</span>
               <span>→</span>
             </button>
-            {msg && msg.includes('Name') && <p style={s.msgText}>{msg}</p>}
+            {msg === 'name' && <p style={s.msgText}>Name updated.</p>}
           </form>
         </div>
 
@@ -116,40 +103,39 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Enrichment API keys */}
+        {/* API Keys */}
         <div style={s.section}>
-          <p style={s.sectionLabel}>ENRICHMENT API KEYS</p>
-          <p style={s.sectionDesc}>Add your API keys to enable automatic email enrichment for leads. Keys are stored locally on your device.</p>
+          <p style={s.sectionLabel}>API KEYS</p>
+          <p style={s.sectionDesc}>Add your API keys to enable enrichment and AI compliance checking. Keys are stored locally on your device only.</p>
           <form onSubmit={handleSaveKeys} style={{ ...s.form, marginTop: '20px' }}>
+
+            <div style={s.field}>
+              <label style={s.label}>GROQ API KEY</label>
+              <input type="password" value={groqKey} onChange={(e) => setGroqKey(e.target.value)} placeholder="gsk_..." style={s.input} data-hover="true" />
+              <p style={s.fieldHint}>
+                Free at console.groq.com — powers AI compliance checking. No credit card needed.
+              </p>
+            </div>
+
+            <div style={s.divider} />
+
             <div style={s.field}>
               <label style={s.label}>HUNTER.IO API KEY</label>
-              <input
-                type="password"
-                value={hunterKey}
-                onChange={(e) => setHunterKey(e.target.value)}
-                placeholder="Enter your Hunter.io API key"
-                style={s.input}
-                data-hover="true"
-              />
-              <p style={s.fieldHint}>Get a free key at hunter.io — 25 lookups/month free</p>
+              <input type="password" value={hunterKey} onChange={(e) => setHunterKey(e.target.value)} placeholder="Enter your Hunter.io API key" style={s.input} data-hover="true" />
+              <p style={s.fieldHint}>Get a free key at hunter.io — 25 email lookups/month free</p>
             </div>
+
             <div style={s.field}>
               <label style={s.label}>APOLLO.IO API KEY</label>
-              <input
-                type="password"
-                value={apolloKey}
-                onChange={(e) => setApolloKey(e.target.value)}
-                placeholder="Enter your Apollo.io API key"
-                style={s.input}
-                data-hover="true"
-              />
+              <input type="password" value={apolloKey} onChange={(e) => setApolloKey(e.target.value)} placeholder="Enter your Apollo.io API key" style={s.input} data-hover="true" />
               <p style={s.fieldHint}>Get a free key at apollo.io — 50 credits/month free</p>
             </div>
+
             <button type="submit" style={s.saveBtn} data-hover="true">
               <span>Save API keys</span>
               <span>→</span>
             </button>
-            {msg && msg.includes('API') && <p style={s.msgText}>{msg}</p>}
+            {msg === 'keys' && <p style={s.msgText}>API keys saved locally.</p>}
           </form>
         </div>
 
@@ -161,12 +147,13 @@ export default function Settings() {
               { label: 'EMAIL', value: user?.email },
               { label: 'PLAN', value: 'FREE' },
               { label: 'STATUS', value: 'ACTIVE' },
-              { label: 'HUNTER KEY', value: hunterKey ? '••••••••' + hunterKey.slice(-4) : 'Not set' },
-              { label: 'APOLLO KEY', value: apolloKey ? '••••••••' + apolloKey.slice(-4) : 'Not set' },
+              { label: 'GROQ KEY', value: groqKey ? '••••' + groqKey.slice(-4) : 'Not set' },
+              { label: 'HUNTER KEY', value: hunterKey ? '••••' + hunterKey.slice(-4) : 'Not set' },
+              { label: 'APOLLO KEY', value: apolloKey ? '••••' + apolloKey.slice(-4) : 'Not set' },
             ].map(({ label, value }) => (
               <div key={label} style={s.infoItem}>
                 <p style={s.infoLabel}>{label}</p>
-                <p style={{ ...s.infoValue, color: value === 'ACTIVE' ? 'var(--green)' : 'var(--white)' }}>{value || '—'}</p>
+                <p style={{ ...s.infoValue, color: value === 'ACTIVE' ? 'var(--green)' : value === 'Not set' ? 'var(--gray-3)' : 'var(--white)' }}>{value || '—'}</p>
               </div>
             ))}
           </div>
@@ -197,6 +184,7 @@ const s = {
   label: { fontSize: '9px', fontWeight: '700', letterSpacing: '2px', color: 'var(--gray-4)' },
   fieldHint: { fontSize: '11px', color: 'var(--gray-4)', marginTop: '2px' },
   input: { padding: '12px 14px', background: 'var(--black)', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '13px', color: 'var(--white)', outline: 'none', fontFamily: 'inherit' },
+  divider: { height: '1px', background: 'var(--gray-2)', margin: '4px 0' },
   saveBtn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', maxWidth: '200px' },
   msgText: { fontSize: '12px', color: 'var(--green)', fontWeight: '600' },
   themeRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
