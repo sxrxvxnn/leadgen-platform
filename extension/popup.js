@@ -23,6 +23,10 @@ function showLoginError(msg) {
 
 function detectPageType(url) {
   if (!url) return 'unknown'
+  if (url.includes('linkedin.com/sales/search/company')) return 'salenav-companies'
+  if (url.includes('linkedin.com/sales/search/people')) return 'salenav-people'
+  if (url.includes('linkedin.com/sales/company/')) return 'salenav-company'
+  if (url.includes('linkedin.com/search/results/companies')) return 'linkedin-companies'
   if (url.includes('linkedin.com/company/') && url.includes('/people')) return 'company-people'
   if (url.includes('linkedin.com/company/')) return 'company'
   if (url.includes('linkedin.com/in/')) return 'profile'
@@ -74,11 +78,15 @@ function initMainScreen(token, email) {
     const extractBtn = document.getElementById('extractBtn')
 
     const typeLabels = {
-      'company': 'COMPANY PAGE',
-      'company-people': 'PEOPLE PAGE ✓ READY',
-      'profile': 'PROFILE PAGE',
-      'search': 'SEARCH RESULTS'
-    }
+  'salenav-companies': 'SALES NAV ACCOUNTS ✓',
+  'salenav-people': 'SALES NAV PEOPLE ✓',
+  'salenav-company': 'SALES NAV COMPANY ✓',
+  'linkedin-companies': 'COMPANY SEARCH ✓',
+  'company-people': 'PEOPLE PAGE ✓ READY',
+  'company': 'COMPANY PAGE',
+  'profile': 'PROFILE PAGE',
+  'search': 'SEARCH RESULTS'
+}
 
     if (type === 'unknown') {
       label.textContent = 'NOT A LINKEDIN PAGE'
@@ -162,6 +170,16 @@ document.getElementById('extractBtn').addEventListener('click', () => {
           if (!token) {
             setStatus('Session expired. Please sign in again.', 'error')
             show('loginScreen')
+            return
+          }
+
+          // Handle company list from Sales Nav or LinkedIn search
+          if (data.type === 'company-list') {
+            if (!data.companies || data.companies.length === 0) {
+              setStatus('No companies found. Scroll down to load results and retry.', 'error')
+              return
+            }
+            saveCompanyList(data.companies, token)
             return
           }
 
@@ -257,6 +275,43 @@ document.getElementById('extractBtn').addEventListener('click', () => {
     )
   })
 })
+
+function saveCompanyList(companies, token) {
+  setStatus('Saving ' + companies.length + ' companies...', 'success')
+
+  let saved = 0
+  let failed = 0
+
+  const saveNext = (index) => {
+    if (index >= companies.length) {
+      setStatus('✓ ' + saved + ' companies saved to dashboard.', 'success')
+      updateLeadCount(token)
+      return
+    }
+
+    const company = companies[index]
+    if (!company.name) { failed++; saveNext(index + 1); return }
+
+    fetch(API + '/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        name: company.name,
+        industry: company.industry || null,
+        size: company.size || null,
+        headquarters: company.headquarters || null,
+        description: company.description || null,
+        website: company.website || null,
+        linkedin_url: company.linkedinUrl || company.salesNavUrl || null,
+      })
+    })
+      .then(r => r.json())
+      .then(() => { saved++; saveNext(index + 1) })
+      .catch(() => { failed++; saveNext(index + 1) })
+  }
+
+  saveNext(0)
+}
 
 function saveCompany(data, token) {
   fetch(API + '/companies', {
