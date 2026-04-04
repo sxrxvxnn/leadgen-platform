@@ -98,3 +98,12 @@ class LeadSpreadsheetUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     remarks: Optional[str] = None
+
+class CompanyUpdate(BaseModel):
+    classification: Optional[str] = None
+    prospect_status: Optional[str] = None
+    employee_count: Optional[str] = None
+    followers: Optional[str] = None
+    revenue: Optional[str] = None
+    notes: Optional[str] = None
+    website: Optional[str] = None

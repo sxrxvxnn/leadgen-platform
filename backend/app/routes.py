@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
-from .models import LeadCreate, LeadUpdate, CompanyCreate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
+from .models import LeadCreate, LeadUpdate, CompanyCreate, CompanyUpdate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
 from .database import supabase
 
 router = APIRouter()
@@ -457,6 +457,128 @@ async def spreadsheet_update_lead(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ─── COMPANY UPDATE ───────────────────────────────────────────
+
+@router.patch("/companies/{company_id}")
+async def update_company(
+    company_id: str,
+    data: CompanyUpdate,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        response = supabase.table("companies")\
+            .update(update_data)\
+            .eq("id", company_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"company": response.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/companies/{company_id}")
+async def delete_company(
+    company_id: str,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        supabase.table("companies")\
+            .delete()\
+            .eq("id", company_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return {"message": "Company deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/companies/{company_id}/leads")
+async def get_company_leads(
+    company_id: str,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        company = supabase.table("companies")\
+            .select("*")\
+            .eq("id", company_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        if not company.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        company_name = company.data[0]["name"]
+        leads = supabase.table("leads")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .ilike("company", company_name)\
+            .execute()
+        return {"company": company.data[0], "leads": leads.data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # ─── BULK COMPANY SAVE ────────────────────────────────────────
+
+@router.post("/companies/bulk")
+async def bulk_create_companies(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    companies = payload.get("companies", [])
+    print(f"DEBUG companies bulk: received {len(companies)} companies, first: {companies[0].get('name') if companies else 'none'}")
+    if not companies:
+        raise HTTPException(status_code=400, detail="No companies provided")
+
+    inserted = []
+    skipped = 0
+
+    for company in companies:
+        try:
+            if not company.get("name"):
+                skipped += 1
+                continue
+
+            # Check for duplicates by name
+            existing = supabase.table("companies")\
+                .select("id")\
+                .eq("user_id", user_id)\
+                .eq("name", company["name"])\
+                .execute()
+
+            if existing.data:
+                skipped += 1
+                continue
+
+            data = {
+                "user_id": user_id,
+                "name": company.get("name", "").strip(),
+                "industry": company.get("industry") or None,
+                "size": company.get("size") or None,
+                "headquarters": company.get("headquarters") or None,
+                "description": company.get("description") or None,
+                "website": company.get("website") or None,
+                "linkedin_url": company.get("linkedinUrl") or company.get("salesNavUrl") or None,
+            }
+
+            response = supabase.table("companies").insert(data).execute()
+            inserted.append(response.data[0])
+
+        except Exception as e:
+            print(f"Company insert error: {e}")
+            skipped += 1
+            continue
+
+    return {
+        "inserted": len(inserted),
+        "skipped": skipped,
+        "companies": inserted
+    }
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
 

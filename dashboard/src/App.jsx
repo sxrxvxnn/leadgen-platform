@@ -8,6 +8,7 @@ import Leads from './pages/Leads'
 import ICP from './pages/ICP'
 import Persona from './pages/Persona'
 import Settings from './pages/Settings'
+import Companies from './pages/Companies'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/icp" element={<ProtectedRoute><ICP /></ProtectedRoute>} />
           <Route path="/persona" element={<ProtectedRoute><Persona /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/companies" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

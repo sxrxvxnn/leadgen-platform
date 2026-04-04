@@ -78,15 +78,15 @@ function initMainScreen(token, email) {
     const extractBtn = document.getElementById('extractBtn')
 
     const typeLabels = {
-  'salenav-companies': 'SALES NAV ACCOUNTS ✓',
-  'salenav-people': 'SALES NAV PEOPLE ✓',
-  'salenav-company': 'SALES NAV COMPANY ✓',
-  'linkedin-companies': 'COMPANY SEARCH ✓',
-  'company-people': 'PEOPLE PAGE ✓ READY',
-  'company': 'COMPANY PAGE',
-  'profile': 'PROFILE PAGE',
-  'search': 'SEARCH RESULTS'
-}
+      'salenav-companies': 'SALES NAV ACCOUNTS ✓',
+      'salenav-people': 'SALES NAV PEOPLE ✓',
+      'salenav-company': 'SALES NAV COMPANY ✓',
+      'linkedin-companies': 'COMPANY SEARCH ✓',
+      'company-people': 'PEOPLE PAGE ✓ READY',
+      'company': 'COMPANY PAGE',
+      'profile': 'PROFILE PAGE',
+      'search': 'SEARCH RESULTS'
+    }
 
     if (type === 'unknown') {
       label.textContent = 'NOT A LINKEDIN PAGE'
@@ -107,15 +107,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const email = document.getElementById('loginEmail').value.trim()
   const password = document.getElementById('loginPassword').value
   const btn = document.getElementById('loginBtn')
-
-  if (!email || !password) {
-    showLoginError('Please enter email and password.')
-    return
-  }
-
+  if (!email || !password) { showLoginError('Please enter email and password.'); return }
   btn.disabled = true
   btn.querySelector('span').textContent = 'Signing in...'
-
   try {
     const data = await loginApi(email, password)
     chrome.storage.local.set({ token: data.access_token, userEmail: data.user.email }, () => {
@@ -137,197 +131,138 @@ document.getElementById('extractBtn').addEventListener('click', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabId = tabs[0].id
 
-    chrome.runtime.sendMessage(
-      { action: 'injectAndScrape', tabId },
-      (bgResponse) => {
-        btn.disabled = false
-        btn.querySelector('span').textContent = 'Extract leads from page'
+    chrome.runtime.sendMessage({ action: 'injectAndScrape', tabId }, (bgResponse) => {
+      btn.disabled = false
+      btn.querySelector('span').textContent = 'Extract leads from page'
 
-        if (chrome.runtime.lastError || !bgResponse) {
-          setStatus('Could not connect. Refresh LinkedIn and try again.', 'error')
-          return
-        }
-
-        if (!bgResponse.success) {
-          setStatus('Extraction failed: ' + (bgResponse.error || 'Unknown error'), 'error')
-          return
-        }
-
-        const data = bgResponse.data
-
-        if (!data) {
-          setStatus('No data returned. Try again.', 'error')
-          return
-        }
-
-        if (data.error) {
-          setStatus(data.error, 'error')
-          return
-        }
-
-        chrome.storage.local.get(['token'], (stored) => {
-          const token = stored.token
-          if (!token) {
-            setStatus('Session expired. Please sign in again.', 'error')
-            show('loginScreen')
-            return
-          }
-
-          // Handle company list from Sales Nav or LinkedIn search
-          if (data.type === 'company-list') {
-            if (!data.companies || data.companies.length === 0) {
-              setStatus('No companies found. Scroll down to load results and retry.', 'error')
-              return
-            }
-            saveCompanyList(data.companies, token)
-            return
-          }
-
-          // Handle company page
-          if (data.type === 'company') {
-            if (!data.name) {
-              setStatus('Could not read company name. Scroll and retry.', 'error')
-              return
-            }
-            saveCompany(data, token)
-            setStatus('Company "' + data.name + '" saved.', 'success')
-            updateLeadCount(token)
-            return
-          }
-
-          // Build leads array
-          let leads = []
-
-          if (data.type === 'search') {
-            if (!data.leads || data.leads.length === 0) {
-              setStatus('No profiles found. Scroll down to load profiles first.', 'error')
-              return
-            }
-            leads = data.leads
-              .filter((l) => l.name && l.name.trim().length > 0)
-              .map((l) => ({
-                name: l.name.trim(),
-                title: l.title ? l.title.trim() : null,
-                company: l.company ? l.company.trim() : null,
-                location: l.location ? l.location.trim() : null,
-                profile_url: l.profileUrl ? l.profileUrl.trim() : null,
-                scraped_at: l.scrapedAt || new Date().toISOString(),
-                status: 'new'
-              }))
-          } else if (data.type === 'profile') {
-            if (!data.name) {
-              setStatus('Could not read profile. Scroll down and retry.', 'error')
-              return
-            }
-            leads = [{
-              name: data.name.trim(),
-              title: data.title ? data.title.trim() : null,
-              company: data.company ? data.company.trim() : null,
-              location: data.location ? data.location.trim() : null,
-              profile_url: data.profileUrl ? data.profileUrl.trim() : null,
-              scraped_at: data.scrapedAt || new Date().toISOString(),
-              status: 'new'
-            }]
-          }
-
-          if (leads.length === 0) {
-            setStatus('No valid leads found. Scroll down and retry.', 'error')
-            return
-          }
-
-          // Show found count immediately
-          setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
-
-          // Send directly to backend — no local duplicate check
-          fetch(API + '/leads/bulk', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({ leads: leads })
-          })
-            .then((r) => {
-              if (!r.ok) throw new Error('HTTP ' + r.status)
-              return r.json()
-            })
-            .then((result) => {
-              const inserted = result.inserted || 0
-              const skipped = result.skipped || 0
-              if (inserted > 0) {
-                setStatus(
-                  '✓ ' + inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved.' +
-                  (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''),
-                  'success'
-                )
-              } else if (skipped > 0) {
-                setStatus(skipped + ' leads already in dashboard.', 'error')
-              } else {
-                setStatus('No leads were saved. Try again.', 'error')
-              }
-              updateLeadCount(token)
-            })
-            .catch((err) => {
-              setStatus('Sync failed: ' + err.message + '. Is backend running?', 'error')
-            })
-        })
+      if (chrome.runtime.lastError || !bgResponse) {
+        setStatus('Could not connect. Refresh LinkedIn and try again.', 'error')
+        return
       }
-    )
+
+      if (!bgResponse.success) {
+        setStatus('Extraction failed: ' + (bgResponse.error || 'Unknown error'), 'error')
+        return
+      }
+
+      const data = bgResponse.data
+      if (!data) { setStatus('No data returned. Try again.', 'error'); return }
+      if (data.error) { setStatus(data.error, 'error'); return }
+
+      chrome.storage.local.get(['token'], (stored) => {
+        const token = stored.token
+        if (!token) { setStatus('Session expired. Please sign in again.', 'error'); show('loginScreen'); return }
+
+        // Handle company list (from LinkedIn company search or Sales Nav)
+        if (data.type === 'company-list') {
+          if (!data.companies || data.companies.length === 0) {
+            setStatus('No companies found. Scroll down to load results and retry.', 'error')
+            return
+          }
+          setStatus('Found ' + data.companies.length + ' companies. Saving...', 'success')
+          saveCompanyList(data.companies, token)
+          return
+        }
+
+        // Handle single company page
+        if (data.type === 'company') {
+          if (!data.name) { setStatus('Could not read company name. Scroll and retry.', 'error'); return }
+          saveCompany(data, token)
+          setStatus('Company "' + data.name + '" saved.', 'success')
+          updateLeadCount(token)
+          return
+        }
+
+        // Build leads array from search or profile
+        let leads = []
+
+        if (data.type === 'search') {
+          if (!data.leads || data.leads.length === 0) {
+            setStatus('No profiles found. Scroll down to load profiles first.', 'error')
+            return
+          }
+          leads = data.leads
+            .filter((l) => l.name && l.name.trim().length > 0)
+            .map((l) => ({
+              name: l.name.trim(),
+              title: l.title ? l.title.trim() : null,
+              company: l.company ? l.company.trim() : null,
+              location: l.location ? l.location.trim() : null,
+              profile_url: l.profileUrl ? l.profileUrl.trim() : null,
+              scraped_at: l.scrapedAt || new Date().toISOString(),
+              status: 'new'
+            }))
+        } else if (data.type === 'profile') {
+          if (!data.name) { setStatus('Could not read profile. Scroll down and retry.', 'error'); return }
+          leads = [{
+            name: data.name.trim(),
+            title: data.title ? data.title.trim() : null,
+            company: data.company ? data.company.trim() : null,
+            location: data.location ? data.location.trim() : null,
+            profile_url: data.profileUrl ? data.profileUrl.trim() : null,
+            scraped_at: data.scrapedAt || new Date().toISOString(),
+            status: 'new'
+          }]
+        }
+
+        if (leads.length === 0) {
+          setStatus('No valid leads found. Scroll down and retry.', 'error')
+          return
+        }
+
+        setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
+
+        fetch(API + '/leads/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ leads: leads })
+        })
+          .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+          .then((result) => {
+            const inserted = result.inserted || 0
+            const skipped = result.skipped || 0
+            if (inserted > 0) {
+              setStatus('✓ ' + inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved.' + (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''), 'success')
+            } else if (skipped > 0) {
+              setStatus(skipped + ' leads already in dashboard.', 'error')
+            } else {
+              setStatus('No leads were saved. Try again.', 'error')
+            }
+            updateLeadCount(token)
+          })
+          .catch((err) => { setStatus('Sync failed: ' + err.message + '. Is backend running?', 'error') })
+      })
+    })
   })
 })
 
 function saveCompanyList(companies, token) {
-  setStatus('Saving ' + companies.length + ' companies...', 'success')
-
-  let saved = 0
-  let failed = 0
-
-  const saveNext = (index) => {
-    if (index >= companies.length) {
-      setStatus('✓ ' + saved + ' companies saved to dashboard.', 'success')
-      updateLeadCount(token)
-      return
-    }
-
-    const company = companies[index]
-    if (!company.name) { failed++; saveNext(index + 1); return }
-
-    fetch(API + '/companies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({
-        name: company.name,
-        industry: company.industry || null,
-        size: company.size || null,
-        headquarters: company.headquarters || null,
-        description: company.description || null,
-        website: company.website || null,
-        linkedin_url: company.linkedinUrl || company.salesNavUrl || null,
-      })
+  fetch(API + '/companies/bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ companies: companies })
+  })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+    .then(result => {
+      const inserted = result.inserted || 0
+      const skipped = result.skipped || 0
+      if (inserted > 0) {
+        setStatus('✓ ' + inserted + ' companies saved.' + (skipped > 0 ? ' ' + skipped + ' duplicates skipped.' : ''), 'success')
+      } else {
+        setStatus('All companies already in dashboard.', 'error')
+      }
     })
-      .then(r => r.json())
-      .then(() => { saved++; saveNext(index + 1) })
-      .catch(() => { failed++; saveNext(index + 1) })
-  }
-
-  saveNext(0)
+    .catch(err => { setStatus('Failed to save companies: ' + err.message, 'error') })
 }
 
 function saveCompany(data, token) {
   fetch(API + '/companies', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + token
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({
-      name: data.name,
-      industry: data.industry || null,
-      size: data.size || null,
-      website: data.website || null,
-      headquarters: data.headquarters || null,
-      description: data.description || null,
-      linkedin_url: data.url || null
+      name: data.name, industry: data.industry || null, size: data.size || null,
+      website: data.website || null, headquarters: data.headquarters || null,
+      description: data.description || null, linkedin_url: data.url || null
     })
   }).catch((e) => console.error('Company save error:', e))
 }

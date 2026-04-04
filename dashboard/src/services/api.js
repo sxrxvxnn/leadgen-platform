@@ -62,3 +62,7 @@ export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starre
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
 // ─── SPREADSHEET ──────────────────────────────────────────────
 export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
+// ─── COMPANIES EXTENDED ───────────────────────────────────────
+export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
+export const deleteCompany = (id) => api.delete(`/companies/${id}`)
+export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)

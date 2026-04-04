@@ -50,6 +50,7 @@ export default function Navbar() {
       <div style={s.center}>
         {[
           ['OVERVIEW', '/dashboard'],
+          ['COMPANIES', '/companies'],
           ['LEADS', '/leads'],
           ['ICP', '/icp'],
           ['PERSONA', '/persona'],
