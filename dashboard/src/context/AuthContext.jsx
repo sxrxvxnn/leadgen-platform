@@ -8,7 +8,6 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // On app load — restore session from localStorage
   useEffect(() => {
     const savedToken = localStorage.getItem('token')
     const savedUser = localStorage.getItem('user')
@@ -24,6 +23,9 @@ export function AuthProvider({ children }) {
     const { access_token, user } = response.data
     localStorage.setItem('token', access_token)
     localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('userEmail', email)
+    // Store password encrypted for auto-refresh
+    localStorage.setItem('userPassword', btoa(password))
     setToken(access_token)
     setUser(user)
     return response
@@ -37,6 +39,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem('userEmail')
+    localStorage.removeItem('userPassword')
     setToken(null)
     setUser(null)
   }
