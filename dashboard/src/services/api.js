@@ -33,7 +33,6 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
-        // Queue requests while refreshing
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then(token => {
@@ -46,10 +45,9 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        // Try to refresh by re-logging in with stored credentials
         const email = localStorage.getItem('userEmail')
         const encodedPassword = localStorage.getItem('userPassword')
-const password = encodedPassword ? atob(encodedPassword) : null
+        const password = encodedPassword ? atob(encodedPassword) : null
 
         if (email && password) {
           const res = await axios.post(BASE_URL + '/auth/login', { email, password })
@@ -60,7 +58,6 @@ const password = encodedPassword ? atob(encodedPassword) : null
           processQueue(null, newToken)
           return api(originalRequest)
         } else {
-          // No stored credentials — redirect to login
           processQueue(new Error('No credentials'), null)
           localStorage.removeItem('token')
           localStorage.removeItem('user')
@@ -96,6 +93,7 @@ export const bulkCreateLeads = (data) => api.post('/leads/bulk', data)
 export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
 export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
+export const autofillBulk = (leadIds, groqKey, batchStart = 0) => api.post('/leads/autofill-bulk', { lead_ids: leadIds, groq_api_key: groqKey, batch_start: batchStart })
 
 // ─── COMPANIES ────────────────────────────────────────────────
 export const getCompanies = () => api.get('/companies')

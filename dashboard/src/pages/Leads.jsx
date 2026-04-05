@@ -202,7 +202,7 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
         {!lead.email && (
           <button style={{ fontSize: '11px', color: isEnriching ? 'var(--gray-4)' : 'var(--amber)', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '3px', cursor: 'pointer', fontWeight: '700', padding: '2px 6px' }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnrich(lead.id) }}>
-            {isEnriching ? '...' : '⚡'}
+            {isEnriching ? '...' : 'Enrich'}
           </button>
         )}
         {lead.email && <span style={{ fontSize: '10px', color: 'var(--green)', fontWeight: '700' }}>✓</span>}
@@ -466,6 +466,7 @@ export default function Leads() {
         <SpreadsheetView
           leads={leads}
           onClose={() => setShowSpreadsheet(false)}
+          onRefresh={() => fetchLeads()}
           onLeadUpdate={(id, data) => { setLeads(prev => prev.map(l => l.id === id ? { ...l, ...data } : l)) }}
         />
       )}

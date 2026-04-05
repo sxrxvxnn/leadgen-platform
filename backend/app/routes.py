@@ -618,7 +618,7 @@ async def check_compliance(
 
         client = Groq(api_key=groq_api_key)
 
-       prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
+        prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
 
 Research the following compliance standards for {company_name}:
 - ISO 27001 (Information Security Management)
@@ -701,6 +701,196 @@ If you have no specific information about this company, make reasonable recommen
     except Exception as e:
         import traceback
         print(f"COMPLIANCE ERROR: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # ─── BULK AUTO-FILL ───────────────────────────────────────────
+
+@router.post("/leads/autofill-bulk")
+async def autofill_bulk(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    lead_ids = payload.get("lead_ids", [])
+    groq_api_key = payload.get("groq_api_key", "")
+    batch_start = payload.get("batch_start", 0)
+    batch_size = 20
+
+    if not lead_ids:
+        raise HTTPException(status_code=400, detail="No lead IDs provided")
+
+    # Process current batch
+    batch = lead_ids[batch_start:batch_start + batch_size]
+    has_more = (batch_start + batch_size) < len(lead_ids)
+
+    try:
+        from groq import Groq
+        import json, re
+
+        # Build company cache to avoid duplicate Groq calls
+        company_cache = {}
+
+        # Get all leads in batch
+        leads_res = supabase.table("leads")\
+            .select("*")\
+            .in_("id", batch)\
+            .eq("user_id", user_id)\
+            .execute()
+
+        if not leads_res.data:
+            return {"results": [], "processed": 0, "has_more": has_more, "next_batch_start": batch_start + batch_size}
+
+        # Get all security leads for user to check security teams
+        all_leads_res = supabase.table("leads")\
+            .select("company, title")\
+            .eq("user_id", user_id)\
+            .execute()
+
+        # Build security team map per company
+        security_keywords = ["ciso", "security engineer", "security analyst", "security architect",
+                           "cybersecurity", "infosec", "grc", "penetration tester",
+                           "vulnerability", "soc analyst", "devsecops", "security manager",
+                           "security director", "security lead", "it security"]
+        security_companies = set()
+        if all_leads_res.data:
+            for l in all_leads_res.data:
+                title = (l.get("title") or "").lower()
+                company = (l.get("company") or "").lower()
+                if company and any(kw in title for kw in security_keywords):
+                    security_companies.add(company)
+
+        results = []
+        client = Groq(api_key=groq_api_key) if groq_api_key else None
+
+        for lead in leads_res.data:
+            try:
+                lead_id = lead["id"]
+                company_name = lead.get("company", "") or ""
+                company_key = company_name.lower().strip()
+
+                update_data = {}
+
+                # Security team from leads data
+                has_security = "Yes" if company_key in security_companies else "No"
+                update_data["has_security_team"] = has_security
+
+                # Employee count and org size — check lead first, then company table
+                employee_count = lead.get("employee_count", "") or ""
+                if not employee_count:
+                    try:
+                        co_emp = supabase.table("companies")\
+                            .select("size")\
+                            .eq("user_id", user_id)\
+                            .ilike("name", company_name)\
+                            .execute()
+                        if co_emp.data and co_emp.data[0].get("size"):
+                            employee_count = co_emp.data[0]["size"]
+                    except Exception:
+                        pass
+
+                if employee_count:
+                    update_data["employee_count"] = employee_count
+                    nums = [int(n) for n in re.findall(r'\d+', employee_count)]
+                    if nums:
+                        n = nums[0]
+                        if n <= 10: update_data["org_size"] = "1-10"
+                        elif n <= 50: update_data["org_size"] = "11-50"
+                        elif n <= 200: update_data["org_size"] = "51-200"
+                        elif n <= 500: update_data["org_size"] = "201-500"
+                        elif n <= 1000: update_data["org_size"] = "501-1000"
+                        else: update_data["org_size"] = "1000+"
+
+                # Followers
+                followers = lead.get("followers_count", "") or ""
+                if followers:
+                    update_data["followers_count"] = followers
+
+                # Use Groq for website + revenue — cached per company
+                if client and company_name:
+                    if company_key not in company_cache:
+                        existing_website = ""
+                        existing_revenue = ""
+                        try:
+                            co_res = supabase.table("companies")                                .select("website, revenue")                                .eq("user_id", user_id)                                .ilike("name", company_name)                                .execute()
+                            if co_res.data:
+                                existing_website = co_res.data[0].get("website") or ""
+                                existing_revenue = co_res.data[0].get("revenue") or ""
+                        except Exception:
+                            pass
+
+                        if existing_website and existing_revenue:
+                            company_cache[company_key] = {
+                                "website": existing_website,
+                                "revenue": existing_revenue
+                            }
+                        else:
+                            try:
+                                prompt = f"""For the company "{company_name}", provide:
+1. Official website domain only (e.g. company.com)
+2. Estimated annual revenue as a single number in USD millions
+
+JSON only, no explanation:
+{{"website": "domain.com", "revenue": "number"}}
+
+If truly unknown use empty string."""
+                                completion = client.chat.completions.create(
+                                    model="llama-3.3-70b-versatile",
+                                    messages=[{"role": "user", "content": prompt}],
+                                    temperature=0.1,
+                                    max_tokens=100,
+                                )
+                                response_text = completion.choices[0].message.content.strip()
+                                if "```" in response_text:
+                                    parts = response_text.split("```")
+                                    response_text = parts[1] if len(parts) > 1 else response_text
+                                    if response_text.startswith("json"):
+                                        response_text = response_text[4:].strip()
+                                ai_data = json.loads(response_text)
+                                company_cache[company_key] = {
+                                    "website": existing_website or ai_data.get("website", ""),
+                                    "revenue": existing_revenue or ai_data.get("revenue", "")
+                                }
+                            except Exception as e:
+                                print(f"Groq error for {company_name}: {e}")
+                                company_cache[company_key] = {"website": existing_website, "revenue": existing_revenue}
+
+                    cached = company_cache.get(company_key, {})
+                    if cached.get("website") and not lead.get("website"):
+                        w = cached["website"].replace("https://", "").replace("http://", "").strip()
+                        if w:
+                            update_data["website"] = "https://" + w
+                    # Always update revenue for consistency across same company
+                    if cached.get("revenue"):
+                        update_data["revenue"] = cached["revenue"]
+
+                # Update lead
+                supabase.table("leads")\
+                    .update(update_data)\
+                    .eq("id", lead_id)\
+                    .execute()
+
+                results.append({
+                    "lead_id": lead_id,
+                    "updated": list(update_data.keys()),
+                    "data": update_data
+                })
+
+            except Exception as e:
+                print(f"Error processing lead {lead.get('id')}: {e}")
+                continue
+
+        return {
+            "results": results,
+            "processed": len(results),
+            "has_more": has_more,
+            "next_batch_start": batch_start + batch_size,
+            "total": len(lead_ids)
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"AUTOFILL BULK ERROR: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -800,4 +990,134 @@ async def debug_bulk(payload: dict, authorization: str = Header(...)):
             "would_skip": len(existing) > 0
         })
     total_in_db = supabase.table("leads").select("id").eq("user_id", user_id).execute()
-    return {"leads_in_db": len(total_in_db.data), "check_results": results, "payload_count": len(leads)}
+    return {"leads_in_db": len(total_in_db.data), "check_results": results, "payload_count": len(leads)}# ─── SPREADSHEET AUTO-FILL ────────────────────────────────────
+
+@router.post("/leads/{lead_id}/autofill")
+async def autofill_lead(
+    lead_id: str,
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+
+    try:
+        from groq import Groq
+        import json
+
+        # Get lead details
+        lead_res = supabase.table("leads")\
+            .select("*")\
+            .eq("id", lead_id)\
+            .eq("user_id", user_id)\
+            .execute()
+
+        if not lead_res.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead = lead_res.data[0]
+        company_name = lead.get("company", "")
+        groq_api_key = payload.get("groq_api_key", "")
+
+        if not groq_api_key:
+            raise HTTPException(status_code=400, detail="Groq API key required")
+
+        # Check if company has security leads
+        security_keywords = ["ciso", "security", "cybersecurity", "infosec", "grc",
+                           "penetration", "vulnerability", "soc analyst", "devsecops"]
+        company_leads = supabase.table("leads")\
+            .select("title")\
+            .eq("user_id", user_id)\
+            .ilike("company", company_name)\
+            .execute()
+
+        has_security_team = "No"
+        if company_leads.data:
+            for cl in company_leads.data:
+                title = (cl.get("title") or "").lower()
+                if any(kw in title for kw in security_keywords):
+                    has_security_team = "Yes"
+                    break
+
+        # Derive org size from employee count
+        employee_count = lead.get("employee_count", "") or ""
+        org_size = ""
+        if employee_count:
+            nums = [int(n) for n in __import__('re').findall(r'\d+', employee_count)]
+            if nums:
+                n = nums[0]
+                if n <= 10: org_size = "1-10"
+                elif n <= 50: org_size = "11-50"
+                elif n <= 200: org_size = "51-200"
+                elif n <= 500: org_size = "201-500"
+                elif n <= 1000: org_size = "501-1000"
+                else: org_size = "1000+"
+
+        update_data = {}
+
+        # Auto-fill from existing scraped data
+        if lead.get("followers_count") and not lead.get("followers_count") == "":
+            update_data["followers_count"] = lead["followers_count"]
+        if employee_count:
+            update_data["employee_count"] = employee_count
+        if org_size:
+            update_data["org_size"] = org_size
+        if has_security_team:
+            update_data["has_security_team"] = has_security_team
+
+        # Use Groq to fetch website and estimate revenue
+        if company_name and groq_api_key:
+            client = Groq(api_key=groq_api_key)
+
+            prompt = f"""For the company "{company_name}", provide:
+1. Their official website URL (just the domain, e.g. company.com)
+2. Estimated annual revenue in USD millions (just a number or range)
+
+Respond in JSON only:
+{{
+  "website": "company.com or empty string if unknown",
+  "revenue": "estimated revenue in USD millions or empty string if unknown"
+}}"""
+
+            try:
+                completion = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=150,
+                )
+                response_text = completion.choices[0].message.content.strip()
+                if "```json" in response_text:
+                    response_text = response_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in response_text:
+                    response_text = response_text.split("```")[1].split("```")[0].strip()
+
+                ai_data = json.loads(response_text)
+                if ai_data.get("website") and not lead.get("website"):
+                    update_data["website"] = "https://" + ai_data["website"].replace("https://", "").replace("http://", "")
+                if ai_data.get("revenue") and not lead.get("revenue"):
+                    update_data["revenue"] = ai_data["revenue"]
+            except Exception as e:
+                print(f"Groq autofill error: {e}")
+
+        # Update lead in database
+        if update_data:
+            supabase.table("leads")\
+                .update(update_data)\
+                .eq("id", lead_id)\
+                .execute()
+
+        return {
+            "lead_id": lead_id,
+            "updated_fields": list(update_data.keys()),
+            "data": update_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"AUTOFILL ERROR: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+
