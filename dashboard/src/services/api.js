@@ -107,9 +107,13 @@ export const checkCompliance = (companyId, groqKey) => api.post(`/companies/${co
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
+export const getICPProfiles = () => api.get('/icp')
 export const createICP = (data) => api.post('/icp', data)
+export const createICPProfile = (data) => api.post('/icp', data)
 export const updateICP = (id, data) => api.patch(`/icp/${id}`, data)
+export const updateICPProfile = (id, data) => api.patch(`/icp/${id}`, data)
 export const deleteICP = (id) => api.delete(`/icp/${id}`)
+export const deleteICPProfile = (id) => api.delete(`/icp/${id}`)
 
 // ─── PERSONAS ─────────────────────────────────────────────────
 export const getPersonas = () => api.get('/personas')
