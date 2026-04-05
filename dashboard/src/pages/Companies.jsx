@@ -49,6 +49,14 @@ function classifyCompany(company) {
   return 'Unclassified'
 }
 
+function parseFollowers(str) {
+  if (!str) return 0
+  const clean = str.toLowerCase().replace(/,/g, '').replace(/followers?/g, '').trim()
+  if (clean.includes('k')) return parseFloat(clean) * 1000
+  if (clean.includes('m')) return parseFloat(clean) * 1000000
+  return parseInt(clean) || 0
+}
+
 function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
@@ -94,7 +102,6 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
     try {
       const res = await checkCompliance(company.id, groqKey)
       setComplianceResult(res.data)
-      setNotes((prev) => prev + (prev ? '\n' : '') + '[AI] ' + (res.data.security_notes || ''))
       onUpdate(company.id, { compliance: res.data.compliance })
     } catch (e) {
       setComplianceResult({ error: 'Check failed. Verify your Groq API key in Settings.' })
@@ -120,7 +127,10 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
               type="text" placeholder="Type industry..." autoFocus
               style={{ ...card.select, width: '130px', color: 'var(--white)', borderColor: 'var(--amber)' }}
               onBlur={(e) => { const val = e.target.value.trim(); if (val) handleClassificationChange(val); setShowCustomInput(false) }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { const val = e.target.value.trim(); if (val) handleClassificationChange(val); setShowCustomInput(false) } if (e.key === 'Escape') setShowCustomInput(false) }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { const val = e.target.value.trim(); if (val) handleClassificationChange(val); setShowCustomInput(false) }
+                if (e.key === 'Escape') setShowCustomInput(false)
+              }}
             />
           ) : (
             <select
@@ -153,7 +163,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
         ))}
       </div>
 
-      {/* Compliance status */}
+      {/* Compliance badges */}
       {company.compliance && (
         <div style={card.complianceSection}>
           <p style={card.infoLabel}>COMPLIANCE</p>
@@ -191,7 +201,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
             ? <p style={{ fontSize: '12px', color: '#ff2d2d' }}>{complianceResult.error}</p>
             : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', letterSpacing: '1px' }}>AI COMPLIANCE CHECK COMPLETE</p>
+                <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', letterSpacing: '1px' }}>✓ AI COMPLIANCE CHECK COMPLETE</p>
                 <p style={{ fontSize: '12px', color: 'var(--gray-5)' }}>Certifications: <strong style={{ color: 'var(--white)' }}>{complianceResult.compliance}</strong></p>
                 <p style={{ fontSize: '12px', color: 'var(--gray-5)' }}>Security Team: <strong style={{ color: 'var(--white)' }}>{complianceResult.has_security_team}</strong></p>
                 <p style={{ fontSize: '11px', color: 'var(--gray-4)', fontStyle: 'italic' }}>{complianceResult.security_notes}</p>
@@ -213,14 +223,13 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads }) {
             style={{ ...card.complianceBtn, opacity: checkingCompliance ? 0.6 : 1 }}
             onClick={handleCheckCompliance}
             disabled={checkingCompliance}
-            data-hover="true"
           >
             {checkingCompliance ? '⏳ Checking...' : '🔍 Check Compliance'}
           </button>
           {company.linkedin_url && (
             <a href={company.linkedin_url} style={card.linkedinBtn}>LinkedIn →</a>
           )}
-          <button style={card.findBtn} onClick={() => onViewLeads(company)} data-hover="true">
+          <button style={card.findBtn} onClick={() => onViewLeads(company)}>
             View Leads →
           </button>
         </div>
@@ -272,7 +281,7 @@ function LeadsModal({ company, onClose }) {
         ) : leads.length === 0 ? (
           <div style={modal.emptyState}>
             <p style={modal.emptyTitle}>No leads found for this company</p>
-            <p style={modal.emptyText}>Visit the company's LinkedIn people page and use the extension to extract leads.</p>
+            <p style={modal.emptyText}>Visit the company LinkedIn people page and use the extension to extract leads.</p>
             <EmptyLeadsLink company={company} />
           </div>
         ) : (
@@ -298,6 +307,7 @@ export default function Companies() {
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [followerFilter, setFollowerFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState(null)
 
   useEffect(() => { fetchCompanies() }, [])
@@ -329,7 +339,8 @@ export default function Companies() {
     const ms = search === '' || [c.name, c.industry, c.headquarters].join(' ').toLowerCase().includes(search.toLowerCase())
     const mc = classFilter === 'all' || c.classification === classFilter || (!c.classification && classFilter === 'Unclassified')
     const ms2 = statusFilter === 'all' || c.prospect_status === statusFilter
-    return ms && mc && ms2
+    const mf = followerFilter === 'all' || parseFollowers(c.followers) >= parseInt(followerFilter)
+    return ms && mc && ms2 && mf
   })
 
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
@@ -354,15 +365,23 @@ export default function Companies() {
         <div style={s.filters}>
           <div style={s.searchBox}>
             <span style={s.searchIcon}>↗</span>
-            <input type="text" placeholder="Search companies..." value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} data-hover="true" />
+            <input type="text" placeholder="Search companies..." value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} />
           </div>
-          <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={s.select} data-hover="true">
+          <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={s.select}>
             <option value="all">All types</option>
             {CLASSIFICATIONS.filter(c => c !== 'Custom...').map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={s.select} data-hover="true">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={s.select}>
             <option value="all">All statuses</option>
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={followerFilter} onChange={(e) => setFollowerFilter(e.target.value)} style={s.select}>
+            <option value="all">All followers</option>
+            <option value="1000">1K+ followers</option>
+            <option value="5000">5K+ followers</option>
+            <option value="10000">10K+ followers</option>
+            <option value="50000">50K+ followers</option>
+            <option value="100000">100K+ followers</option>
           </select>
         </div>
 
@@ -403,7 +422,7 @@ const s = {
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--gray-4)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
-  emptyTitle: { fontSize: '18px', fontWeight: '700', color: 'var(--gray-3)', marginBottom: '8px', letterSpacing: '-0.5px' },
+  emptyTitle: { fontSize: '18px', fontWeight: '700', color: 'var(--gray-3)', marginBottom: '8px' },
   emptyText: { fontSize: '13px', color: 'var(--gray-4)', lineHeight: 1.6 },
 }
 

@@ -618,25 +618,29 @@ async def check_compliance(
 
         client = Groq(api_key=groq_api_key)
 
-        prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
+       prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
 
 Research the following compliance standards for {company_name}:
 - ISO 27001 (Information Security Management)
-- SOC 2 (Service Organization Control)
+- SOC 2 Type II (Service Organization Control)
 - GDPR (General Data Protection Regulation)
 - HIPAA (Health Insurance Portability and Accountability Act)
 - PCI DSS (Payment Card Industry Data Security Standard)
-- OWASP (Open Web Application Security Project)
+- OWASP (Open Web Application Security Project guidelines)
+- CERT-In (Indian Computer Emergency Response Team)
+- DPDP Act (Digital Personal Data Protection Act - India)
+- RBI Guidelines (Reserve Bank of India - for fintech)
+- SEBI Guidelines (Securities and Exchange Board of India)
 
 Respond in JSON format only with no explanation:
 {{
-  "compliance": "comma-separated list of certifications this company likely has or needs",
+  "compliance": "comma-separated list of certifications this company likely has or needs based on their industry and region",
   "has_security_team": "Yes or No or Unknown",
-  "security_notes": "brief one sentence note about their security posture",
+  "security_notes": "brief one sentence note about their security posture and compliance needs",
   "confidence": "high, medium, or low"
 }}
 
-If you have no information about this company, return confidence as low and make reasonable guesses based on their industry."""
+If you have no specific information about this company, make reasonable recommendations based on their industry ({industry}) and typical requirements for companies of this type."""
 
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
