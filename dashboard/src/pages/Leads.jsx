@@ -300,18 +300,36 @@ export default function Leads() {
     setEnrichMsg('')
     try {
       const token = localStorage.getItem('token')
+      const hunterKey = localStorage.getItem('hunterKey') || ''
+      const apolloKey = localStorage.getItem('apolloKey') || ''
       const res = await fetch('http://localhost:8000/api/leads/' + leadId + '/enrich', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ hunter_key: hunterKey, apollo_key: apolloKey })
       })
       const data = await res.json()
       if (data.lead) {
         setLeads((prev) => prev.map((l) => l.id === leadId ? data.lead : l))
-        setEnrichMsg(data.enriched ? '✓ Email found' : data.message)
+        setEnrichMsg(data.enriched ? '✓ Email found' : data.message || 'Not found')
       }
     } catch (e) { console.error(e) }
-    finally { setEnrichingId(null); setTimeout(() => setEnrichMsg(''), 4000) }
+    finally {
+      setEnrichingId(null)
+      setTimeout(() => setEnrichMsg(''), 5000)
+    }
   }
+
+  // Filtered leads - defined before functions that use it
+  const filtered = leads.filter((l) => {
+    const ms = search === '' || [l.name, l.title, l.company, l.location].join(' ').toLowerCase().includes(search.toLowerCase())
+    const mf = statusFilter === 'all' || l.status === statusFilter
+    const mstar = !starredOnly || l.starred
+    const titleText = (l.title || '').toLowerCase()
+    const mv = viewFilter === 'all' ||
+      (viewFilter === 'decision-makers' && DECISION_MAKER_KEYWORDS.test(titleText)) ||
+      (viewFilter === 'security' && SECURITY_KEYWORDS.test(titleText))
+    return ms && mf && mstar && mv
+  })
 
   function toggleSelect(id) { setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]) }
   function toggleSelectAll() { setSelected(selected.length === filtered.length ? [] : filtered.map((l) => l.id)) }
@@ -327,20 +345,9 @@ export default function Leads() {
     a.click()
   }
 
-  const filtered = leads.filter((l) => {
-    const ms = search === '' || [l.name, l.title, l.company, l.location].join(' ').toLowerCase().includes(search.toLowerCase())
-    const mf = statusFilter === 'all' || l.status === statusFilter
-    const mstar = !starredOnly || l.starred
-    const titleText = (l.title || '').toLowerCase()
-    const mv = viewFilter === 'all' ||
-      (viewFilter === 'decision-makers' && DECISION_MAKER_KEYWORDS.test(titleText)) ||
-      (viewFilter === 'security' && SECURITY_KEYWORDS.test(titleText))
-    return ms && mf && mstar && mv
-  })
-
   const starredCount = leads.filter(l => l.starred).length
-  const decisionMakerCount = leads.filter(l => DECISION_MAKER_KEYWORDS.test(l.title || '')).length
-  const securityCount = leads.filter(l => SECURITY_KEYWORDS.test(l.title || '')).length
+  const decisionMakerCount = leads.filter(l => DECISION_MAKER_KEYWORDS.test((l.title || '').toLowerCase())).length
+  const securityCount = leads.filter(l => SECURITY_KEYWORDS.test((l.title || '').toLowerCase())).length
 
   const columns = [
     { key: 'name', label: 'TARGET', flex: 2 },
@@ -466,7 +473,11 @@ export default function Leads() {
         <SpreadsheetView
           leads={leads}
           onClose={() => setShowSpreadsheet(false)}
-          onRefresh={() => fetchLeads()}
+          onRefresh={async () => {
+            await fetchLeads()
+            setShowSpreadsheet(false)
+            setTimeout(() => setShowSpreadsheet(true), 150)
+          }}
           onLeadUpdate={(id, data) => { setLeads(prev => prev.map(l => l.id === id ? { ...l, ...data } : l)) }}
         />
       )}

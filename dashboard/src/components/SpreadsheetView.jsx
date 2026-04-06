@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { spreadsheetUpdateLead, autofillBulk } from '../services/api'
 
 const CONNECTION_STATUSES = [
@@ -8,6 +8,7 @@ const CONNECTION_STATUSES = [
 ]
 
 const SECURITY_OPTIONS = ['Unknown', 'Yes', 'No']
+const APPOINTMENT_OPTIONS = ['Unknown', 'Yes', 'No']
 const COMPLIANCE_OPTIONS = ['', 'ISO 27001', 'SOC 2', 'GDPR', 'HIPAA', 'PCI DSS',
   'ISO + SOC2', 'ISO + GDPR', 'Multiple', 'OWASP', 'CERT-In', 'DPDP Act', 'RBI Guidelines', 'SEBI Guidelines']
 const ORG_SIZE_OPTIONS = ['', '1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
@@ -27,6 +28,7 @@ const COLUMNS = [
   { key: 'revenue', label: 'Revenue (USD M)', width: 140, type: 'text' },
   { key: 'has_security_team', label: 'Security Team?', width: 130, type: 'select', options: SECURITY_OPTIONS },
   { key: 'compliance', label: 'Compliance', width: 150, type: 'select', options: COMPLIANCE_OPTIONS },
+  { key: 'appointment', label: 'Appointment', width: 130, type: 'select', options: APPOINTMENT_OPTIONS },
   { key: 'account_manager', label: 'Account Manager', width: 150, type: 'text' },
   { key: 'linkedin_status_rejah', label: 'LinkedIn (Rejah)', width: 190, type: 'select', options: CONNECTION_STATUSES },
   { key: 'linkedin_status_rahul', label: 'LinkedIn (Rahul)', width: 190, type: 'select', options: CONNECTION_STATUSES },
@@ -57,11 +59,10 @@ function EditableCell({ lead, col, onSave, isEditing, onStartEdit, onStopEdit })
   const inputRef = useRef(null)
 
   useEffect(() => { setVal(getCellValue(lead, col.key)) }, [lead[col.key]])
-
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus()
-      inputRef.current.select()
+      if (inputRef.current.select) inputRef.current.select()
     }
   }, [isEditing])
 
@@ -102,7 +103,11 @@ function EditableCell({ lead, col, onSave, isEditing, onStartEdit, onStopEdit })
     const displayVal = getCellValue(lead, col.key)
     const isStatusCol = col.key.includes('linkedin_status')
     const isSecTeam = col.key === 'has_security_team'
-    const color = isStatusCol ? getStatusColor(displayVal) : isSecTeam && displayVal === 'Yes' ? 'var(--green)' : isSecTeam && displayVal === 'No' ? '#ff2d2d' : 'var(--gray-5)'
+    const isAppt = col.key === 'appointment'
+    let color = 'var(--gray-5)'
+    if (isStatusCol) color = getStatusColor(displayVal)
+    else if ((isSecTeam || isAppt) && displayVal === 'Yes') color = 'var(--green)'
+    else if ((isSecTeam || isAppt) && displayVal === 'No') color = '#ff2d2d'
     return React.createElement('div', { style: { ...cell.text, color, cursor: 'pointer' }, onClick: onStartEdit }, displayVal || '—')
   }
 
@@ -128,8 +133,7 @@ function ResizableHeader({ col, colIndex, onResize }) {
   const startWidth = useRef(0)
 
   function handleMouseDown(e) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault(); e.stopPropagation()
     isResizing.current = true
     startX.current = e.clientX
     startWidth.current = col.width
@@ -164,7 +168,7 @@ function ResizableHeader({ col, colIndex, onResize }) {
   )
 }
 
-export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
+export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefresh }) {
   const [localLeads, setLocalLeads] = useState(() => leads.map(l => ({ ...l })))
   const [columns, setColumns] = useState(COLUMNS)
   const [editingCell, setEditingCell] = useState(null)
@@ -174,20 +178,15 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
   const [selected, setSelected] = useState([])
   const [autofilling, setAutofilling] = useState(false)
   const [autofillMsg, setAutofillMsg] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const accountManager = localStorage.getItem('fullName') || ''
 
-  // Sync when parent leads change
-  useEffect(() => {
-    setLocalLeads(leads.map(l => ({ ...l })))
-  }, [leads])
+  useEffect(() => { setLocalLeads(leads.map(l => ({ ...l }))) }, [leads])
 
-  // Auto-fill account manager
   useEffect(() => {
     if (!accountManager) return
     localLeads.forEach(lead => {
-      if (!lead.account_manager) {
-        handleSave(lead.id, 'account_manager', accountManager)
-      }
+      if (!lead.account_manager) handleSave(lead.id, 'account_manager', accountManager)
     })
   }, [])
 
@@ -209,17 +208,15 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
       await spreadsheetUpdateLead(leadId, { [field]: value })
       setLocalLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l))
       if (onLeadUpdate) onLeadUpdate(leadId, { [field]: value })
-    } catch (e) {
-      console.error('Save failed:', e)
-    } finally {
-      setSaving(null)
-    }
+    } catch (e) { console.error('Save failed:', e) }
+    finally { setSaving(null) }
   }
 
   async function handleAutofill() {
-    const groqKey = localStorage.getItem('groqKey')
-    if (!groqKey) {
-      alert('Please add your Groq API key in Settings first. It\'s free at console.groq.com')
+    const groqKey = localStorage.getItem('groqKey') || ''
+    const openaiKey = localStorage.getItem('openaiKey') || ''
+    if (!groqKey && !openaiKey) {
+      alert('Please add your OpenAI or Groq API key in Settings first.')
       return
     }
 
@@ -239,21 +236,18 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
 
     while (hasMore) {
       try {
-        const res = await autofillBulk(toFill, groqKey, batchStart)
-        console.log('Batch result:', JSON.stringify(res.data?.results?.slice(0, 2)))
+        const res = await autofillBulk(toFill, groqKey, batchStart, openaiKey)
         const data = res.data
         totalProcessed += data.processed || 0
         hasMore = data.has_more || false
         batchStart = data.next_batch_start || (batchStart + 20)
 
-        const done = Math.min(batchStart, toFill.length)
-        setAutofillMsg('Processing ' + done + '/' + toFill.length + '...')
+        setAutofillMsg('Processing ' + Math.min(batchStart, toFill.length) + '/' + toFill.length + '...')
 
-        // Collect all updates
         if (data.results && data.results.length > 0) {
           data.results.forEach(r => {
             if (r.data && Object.keys(r.data).length > 0) {
-              allUpdates[r.lead_id] = r.data
+              allUpdates[r.lead_id] = { ...(allUpdates[r.lead_id] || {}), ...r.data }
             }
           })
         }
@@ -265,19 +259,9 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
       }
     }
 
-    // Apply all updates at once after all batches complete
+    // Apply all updates
     if (Object.keys(allUpdates).length > 0) {
-      // Force a fresh copy of leads with all updates applied
-      setLocalLeads(prev => {
-        const updated = prev.map(l => {
-          if (allUpdates[l.id]) {
-            return Object.assign({}, l, allUpdates[l.id])
-          }
-          return l
-        })
-        return [...updated] // new array reference forces re-render
-      })
-      // Notify parent outside of render cycle
+      setLocalLeads(prev => [...prev.map(l => allUpdates[l.id] ? { ...l, ...allUpdates[l.id] } : l)])
       setTimeout(() => {
         Object.entries(allUpdates).forEach(([leadId, data]) => {
           if (onLeadUpdate) onLeadUpdate(leadId, data)
@@ -285,9 +269,23 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
       }, 100)
     }
 
-    setAutofillMsg('Done — ' + totalProcessed + ' leads updated')
+    setAutofillMsg('Done — ' + totalProcessed + ' updated. Click ↺ Refresh to see all changes.')
     setAutofilling(false)
-    setTimeout(() => setAutofillMsg(''), 6000)
+    setTimeout(() => setAutofillMsg(''), 8000)
+  }
+
+  async function handleRefresh() {
+    if (!onRefresh) return
+    setRefreshing(true)
+    setAutofillMsg('Refreshing...')
+    try {
+      await onRefresh()
+    } catch (e) {
+      console.error('Refresh failed:', e)
+    } finally {
+      setRefreshing(false)
+      setAutofillMsg('')
+    }
   }
 
   function toggleSelect(id) {
@@ -336,11 +334,16 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
           { style: hdr.right },
           saving && React.createElement('span', { style: hdr.saving }, '● SAVING'),
           autofillMsg && React.createElement('span', {
-            style: { fontSize: '11px', color: autofillMsg.startsWith('Done') ? 'var(--green)' : 'var(--amber)', fontWeight: '600', whiteSpace: 'nowrap' }
+            style: {
+              fontSize: '11px',
+              color: autofillMsg.startsWith('Done') ? 'var(--green)' : autofillMsg.startsWith('Refresh') ? 'var(--gray-4)' : 'var(--amber)',
+              fontWeight: '600',
+              whiteSpace: 'nowrap'
+            }
           }, autofillMsg),
-          React.createElement('p', {
-            style: { fontSize: '10px', color: 'var(--gray-4)', whiteSpace: 'nowrap' }
-          }, selected.length > 0 ? selected.length + ' selected' : 'Drag edge to resize'),
+          React.createElement('p', { style: { fontSize: '10px', color: 'var(--gray-4)', whiteSpace: 'nowrap' } },
+            selected.length > 0 ? selected.length + ' selected' : 'Drag edge to resize'
+          ),
           React.createElement('input', {
             type: 'text', placeholder: 'Search leads...',
             value: search, onChange: (e) => setSearch(e.target.value),
@@ -352,24 +355,18 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate }) {
             style: hdr.select,
           }, companies.map(c => React.createElement('option', { key: c, value: c }, c === 'all' ? 'All companies' : c))),
           React.createElement('button', {
-            style: {
-              ...hdr.autofillBtn,
-              opacity: autofilling ? 0.6 : 1,
-              cursor: autofilling ? 'not-allowed' : 'pointer',
-            },
+            style: { ...hdr.autofillBtn, opacity: autofilling ? 0.6 : 1, cursor: autofilling ? 'not-allowed' : 'pointer' },
             onClick: handleAutofill,
             disabled: autofilling,
           }, autofilling ? 'Filling...' : 'Auto-fill'),
+          React.createElement('button', {
+            style: { ...hdr.closeBtn, color: 'var(--green)', borderColor: 'var(--green)', opacity: refreshing ? 0.6 : 1 },
+            onClick: handleRefresh,
+            disabled: refreshing,
+          }, refreshing ? '...' : '↺ Refresh'),
           React.createElement('button', { style: hdr.exportBtn, onClick: handleExport },
             'Export ' + (selected.length > 0 ? '(' + selected.length + ')' : 'all') + ' →'
           ),
-          React.createElement('button', {
-            style: { ...hdr.closeBtn, color: 'var(--green)', borderColor: 'var(--green)' },
-            onClick: () => {
-              if (onRefresh) onRefresh()
-              else window.location.reload()
-            }
-          }, '↺ Refresh'),
           React.createElement('button', { style: hdr.closeBtn, onClick: onClose }, '✕ Close')
         )
       ),

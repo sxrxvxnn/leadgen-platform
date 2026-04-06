@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const BASE_URL = 'http://localhost:8000/api'
+// Use environment variable if available, otherwise default to localhost
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -14,68 +15,15 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Auto refresh token on 401
-let isRefreshing = false
-let failedQueue = []
-
-function processQueue(error, token = null) {
-  failedQueue.forEach(prom => {
-    if (error) prom.reject(error)
-    else prom.resolve(token)
-  })
-  failedQueue = []
-}
-
+// Handle 401 by redirecting to login
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        }).then(token => {
-          originalRequest.headers.Authorization = 'Bearer ' + token
-          return api(originalRequest)
-        }).catch(err => Promise.reject(err))
-      }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      try {
-        const email = localStorage.getItem('userEmail')
-        const encodedPassword = localStorage.getItem('userPassword')
-        const password = encodedPassword ? atob(encodedPassword) : null
-
-        if (email && password) {
-          const res = await axios.post(BASE_URL + '/auth/login', { email, password })
-          const newToken = res.data.access_token
-          localStorage.setItem('token', newToken)
-          api.defaults.headers.common['Authorization'] = 'Bearer ' + newToken
-          originalRequest.headers.Authorization = 'Bearer ' + newToken
-          processQueue(null, newToken)
-          return api(originalRequest)
-        } else {
-          processQueue(new Error('No credentials'), null)
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-          return Promise.reject(error)
-        }
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        localStorage.removeItem('userPassword')
-        window.location.href = '/login'
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
-      }
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('userEmail')
+      window.location.href = '/login'
     }
-
     return Promise.reject(error)
   }
 )
@@ -93,7 +41,16 @@ export const bulkCreateLeads = (data) => api.post('/leads/bulk', data)
 export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
 export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
-export const autofillBulk = (leadIds, groqKey, batchStart = 0) => api.post('/leads/autofill-bulk', { lead_ids: leadIds, groq_api_key: groqKey, batch_start: batchStart })
+export const autofillBulk = (leadIds, groqKey, batchStart = 0, openaiKey = '') =>
+  apiRequest('/leads/autofill-bulk', {
+    method: 'POST',
+    body: JSON.stringify({
+      lead_ids: leadIds,
+      groq_api_key: groqKey,
+      openai_api_key: openaiKey,
+      batch_start: batchStart,
+    }),
+  })
 
 // ─── COMPANIES ────────────────────────────────────────────────
 export const getCompanies = () => api.get('/companies')

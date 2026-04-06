@@ -24,8 +24,6 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', access_token)
     localStorage.setItem('user', JSON.stringify(user))
     localStorage.setItem('userEmail', email)
-    // Store password encrypted for auto-refresh
-    localStorage.setItem('userPassword', btoa(password))
     setToken(access_token)
     setUser(user)
     return response
@@ -40,7 +38,6 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('userEmail')
-    localStorage.removeItem('userPassword')
     setToken(null)
     setUser(null)
   }

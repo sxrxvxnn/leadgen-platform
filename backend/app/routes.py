@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
+import os
 from .models import LeadCreate, LeadUpdate, CompanyCreate, CompanyUpdate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
 from .database import supabase
 
@@ -163,8 +164,9 @@ async def create_company(
         return {"company": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # ─── ICP ROUTES ──────────────────────────────────────────────
+
+
+# ─── ICP ROUTES ──────────────────────────────────────────────
 
 @router.get("/icp")
 async def get_icp_profiles(authorization: str = Header(...)):
@@ -229,8 +231,9 @@ async def delete_icp_profile(
         return {"message": "ICP profile deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # ─── PERSONA ROUTES ──────────────────────────────────────────
+
+
+# ─── PERSONA ROUTES ──────────────────────────────────────────
 
 @router.get("/personas")
 async def get_personas(authorization: str = Header(...)):
@@ -276,17 +279,18 @@ async def delete_persona(
         return {"message": "Persona deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # ─── ENRICHMENT ROUTES ───────────────────────────────────────
+
+
+# ─── ENRICHMENT ROUTES ───────────────────────────────────────
 
 @router.post("/leads/{lead_id}/enrich")
 async def enrich_lead_route(
     lead_id: str,
+    payload: dict = {},
     authorization: str = Header(...)
 ):
     user_id = get_user_id(authorization)
     try:
-        # Get the lead first
         lead_res = supabase.table("leads")\
             .select("*")\
             .eq("id", lead_id)\
@@ -298,50 +302,57 @@ async def enrich_lead_route(
 
         lead = lead_res.data[0]
 
-        # Get company website if available
-        website = None
-        if lead.get("company"):
-            company_res = supabase.table("companies")\
-                .select("website")\
-                .eq("user_id", user_id)\
-                .ilike("name", lead["company"])\
-                .execute()
-            if company_res.data:
-                website = company_res.data[0].get("website")
+        if lead.get("email"):
+            return {"lead": lead, "enriched": False, "message": "Email already exists"}
 
-        # Run enrichment
-        from .enrichment import enrich_lead
-        enriched = enrich_lead(
-            name=lead.get("name", ""),
-            company=lead.get("company", ""),
-            website=website
-        )
+        hunter_key = payload.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
+        apollo_key = payload.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
 
-        if not enriched:
-            return {"message": "No enrichment data found", "lead": lead}
+        name = lead.get("name", "")
+        company = lead.get("company", "")
+        website = lead.get("website", "")
 
-        # Update lead with enriched data
-        update_data = {}
-        if enriched.get("email") and not lead.get("email"):
-            update_data["email"] = enriched["email"]
-        if enriched.get("phone") and not lead.get("phone"):
-            update_data["phone"] = enriched["phone"]
+        # Try to get website from companies table if not on lead
+        if not website and company:
+            try:
+                co_res = supabase.table("companies")\
+                    .select("website")\
+                    .eq("user_id", user_id)\
+                    .ilike("name", company)\
+                    .execute()
+                if co_res.data and co_res.data[0].get("website"):
+                    website = co_res.data[0]["website"]
+            except Exception:
+                pass
 
-        if update_data:
-            updated = supabase.table("leads")\
-                .update(update_data)\
-                .eq("id", lead_id)\
-                .eq("user_id", user_id)\
-                .execute()
-            return {"message": "Lead enriched successfully", "enriched": update_data, "lead": updated.data[0]}
+        from .enrichment import enrich_lead, extract_domain
+        result = {}
 
-        return {"message": "Lead already has contact data", "lead": lead}
+        # Try Hunter with domain
+        if hunter_key and website:
+            domain = extract_domain(website)
+            parts = name.strip().split(" ", 1)
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else ""
+            from .enrichment import enrich_with_hunter
+            result = enrich_with_hunter(first_name, last_name, domain)
+
+        if result.get("email"):
+            update_data = {"email": result["email"]}
+            supabase.table("leads").update(update_data).eq("id", lead_id).execute()
+            updated_lead = {**lead, **update_data}
+            return {"lead": updated_lead, "enriched": True, "message": "Email found via Hunter"}
+
+        return {
+            "lead": lead,
+            "enriched": False,
+            "message": "Email not found. Try adding the company website first using Auto-fill."
+        }
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/leads/enrich/bulk")
 async def bulk_enrich_leads(
@@ -524,8 +535,9 @@ async def get_company_leads(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    # ─── BULK COMPANY SAVE ────────────────────────────────────────
+
+
+# ─── BULK COMPANY SAVE ────────────────────────────────────────
 
 @router.post("/companies/bulk")
 async def bulk_create_companies(
@@ -812,7 +824,11 @@ async def autofill_bulk(
                         existing_website = ""
                         existing_revenue = ""
                         try:
-                            co_res = supabase.table("companies")                                .select("website, revenue")                                .eq("user_id", user_id)                                .ilike("name", company_name)                                .execute()
+                            co_res = supabase.table("companies")\
+                                .select("website, revenue")\
+                                .eq("user_id", user_id)\
+                                .ilike("name", company_name)\
+                                .execute()
                             if co_res.data:
                                 existing_website = co_res.data[0].get("website") or ""
                                 existing_revenue = co_res.data[0].get("revenue") or ""
@@ -893,7 +909,73 @@ If truly unknown use empty string."""
         print(f"AUTOFILL BULK ERROR: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    
+  # ─── WEBSITE ANALYZER ────────────────────────────────────────
 
+@router.post("/companies/{company_id}/analyze-website")
+async def analyze_company_website(
+    company_id: str,
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    try:
+        co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+        if not co_res.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+        company = co_res.data[0]
+
+        from .website_analyzer import fetch_website_content, analyze_with_gemini, analyze_with_openai, analyze_with_groq, classify_with_groq
+
+        openai_key = payload.get("openai_key") or os.getenv("OPENAI_API_KEY", "")
+        gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
+        groq_key = payload.get("groq_key") or os.getenv("GROQ_API_KEY", "")
+        website = company.get("website") or payload.get("website", "")
+
+        result = {}
+
+        # Fetch website content first if URL available
+        website_data = None
+        if website:
+            website_data = fetch_website_content(website)
+
+        # Try AI in priority order: Gemini → OpenAI → Groq
+        if website_data and gemini_key:
+            result = analyze_with_gemini(website_data, company.get("name", ""), gemini_key)
+        
+        if not result and website_data and openai_key:
+            ai_result = analyze_with_openai(website_data, company.get("name", ""), openai_key)
+            if not ai_result.get('_openai_error'):
+                result = ai_result
+
+        if not result and groq_key:
+            result = analyze_with_groq(
+                website_data,
+                company.get("name", ""),
+                company.get("industry", ""),
+                company.get("description", ""),
+                groq_key
+            )
+
+        if not result:
+            raise HTTPException(status_code=400, detail="No AI key available. Add Gemini (free), OpenAI, or Groq key in Settings.")
+
+        # Save results to database
+        if result and not result.get("error"):
+            update_data = {}
+            if result.get("company_type"):
+                update_data["classification"] = result["company_type"]
+            if result.get("compliance"):
+                update_data["compliance"] = ", ".join(result["compliance"])
+            if update_data:
+                supabase.table("companies").update(update_data).eq("id", company_id).execute()
+
+        return {"success": True, "analysis": result, "company_id": company_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
 
 @router.post("/leads/bulk")
@@ -942,6 +1024,12 @@ async def bulk_create_leads(
             first_name = name_parts[0] if name_parts else ""
             last_name = name_parts[1] if len(name_parts) > 1 else ""
 
+            followers_raw = lead.get("followers_count", "") or lead.get("followers", "") or ""
+            followers_clean = followers_raw.replace("followers", "").replace("follower", "").strip() if followers_raw else None
+
+            employee_raw = lead.get("employee_count", "") or lead.get("employeeCount", "") or ""
+            employee_clean = employee_raw.strip() if employee_raw else None
+
             clean_lead = {
                 "user_id": user_id,
                 "name": name,
@@ -955,7 +1043,11 @@ async def bulk_create_leads(
                 "profile_url": profile_url or None,
                 "status": lead.get("status", "new"),
                 "notes": lead.get("notes") or None,
-                "scraped_at": lead.get("scraped_at") or None,
+                "scraped_at": lead.get("scraped_at") or lead.get("scrapedAt") or None,
+                "followers_count": followers_clean or None,
+                "employee_count": employee_clean or None,
+                "website": lead.get("website") or None,
+                "appointment": lead.get("appointment") or None,
             }
 
             response = supabase.table("leads").insert(clean_lead).execute()

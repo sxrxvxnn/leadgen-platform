@@ -1,4 +1,4 @@
-const API = 'http://localhost:8000/api'
+// API_BASE_URL URL is now defined in config.js
 
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'))
@@ -36,7 +36,7 @@ function detectPageType(url) {
 }
 
 function updateLeadCount(token) {
-  fetch(API + '/leads', { headers: { Authorization: 'Bearer ' + token } })
+  fetch(API_BASE_URL + '/leads', { headers: { Authorization: 'Bearer ' + token } })
     .then((r) => r.json())
     .then((data) => {
       const count = data.leads ? data.leads.length : 0
@@ -47,7 +47,7 @@ function updateLeadCount(token) {
 }
 
 async function loginApi(email, password) {
-  const res = await fetch(API + '/auth/login', {
+  const res = await fetch(API_BASE_URL + '/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
@@ -58,12 +58,12 @@ async function loginApi(email, password) {
 
 async function getValidToken() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(['token', 'userEmail', 'userPassword'], async (stored) => {
+    chrome.storage.local.get(['token', 'userEmail'], async (stored) => {
       const token = stored.token
       if (!token) { reject(new Error('No token')); return }
 
       try {
-        const testRes = await fetch(API + '/leads', {
+        const testRes = await fetch(API_BASE_URL + '/leads', {
           headers: { 'Authorization': 'Bearer ' + token }
         })
 
@@ -72,28 +72,11 @@ async function getValidToken() {
           return
         }
 
-        // Token expired — refresh
-        const email = stored.userEmail
-        const password = stored.userPassword ? atob(stored.userPassword) : null
-
-        if (!email || !password) { reject(new Error('No credentials')); return }
-
-        const refreshRes = await fetch(API + '/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        })
-
-        if (!refreshRes.ok) { reject(new Error('Refresh failed')); return }
-
-        const refreshData = await refreshRes.json()
-        const newToken = refreshData.access_token
-        chrome.storage.local.set({ token: newToken })
-        resolve(newToken)
+        // Token expired - user needs to re-login
+        reject(new Error('Token expired - please sign in again'))
 
       } catch (e) {
-        // Network error — return existing token
-        resolve(token)
+        reject(e)
       }
     })
   })
@@ -123,8 +106,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     const data = await loginApi(email, password)
     chrome.storage.local.set({
       token: data.access_token,
-      userEmail: email,
-      userPassword: btoa(password)
+      userEmail: email
     }, () => {
       initMainScreen(data.access_token, email)
     })
@@ -152,6 +134,7 @@ function initMainScreen(token, email) {
     const label = document.getElementById('pageTypeLabel')
     const extractBtn = document.getElementById('extractBtn')
     const autoScrollBtn = document.getElementById('autoScrollBtn')
+    const peopleTip = document.getElementById('peopleTip')
 
     const typeLabels = {
       'salenav-companies': 'SALES NAV ACCOUNTS',
@@ -170,12 +153,14 @@ function initMainScreen(token, email) {
       extractBtn.disabled = true
       extractBtn.style.opacity = '0.3'
       autoScrollBtn.style.display = 'none'
+      peopleTip.style.display = 'none'
     } else {
       label.textContent = typeLabels[type] || type.toUpperCase()
       badge.className = 'page-badge linkedin'
       extractBtn.disabled = false
       extractBtn.style.opacity = '1'
       autoScrollBtn.style.display = type === 'company-people' ? 'block' : 'none'
+      peopleTip.style.display = type === 'company-people' ? 'block' : 'none'
     }
   })
 
@@ -221,7 +206,6 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
   btn.querySelector('span').textContent = 'Extracting...'
   clearStatus()
 
-  // Get valid token with auto-refresh
   let token
   try {
     token = await getValidToken()
@@ -293,6 +277,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
             status: 'new',
             followers_count: l.followers || data.companyFollowers || null,
             employee_count: l.employeeCount || data.companySize || null,
+            appointment: l.appointment || null,
           }))
       } else if (data.type === 'profile') {
         if (!data.name) { setStatus('Could not read profile. Scroll down and retry.', 'error'); return }
@@ -305,6 +290,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
           scraped_at: data.scrapedAt || new Date().toISOString(),
           status: 'new',
           followers_count: data.followers || null,
+          appointment: data.appointment || null,
         }]
       }
 
@@ -315,7 +301,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
       setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
 
-      fetch(API + '/leads/bulk', {
+      fetch(API_BASE_URL + '/leads/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ leads: leads })
@@ -404,7 +390,7 @@ function showCompanySelectionScreen(companies, token) {
 // ─── SAVE HELPERS ─────────────────────────────────────────────
 
 function saveCompanyList(companies, token) {
-  fetch(API + '/companies/bulk', {
+  fetch(API_BASE_URL + '/companies/bulk', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
     body: JSON.stringify({ companies: companies })
@@ -423,7 +409,7 @@ function saveCompanyList(companies, token) {
 }
 
 function saveCompany(data, token) {
-  fetch(API + '/companies', {
+  fetch(API_BASE_URL + '/companies', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({
@@ -446,7 +432,7 @@ document.getElementById('dashboardBtn').addEventListener('click', () => {
 })
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  chrome.storage.local.remove(['token', 'userEmail', 'userPassword'], () => {
+  chrome.storage.local.remove(['token', 'userEmail'], () => {
     show('loginScreen')
     document.getElementById('statusDot').className = 'status-dot'
     document.getElementById('loginEmail').value = ''

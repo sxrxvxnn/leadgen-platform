@@ -1,4 +1,4 @@
- function getPageType() {
+function getPageType() {
   const url = window.location.href
   if (url.includes('linkedin.com/sales/search/company')) return 'salenav-companies'
   if (url.includes('linkedin.com/sales/search/people')) return 'salenav-people'
@@ -16,6 +16,19 @@ function cleanUrl(url) {
   return url.split('?')[0].split('#')[0]
 }
 
+function detectAppointment() {
+  const bookingPatterns = [
+    /calendly\.com/i, /cal\.com/i, /topmate\.io/i, /tidycal\.com/i,
+    /savvycal\.com/i, /zcal\.co/i, /hubspot.*meetings/i,
+    /youcanbook/i, /acuityscheduling/i, /setmore/i, /doodle\.com/i,
+  ]
+  const allLinks = Array.from(document.querySelectorAll('a[href]'))
+  const hasBookingLink = allLinks.some(link => bookingPatterns.some(p => p.test(link.href || '')))
+  const pageText = document.body.innerText
+  const hasBookingText = bookingPatterns.some(p => p.test(pageText))
+  return (hasBookingLink || hasBookingText) ? 'Yes' : 'No'
+}
+
 function scrapeCompanyPage() {
   const data = {
     type: 'company', name: '', industry: '', size: '', website: '',
@@ -23,13 +36,11 @@ function scrapeCompanyPage() {
     url: cleanUrl(window.location.href),
     scrapedAt: new Date().toISOString()
   }
-
   const nameSelectors = ['h1.org-top-card-summary__title', '.org-top-card-summary__title', 'h1[class*="org-top-card"]', 'h1']
   for (const sel of nameSelectors) {
     const el = document.querySelector(sel)
     if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break }
   }
-
   let infoItems = document.querySelectorAll('.org-top-card-summary-info-list__info-item')
   infoItems.forEach((item, index) => {
     const text = item.innerText.trim()
@@ -37,7 +48,6 @@ function scrapeCompanyPage() {
     if (index === 1) data.size = text
     if (index === 2) data.headquarters = text
   })
-
   if (!data.industry) {
     const dts = document.querySelectorAll('.artdeco-def-list__item dt')
     const dds = document.querySelectorAll('.artdeco-def-list__item dd')
@@ -50,21 +60,17 @@ function scrapeCompanyPage() {
       if (key.includes('website')) data.website = val
     })
   }
-
   for (const sel of ['a[data-control-name="topbox_website"]']) {
     const el = document.querySelector(sel)
     if (el && el.href && !el.href.includes('linkedin')) { data.website = el.href; break }
   }
-
   for (const sel of ['p.org-top-card-summary__tagline', '.org-about-us-organization-description__text']) {
     const el = document.querySelector(sel)
     if (el && el.innerText.trim()) { data.description = el.innerText.trim(); break }
   }
-
   const allText = document.body.innerText
   const followersMatch = allText.match(/(\d[\d,KkMm]*)\s*followers?/i)
   if (followersMatch) data.followers = followersMatch[0].trim()
-
   return data
 }
 
@@ -85,47 +91,40 @@ function scrapeCompanyPeoplePage() {
 
   const pageLines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   pageLines.forEach(line => {
-    if (/^\d+[\d,.KkMm]*\s*followers?$/i.test(line)) companyFollowers = line
+    if (/^\d+[\d,.KkMm]*\s*followers?$/i.test(line) && !companyFollowers) companyFollowers = line
     if (/employees? on linkedin/i.test(line)) companySize = line.replace(/employees? on linkedin/i, '').trim()
+    if (/associated member/i.test(line)) {
+      const match = line.match(/(\d+)\s*associated/i)
+      if (match && !companySize) companySize = match[1]
+    }
   })
 
   const leads = []
   const seen = new Set()
-
   const profileLinks = document.querySelectorAll('a[href*="linkedin.com/in/"]')
 
   profileLinks.forEach(link => {
     const url = cleanUrl(link.href)
     if (!url || seen.has(url)) return
     if (/\/in\/[^/]+\/(detail|overlay|edit|recent-activity|posts|pulse)/.test(url)) return
-
     seen.add(url)
 
     const lead = {
-      type: 'profile',
-      name: '',
-      title: '',
-      company: companyName,
-      location: '',
-      profileUrl: url,
-      followers: companyFollowers,
-      employeeCount: companySize,
+      type: 'profile', name: '', title: '', company: companyName,
+      location: '', profileUrl: url, followers: companyFollowers,
+      employeeCount: companySize, appointment: 'No',
       scrapedAt: new Date().toISOString()
     }
 
-    // Skip lines that are UI elements or connection degrees
     const isSkipLine = (l) => {
       return /^(1st|2nd|3rd\+?|connect|follow|message|linkedin member|pending|withdraw|view full profile|view profile|add|skip|close|next|previous|more)$/i.test(l) ||
         /degree connection/i.test(l) ||
         /\d+(st|nd|rd|th)\+?\s*degree/i.test(l) ||
         /mutual connection/i.test(l) ||
         /^\d+\s*(connection|follower|following)/i.test(l) ||
-        l.startsWith('·') ||
-        l.startsWith('•') ||
-        l.length < 2
+        l.startsWith('·') || l.startsWith('•') || l.length < 2
     }
 
-    // Walk up DOM to find card container
     let card = link.parentElement
     for (let i = 0; i < 6; i++) {
       if (!card) break
@@ -135,21 +134,17 @@ function scrapeCompanyPeoplePage() {
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1)
         if (lines.length >= 2) {
           const validLines = lines.filter(l => !isSkipLine(l))
-
           if (validLines.length > 0) lead.name = validLines[0]
           if (validLines.length > 1) {
-            // Make sure title isn't the company name
             const potentialTitle = validLines[1]
             if (potentialTitle.toLowerCase() !== companyName.toLowerCase()) {
               lead.title = potentialTitle.length > 80 ? potentialTitle.substring(0, 77) + '...' : potentialTitle
             }
           }
-
           const locationPattern = /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai)/i
           for (let j = 2; j < validLines.length; j++) {
             if (locationPattern.test(validLines[j]) && validLines[j].length < 60) {
-              lead.location = validLines[j]
-              break
+              lead.location = validLines[j]; break
             }
           }
           break
@@ -158,7 +153,6 @@ function scrapeCompanyPeoplePage() {
       card = card.parentElement
     }
 
-    // Fallback name from URL slug
     if (!lead.name || lead.name.toLowerCase() === 'linkedin member' || isSkipLine(lead.name)) {
       const slugMatch = url.match(/\/in\/([^/]+)/)
       if (slugMatch) {
@@ -166,9 +160,7 @@ function scrapeCompanyPeoplePage() {
       }
     }
 
-    if (lead.name && lead.name.length > 1 && !isSkipLine(lead.name)) {
-      leads.push(lead)
-    }
+    if (lead.name && lead.name.length > 1 && !isSkipLine(lead.name)) leads.push(lead)
   })
 
   return { type: 'search', leads, companyName, companyFollowers, companySize, scrapedAt: new Date().toISOString() }
@@ -178,7 +170,7 @@ function scrapeProfilePage() {
   const data = {
     type: 'profile', name: '', title: '', company: '', location: '',
     profileUrl: cleanUrl(window.location.href), followers: '', connections: '',
-    scrapedAt: new Date().toISOString()
+    appointment: 'No', scrapedAt: new Date().toISOString()
   }
 
   const pageTitle = document.title
@@ -197,53 +189,79 @@ function scrapeProfilePage() {
     return patterns.some(p => p.test(line))
   }
 
-  const isLocation = (line) => line.length < 60 && (/,/.test(line) || /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|asia)/i.test(line))
+  const isLocation = (line) => line.length < 60 && (
+    /,/.test(line) ||
+    /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|asia|california|texas|florida|washington|new jersey|illinois)/i.test(line)
+  )
 
   const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 1)
 
+  let followersFound = false
   lines.forEach(line => {
-    if (/^\d[\d,]*\+?\s*followers?$/i.test(line)) data.followers = line
-    if (/^\d[\d,]*\+?\s*connections?$/i.test(line)) data.connections = line
+    if (!followersFound && /^\d[\d,]*\+?\s*followers?$/i.test(line)) {
+      data.followers = line
+      followersFound = true
+    }
+    if (/^\d[\d,]*\+?\s*connections?$/i.test(line) && !data.connections) {
+      data.connections = line
+    }
   })
 
   const nameIndex = lines.findIndex(l => data.name && (l === data.name || l.startsWith(data.name)))
 
   if (nameIndex !== -1) {
     let titleFound = false
-    for (let i = nameIndex + 1; i < Math.min(nameIndex + 15, lines.length); i++) {
+    let companyFound = false
+
+    for (let i = nameIndex + 1; i < Math.min(nameIndex + 20, lines.length); i++) {
       const line = lines[i]
       if (skipLine(line) || line === data.name) continue
+      if (line.startsWith('·')) continue
+
       if (!titleFound && line.length > 3) {
         const rawTitle = line.split('|')[0].trim()
         data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle
-        titleFound = true; continue
+        titleFound = true
+        continue
       }
-      if (titleFound && !data.location && isLocation(line)) { data.location = line; break }
+
+      if (titleFound && !companyFound && line.includes('·') && line.length < 100 && !isLocation(line)) {
+        data.company = line.split('·')[0].trim()
+        companyFound = true
+        continue
+      }
+
+      if (titleFound && !data.location && isLocation(line)) {
+        data.location = line
+        if (companyFound) break
+      }
+
+      if (titleFound && companyFound && data.location) break
     }
   }
 
-  const expIndex = lines.findIndex(l => l === 'Experience')
-  if (expIndex !== -1) {
-    let expLinesFound = 0
-    for (let i = expIndex + 1; i < Math.min(expIndex + 10, lines.length); i++) {
-      const line = lines[i]
-      if (line.length > 2 && line.length < 100 &&
-        !line.includes('Full-time') && !line.includes('Part-time') &&
-        !line.includes('Contract') && !/^\d{4}/.test(line) &&
-        !line.includes(' yr') && !line.includes(' mo') &&
-        !line.includes('Present') && !line.includes('On-site') &&
-        !line.includes('Remote') && !line.includes('Hybrid') && !isLocation(line)) {
-        if (expLinesFound === 0) {
-          const rawTitle = line.split('·')[0].trim()
-          data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle
-        } else if (expLinesFound === 1) {
-          data.company = line.split('·')[0].trim(); break
+  if (!data.company) {
+    const expIndex = lines.findIndex(l => l === 'Experience')
+    if (expIndex !== -1) {
+      let expLinesFound = 0
+      for (let i = expIndex + 1; i < Math.min(expIndex + 10, lines.length); i++) {
+        const line = lines[i]
+        if (line.length > 2 && line.length < 100 &&
+          !line.includes('Full-time') && !line.includes('Part-time') &&
+          !line.includes('Contract') && !/^\d{4}/.test(line) &&
+          !line.includes(' yr') && !line.includes(' mo') &&
+          !line.includes('Present') && !line.includes('On-site') &&
+          !line.includes('Remote') && !line.includes('Hybrid') && !isLocation(line)) {
+          if (expLinesFound === 1) {
+            data.company = line.split('·')[0].trim(); break
+          }
+          expLinesFound++
         }
-        expLinesFound++
       }
     }
   }
 
+  data.appointment = detectAppointment()
   return data
 }
 
@@ -281,6 +299,7 @@ function scrapeLinkedInCompanySearch() {
     if (seen.has(slug)) return
     seen.add(slug)
 
+    // Name is first line of link text
     const rawName = link.innerText.trim()
     const name = rawName.split('\n')[0].trim()
     if (!name || name.length < 2 || name.length > 100) return
@@ -293,22 +312,42 @@ function scrapeLinkedInCompanySearch() {
       scrapedAt: new Date().toISOString()
     }
 
+    // Parse from link innerText — most reliable source
+    // Format: "Name\n\nIndustry\n\nLocation"
+    const linkParts = link.innerText.split('\n').map(p => p.trim()).filter(p => p.length > 0)
+    // linkParts[0] = name, [1] = industry, [2] = location
+    if (linkParts.length > 1) company.industry = linkParts[1]
+    if (linkParts.length > 2) {
+      const potentialHQ = linkParts[2]
+      // Only use as HQ if it's not a followers count
+      if (!/follower/i.test(potentialHQ)) {
+        company.headquarters = potentialHQ
+      }
+    }
+
+    // Get followers and description from card container
     let card = link
     for (let i = 0; i < 6; i++) {
       card = card.parentElement
       if (!card) break
       const cardLines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0)
-      if (cardLines.length >= 5) {
-        const followersLine = cardLines.find(l => /follower/i.test(l))
+      if (cardLines.length >= 4) {
+        // Followers — line with "follower" text
+        const followersLine = cardLines.find(l => /\d[\d,KkMm]*\s*followers?/i.test(l))
         if (followersLine) company.followers = followersLine
-        const descLine = cardLines.find(l => l.length > 50 && !l.includes(name) && !/follower|follow|sign up|visit website/i.test(l))
+
+        // Description — long line, not name, not followers, not UI text
+        const descLine = cardLines.find(l =>
+          l.length > 40 &&
+          !l.includes(name) &&
+          !/follower|follow|sign up|visit website|get the linkedin/i.test(l) &&
+          !l.match(/^\d+/)
+        )
         if (descLine) company.description = descLine.substring(0, 200)
-        const nameParts = link.innerText.split('\n').map(p => p.trim()).filter(p => p.length > 0)
-        if (nameParts.length > 1) company.industry = nameParts[1]
-        if (nameParts.length > 2) company.headquarters = nameParts[2]
         break
       }
     }
+
     companies.push(company)
   })
 
@@ -381,12 +420,7 @@ function autoScrollPeoplePage(callback) {
     const buttons = Array.from(document.querySelectorAll('button'))
     for (const btn of buttons) {
       const text = (btn.innerText || btn.textContent || '').trim()
-      if (
-        text === 'Show more results' ||
-        text === 'Load more results' ||
-        text === 'See more' ||
-        text === 'Show more'
-      ) {
+      if (text === 'Show more results' || text === 'Load more results' || text === 'See more' || text === 'Show more') {
         const rect = btn.getBoundingClientRect()
         if (rect.width > 0 && rect.height > 0) {
           btn.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -400,15 +434,9 @@ function autoScrollPeoplePage(callback) {
 
   function scrollStep() {
     const currentCount = getUniqueProfileCount()
-
-    // Scroll to bottom first
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
     totalScrolls++
-
-    // Try clicking show more after scroll settles
-    setTimeout(() => {
-      findAndClickShowMore()
-    }, 1500)
+    setTimeout(() => { findAndClickShowMore() }, 1500)
 
     if (currentCount === lastCount) {
       unchangedRounds++
@@ -418,12 +446,9 @@ function autoScrollPeoplePage(callback) {
     }
 
     if (unchangedRounds >= 4 || totalScrolls >= maxScrolls) {
-      setTimeout(() => {
-        callback(getUniqueProfileCount())
-      }, 2500)
+      setTimeout(() => { callback(getUniqueProfileCount()) }, 2500)
       return
     }
-
     setTimeout(scrollStep, 3500)
   }
 
@@ -446,7 +471,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     else if (pageType === 'profile') result = scrapeProfilePage()
     else if (pageType === 'search') result = scrapeSearchPage()
     else result = { error: 'Navigate to a LinkedIn page to extract leads or companies.' }
-
     chrome.storage.local.get({ leads: [] }, (existing) => {
       if (result && !result.error) {
         const updated = [...existing.leads, result]
@@ -462,9 +486,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: 'Not on a people page' })
       return true
     }
-    autoScrollPeoplePage((count) => {
-      sendResponse({ success: true, count })
-    })
+    autoScrollPeoplePage((count) => { sendResponse({ success: true, count }) })
     return true
   }
 
