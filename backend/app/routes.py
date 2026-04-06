@@ -600,122 +600,118 @@ async def bulk_create_companies(
 @router.post("/companies/{company_id}/check-compliance")
 async def check_compliance(
     company_id: str,
-    payload: dict,
+    payload: dict = {},
     authorization: str = Header(...)
 ):
     user_id = get_user_id(authorization)
-
     try:
-        from groq import Groq
-        import json
-        import traceback
-
-        # Get company details
-        company_res = supabase.table("companies")\
-            .select("*")\
-            .eq("id", company_id)\
-            .eq("user_id", user_id)\
-            .execute()
-
-        if not company_res.data:
+        co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+        if not co_res.data:
             raise HTTPException(status_code=404, detail="Company not found")
+        company = co_res.data[0]
 
-        company = company_res.data[0]
-        company_name = company.get("name", "")
-        industry = company.get("industry", "")
-        groq_api_key = payload.get("groq_api_key", "")
+        groq_key = payload.get("groq_key") or os.getenv("GROQ_API_KEY", "")
+        gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
+        website = company.get("website", "")
 
-        if not groq_api_key:
-            raise HTTPException(status_code=400, detail="Groq API key required")
+        compliance_found = []
+        has_security_team = "Unknown"
+        security_notes = ""
+        confidence = "Low"
 
-        client = Groq(api_key=groq_api_key)
+        # Step 1 — scrape website for compliance text (most reliable)
+        if website:
+            from .website_analyzer import fetch_website_content
+            website_data = fetch_website_content(website)
+            if website_data:
+                compliance_found = website_data.get("compliance_detected", [])
+                full_text = website_data.get("full_text", "").lower()
+                # Check for security team signals
+                security_signals = ["security team", "security engineer", "ciso", "chief security", "infosec", "information security", "security operations"]
+                if any(s in full_text for s in security_signals):
+                    has_security_team = "Yes"
+                    confidence = "High"
+                else:
+                    has_security_team = "Unknown"
+                    confidence = "Medium"
+                security_notes = f"Detected from website: {website}"
 
-        prompt = f"""You are a compliance research assistant. Based on your knowledge about {company_name} (Industry: {industry}), determine which compliance certifications this company likely has or needs.
+        # Step 2 — use AI to verify and add more context only if AI key available
+        if (groq_key or gemini_key) and company.get("name"):
+            company_name = company.get("name", "")
+            industry = company.get("industry", "")
+            description = company.get("description", "")
 
-Research the following compliance standards for {company_name}:
-- ISO 27001 (Information Security Management)
-- SOC 2 Type II (Service Organization Control)
-- GDPR (General Data Protection Regulation)
-- HIPAA (Health Insurance Portability and Accountability Act)
-- PCI DSS (Payment Card Industry Data Security Standard)
-- OWASP (Open Web Application Security Project guidelines)
-- CERT-In (Indian Computer Emergency Response Team)
-- DPDP Act (Digital Personal Data Protection Act - India)
-- RBI Guidelines (Reserve Bank of India - for fintech)
-- SEBI Guidelines (Securities and Exchange Board of India)
+            prompt = f"""Company: {company_name}
+Industry: {industry or "Unknown"}
+Description: {description or "None"}
+Compliance already detected from their website: {compliance_found}
 
-Respond in JSON format only with no explanation:
-{{
-  "compliance": "comma-separated list of certifications this company likely has or needs based on their industry and region",
-  "has_security_team": "Yes or No or Unknown",
-  "security_notes": "brief one sentence note about their security posture and compliance needs",
-  "confidence": "high, medium, or low"
-}}
+Based ONLY on what's likely for this specific company given their industry and description, what compliance standards might they have? 
+DO NOT make up standards. Only include ones that are highly likely given the industry.
 
-If you have no specific information about this company, make reasonable recommendations based on their industry ({industry}) and typical requirements for companies of this type."""
+Reply with ONLY valid JSON:
+{{"additional_compliance": [], "has_security_team": "Yes" or "No" or "Unknown", "confidence": "High" or "Medium" or "Low", "notes": "one sentence"}}
 
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=300,
-        )
+IMPORTANT: Return empty additional_compliance array if not sure. Do not guess."""
 
-        response_text = completion.choices[0].message.content.strip()
+            try:
+                if gemini_key:
+                    res = requests.post(
+                        f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}',
+                        headers={'Content-Type': 'application/json'},
+                        json={'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 200}},
+                        timeout=15
+                    )
+                    data = res.json()
+                    content = data['candidates'][0]['content']['parts'][0]['text'].strip()
+                else:
+                    res = requests.post(
+                        'https://api.groq.com/openai/v1/chat/completions',
+                        headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                        json={'model': 'llama-3.1-8b-instant', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 200, 'temperature': 0.1},
+                        timeout=10
+                    )
+                    data = res.json()
+                    content = data['choices'][0]['message']['content'].strip()
 
-        try:
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            result = json.loads(response_text)
-        except Exception:
-            result = {
-                "compliance": "Unknown",
-                "has_security_team": "Unknown",
-                "security_notes": "Could not parse response",
-                "confidence": "low"
-            }
+                import re, json as jsonlib
+                content = re.sub(r'^```json\s*', '', content)
+                content = re.sub(r'\s*```$', '', content)
+                ai_result = jsonlib.loads(content)
 
-        update_data = {}
-        if result.get("compliance"):
-            update_data["compliance"] = result["compliance"]
+                # Only add AI compliance if it's not already found and is credible
+                additional = ai_result.get("additional_compliance", [])
+                for item in additional:
+                    if item and item not in compliance_found:
+                        compliance_found.append(item)
 
-        if result.get("compliance"):
-            supabase.table("leads")\
-                .update({"compliance": result["compliance"]})\
-                .eq("user_id", user_id)\
-                .ilike("company", company_name)\
-                .execute()
+                if has_security_team == "Unknown":
+                    has_security_team = ai_result.get("has_security_team", "Unknown")
+                    confidence = ai_result.get("confidence", confidence)
+                    security_notes = ai_result.get("notes", security_notes)
 
-        existing_notes = company.get("notes", "") or ""
-        security_note = result.get("security_notes", "")
-        if security_note and security_note not in existing_notes:
-            update_data["notes"] = (existing_notes + "\n\n[AI Compliance Check]: " + security_note).strip()
+            except Exception as e:
+                print(f"AI compliance error: {e}")
 
-        if update_data:
-            supabase.table("companies")\
-                .update(update_data)\
-                .eq("id", company_id)\
-                .execute()
+        compliance_str = ", ".join(compliance_found) if compliance_found else "None detected"
+
+        # Save to database
+        if compliance_found:
+            supabase.table("companies").update({"compliance": compliance_str}).eq("id", company_id).execute()
 
         return {
-            "company": company_name,
-            "compliance": result.get("compliance", "Unknown"),
-            "has_security_team": result.get("has_security_team", "Unknown"),
-            "security_notes": result.get("security_notes", ""),
-            "confidence": result.get("confidence", "low"),
-            "updated": True
+            "compliance": compliance_str,
+            "has_security_team": has_security_team,
+            "security_notes": security_notes,
+            "confidence": confidence,
+            "source": "Website scraping + AI verification" if website else "AI only"
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        print(f"COMPLIANCE ERROR: {str(e)}")
-        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-    
     # ─── BULK AUTO-FILL ───────────────────────────────────────────
 
 @router.post("/leads/autofill-bulk")
@@ -850,13 +846,33 @@ JSON only, no explanation:
 {{"website": "domain.com", "revenue": "number"}}
 
 If truly unknown use empty string."""
-                                completion = client.chat.completions.create(
-                                    model="llama-3.3-70b-versatile",
-                                    messages=[{"role": "user", "content": prompt}],
-                                    temperature=0.1,
-                                    max_tokens=100,
-                                )
-                                response_text = completion.choices[0].message.content.strip()
+                                # Try Gemini first, then Groq
+                                _gemini_key = payload.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
+                                _groq_key = payload.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
+                                response_text = None
+                                if _gemini_key:
+                                    try:
+                                        _r = requests.post(
+                                            f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_gemini_key}',
+                                            headers={'Content-Type': 'application/json'},
+                                            json={'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 150}},
+                                            timeout=15
+                                        )
+                                        _d = _r.json()
+                                        response_text = _d['candidates'][0]['content']['parts'][0]['text'].strip()
+                                    except Exception as _e:
+                                        print(f"Gemini autofill error: {_e}")
+                                if not response_text and _groq_key:
+                                    try:
+                                        completion = client.chat.completions.create(
+                                            model="llama-3.3-70b-versatile",
+                                            messages=[{"role": "user", "content": prompt}],
+                                            temperature=0.1,
+                                            max_tokens=150,
+                                        )
+                                        response_text = completion.choices[0].message.content.strip()
+                                    except Exception as _e:
+                                        print(f"Groq autofill error: {_e}")
                                 if "```" in response_text:
                                     parts = response_text.split("```")
                                     response_text = parts[1] if len(parts) > 1 else response_text

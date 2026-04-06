@@ -48,6 +48,7 @@ export const autofillBulk = (leadIds, groqKey, batchStart = 0, openaiKey = '') =
       lead_ids: leadIds,
       groq_api_key: groqKey,
       openai_api_key: openaiKey,
+      gemini_api_key: localStorage.getItem('geminiKey') || '',
       batch_start: batchStart,
     }),
   })
@@ -58,7 +59,14 @@ export const createCompany = (data) => api.post('/companies', data)
 export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
 export const deleteCompany = (id) => api.delete(`/companies/${id}`)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
-export const checkCompliance = (companyId, groqKey) => api.post(`/companies/${companyId}/check-compliance`, { groq_api_key: groqKey })
+export const checkCompliance = (companyId, groqKey) =>
+  apiRequest(`/companies/${companyId}/check-compliance`, {
+    method: 'POST',
+    body: JSON.stringify({
+      groq_key: groqKey,
+      gemini_key: localStorage.getItem('geminiKey') || '',
+    }),
+  })
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
