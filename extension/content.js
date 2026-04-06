@@ -58,22 +58,47 @@ function scrapeCompanyPage() {
 
 function scrapeCompanyPeoplePage() {
   let companyName = ''
+  let companyFollowers = ''
+  let companySize = ''
+
   const titleTag = document.title
   if (titleTag) companyName = titleTag.split('|')[0].replace(/people/gi, '').replace(/:/g, '').trim()
+
+  const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  lines.forEach(line => {
+    if (/^\d+[\d,.KkMm]*\s*followers?$/i.test(line)) companyFollowers = line
+    if (/employees? on linkedin/i.test(line)) companySize = line.replace(/employees? on linkedin/i, '').trim()
+  })
+
   const leads = []
   const seen = new Set()
   const listItems = document.querySelectorAll('ul.display-flex.list-style-none.flex-wrap > li')
+
   listItems.forEach((li) => {
     const profileLink = li.querySelector('a[href*="/in/"]')
     if (!profileLink) return
     const url = cleanUrl(profileLink.href)
     if (!url || seen.has(url)) return
     seen.add(url)
-    const lead = { type: 'profile', name: '', title: '', company: companyName, location: '', profileUrl: url, scrapedAt: new Date().toISOString() }
+
+    const lead = {
+      type: 'profile',
+      name: '',
+      title: '',
+      company: companyName,
+      location: '',
+      profileUrl: url,
+      followers: companyFollowers,
+      employeeCount: companySize,
+      scrapedAt: new Date().toISOString()
+    }
+
     const lines = li.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
     const skipPatterns = /^(1st|2nd|3rd|Connect|Follow|Message|LinkedIn Member|Pending|withdraw|View full profile)$/i
     const connectionPattern = /degree connection|mutual connection|other mutual/i
+
     if (lines.length > 0) lead.name = lines[0]
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]
       if (!skipPatterns.test(line) && !connectionPattern.test(line) && !line.startsWith('·') && line.length > 2) {
@@ -81,15 +106,37 @@ function scrapeCompanyPeoplePage() {
         break
       }
     }
+
+    const locationPatterns = /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai)/i
+    for (let i = 1; i < lines.length; i++) {
+      if (locationPatterns.test(lines[i]) && lines[i].length < 60) {
+        lead.location = lines[i]
+        break
+      }
+    }
+
     if (lead.name && lead.name !== 'LinkedIn Member') leads.push(lead)
   })
+
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
 function scrapeProfilePage() {
-  const data = { type: 'profile', name: '', title: '', company: '', location: '', profileUrl: cleanUrl(window.location.href), scrapedAt: new Date().toISOString() }
+  const data = {
+    type: 'profile',
+    name: '',
+    title: '',
+    company: '',
+    location: '',
+    profileUrl: cleanUrl(window.location.href),
+    followers: '',
+    connections: '',
+    scrapedAt: new Date().toISOString()
+  }
+
   const pageTitle = document.title
   if (pageTitle) data.name = pageTitle.split('|')[0].trim()
+
   const skipLine = (line) => {
     const patterns = [
       /^(1st|2nd|3rd|connect|follow|message|linkedin|pending|withdraw)$/i,
@@ -102,9 +149,18 @@ function scrapeProfilePage() {
     ]
     return patterns.some(p => p.test(line))
   }
+
   const isLocation = (line) => line.length < 60 && (/,/.test(line) || /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|asia)/i.test(line))
+
   const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 1)
+
+  lines.forEach(line => {
+    if (/^\d[\d,]*\+?\s*followers?$/i.test(line)) data.followers = line
+    if (/^\d[\d,]*\+?\s*connections?$/i.test(line)) data.connections = line
+  })
+
   const nameIndex = lines.findIndex(l => data.name && (l === data.name || l.startsWith(data.name)))
+
   if (nameIndex !== -1) {
     let titleFound = false
     for (let i = nameIndex + 1; i < Math.min(nameIndex + 15, lines.length); i++) {
@@ -118,18 +174,29 @@ function scrapeProfilePage() {
       if (titleFound && !data.location && isLocation(line)) { data.location = line; break }
     }
   }
+
   const expIndex = lines.findIndex(l => l === 'Experience')
   if (expIndex !== -1) {
     let expLinesFound = 0
     for (let i = expIndex + 1; i < Math.min(expIndex + 10, lines.length); i++) {
       const line = lines[i]
-      if (line.length > 2 && line.length < 100 && !line.includes('Full-time') && !line.includes('Part-time') && !line.includes('Contract') && !/^\d{4}/.test(line) && !line.includes(' yr') && !line.includes(' mo') && !line.includes('Present') && !line.includes('On-site') && !line.includes('Remote') && !line.includes('Hybrid') && !isLocation(line)) {
-        if (expLinesFound === 0) { const rawTitle = line.split('·')[0].trim(); data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle }
-        else if (expLinesFound === 1) { data.company = line.split('·')[0].trim(); break }
+      if (line.length > 2 && line.length < 100 &&
+        !line.includes('Full-time') && !line.includes('Part-time') &&
+        !line.includes('Contract') && !/^\d{4}/.test(line) &&
+        !line.includes(' yr') && !line.includes(' mo') &&
+        !line.includes('Present') && !line.includes('On-site') &&
+        !line.includes('Remote') && !line.includes('Hybrid') && !isLocation(line)) {
+        if (expLinesFound === 0) {
+          const rawTitle = line.split('·')[0].trim()
+          data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle
+        } else if (expLinesFound === 1) {
+          data.company = line.split('·')[0].trim(); break
+        }
         expLinesFound++
       }
     }
   }
+
   return data
 }
 
@@ -156,66 +223,51 @@ function scrapeSearchPage() {
 function scrapeLinkedInCompanySearch() {
   const companies = []
   const seen = new Set()
-
-  // LinkedIn embeds company name + industry + location inside the link text
-  // Format: "Company Name\n\nIndustry\n\nLocation..."
   const companyLinks = document.querySelectorAll('a[href*="linkedin.com/company/"]')
 
   companyLinks.forEach(link => {
     const href = cleanUrl(link.href)
-
-    // Only match direct company URLs — not events, ads, or other pages
     const slugMatch = href.match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)\/?$/)
     if (!slugMatch) return
-
     const slug = slugMatch[1]
     if (['linkedin', 'company', 'school', 'showcase'].includes(slug)) return
     if (seen.has(slug)) return
     seen.add(slug)
 
-    // The link text contains name + industry + location separated by \n\n
-    const fullText = link.innerText || ''
-    const parts = fullText.split('\n').map(p => p.trim()).filter(p => p.length > 0)
-
-    if (parts.length === 0) return
-
-    const name = parts[0]
+    const name = link.innerText.trim()
     if (!name || name.length < 2 || name.length > 100) return
-
-    // Skip UI elements
-    if (/^(follow|following|connect|sign up|visit|reactivate|premium|about|more|jobs|messaging|notifications|for business)$/i.test(name)) return
+    if (/^(follow|following|connect|sign up|visit website|reactivate)$/i.test(name)) return
     if (/online event|your local time|\d{1,2}:\d{2}/.test(name)) return
+    if (/^(new york|london|miami|tampa|san francisco|washington|singapore|dubai|mumbai)/i.test(name)) return
 
     const company = {
       type: 'company',
-      name,
-      industry: parts[1] || '',
-      headquarters: parts[2] || '',
+      name: name.split('\n')[0].trim(),
+      industry: '',
+      headquarters: '',
       followers: '',
       description: '',
       linkedinUrl: href,
       scrapedAt: new Date().toISOString()
     }
 
-    // Get description and followers from parent card
     let card = link
     for (let i = 0; i < 6; i++) {
       card = card.parentElement
       if (!card) break
       const cardLines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0)
       if (cardLines.length >= 5) {
-        // Find followers
         const followersLine = cardLines.find(l => /follower/i.test(l))
         if (followersLine) company.followers = followersLine
-
-        // Find description — long line not matching name/industry/location/followers
         const descLine = cardLines.find(l =>
-          l.length > 50 &&
-          !l.includes(name) &&
-          !l.includes(company.industry) &&
+          l.length > 50 && !l.includes(company.name) &&
           !/follower|follow|sign up|visit website/i.test(l)
         )
         if (descLine) company.description = descLine.substring(0, 200)
+
+        const nameParts = link.innerText.split('\n').map(p => p.trim()).filter(p => p.length > 0)
+        if (nameParts.length > 1) company.industry = nameParts[1]
+        if (nameParts.length > 2) company.headquarters = nameParts[2]
         break
       }
     }
@@ -285,6 +337,41 @@ function scrapeSalesNavPeople() {
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
+// ─── AUTO SCROLL ─────────────────────────────────────────────
+
+function autoScrollPeoplePage(callback) {
+  let lastCount = 0
+  let unchangedRounds = 0
+  let totalScrolls = 0
+  const maxScrolls = 15
+
+  function scrollStep() {
+    const items = document.querySelectorAll('a[href*="linkedin.com/in/"]')
+    const currentCount = items.length
+
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+    totalScrolls++
+
+    if (currentCount === lastCount) {
+      unchangedRounds++
+    } else {
+      unchangedRounds = 0
+      lastCount = currentCount
+    }
+
+    if (unchangedRounds >= 3 || totalScrolls >= maxScrolls) {
+      setTimeout(() => callback(currentCount), 1500)
+      return
+    }
+
+    setTimeout(scrollStep, 2000)
+  }
+
+  scrollStep()
+}
+
+// ─── MESSAGE LISTENER ─────────────────────────────────────────
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scrape') {
     const pageType = getPageType()
@@ -297,6 +384,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     else if (pageType === 'profile') result = scrapeProfilePage()
     else if (pageType === 'search') result = scrapeSearchPage()
     else result = { error: 'Navigate to a LinkedIn page to extract leads or companies.' }
+
     chrome.storage.local.get({ leads: [] }, (existing) => {
       if (result && !result.error) {
         const updated = [...existing.leads, result]
@@ -305,9 +393,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })
     sendResponse({ success: true, data: result })
   }
+
+  if (message.action === 'autoScroll') {
+    const pageType = getPageType()
+    if (pageType !== 'company-people') {
+      sendResponse({ success: false, error: 'Not on a people page' })
+      return true
+    }
+    autoScrollPeoplePage((count) => {
+      sendResponse({ success: true, count })
+    })
+    return true
+  }
+
   if (message.action === 'getLeads') {
     chrome.storage.local.get({ leads: [] }, (data) => { sendResponse({ leads: data.leads }) })
     return true
   }
+
   return true
 })

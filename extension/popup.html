@@ -1,234 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>LeadGen Engine</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LeadGen Engine</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 320px;
+      min-height: 420px;
+      background: #0a0a0a;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #f0ede8;
+      overflow: hidden;
+    }
+    .screen { display: none; padding: 24px; }
+    .screen.active { display: block; }
 
-      body {
-        width: 340px;
-        min-height: 220px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-        background: #0a0a0a;
-        color: #f0ede8;
-      }
+    /* Header */
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .logo { width: 28px; height: 28px; background: #f0ede8; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: #0a0a0a; flex-shrink: 0; }
+    .brand { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #f0ede8; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #333; margin-left: auto; flex-shrink: 0; }
+    .status-dot.online { background: #00e676; }
 
-      .screen { display: none; padding: 20px; }
-      .screen.active { display: block; }
+    /* Login */
+    .login-title { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .login-sub { font-size: 11px; color: #666; margin-bottom: 20px; }
+    .field { margin-bottom: 12px; }
+    .field label { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px; }
+    .field input { width: 100%; padding: 10px 12px; background: #111; border: 1px solid #222; border-radius: 4px; font-size: 13px; color: #f0ede8; outline: none; font-family: inherit; }
+    .field input:focus { border-color: #444; }
+    .error-msg { font-size: 11px; color: #ff2d2d; margin-bottom: 12px; display: none; }
+    .error-msg.show { display: block; }
+    .btn-primary { width: 100%; padding: 12px; background: #f0ede8; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0a0a0a; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-family: inherit; }
+    .btn-primary:hover { background: #fff; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-      /* Header */
-      .header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 16px 20px;
-        border-bottom: 1px solid #222;
-      }
-      .brand-mark {
-        width: 26px; height: 26px;
-        background: #f0ede8;
-        border-radius: 4px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 9px; font-weight: 900; color: #0a0a0a;
-        letter-spacing: 0.5px;
-      }
-      .brand-name {
-        font-size: 10px; font-weight: 700;
-        letter-spacing: 3px; color: #555;
-      }
-      .status-dot {
-        margin-left: auto;
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: #333;
-      }
-      .status-dot.online { background: #00e676; box-shadow: 0 0 6px #00e676; }
+    /* Main */
+    .lead-count { font-size: 11px; color: #555; margin-bottom: 20px; letter-spacing: 0.5px; }
+    .lead-count span { color: #f0ede8; font-weight: 700; }
+    .page-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #111; border: 1px solid #222; border-radius: 3px; margin-bottom: 16px; }
+    .page-badge.linkedin { border-color: #0077b5; }
+    .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #555; }
+    .page-badge.linkedin .badge-dot { background: #0077b5; }
+    #pageTypeLabel { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: #666; }
+    .page-badge.linkedin #pageTypeLabel { color: #0077b5; }
 
-      /* Login screen */
-      .login-title {
-        font-size: 18px; font-weight: 900;
-        letter-spacing: -0.5px;
-        margin-bottom: 4px;
-      }
-      .login-sub {
-        font-size: 11px; color: #555;
-        margin-bottom: 20px; letter-spacing: 0.5px;
-      }
-      .field { margin-bottom: 12px; }
-      .field label {
-        display: block;
-        font-size: 9px; font-weight: 600;
-        letter-spacing: 2px; color: #444;
-        text-transform: uppercase;
-        margin-bottom: 6px;
-      }
-      .field input {
-        width: 100%; padding: 10px 12px;
-        background: #161616; border: 1px solid #222;
-        border-radius: 4px; font-size: 12px;
-        color: #f0ede8; outline: none;
-        font-family: inherit;
-      }
-      .field input:focus { border-color: #444; }
+    .status-msg { font-size: 11px; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; display: none; }
+    .status-msg.show { display: block; }
+    .status-msg.success { background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); color: #00e676; }
+    .status-msg.error { background: rgba(255,45,45,0.08); border: 1px solid rgba(255,45,45,0.2); color: #ff2d2d; }
 
-      .btn {
-        width: 100%; padding: 11px;
-        background: #f0ede8; border: none;
-        border-radius: 4px; font-size: 12px;
-        font-weight: 700; color: #0a0a0a;
-        cursor: pointer; font-family: inherit;
-        display: flex; align-items: center;
-        justify-content: space-between;
-        margin-top: 4px;
-      }
-      .btn:disabled { opacity: 0.5; }
-      .btn-secondary {
-        background: transparent;
-        border: 1px solid #222;
-        color: #555; margin-top: 8px;
-        justify-content: center;
-      }
+    .btn-autoscroll {
+      display: none;
+      width: 100%;
+      padding: 10px 14px;
+      background: transparent;
+      border: 1px solid #ffab00;
+      border-radius: 4px;
+      color: #ffab00;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 8px;
+      font-family: inherit;
+      letter-spacing: 0.5px;
+      text-align: left;
+    }
+    .btn-autoscroll:disabled { opacity: 0.5; cursor: not-allowed; }
 
-      /* Main screen */
-      .page-badge {
-        display: inline-flex; align-items: center;
-        gap: 6px; padding: 4px 10px;
-        background: #161616; border: 1px solid #222;
-        border-radius: 2px; font-size: 9px;
-        font-weight: 600; letter-spacing: 2px;
-        color: #555; margin-bottom: 16px;
-      }
-      .page-badge .dot {
-        width: 4px; height: 4px;
-        border-radius: 50%; background: #555;
-      }
-      .page-badge.linkedin .dot { background: #00e676; }
-      .page-badge.linkedin { color: #f0ede8; border-color: #333; }
+    .btn-extract { width: 100%; padding: 12px 14px; background: #f0ede8; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0a0a0a; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-family: inherit; margin-bottom: 8px; }
+    .btn-extract:hover { background: #fff; }
+    .btn-extract:disabled { opacity: 0.4; cursor: not-allowed; }
 
-      .extract-btn {
-        width: 100%; padding: 14px 16px;
-        background: #f0ede8; border: none;
-        border-radius: 4px; font-size: 12px;
-        font-weight: 700; color: #0a0a0a;
-        cursor: pointer; font-family: inherit;
-        display: flex; align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
-      }
-      .extract-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-dashboard { width: 100%; padding: 10px 14px; background: transparent; border: 1px solid #222; border-radius: 4px; font-size: 11px; font-weight: 600; color: #555; cursor: pointer; font-family: inherit; text-align: left; margin-bottom: 8px; }
+    .btn-dashboard:hover { border-color: #444; color: #888; }
 
-      .secondary-btn {
-        width: 100%; padding: 10px 16px;
-        background: transparent; border: 1px solid #222;
-        border-radius: 4px; font-size: 11px;
-        font-weight: 600; color: #555;
-        cursor: pointer; font-family: inherit;
-        letter-spacing: 1px;
-        display: flex; align-items: center;
-        justify-content: space-between;
-      }
+    .btn-logout { width: 100%; padding: 8px 14px; background: transparent; border: none; font-size: 10px; color: #333; cursor: pointer; font-family: inherit; text-align: left; letter-spacing: 0.5px; }
+    .btn-logout:hover { color: #555; }
 
-      .status-msg {
-        margin-top: 12px; padding: 10px 12px;
-        border-radius: 4px; font-size: 11px;
-        display: none;
-      }
-      .status-msg.show { display: block; }
-      .status-msg.success {
-        background: rgba(0,230,118,0.08);
-        border: 1px solid #00e676; color: #00e676;
-      }
-      .status-msg.error {
-        background: rgba(255,45,45,0.08);
-        border: 1px solid #ff2d2d; color: #ff2d2d;
-      }
+    .divider { height: 1px; background: #111; margin: 16px 0; }
+  </style>
+</head>
+<body>
 
-      .footer {
-        display: flex; align-items: center;
-        justify-content: space-between;
-        padding: 12px 20px;
-        border-top: 1px solid #161616;
-        margin-top: 4px;
-      }
-      .lead-count {
-        font-size: 10px; color: #444;
-        letter-spacing: 1px;
-      }
-      .lead-count span { color: #f0ede8; font-weight: 700; }
-      .logout-btn {
-        background: none; border: none;
-        font-size: 10px; color: #333;
-        cursor: pointer; font-family: inherit;
-        letter-spacing: 1px;
-      }
-
-      .error-msg {
-        font-size: 11px; color: #ff2d2d;
-        margin-top: 8px; display: none;
-      }
-      .error-msg.show { display: block; }
-    </style>
-  </head>
-  <body>
-
-    <!-- Header (always visible) -->
+  <!-- Login Screen -->
+  <div class="screen active" id="loginScreen">
     <div class="header">
-      <div class="brand-mark">LE</div>
-      <span class="brand-name">LEADGEN ENGINE</span>
+      <div class="logo">LE</div>
+      <span class="brand">LEADGEN ENGINE</span>
+      <div class="status-dot" id="statusDot"></div>
+    </div>
+    <h2 class="login-title">Sign in</h2>
+    <p class="login-sub">Connect to your dashboard</p>
+    <div class="error-msg" id="loginError"></div>
+    <div class="field">
+      <label>EMAIL</label>
+      <input type="email" id="loginEmail" placeholder="you@company.com" />
+    </div>
+    <div class="field">
+      <label>PASSWORD</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" />
+    </div>
+    <button class="btn-primary" id="loginBtn">
+      <span>Sign in</span>
+      <span>→</span>
+    </button>
+  </div>
+
+  <!-- Main Screen -->
+  <div class="screen" id="mainScreen">
+    <div class="header">
+      <div class="logo">LE</div>
+      <span class="brand">LEADGEN ENGINE</span>
       <div class="status-dot" id="statusDot"></div>
     </div>
 
-    <!-- Login screen -->
-    <div class="screen active" id="loginScreen">
-      <div style="height:16px"></div>
-      <p class="login-title">Sign in</p>
-      <p class="login-sub">Connect to your dashboard</p>
+    <div class="lead-count" id="leadCount"><span>—</span> leads synced</div>
 
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="loginEmail" placeholder="you@company.com" />
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="loginPassword" placeholder="••••••••" />
-      </div>
-
-      <p class="error-msg" id="loginError"></p>
-
-      <button class="btn" id="loginBtn">
-        <span>Sign in</span>
-        <span>→</span>
-      </button>
+    <div class="page-badge" id="pageBadge">
+      <div class="badge-dot"></div>
+      <span id="pageTypeLabel">DETECTING PAGE...</span>
     </div>
 
-    <!-- Main screen -->
-    <div class="screen" id="mainScreen">
-      <div style="height:16px"></div>
+    <div class="status-msg" id="statusMsg"></div>
 
-      <div class="page-badge" id="pageBadge">
-        <div class="dot"></div>
-        <span id="pageTypeLabel">Detecting...</span>
-      </div>
+    <button class="btn-autoscroll" id="autoScrollBtn">
+      ↓ Auto-scroll to load all profiles
+    </button>
 
-      <button class="extract-btn" id="extractBtn">
-        <span>Extract leads from page</span>
-        <span>→</span>
-      </button>
+    <button class="btn-extract" id="extractBtn" disabled>
+      <span>Extract leads from page</span>
+      <span>→</span>
+    </button>
 
-      <button class="secondary-btn" id="dashboardBtn">
-        <span>Open dashboard</span>
-        <span>↗</span>
-      </button>
+    <div class="divider"></div>
 
-      <div class="status-msg" id="statusMsg"></div>
+    <button class="btn-dashboard" id="dashboardBtn">Open dashboard →</button>
+    <button class="btn-logout" id="logoutBtn">SIGN OUT</button>
+  </div>
 
-      <div class="footer">
-        <p class="lead-count" id="leadCount">— leads synced</p>
-        <button class="logout-btn" id="logoutBtn">SIGN OUT</button>
-      </div>
-    </div>
-
-    <script src="popup.js"></script>
-  </body>
+  <script src="popup.js"></script>
+</body>
 </html>

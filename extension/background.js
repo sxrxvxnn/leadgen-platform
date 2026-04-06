@@ -41,3 +41,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true // Keep message channel open for async response
   }
 })
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'injectAndScrape') {
+    const tabId = message.tabId
+    chrome.scripting.executeScript(
+      { target: { tabId }, files: ['content.js'] },
+      () => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message })
+          return
+        }
+        chrome.tabs.sendMessage(tabId, { action: 'scrape' }, (response) => {
+          sendResponse(response || { success: false, error: 'No response from content script' })
+        })
+      }
+    )
+    return true
+  }
+
+  if (message.action === 'injectAndAutoScroll') {
+    const tabId = message.tabId
+    chrome.scripting.executeScript(
+      { target: { tabId }, files: ['content.js'] },
+      () => {
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message })
+          return
+        }
+        chrome.tabs.sendMessage(tabId, { action: 'autoScroll' }, (response) => {
+          sendResponse(response || { success: false, error: 'No response' })
+        })
+      }
+    )
+    return true
+  }
+})
