@@ -27,10 +27,11 @@ function detectPageType(url) {
   if (url.includes('linkedin.com/sales/search/people')) return 'salenav-people'
   if (url.includes('linkedin.com/sales/company/')) return 'salenav-company'
   if (url.includes('linkedin.com/search/results/companies')) return 'linkedin-companies'
+  if (url.includes('linkedin.com/search/results/people')) return 'search'
+  if (url.includes('linkedin.com/search/results/all')) return 'linkedin-all-search'
   if (url.includes('linkedin.com/company/') && url.includes('/people')) return 'company-people'
   if (url.includes('linkedin.com/company/')) return 'company'
   if (url.includes('linkedin.com/in/')) return 'profile'
-  if (url.includes('linkedin.com/search/results/people')) return 'search'
   return 'unknown'
 }
 
@@ -55,6 +56,49 @@ async function loginApi(email, password) {
   return res.json()
 }
 
+async function getValidToken() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['token', 'userEmail', 'userPassword'], async (stored) => {
+      const token = stored.token
+      if (!token) { reject(new Error('No token')); return }
+
+      try {
+        const testRes = await fetch(API + '/leads', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        })
+
+        if (testRes.status !== 401) {
+          resolve(token)
+          return
+        }
+
+        // Token expired — refresh
+        const email = stored.userEmail
+        const password = stored.userPassword ? atob(stored.userPassword) : null
+
+        if (!email || !password) { reject(new Error('No credentials')); return }
+
+        const refreshRes = await fetch(API + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        })
+
+        if (!refreshRes.ok) { reject(new Error('Refresh failed')); return }
+
+        const refreshData = await refreshRes.json()
+        const newToken = refreshData.access_token
+        chrome.storage.local.set({ token: newToken })
+        resolve(newToken)
+
+      } catch (e) {
+        // Network error — return existing token
+        resolve(token)
+      }
+    })
+  })
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['token', 'userEmail'], (data) => {
     if (data.token) {
@@ -72,15 +116,16 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const email = document.getElementById('loginEmail').value.trim()
   const password = document.getElementById('loginPassword').value
   const btn = document.getElementById('loginBtn')
-  if (!email || !password) {
-    showLoginError('Please enter email and password.')
-    return
-  }
+  if (!email || !password) { showLoginError('Please enter email and password.'); return }
   btn.disabled = true
   btn.querySelector('span').textContent = 'Signing in...'
   try {
     const data = await loginApi(email, password)
-    chrome.storage.local.set({ token: data.access_token, userEmail: email }, () => {
+    chrome.storage.local.set({
+      token: data.access_token,
+      userEmail: email,
+      userPassword: btoa(password)
+    }, () => {
       initMainScreen(data.access_token, email)
     })
   } catch (err) {
@@ -113,10 +158,11 @@ function initMainScreen(token, email) {
       'salenav-people': 'SALES NAV PEOPLE',
       'salenav-company': 'SALES NAV COMPANY',
       'linkedin-companies': 'COMPANY SEARCH',
+      'linkedin-all-search': 'LINKEDIN SEARCH',
       'company-people': 'PEOPLE PAGE — READY',
       'company': 'COMPANY PAGE',
       'profile': 'PROFILE PAGE',
-      'search': 'SEARCH RESULTS'
+      'search': 'PEOPLE SEARCH'
     }
 
     if (type === 'unknown') {
@@ -169,11 +215,23 @@ document.getElementById('autoScrollBtn').addEventListener('click', () => {
 
 // ─── EXTRACT ─────────────────────────────────────────────────
 
-document.getElementById('extractBtn').addEventListener('click', () => {
+document.getElementById('extractBtn').addEventListener('click', async () => {
   const btn = document.getElementById('extractBtn')
   btn.disabled = true
   btn.querySelector('span').textContent = 'Extracting...'
   clearStatus()
+
+  // Get valid token with auto-refresh
+  let token
+  try {
+    token = await getValidToken()
+  } catch (e) {
+    setStatus('Session expired. Please sign in again.', 'error')
+    show('loginScreen')
+    btn.disabled = false
+    btn.querySelector('span').textContent = 'Extract leads from page'
+    return
+  }
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabId = tabs[0].id
@@ -196,103 +254,152 @@ document.getElementById('extractBtn').addEventListener('click', () => {
       if (!data) { setStatus('No data returned. Try again.', 'error'); return }
       if (data.error) { setStatus(data.error, 'error'); return }
 
-      chrome.storage.local.get(['token'], (stored) => {
-        const token = stored.token
-        if (!token) {
-          setStatus('Session expired. Please sign in again.', 'error')
-          show('loginScreen')
+      // Handle company list — show selection screen first
+      if (data.type === 'company-list') {
+        if (!data.companies || data.companies.length === 0) {
+          setStatus('No companies found. Scroll down and retry.', 'error')
           return
         }
+        showCompanySelectionScreen(data.companies, token)
+        return
+      }
 
-        // Handle company list
-        if (data.type === 'company-list') {
-          if (!data.companies || data.companies.length === 0) {
-            setStatus('No companies found. Scroll down and retry.', 'error')
-            return
-          }
-          setStatus('Found ' + data.companies.length + ' companies. Saving...', 'success')
-          saveCompanyList(data.companies, token)
+      // Handle single company page
+      if (data.type === 'company') {
+        if (!data.name) { setStatus('Could not read company. Retry.', 'error'); return }
+        saveCompany(data, token)
+        setStatus('Company "' + data.name + '" saved.', 'success')
+        updateLeadCount(token)
+        return
+      }
+
+      // Build leads array
+      let leads = []
+
+      if (data.type === 'search') {
+        if (!data.leads || data.leads.length === 0) {
+          setStatus('No profiles found. Scroll down first then retry.', 'error')
           return
         }
-
-        // Handle single company page
-        if (data.type === 'company') {
-          if (!data.name) { setStatus('Could not read company. Retry.', 'error'); return }
-          saveCompany(data, token)
-          setStatus('Company "' + data.name + '" saved.', 'success')
-          updateLeadCount(token)
-          return
-        }
-
-        // Build leads array
-        let leads = []
-
-        if (data.type === 'search') {
-          if (!data.leads || data.leads.length === 0) {
-            setStatus('No profiles found. Scroll down first then retry.', 'error')
-            return
-          }
-          leads = data.leads
-            .filter((l) => l.name && l.name.trim().length > 0)
-            .map((l) => ({
-              name: l.name.trim(),
-              title: l.title ? l.title.trim() : null,
-              company: l.company ? l.company.trim() : null,
-              location: l.location ? l.location.trim() : null,
-              profile_url: l.profileUrl ? l.profileUrl.trim() : null,
-              scraped_at: l.scrapedAt || new Date().toISOString(),
-              status: 'new',
-              followers_count: l.followers || null,
-              employee_count: l.employeeCount || null,
-            }))
-        } else if (data.type === 'profile') {
-          if (!data.name) { setStatus('Could not read profile. Scroll down and retry.', 'error'); return }
-          leads = [{
-            name: data.name.trim(),
-            title: data.title ? data.title.trim() : null,
-            company: data.company ? data.company.trim() : null,
-            location: data.location ? data.location.trim() : null,
-            profile_url: data.profileUrl ? data.profileUrl.trim() : null,
-            scraped_at: data.scrapedAt || new Date().toISOString(),
+        leads = data.leads
+          .filter((l) => l.name && l.name.trim().length > 0)
+          .map((l) => ({
+            name: l.name.trim(),
+            title: l.title ? l.title.trim() : null,
+            company: l.company ? l.company.trim() : null,
+            location: l.location ? l.location.trim() : null,
+            profile_url: l.profileUrl ? l.profileUrl.trim() : null,
+            scraped_at: l.scrapedAt || new Date().toISOString(),
             status: 'new',
-            followers_count: data.followers || null,
-          }]
-        }
+            followers_count: l.followers || data.companyFollowers || null,
+            employee_count: l.employeeCount || data.companySize || null,
+          }))
+      } else if (data.type === 'profile') {
+        if (!data.name) { setStatus('Could not read profile. Scroll down and retry.', 'error'); return }
+        leads = [{
+          name: data.name.trim(),
+          title: data.title ? data.title.trim() : null,
+          company: data.company ? data.company.trim() : null,
+          location: data.location ? data.location.trim() : null,
+          profile_url: data.profileUrl ? data.profileUrl.trim() : null,
+          scraped_at: data.scrapedAt || new Date().toISOString(),
+          status: 'new',
+          followers_count: data.followers || null,
+        }]
+      }
 
-        if (leads.length === 0) {
-          setStatus('No valid leads found. Scroll down and retry.', 'error')
-          return
-        }
+      if (leads.length === 0) {
+        setStatus('No valid leads found. Scroll down and retry.', 'error')
+        return
+      }
 
-        setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
+      setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
 
-        fetch(API + '/leads/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ leads: leads })
-        })
-          .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
-          .then((result) => {
-            const inserted = result.inserted || 0
-            const skipped = result.skipped || 0
-            if (inserted > 0) {
-              setStatus(
-                '✓ ' + inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved.' +
-                (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''),
-                'success'
-              )
-            } else if (skipped > 0) {
-              setStatus(skipped + ' leads already in dashboard.', 'error')
-            } else {
-              setStatus('No leads were saved. Try again.', 'error')
-            }
-            updateLeadCount(token)
-          })
-          .catch((err) => { setStatus('Sync failed: ' + err.message, 'error') })
+      fetch(API + '/leads/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ leads: leads })
       })
+        .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+        .then((result) => {
+          const inserted = result.inserted || 0
+          const skipped = result.skipped || 0
+          if (inserted > 0) {
+            setStatus('✓ ' + inserted + ' lead' + (inserted > 1 ? 's' : '') + ' saved.' + (skipped > 0 ? ' (' + skipped + ' duplicates skipped)' : ''), 'success')
+          } else if (skipped > 0) {
+            setStatus(skipped + ' leads already in dashboard.', 'error')
+          } else {
+            setStatus('No leads were saved. Try again.', 'error')
+          }
+          updateLeadCount(token)
+        })
+        .catch((err) => { setStatus('Sync failed: ' + err.message, 'error') })
     })
   })
 })
+
+// ─── COMPANY SELECTION SCREEN ─────────────────────────────────
+
+function showCompanySelectionScreen(companies, token) {
+  const overlay = document.createElement('div')
+  overlay.id = 'companySelectOverlay'
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: #0a0a0a; z-index: 100;
+    display: flex; flex-direction: column; padding: 16px;
+    font-family: inherit; overflow: hidden;
+  `
+
+  overlay.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <p style="font-size:9px; font-weight:700; letter-spacing:2px; color:#555; margin-bottom:4px;">SELECT COMPANIES</p>
+        <p style="font-size:16px; font-weight:900; color:#f0ede8;">${companies.length} found</p>
+      </div>
+      <button id="selectAllBtn" style="font-size:9px; font-weight:700; letter-spacing:1px; color:#ffab00; background:none; border:1px solid #ffab00; border-radius:3px; padding:4px 8px; cursor:pointer; font-family:inherit;">SELECT ALL</button>
+    </div>
+    <div id="companyList" style="flex:1; overflow-y:auto; margin-bottom:12px; display:flex; flex-direction:column; gap:6px;">
+      ${companies.map((c, i) => `
+        <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#111; border-radius:4px; cursor:pointer; border:1px solid #1a1a1a;">
+          <input type="checkbox" value="${i}" checked style="accent-color:#ffab00; cursor:pointer; flex-shrink:0;" />
+          <div style="overflow:hidden; flex:1;">
+            <p style="font-size:12px; font-weight:600; color:#f0ede8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name}</p>
+            <p style="font-size:10px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.industry || c.headquarters || '—'}</p>
+          </div>
+        </label>
+      `).join('')}
+    </div>
+    <div style="display:flex; gap:8px; flex-shrink:0;">
+      <button id="cancelSelectBtn" style="flex:1; padding:10px; background:transparent; border:1px solid #222; border-radius:4px; font-size:11px; color:#555; cursor:pointer; font-family:inherit;">Cancel</button>
+      <button id="saveSelectedBtn" style="flex:2; padding:10px; background:#f0ede8; border:none; border-radius:4px; font-size:12px; font-weight:700; color:#0a0a0a; cursor:pointer; font-family:inherit;">Save Selected →</button>
+    </div>
+  `
+
+  document.body.appendChild(overlay)
+
+  let allSelected = true
+
+  document.getElementById('selectAllBtn').addEventListener('click', () => {
+    allSelected = !allSelected
+    overlay.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = allSelected)
+    document.getElementById('selectAllBtn').textContent = allSelected ? 'DESELECT ALL' : 'SELECT ALL'
+  })
+
+  document.getElementById('cancelSelectBtn').addEventListener('click', () => {
+    overlay.remove()
+    setStatus('Cancelled.', 'error')
+  })
+
+  document.getElementById('saveSelectedBtn').addEventListener('click', () => {
+    const selected = []
+    overlay.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+      selected.push(companies[parseInt(cb.value)])
+    })
+    overlay.remove()
+    if (selected.length === 0) { setStatus('No companies selected.', 'error'); return }
+    setStatus('Saving ' + selected.length + ' companies...', 'success')
+    saveCompanyList(selected, token)
+  })
+}
 
 // ─── SAVE HELPERS ─────────────────────────────────────────────
 
@@ -307,11 +414,7 @@ function saveCompanyList(companies, token) {
       const inserted = result.inserted || 0
       const skipped = result.skipped || 0
       if (inserted > 0) {
-        setStatus(
-          '✓ ' + inserted + ' companies saved.' +
-          (skipped > 0 ? ' ' + skipped + ' duplicates skipped.' : ''),
-          'success'
-        )
+        setStatus('✓ ' + inserted + ' companies saved.' + (skipped > 0 ? ' ' + skipped + ' duplicates skipped.' : ''), 'success')
       } else {
         setStatus('All companies already in dashboard.', 'error')
       }
@@ -330,7 +433,8 @@ function saveCompany(data, token) {
       website: data.website || null,
       headquarters: data.headquarters || null,
       description: data.description || null,
-      linkedin_url: data.url || null
+      linkedin_url: data.url || null,
+      followers: data.followers || null,
     })
   }).catch((e) => console.error('Company save error:', e))
 }
@@ -342,7 +446,7 @@ document.getElementById('dashboardBtn').addEventListener('click', () => {
 })
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
-  chrome.storage.local.remove(['token', 'userEmail'], () => {
+  chrome.storage.local.remove(['token', 'userEmail', 'userPassword'], () => {
     show('loginScreen')
     document.getElementById('statusDot').className = 'status-dot'
     document.getElementById('loginEmail').value = ''
