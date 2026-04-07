@@ -222,37 +222,41 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
 
   async function handleAutofill() {
     const groqKey = localStorage.getItem('groqKey') || ''
+    const geminiKey = localStorage.getItem('geminiKey') || ''
     const openaiKey = localStorage.getItem('openaiKey') || ''
-    const geminiKey2 = localStorage.getItem('geminiKey') || ''
-    if (!groqKey && !openaiKey && !geminiKey2) {
+    if (!groqKey && !geminiKey && !openaiKey) {
       alert('Please add your Gemini, OpenAI or Groq API key in Settings first.')
       return
     }
-
     const toFill = selected.length > 0
       ? filtered.filter(l => selected.includes(l.id)).map(l => l.id)
       : filtered.map(l => l.id)
-
     if (toFill.length === 0) return
-
     setAutofilling(true)
-    setAutofillMsg('Starting...')
-
+    setAutofillMsg('Starting autofill...')
+    const token = localStorage.getItem('token')
+    const allUpdates = {}
     let batchStart = 0
     let totalProcessed = 0
     let hasMore = true
-    const allUpdates = {}
-
     while (hasMore) {
       try {
-        const res = await autofillBulk(toFill, groqKey, batchStart, localStorage.getItem('openaiKey') || '')
-        const data = res.data
+        const response = await fetch('http://localhost:8000/api/leads/autofill-bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            lead_ids: toFill,
+            gemini_api_key: geminiKey,
+            openai_api_key: openaiKey,
+            groq_api_key: groqKey,
+            batch_start: batchStart
+          })
+        })
+        const data = await response.json()
         totalProcessed += data.processed || 0
         hasMore = data.has_more || false
         batchStart = data.next_batch_start || (batchStart + 20)
-
         setAutofillMsg('Processing ' + Math.min(batchStart, toFill.length) + '/' + toFill.length + '...')
-
         if (data.results && data.results.length > 0) {
           data.results.forEach(r => {
             if (r.data && Object.keys(r.data).length > 0) {
@@ -260,27 +264,24 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
             }
           })
         }
-
         if (hasMore) await new Promise(resolve => setTimeout(resolve, 1500))
       } catch (e) {
-        console.error('Batch error:', e)
+        console.error('Autofill batch error:', e)
         hasMore = false
       }
     }
-
-    // Apply all updates
     if (Object.keys(allUpdates).length > 0) {
       setLocalLeads(prev => [...prev.map(l => allUpdates[l.id] ? { ...l, ...allUpdates[l.id] } : l)])
       setTimeout(() => {
-        Object.entries(allUpdates).forEach(([leadId, data]) => {
-          if (onLeadUpdate) onLeadUpdate(leadId, data)
+        Object.entries(allUpdates).forEach(([leadId, upd]) => {
+          if (onLeadUpdate) onLeadUpdate(leadId, upd)
         })
-      }, 100)
+        if (onRefresh) onRefresh()
+      }, 200)
     }
-
-    setAutofillMsg('Done — ' + totalProcessed + ' updated. Click ↺ Refresh to see all changes.')
+    setAutofillMsg('Done — ' + totalProcessed + ' leads updated')
     setAutofilling(false)
-    setTimeout(() => setAutofillMsg(''), 8000)
+    setTimeout(() => setAutofillMsg(''), 6000)
   }
 
   async function handleRefresh() {

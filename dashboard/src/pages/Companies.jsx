@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance } from '../services/api'
+import DMFinder from '../components/DMFinder'
 import Navbar from '../components/Navbar'
 
 const CLASSIFICATIONS = [
@@ -514,6 +515,7 @@ export default function Companies() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [analyzingId, setAnalyzingId] = useState(null)
+  const [showDMFinder, setShowDMFinder] = useState(false)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
 
@@ -653,6 +655,12 @@ export default function Companies() {
             <option value="50000">50K+ followers</option>
             <option value="100000">100K+ followers</option>
           </select>
+          <button
+            onClick={() => setShowDMFinder(true)}
+            style={{ padding: '10px 18px', background: 'var(--amber)', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+          >
+            🎯 Find DMs
+          </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--gray-4)', whiteSpace: 'nowrap', padding: '10px 0' }}>
             <input
               type="checkbox"
@@ -669,6 +677,7 @@ export default function Companies() {
             <button onClick={handleBulkDelete} style={{ padding: '6px 14px', background: '#ff2d2d', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
               Delete selected
             </button>
+              <button onClick={() => setShowDMFinder(true)} style={{ padding: '5px 12px', background: 'var(--amber)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit' }}>🎯 Find DMs</button>
             <button onClick={() => setSelectedIds([])} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--gray-3)', borderRadius: '4px', fontSize: '12px', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit' }}>
               Clear
             </button>
@@ -703,6 +712,12 @@ export default function Companies() {
 
       {selectedCompany && <LeadsModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />}
       {analysisResult && <AnalysisModal result={analysisResult} onClose={() => setAnalysisResult(null)} />}
+      {showDMFinder && (
+        <DMFinder
+          companies={selectedIds.length > 0 ? companies.filter(c => selectedIds.includes(c.id)) : filtered}
+          onClose={() => setShowDMFinder(false)}
+        />
+      )}
     </div>
   )
 }
