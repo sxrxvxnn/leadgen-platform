@@ -176,6 +176,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
   const [companyFilter, setCompanyFilter] = useState('all')
   const [saving, setSaving] = useState(null)
   const [selected, setSelected] = useState([])
+  const [viewFilter, setViewFilter] = useState('all')
   const [autofilling, setAutofilling] = useState(false)
   const [autofillMsg, setAutofillMsg] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -196,9 +197,16 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
 
   const companies = ['all', ...new Set(leads.map(l => l.company).filter(Boolean))]
 
+  const DM_TITLES_SS = ['ceo', 'cto', 'cpo', 'ciso', 'vp', 'director', 'head of', 'founder', 'co-founder', 'president', 'managing director', 'general manager']
+  const isDecisionMakerSS = (lead) => DM_TITLES_SS.some(t => (lead.title || '').toLowerCase().includes(t))
+  const isSecuritySS = (lead) => ['ciso', 'security engineer', 'security analyst', 'infosec', 'information security', 'security'].some(t => (lead.title || '').toLowerCase().includes(t))
+
   const filtered = localLeads.filter(l => {
     const ms = search === '' || [l.name, l.first_name, l.last_name, l.title, l.company].join(' ').toLowerCase().includes(search.toLowerCase())
     const mc = companyFilter === 'all' || l.company === companyFilter
+    if (viewFilter === 'dm' && !isDecisionMakerSS(l)) return false
+    if (viewFilter === 'security' && !isSecuritySS(l)) return false
+    if (viewFilter === 'starred' && !l.starred) return false
     return ms && mc
   })
 
@@ -215,8 +223,9 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
   async function handleAutofill() {
     const groqKey = localStorage.getItem('groqKey') || ''
     const openaiKey = localStorage.getItem('openaiKey') || ''
-    if (!groqKey && !openaiKey) {
-      alert('Please add your OpenAI or Groq API key in Settings first.')
+    const geminiKey2 = localStorage.getItem('geminiKey') || ''
+    if (!groqKey && !openaiKey && !geminiKey2) {
+      alert('Please add your Gemini, OpenAI or Groq API key in Settings first.')
       return
     }
 
@@ -236,7 +245,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
 
     while (hasMore) {
       try {
-        const res = await autofillBulk(toFill, groqKey, batchStart, openaiKey)
+        const res = await autofillBulk(toFill, groqKey, batchStart, localStorage.getItem('openaiKey') || '')
         const data = res.data
         totalProcessed += data.processed || 0
         hasMore = data.has_more || false
@@ -354,6 +363,24 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
             onChange: (e) => setCompanyFilter(e.target.value),
             style: hdr.select,
           }, companies.map(c => React.createElement('option', { key: c, value: c }, c === 'all' ? 'All companies' : c))),
+          ...['all', 'dm', 'security', 'starred'].map(f =>
+            React.createElement('button', {
+              key: f,
+              onClick: () => setViewFilter(f),
+              style: {
+                padding: '7px 12px',
+                background: viewFilter === f ? 'var(--amber)' : 'transparent',
+                border: `1px solid ${viewFilter === f ? 'var(--amber)' : 'var(--gray-2)'}`,
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: '700',
+                color: viewFilter === f ? 'var(--black)' : 'var(--gray-4)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap',
+              }
+            }, f === 'all' ? 'All' : f === 'dm' ? 'Decision Makers' : f === 'security' ? 'Security' : '★ Starred')
+          ),
           React.createElement('button', {
             style: { ...hdr.autofillBtn, opacity: autofilling ? 0.6 : 1, cursor: autofilling ? 'not-allowed' : 'pointer' },
             onClick: handleAutofill,

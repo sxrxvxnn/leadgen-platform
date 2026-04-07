@@ -1,6 +1,5 @@
 import axios from 'axios'
 
-// Use environment variable if available, otherwise default to localhost
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 const api = axios.create({
@@ -8,14 +7,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-// Attach token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// Handle 401 by redirecting to login
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -42,16 +39,14 @@ export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starre
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
 export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
 export const autofillBulk = (leadIds, groqKey, batchStart = 0, openaiKey = '') =>
-  apiRequest('/leads/autofill-bulk', {
-    method: 'POST',
-    body: JSON.stringify({
-      lead_ids: leadIds,
-      groq_api_key: groqKey,
-      openai_api_key: openaiKey,
-      gemini_api_key: localStorage.getItem('geminiKey') || '',
-      batch_start: batchStart,
-    }),
+  api.post('/leads/autofill-bulk', {
+    lead_ids: leadIds,
+    groq_api_key: groqKey,
+    openai_api_key: openaiKey,
+    gemini_api_key: localStorage.getItem('geminiKey') || '',
+    batch_start: batchStart,
   })
+export const enrichLead = (id, payload) => api.post(`/leads/${id}/enrich`, payload)
 
 // ─── COMPANIES ────────────────────────────────────────────────
 export const getCompanies = () => api.get('/companies')
@@ -60,12 +55,9 @@ export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
 export const deleteCompany = (id) => api.delete(`/companies/${id}`)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId, groqKey) =>
-  apiRequest(`/companies/${companyId}/check-compliance`, {
-    method: 'POST',
-    body: JSON.stringify({
-      groq_key: groqKey,
-      gemini_key: localStorage.getItem('geminiKey') || '',
-    }),
+  api.post(`/companies/${companyId}/check-compliance`, {
+    groq_key: groqKey,
+    gemini_key: localStorage.getItem('geminiKey') || '',
   })
 
 // ─── ICP ──────────────────────────────────────────────────────

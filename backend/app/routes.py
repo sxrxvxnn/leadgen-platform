@@ -838,14 +838,18 @@ async def autofill_bulk(
                             }
                         else:
                             try:
-                                prompt = f"""For the company "{company_name}", provide:
-1. Official website domain only (e.g. company.com)
-2. Estimated annual revenue as a single number in USD millions
+                                prompt = f"""For the company "{company_name}", provide accurate data. Return ONLY valid JSON:
+{{"website": "https://domain.com", "revenue": "number_in_USD_millions_or_empty", "has_security_team": "Yes or No or Unknown", "company_type": "Product or Services or Hybrid"}}
 
-JSON only, no explanation:
-{{"website": "domain.com", "revenue": "number"}}
+Rules:
+- website: full URL with https://, empty string if unknown
+- revenue: number only in USD millions, empty string if unknown  
+- has_security_team: Yes if cybersecurity/fintech/large tech company, No if small company, Unknown if unsure
+- company_type: Product if SaaS/software product, Services if consulting/outsourcing, Hybrid if both
 
-If truly unknown use empty string."""
+Company: {company_name}
+Industry: {lead.get('industry', lead.get('title', 'technology'))}
+Be conservative and accurate. No explanation."""
                                 # Try Gemini first, then Groq
                                 _gemini_key = payload.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
                                 _groq_key = payload.get("groq_api_key") or os.getenv("GROQ_API_KEY", "")
@@ -881,7 +885,9 @@ If truly unknown use empty string."""
                                 ai_data = json.loads(response_text)
                                 company_cache[company_key] = {
                                     "website": existing_website or ai_data.get("website", ""),
-                                    "revenue": existing_revenue or ai_data.get("revenue", "")
+                                    "revenue": existing_revenue or ai_data.get("revenue", ""),
+                                    "has_security_team": ai_data.get("has_security_team", "Unknown"),
+                                    "company_type": ai_data.get("company_type", "")
                                 }
                             except Exception as e:
                                 print(f"Groq error for {company_name}: {e}")
@@ -891,10 +897,28 @@ If truly unknown use empty string."""
                     if cached.get("website") and not lead.get("website"):
                         w = cached["website"].replace("https://", "").replace("http://", "").strip()
                         if w:
-                            update_data["website"] = "https://" + w
-                    # Always update revenue for consistency across same company
+                            update_data["website"] = "https://" + w if not w.startswith("http") else w
                     if cached.get("revenue"):
                         update_data["revenue"] = cached["revenue"]
+                    # Detect security team from all leads of same company
+                    if not update_data.get("has_security_team"):
+                        try:
+                            sec_titles = ["ciso", "security engineer", "security analyst", "security architect",
+                                        "infosec", "information security", "security operations", "soc analyst",
+                                        "penetration tester", "security manager", "chief security"]
+                            company_leads_res = supabase.table("leads")                                .select("title")                                .eq("user_id", user_id)                                .ilike("company", f"%{company_name}%")                                .execute()
+                            if company_leads_res.data:
+                                titles = [l.get("title", "").lower() for l in company_leads_res.data if l.get("title")]
+                                has_sec = any(any(st in t for st in sec_titles) for t in titles)
+                                if has_sec:
+                                    update_data["has_security_team"] = "Yes"
+                        except Exception:
+                            pass
+                    if cached.get("has_security_team") and cached["has_security_team"] != "Unknown":
+                        if not update_data.get("has_security_team"):
+                            update_data["has_security_team"] = cached["has_security_team"]
+                    if cached.get("company_type"):
+                        update_data["company_type"] = cached["company_type"]
 
                 # Update lead
                 supabase.table("leads")\

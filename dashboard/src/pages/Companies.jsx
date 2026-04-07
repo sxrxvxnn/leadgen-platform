@@ -44,6 +44,19 @@ function getTypeBadge(type) {
   }
 }
 
+function toggleSelect(id) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+  }
+
+  async function handleBulkDelete() {
+    if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
+    try {
+      await Promise.all(selectedIds.map(id => deleteCompany(id)))
+      setCompanies(prev => prev.filter(c => !selectedIds.includes(c.id)))
+      setSelectedIds([])
+    } catch (e) { console.error(e) }
+  }
+
 function classifyCompany(company) {
   const text = [company.name, company.industry, company.description].join(' ').toLowerCase()
   if (/fintech|payment|lending|neobank|wallet|crypto|blockchain|insurtech/.test(text)) return 'Fintech'
@@ -114,7 +127,7 @@ function EditableWebsite({ value, onSave }) {
 
 // ─── COMPANY CARD ─────────────────────────────────────────────
 
-function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsite, analyzingId }) {
+function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsite, analyzingId, selected, onToggle }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
   const [notes, setNotes] = useState(company.notes || '')
@@ -149,9 +162,10 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
   }
 
   async function handleCheckCompliance() {
-    const groqKey = localStorage.getItem('groqKey')
-    if (!groqKey) {
-      alert('Please add your Groq API key in Settings first. Free at console.groq.com')
+    const groqKey = localStorage.getItem('groqKey') || ''
+    const geminiKey = localStorage.getItem('geminiKey') || ''
+    if (!groqKey && !geminiKey) {
+      alert('Please add your Gemini or Groq API key in Settings first.')
       return
     }
     setCheckingCompliance(true)
@@ -159,9 +173,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
     try {
       const res = await checkCompliance(company.id, groqKey)
       setComplianceResult(res.data)
-      onUpdate(company.id, { compliance: res.data.compliance })
+      if (res.data.compliance && res.data.compliance !== 'None detected') {
+        onUpdate(company.id, { compliance: res.data.compliance })
+      }
     } catch (e) {
-      setComplianceResult({ error: 'Check failed. Verify your Groq API key in Settings.' })
+      console.error('Compliance error:', e)
+      setComplianceResult({ error: 'Analysis failed: ' + (e.response?.data?.detail || e.message) })
     } finally {
       setCheckingCompliance(false)
     }
@@ -187,6 +204,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
           <p style={card.industry}>{company.industry || 'Industry unknown'}</p>
         </div>
         <div style={card.headerRight}>
+          
           {showCustomInput ? (
             <input
               type="text" placeholder="Type industry..." autoFocus
@@ -197,7 +215,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
                 if (e.key === 'Escape') setShowCustomInput(false)
               }}
             />
-          ) : (
+          ) 
+          : (
             <select
               value={classification}
               onChange={e => { if (e.target.value === 'Custom...') setShowCustomInput(true); else handleClassificationChange(e.target.value) }}
@@ -206,6 +225,13 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
+          <input
+            type="checkbox"
+            checked={selected || false}
+            onChange={() => onToggle(company.id)}
+            onClick={e => e.stopPropagation()}
+            style={{ accentColor: 'var(--amber)', cursor: 'pointer', flexShrink: 0 }}
+          />
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)}>✕</button>
         </div>
       </div>
@@ -489,6 +515,7 @@ export default function Companies() {
   const [selectedCompany, setSelectedCompany] = useState(null)
   const [analyzingId, setAnalyzingId] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
 
   useEffect(() => { fetchCompanies() }, [])
 
@@ -626,7 +653,27 @@ export default function Companies() {
             <option value="50000">50K+ followers</option>
             <option value="100000">100K+ followers</option>
           </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--gray-4)', whiteSpace: 'nowrap', padding: '10px 0' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.length === filtered.length && filtered.length > 0}
+              onChange={() => setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map(c => c.id))}
+              style={{ accentColor: 'var(--amber)', cursor: 'pointer' }}
+            />
+            Select all
+          </label>
         </div>
+        {selectedIds.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'var(--gray-1)', border: '1px solid var(--amber)', borderRadius: '6px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--amber)' }}>{selectedIds.length} selected</span>
+            <button onClick={handleBulkDelete} style={{ padding: '6px 14px', background: '#ff2d2d', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+              Delete selected
+            </button>
+            <button onClick={() => setSelectedIds([])} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--gray-3)', borderRadius: '4px', fontSize: '12px', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit' }}>
+              Clear
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <p style={s.empty}>Loading companies...</p>
@@ -646,6 +693,8 @@ export default function Companies() {
                 onViewLeads={setSelectedCompany}
                 onAnalyzeWebsite={handleAnalyzeWebsite}
                 analyzingId={analyzingId}
+                selected={selectedIds.includes(company.id)}
+                onToggle={toggleSelect}
               />
             ))}
           </div>
@@ -724,4 +773,4 @@ const modal = {
   leadTitle: { fontSize: '11px', color: 'var(--gray-4)', lineHeight: 1.4 },
   leadLocation: { fontSize: '11px', color: 'var(--gray-4)' },
   leadLink: { fontSize: '10px', color: '#00d4ff', textDecoration: 'none', fontWeight: '700', marginTop: '4px' },
-}
+} 
