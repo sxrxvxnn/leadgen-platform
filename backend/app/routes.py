@@ -1253,3 +1253,8 @@ Respond in JSON only:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+@router.get("/health")
+def health_check():
+    return {"status": "ok"}
