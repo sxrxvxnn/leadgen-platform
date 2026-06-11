@@ -1242,6 +1242,110 @@ async def autofill_company_from_linkedin(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── BULK AUTOFILL (parallel) ─────────────────────────────────
+
+@router.post("/companies/bulk-autofill")
+async def bulk_autofill_companies(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Autofill LinkedIn data for multiple companies in parallel (5 workers)."""
+    user_id = get_user_id(authorization)
+    company_ids = payload.get("company_ids", [])
+    openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
+
+    import re as _re
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from .company_prefill import (search_company_website, search_linkedin_url_direct,
+                                   extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3,
+                                   scrape_linkedin_data)
+
+    # Fetch target companies
+    try:
+        if company_ids:
+            co_res = supabase.table("companies").select("*").in_("id", company_ids).eq("user_id", user_id).execute()
+        else:
+            co_res = supabase.table("companies").select("*").eq("user_id", user_id).execute()
+        companies = co_res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    def _autofill_one(company: dict) -> dict:
+        company_name = company.get("name", "")
+        found_website = company.get("website") or ""
+        linkedin_url  = company.get("linkedin_url") or ""
+
+        try:
+            # Find LinkedIn URL
+            if not linkedin_url:
+                if not found_website:
+                    found_website = search_company_website(company_name) or ""
+                if found_website:
+                    try:
+                        r = requests.get(
+                            found_website if found_website.startswith("http") else "https://" + found_website,
+                            headers={"User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"},
+                            timeout=10, allow_redirects=True
+                        )
+                        linkedin_url = extract_linkedin_url_from_html(r.text)
+                        if not linkedin_url and openrouter_key:
+                            linkedin_url = extract_linkedin_url_with_qwen3(r.text, company_name, openrouter_key)
+                    except Exception:
+                        pass
+            if not linkedin_url:
+                linkedin_url = search_linkedin_url_direct(company_name) or ""
+            if not linkedin_url:
+                return {"id": company["id"], "name": company_name, "success": False,
+                        "filled": [], "update": {}, "message": "LinkedIn not found"}
+
+            # Scrape LinkedIn
+            li = scrape_linkedin_data(linkedin_url)
+
+            # Website fallback
+            if not found_website and not li.get("website"):
+                found_website = search_company_website(company_name) or ""
+            website_to_save = li.get("website") or found_website or ""
+
+            # Build update (only empty fields)
+            update_data = {}
+            if linkedin_url and not company.get("linkedin_url"):
+                update_data["linkedin_url"] = linkedin_url
+            if li.get("location") and not company.get("headquarters"):
+                update_data["headquarters"] = li["location"]
+            if li.get("followers") and not company.get("followers"):
+                update_data["followers"] = li["followers"]
+            if li.get("employee_count") and not company.get("size"):
+                update_data["size"] = f"{li['employee_count']} employees"
+            if li.get("description") and not company.get("description"):
+                update_data["description"] = li["description"]
+            if website_to_save and not company.get("website"):
+                update_data["website"] = website_to_save
+
+            if update_data:
+                supabase.table("companies").update(update_data).eq("id", company["id"]).execute()
+
+            return {"id": company["id"], "name": company_name, "success": True,
+                    "filled": list(update_data.keys()), "update": update_data}
+
+        except Exception as e:
+            return {"id": company["id"], "name": company_name, "success": False,
+                    "filled": [], "update": {}, "message": str(e)}
+
+    results = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_autofill_one, c): c for c in companies}
+        for future in as_completed(futures):
+            try:
+                results.append(future.result())
+            except Exception as e:
+                results.append({"success": False, "message": str(e)})
+
+    filled_count = sum(1 for r in results if r.get("filled"))
+    posthog.capture(user_id, "companies_bulk_autofilled", {"total": len(companies), "filled": filled_count})
+    return {"results": results, "total": len(companies), "filled": filled_count}
+
+
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
 
 @router.post("/leads/bulk")

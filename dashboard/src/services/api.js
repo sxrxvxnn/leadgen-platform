@@ -72,6 +72,10 @@ export const prefillCompany = (name, websiteUrl) =>
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
 export const bulkCreateCompanies = (companies) => api.post('/companies/bulk', { companies })
+export const bulkAutofillCompanies = (companyIds = []) => api.post('/companies/bulk-autofill', {
+  company_ids: companyIds,
+  openrouter_key: localStorage.getItem('openrouterKey') || '',
+})
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')

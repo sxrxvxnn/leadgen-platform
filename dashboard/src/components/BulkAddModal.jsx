@@ -64,9 +64,12 @@ export default function BulkAddModal({ onClose, onRefresh }) {
   }
 
   async function fillAll() {
+    const pending = rows.filter(r => r.name.trim() && r.status === 'idle')
+    if (!pending.length) return
     setFillingAll(true)
-    for (const row of rows) {
-      if (row.name.trim() && row.status === 'idle') await fillRow(row)
+    const BATCH = 4
+    for (let i = 0; i < pending.length; i += BATCH) {
+      await Promise.all(pending.slice(i, i + BATCH).map(row => fillRow(row)))
     }
     setFillingAll(false)
   }

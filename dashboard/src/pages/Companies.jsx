@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, bulkAutofillCompanies } from '../services/api'
 import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
 import BulkAddModal from '../components/BulkAddModal'
@@ -722,28 +722,31 @@ export default function Companies() {
   }
 
   async function handleBulkAutofill() {
-    const targets = selectedIds.length
-      ? companies.filter(c => selectedIds.includes(c.id))
-      : companies
-    if (!targets.length) return
+    const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
+    if (!targetIds.length) return
     setBulkFilling(true)
-    setBulkFillMsg(`Starting autofill for ${targets.length} companies…`)
-    let done = 0, filled = 0
-    for (const company of targets) {
-      setBulkFillMsg(`Autofilling ${done + 1} / ${targets.length} — ${company.name}`)
-      try {
-        const res = await autofillCompanyLinkedIn(company.id)
-        const { success, update } = res.data
-        if (success && update && Object.keys(update).length > 0) {
-          setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...update } : c))
-          filled++
+    setBulkFillMsg(`Autofilling ${targetIds.length} companies in parallel…`)
+    try {
+      const res = await bulkAutofillCompanies(targetIds)
+      const { results, filled: filledCount, total } = res.data
+      // Apply all updates to local state at once
+      setCompanies(prev => {
+        const updated = [...prev]
+        for (const r of results) {
+          if (r.success && r.update && Object.keys(r.update).length > 0) {
+            const idx = updated.findIndex(c => c.id === r.id)
+            if (idx !== -1) updated[idx] = { ...updated[idx], ...r.update }
+          }
         }
-      } catch { /* skip failed */ }
-      done++
+        return updated
+      })
+      setBulkFillMsg(`Done — ${filledCount} of ${total} companies updated`)
+    } catch (e) {
+      setBulkFillMsg('Autofill failed — ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setBulkFilling(false)
+      setTimeout(() => setBulkFillMsg(''), 5000)
     }
-    setBulkFillMsg(`Done — ${filled} of ${done} companies updated`)
-    setBulkFilling(false)
-    setTimeout(() => setBulkFillMsg(''), 5000)
   }
 
   function handleBulkDelete() {
