@@ -32,6 +32,7 @@ class CompanyCreate(BaseModel):
     headquarters: Optional[str] = None
     description: Optional[str] = None
     linkedin_url: Optional[str] = None
+    followers: Optional[str] = None
 
 class UserSignup(BaseModel):
     email: str
@@ -107,3 +108,7 @@ class CompanyUpdate(BaseModel):
     revenue: Optional[str] = None
     notes: Optional[str] = None
     website: Optional[str] = None
+    headquarters: Optional[str] = None
+    description: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    size: Optional[str] = None

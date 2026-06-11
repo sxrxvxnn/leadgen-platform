@@ -301,6 +301,17 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
       setStatus('Found ' + leads.length + ' profiles. Saving...', 'success')
 
+      // If this is a company people page, also update the company's size with associated members count
+      const companyName = data.companyName || ''
+      const companySize = data.companySize || ''
+      if (companyName && companySize) {
+        fetch(API_BASE_URL + '/companies/size-by-name', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ name: companyName, size: companySize })
+        }).catch(() => {})
+      }
+
       fetch(API_BASE_URL + '/leads/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },

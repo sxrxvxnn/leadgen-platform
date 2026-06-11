@@ -24,24 +24,24 @@ const DECISION_MAKER_KEYWORDS = /\b(ceo|cto|ciso|coo|cfo|founder|co-founder|cofo
 const SECURITY_KEYWORDS = /\b(ciso|chief information security|cybersecurity|infosec|information security officer|grc manager|grc analyst|risk manager|compliance manager|compliance officer|vapt|penetration tester|penetration testing|vulnerability|security analyst|security engineer|security architect|security consultant|security manager|security director|security lead|soc analyst|siem|devsecops|cloud security engineer|network security|it security|cyber analyst|cyber engineer)\b/i
 
 const statusColors = {
-  new: 'var(--white)',
-  contacted: 'var(--amber)',
-  qualified: 'var(--green)',
-  disqualified: 'var(--gray-4)',
+  new:          { color: '#4a7c59', background: 'rgba(74,124,89,0.10)',  border: 'rgba(74,124,89,0.22)' },
+  contacted:    { color: '#a86448', background: 'rgba(168,100,72,0.10)', border: 'rgba(168,100,72,0.22)' },
+  qualified:    { color: '#5b8db8', background: 'rgba(91,141,184,0.10)', border: 'rgba(91,141,184,0.22)' },
+  disqualified: { color: '#a1a1a1', background: 'rgba(161,161,161,0.10)', border: 'rgba(161,161,161,0.22)' },
 }
 
 const connectionStatusColors = {
-  'Not Requested': 'var(--gray-4)',
-  'Connection Request Sent': 'var(--amber)',
-  'First Message Sent': 'var(--amber)',
-  'Follow-up 1': 'var(--amber)',
-  'Follow-up 2': 'var(--amber)',
-  'Follow-up 3': 'var(--amber)',
-  'Connected': 'var(--green)',
-  'Not Interested': '#ff2d2d',
-  'No Response': 'var(--gray-4)',
-  'Transferred to Rahul': '#00d4ff',
-  'Transferred to Rejah': '#00d4ff',
+  'Not Requested':           'var(--text-muted)',
+  'Connection Request Sent': 'var(--accent)',
+  'First Message Sent':      'var(--accent)',
+  'Follow-up 1':             'var(--accent)',
+  'Follow-up 2':             'var(--accent)',
+  'Follow-up 3':             'var(--accent)',
+  'Connected':               '#4a7c59',
+  'Not Interested':          'var(--red)',
+  'No Response':             'var(--text-muted)',
+  'Transferred to Rahul':    '#5b8db8',
+  'Transferred to Rejah':    '#5b8db8',
 }
 
 function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusChange, onConnectionChange }) {
@@ -103,7 +103,7 @@ function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusCh
       ),
       React.createElement(
         'button',
-        { style: { ...bulk.actionBtn, color: '#ff2d2d', borderColor: '#ff2d2d' }, onClick: onDelete },
+        { style: { ...bulk.actionBtn, color: 'var(--red)', borderColor: 'rgba(184,50,50,0.4)' }, onClick: onDelete },
         'Delete Selected'
       )
     )
@@ -117,7 +117,7 @@ function StarButton({ starred, onClick }) {
       onClick,
       style: {
         background: 'none', border: 'none', cursor: 'pointer',
-        fontSize: '14px', color: starred ? 'var(--amber)' : 'var(--gray-3)',
+        fontSize: '14px', color: starred ? 'var(--accent)' : 'var(--border-strong)',
         padding: '2px 4px', transition: 'color 0.15s', flexShrink: 0,
       }
     },
@@ -126,7 +126,7 @@ function StarButton({ starred, onClick }) {
 }
 
 function ConnectionStatusDropdown({ status, onChange }) {
-  const color = connectionStatusColors[status] || 'var(--gray-4)'
+  const color = connectionStatusColors[status] || 'var(--text-muted)'
   return React.createElement(
     'select',
     {
@@ -134,9 +134,9 @@ function ConnectionStatusDropdown({ status, onChange }) {
       onChange: (e) => onChange(e.target.value),
       onClick: (e) => e.stopPropagation(),
       style: {
-        background: 'var(--gray-1)', border: '1px solid var(--gray-2)',
-        borderRadius: '3px', color, fontSize: '10px', fontWeight: '600',
-        letterSpacing: '0.5px', padding: '3px 6px', cursor: 'pointer',
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: '5px', color, fontSize: '10px', fontWeight: '600',
+        letterSpacing: '0.3px', padding: '3px 6px', cursor: 'pointer',
         fontFamily: 'inherit', maxWidth: '160px', outline: 'none',
       }
     },
@@ -149,8 +149,8 @@ function ViewLink({ url }) {
 }
 
 function StatusBadge({ status }) {
-  const color = statusColors[status] || 'var(--white)'
-  return React.createElement('span', { style: { ...sub.badge, color, borderColor: color } }, (status || 'new').toUpperCase())
+  const st = statusColors[status] || statusColors.new
+  return React.createElement('span', { style: { fontSize: '10px', fontWeight: '500', padding: '2px 8px', borderRadius: '4px', color: st.color, background: st.background, border: `1px solid ${st.border}` } }, status || 'new')
 }
 
 function CellInput({ value, onChange, onBlur, onKeyDown }) {
@@ -171,7 +171,7 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
   const isSecurity = SECURITY_KEYWORDS.test(lead.title || '')
 
   return (
-    <div style={{ ...s.trow, background: isSelected ? 'rgba(255,255,255,0.03)' : 'transparent', borderLeft: lead.starred ? '2px solid var(--amber)' : '2px solid transparent' }}>
+    <div style={{ ...s.trow, background: isSelected ? 'rgba(168,100,72,0.04)' : 'transparent', borderLeft: lead.starred ? '2px solid var(--accent)' : '2px solid transparent' }}>
       <div style={{ width: '32px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <input type="checkbox" checked={isSelected} onChange={onToggleSelect} style={sub.checkbox} onClick={(e) => e.stopPropagation()} />
       </div>
@@ -179,8 +179,8 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
         <StarButton starred={lead.starred} onClick={(e) => { e.stopPropagation(); onStar(lead.id, !lead.starred) }} />
       </div>
       <div style={{ width: '60px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '3px' }}>
-        {isDecisionMaker && <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 5px', borderRadius: '2px', background: 'rgba(0,212,255,0.1)', color: '#00d4ff', border: '1px solid #00d4ff', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DM</span>}
-        {isSecurity && <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 5px', borderRadius: '2px', background: 'rgba(255,45,45,0.1)', color: '#ff2d2d', border: '1px solid #ff2d2d', letterSpacing: '0.5px' }}>SEC</span>}
+        {isDecisionMaker && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: '1px solid rgba(91,141,184,0.3)', letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>DM</span>}
+        {isSecurity && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(184,50,50,0.10)', color: 'var(--red)', border: '1px solid rgba(184,50,50,0.3)', letterSpacing: '0.3px' }}>SEC</span>}
       </div>
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
@@ -189,8 +189,8 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
             {isEditing && col.key === 'status' && <CellSelect value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} />}
             {isEditing && col.key !== 'status' && <CellInput value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(lead.id); if (e.key === 'Escape') onCancelEdit() }} />}
             {!isEditing && col.key === 'status' && <StatusBadge status={lead.status} />}
-            {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--white)', fontWeight: '500' }}>{lead.name || '—'}</span>}
-            {!isEditing && col.key !== 'status' && col.key !== 'name' && <span style={{ fontSize: '12px', color: 'var(--gray-5)' }}>{lead[col.key] || '—'}</span>}
+            {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500' }}>{lead.name || '—'}</span>}
+            {!isEditing && col.key !== 'status' && col.key !== 'name' && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lead[col.key] || '—'}</span>}
           </div>
         )
       })}
@@ -200,12 +200,12 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       <div style={{ width: '100px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
         {lead.profile_url && <ViewLink url={lead.profile_url} />}
         {!lead.email && (
-          <button style={{ fontSize: '11px', color: isEnriching ? 'var(--gray-4)' : 'var(--amber)', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '3px', cursor: 'pointer', fontWeight: '700', padding: '2px 6px' }}
+          <button style={{ fontSize: '11px', color: isEnriching ? 'var(--text-muted)' : 'var(--accent)', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnrich(lead.id) }}>
             {isEnriching ? '...' : 'Enrich'}
           </button>
         )}
-        {lead.email && <span style={{ fontSize: '10px', color: 'var(--green)', fontWeight: '700' }}>✓</span>}
+        {lead.email && <span style={{ fontSize: '10px', color: '#4a7c59', fontWeight: '600' }}>✓</span>}
         <button style={sub.deleteBtn} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(lead.id) }}>✕</button>
       </div>
     </div>
@@ -319,7 +319,6 @@ export default function Leads() {
     }
   }
 
-  // Filtered leads - defined before functions that use it
   const filtered = leads.filter((l) => {
     const ms = search === '' || [l.name, l.title, l.company, l.location].join(' ').toLowerCase().includes(search.toLowerCase())
     const mf = statusFilter === 'all' || l.status === statusFilter
@@ -364,28 +363,27 @@ export default function Leads() {
 
       <div style={s.hero}>
         <div>
-          <p style={s.eyebrow}>LEAD INTELLIGENCE</p>
+          <p style={s.eyebrow}>Lead Intelligence</p>
           <h1 style={s.heroTitle}>
             {filtered.length}
             <span style={s.heroUnit}>{' targets'}</span>
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          {enrichMsg && <span style={{ fontSize: '12px', color: 'var(--green)', fontWeight: '600' }}>{enrichMsg}</span>}
+          {enrichMsg && <span style={{ fontSize: '12px', color: '#4a7c59', fontWeight: '500' }}>{enrichMsg}</span>}
           <button
-            style={{ ...s.starFilterBtn, background: starredOnly ? 'var(--amber)' : 'transparent', color: starredOnly ? 'var(--black)' : 'var(--amber)', borderColor: 'var(--amber)' }}
-            onClick={() => setStarredOnly(!starredOnly)} data-hover="true"
+            style={{ ...s.starFilterBtn, background: starredOnly ? 'var(--accent)' : 'transparent', color: starredOnly ? 'var(--bg)' : 'var(--accent)', borderColor: 'rgba(168,100,72,0.4)' }}
+            onClick={() => setStarredOnly(!starredOnly)}
           >
-            ★ {starredCount} STARRED
+            ★ {starredCount} starred
           </button>
-          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)} data-hover="true">⊞ Spreadsheet</button>
-          <button style={s.exportBtn} onClick={() => handleExport()} data-hover="true">Export all →</button>
+          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>⊞ Spreadsheet</button>
+          <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
         </div>
       </div>
 
       <div style={s.container}>
 
-        {/* Bulk action bar — appears when leads are selected */}
         {selected.length > 0 && (
           <BulkActionBar
             count={selected.length}
@@ -397,49 +395,46 @@ export default function Leads() {
           />
         )}
 
-        {/* View filter tabs */}
         <div style={s.viewTabs}>
           {[
-            { key: 'all', label: 'ALL LEADS', count: leads.length },
-            { key: 'decision-makers', label: 'DECISION MAKERS', count: decisionMakerCount },
-            { key: 'security', label: 'SECURITY', count: securityCount },
+            { key: 'all', label: 'All leads', count: leads.length },
+            { key: 'decision-makers', label: 'Decision Makers', count: decisionMakerCount },
+            { key: 'security', label: 'Security', count: securityCount },
           ].map(tab => (
             <button key={tab.key} onClick={() => setViewFilter(tab.key)}
-              style={{ ...s.viewTab, ...(viewFilter === tab.key ? s.viewTabActive : {}) }} data-hover="true">
+              style={{ ...s.viewTab, ...(viewFilter === tab.key ? s.viewTabActive : {}) }}>
               {tab.label}
-              <span style={{ ...s.viewTabCount, background: viewFilter === tab.key ? 'rgba(0,0,0,0.2)' : 'var(--gray-2)', color: viewFilter === tab.key ? 'var(--black)' : 'var(--gray-4)' }}>
+              <span style={{ ...s.viewTabCount, background: viewFilter === tab.key ? 'rgba(29,27,27,0.10)' : 'var(--surface-raised)', color: viewFilter === tab.key ? 'var(--bg)' : 'var(--text-muted)' }}>
                 {tab.count}
               </span>
             </button>
           ))}
         </div>
 
-        {/* Search and status filters */}
         <div style={s.filters}>
           <div style={s.searchBox}>
             <span style={s.searchIcon}>↗</span>
-            <input type="text" placeholder="Search targets..." value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} data-hover="true" />
+            <input type="text" placeholder="Search targets..." value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} />
           </div>
           <div style={s.filterTabs}>
             {['all', ...STATUS_OPTIONS].map((f) => (
-              <button key={f} onClick={() => setStatusFilter(f)} style={{ ...s.filterTab, ...(statusFilter === f ? s.filterTabActive : {}) }} data-hover="true">
-                {f.toUpperCase()}
+              <button key={f} onClick={() => setStatusFilter(f)} style={{ ...s.filterTab, ...(statusFilter === f ? s.filterTabActive : {}) }}>
+                {f}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Table */}
         <div style={s.table}>
           <div style={s.thead}>
             <div style={{ width: '32px', flexShrink: 0 }}>
               <input type="checkbox" onChange={toggleSelectAll} checked={selected.length === filtered.length && filtered.length > 0} style={sub.checkbox} />
             </div>
             <div style={{ width: '28px', flexShrink: 0 }}>
-              <span style={{ fontSize: '11px', color: 'var(--gray-4)' }}>★</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>★</span>
             </div>
             <div style={{ width: '60px', flexShrink: 0 }}>
-              <span style={{ fontSize: '9px', color: 'var(--gray-4)', letterSpacing: '1px' }}>TYPE</span>
+              <span style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '1px' }}>TYPE</span>
             </div>
             {columns.map((col) => (
               <span key={col.key} style={{ ...s.th, flex: col.flex }}>{col.label}</span>
@@ -486,68 +481,68 @@ export default function Leads() {
 }
 
 const s = {
-  page: { minHeight: '100vh', background: 'var(--black)' },
-  hero: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '48px 32px 32px', borderBottom: '1px solid var(--gray-2)' },
-  eyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '12px' },
-  heroTitle: { fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '900', letterSpacing: '-2px', color: 'var(--white)', lineHeight: 1 },
-  heroUnit: { fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '300', color: 'var(--gray-4)', letterSpacing: '-1px' },
-  starFilterBtn: { padding: '8px 16px', border: '1px solid', borderRadius: '4px', fontSize: '11px', fontWeight: '700', cursor: 'pointer', letterSpacing: '1px', fontFamily: 'inherit', transition: 'all 0.15s' },
-  spreadsheetBtn: { padding: '10px 20px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '13px', fontWeight: '600', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit' },
-  exportBtn: { padding: '10px 24px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer' },
+  page: { minHeight: '100vh', background: 'var(--bg)' },
+  hero: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '48px 32px 32px', borderBottom: '1px solid var(--border)' },
+  eyebrow: { fontSize: '11px', fontWeight: '500', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase' },
+  heroTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '400', letterSpacing: '-1.5px', color: 'var(--text)', lineHeight: 1 },
+  heroUnit: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.5px' },
+  starFilterBtn: { padding: '8px 14px', border: '1px solid', borderRadius: '7px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
+  spreadsheetBtn: { padding: '9px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
+  exportBtn: { padding: '9px 18px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
   container: { padding: '24px 32px' },
   viewTabs: { display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' },
-  viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '11px', fontWeight: '700', letterSpacing: '1px', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  viewTabActive: { background: 'var(--white)', color: 'var(--black)', border: '1px solid var(--white)' },
-  viewTabCount: { padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '700' },
+  viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
+  viewTabActive: { background: 'var(--text)', color: 'var(--bg)', border: '1px solid var(--text)' },
+  viewTabCount: { padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '500' },
   filters: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
-  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', flex: 1, minWidth: '200px' },
-  searchIcon: { padding: '0 14px', color: 'var(--gray-4)', fontSize: '16px' },
-  searchInput: { flex: 1, padding: '11px 14px 11px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--white)' },
+  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },
+  searchIcon: { padding: '0 14px', color: 'var(--text-muted)', fontSize: '15px' },
+  searchInput: { flex: 1, padding: '10px 14px 10px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text)', fontFamily: 'inherit' },
   filterTabs: { display: 'flex', gap: '4px' },
-  filterTab: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', color: 'var(--gray-4)', fontSize: '10px', fontWeight: '600', letterSpacing: '1px', cursor: 'pointer', fontFamily: 'inherit' },
-  filterTabActive: { background: 'var(--white)', color: 'var(--black)', border: '1px solid var(--white)' },
-  table: { background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', overflow: 'hidden' },
-  thead: { display: 'flex', padding: '10px 24px', background: 'var(--black)', borderBottom: '1px solid var(--gray-2)', alignItems: 'center' },
-  th: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--gray-4)' },
-  trow: { display: 'flex', padding: '0 24px', borderTop: '1px solid var(--gray-2)', alignItems: 'center', minHeight: '52px', transition: 'background 0.15s' },
+  filterTab: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '400', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
+  filterTabActive: { background: 'var(--text)', color: 'var(--bg)', border: '1px solid var(--text)' },
+  table: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' },
+  thead: { display: 'flex', padding: '10px 24px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', alignItems: 'center' },
+  th: { fontSize: '9px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', textTransform: 'uppercase' },
+  trow: { display: 'flex', padding: '0 24px', borderTop: '1px solid var(--border)', alignItems: 'center', minHeight: '52px', transition: 'background 0.1s' },
   td: { padding: '4px 8px 4px 0', display: 'flex', alignItems: 'center' },
-  empty: { padding: '40px 24px', fontSize: '13px', color: 'var(--gray-4)' },
+  empty: { padding: '40px 24px', fontSize: '13px', color: 'var(--text-muted)' },
 }
 
 const sub = {
-  link: { fontSize: '10px', fontWeight: '700', letterSpacing: '1px', color: 'var(--gray-4)', textDecoration: 'none' },
-  badge: { fontSize: '9px', fontWeight: '700', letterSpacing: '1px', border: '1px solid', padding: '2px 8px', borderRadius: '2px' },
-  deleteBtn: { fontSize: '11px', color: 'var(--gray-4)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '700', padding: '2px 4px' },
-  checkbox: { cursor: 'pointer', accentColor: 'var(--white)' },
-  cellInput: { width: '100%', padding: '4px 8px', border: '1px solid var(--gray-3)', borderRadius: '2px', fontSize: '12px', outline: 'none', background: 'var(--gray-2)', color: 'var(--white)' },
-  cellSelect: { padding: '4px 8px', border: '1px solid var(--gray-3)', borderRadius: '2px', fontSize: '12px', outline: 'none', background: 'var(--gray-2)', color: 'var(--white)' },
+  link: { fontSize: '10px', fontWeight: '500', letterSpacing: '0.5px', color: 'var(--text-muted)', textDecoration: 'none' },
+  deleteBtn: { fontSize: '11px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '500', padding: '2px 4px' },
+  checkbox: { cursor: 'pointer', accentColor: 'var(--accent)' },
+  cellInput: { width: '100%', padding: '4px 8px', border: '1px solid var(--border-strong)', borderRadius: '5px', fontSize: '12px', outline: 'none', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' },
+  cellSelect: { padding: '4px 8px', border: '1px solid var(--border-strong)', borderRadius: '5px', fontSize: '12px', outline: 'none', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' },
 }
 
 const bulk = {
   bar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '12px 20px', background: 'var(--gray-1)', border: '1px solid var(--amber)',
-    borderRadius: '4px', marginBottom: '16px', gap: '16px',
+    padding: '12px 16px', background: 'var(--surface)', border: '1px solid rgba(168,100,72,0.3)',
+    borderRadius: '10px', marginBottom: '16px', gap: '16px',
   },
   left: { display: 'flex', alignItems: 'center', gap: '12px' },
-  count: { fontSize: '13px', fontWeight: '700', color: 'var(--amber)', letterSpacing: '0.5px' },
-  clearBtn: { background: 'none', border: 'none', color: 'var(--gray-4)', fontSize: '11px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit' },
+  count: { fontSize: '13px', fontWeight: '500', color: 'var(--accent)' },
+  clearBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' },
   actions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
   actionBtn: {
-    padding: '7px 14px', background: 'transparent', border: '1px solid var(--gray-2)',
-    borderRadius: '4px', fontSize: '11px', fontWeight: '600', color: 'var(--white)',
-    cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.5px',
+    padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)',
+    borderRadius: '7px', fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)',
+    cursor: 'pointer', fontFamily: 'inherit',
   },
   dropdown: {
     position: 'absolute', top: '100%', left: 0, marginTop: '4px',
-    background: 'var(--gray-1)', border: '1px solid var(--gray-2)',
-    borderRadius: '4px', zIndex: 100, minWidth: '160px',
-    display: 'flex', flexDirection: 'column',
+    background: 'var(--bg)', border: '1px solid var(--border)',
+    borderRadius: '10px', zIndex: 100, minWidth: '160px',
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    boxShadow: '0 4px 20px rgba(29,27,27,0.08)',
   },
   dropdownItem: {
     padding: '10px 14px', background: 'none', border: 'none',
-    color: 'var(--white)', fontSize: '11px', fontWeight: '600',
+    color: 'var(--text)', fontSize: '12px', fontWeight: '400',
     cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
-    borderBottom: '1px solid var(--gray-2)',
+    borderBottom: '1px solid var(--border)',
   },
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn } from '../services/api'
 import DMFinder from '../components/DMFinder'
+import AddCompanyModal from '../components/AddCompanyModal'
 import Navbar from '../components/Navbar'
 
 const CLASSIFICATIONS = [
@@ -15,48 +16,65 @@ const PROSPECT_STATUSES = [
 ]
 
 const classificationColors = {
-  'Fintech': '#00d4ff', 'Healthtech': 'var(--green)', 'SaaS': 'var(--amber)',
-  'Cybersecurity': '#ff2d2d', 'IT Services': '#a78bfa', 'E-commerce': '#fb923c',
-  'Edtech': '#34d399', 'Logistics': '#94a3b8', 'Manufacturing': '#94a3b8',
-  'Banking': 'var(--gray-4)', 'Insurance': 'var(--gray-4)', 'VC / Investment': '#ff2d2d',
-  'Media': '#f472b6', 'Consulting': '#60a5fa', 'Retail': '#fbbf24',
-  'Real Estate': '#a3e635', 'Government': 'var(--gray-4)', 'Non-profit': 'var(--green)',
-  'Unclassified': 'var(--gray-3)', 'Other': 'var(--gray-4)',
+  'Fintech':          '#5b8db8',
+  'Healthtech':       '#4a7c59',
+  'SaaS':             '#7b6bae',
+  'Cybersecurity':    '#b83232',
+  'IT Services':      '#8b7bbe',
+  'E-commerce':       '#a86448',
+  'Edtech':           '#4a8c6b',
+  'Logistics':        '#6b7e8c',
+  'Manufacturing':    '#7a7060',
+  'Banking':          '#5c6b7e',
+  'Insurance':        '#6b7060',
+  'VC / Investment':  '#a05050',
+  'Media':            '#a05880',
+  'Consulting':       '#5878a0',
+  'Retail':           '#a0904a',
+  'Real Estate':      '#6a904a',
+  'Government':       '#6b7070',
+  'Non-profit':       '#4a7c59',
+  'Unclassified':     '#a1a1a1',
+  'Other':            '#a1a1a1',
 }
 
 const prospectColors = {
-  'To Review': 'var(--gray-4)', 'Prospect': 'var(--green)', 'Not a Fit': '#ff2d2d',
-  'Contacted': 'var(--amber)', 'In Progress': '#00d4ff',
-  'Closed Won': 'var(--green)', 'Closed Lost': 'var(--gray-4)',
+  'To Review':   '#a1a1a1',
+  'Prospect':    '#4a7c59',
+  'Not a Fit':   '#b83232',
+  'Contacted':   '#a86448',
+  'In Progress': '#5b8db8',
+  'Closed Won':  '#4a7c59',
+  'Closed Lost': '#a1a1a1',
 }
 
 function getTypeBadge(type) {
   if (!type) return null
   const map = {
-    'Product': { bg: 'rgba(0,212,255,0.12)', color: '#00d4ff', border: 'rgba(0,212,255,0.3)' },
-    'Services': { bg: 'rgba(255,171,0,0.12)', color: 'var(--amber)', border: 'rgba(255,171,0,0.3)' },
-    'Hybrid': { bg: 'rgba(148,0,255,0.12)', color: '#b040ff', border: 'rgba(148,0,255,0.3)' },
+    'Product':  { bg: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: 'rgba(91,141,184,0.25)' },
+    'Services': { bg: 'rgba(168,100,72,0.10)',  color: '#a86448', border: 'rgba(168,100,72,0.25)' },
+    'Hybrid':   { bg: 'rgba(123,107,174,0.10)', color: '#7b6bae', border: 'rgba(123,107,174,0.25)' },
   }
   const st = map[type] || map['Hybrid']
   return {
-    fontSize: '9px', fontWeight: '700', letterSpacing: '1px',
-    padding: '2px 8px', borderRadius: '3px',
+    fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
+    padding: '2px 7px', borderRadius: '4px',
     background: st.bg, color: st.color, border: `1px solid ${st.border}`,
   }
 }
 
 function toggleSelect(id) {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
-  }
+  setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
+}
 
-  async function handleBulkDelete() {
-    if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
-    try {
-      await Promise.all(selectedIds.map(id => deleteCompany(id)))
-      setCompanies(prev => prev.filter(c => !selectedIds.includes(c.id)))
-      setSelectedIds([])
-    } catch (e) { console.error(e) }
-  }
+async function handleBulkDelete() {
+  if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
+  try {
+    await Promise.all(selectedIds.map(id => deleteCompany(id)))
+    setCompanies(prev => prev.filter(c => !selectedIds.includes(c.id)))
+    setSelectedIds([])
+  } catch (e) { console.error(e) }
+}
 
 function classifyCompany(company) {
   const text = [company.name, company.industry, company.description].join(' ').toLowerCase()
@@ -103,7 +121,7 @@ function EditableWebsite({ value, onSave }) {
           if (e.key === 'Enter') { onSave(val); setEditing(false) }
           if (e.key === 'Escape') { setVal(value || ''); setEditing(false) }
         }}
-        style={{ width: '100%', background: 'var(--black)', border: '1px solid var(--amber)', borderRadius: '3px', padding: '2px 6px', fontSize: '12px', color: 'var(--white)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--accent)', borderRadius: '4px', padding: '2px 6px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
       />
     )
   }
@@ -113,16 +131,16 @@ function EditableWebsite({ value, onSave }) {
     const display = val.replace('https://', '').replace('http://', '').split('/')[0]
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <a href={href} target="_blank" rel="noreferrer" style={card.infoLink} onClick={e => e.stopPropagation()}>{display}</a>
-        <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: 'var(--gray-4)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }}>✎</button>
+        <a href={href} target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: 'var(--accent)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>{display}</a>
+        <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', padding: '0 2px', lineHeight: 1 }}>✎</button>
       </div>
     )
   }
 
   return (
-    <p style={{ fontSize: '11px', color: 'var(--gray-3)', fontStyle: 'italic', cursor: 'pointer', margin: 0 }} onClick={() => setEditing(true)}>
-      Click to add...
-    </p>
+    <span style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer', fontStyle: 'italic' }} onClick={() => setEditing(true)}>
+      Add website…
+    </span>
   )
 }
 
@@ -136,6 +154,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
   const [showCustomInput, setShowCustomInput] = useState(false)
   const [checkingCompliance, setCheckingCompliance] = useState(false)
   const [complianceResult, setComplianceResult] = useState(null)
+  const [fillingLI, setFillingLI] = useState(false)
+  const [fillResult, setFillResult] = useState(null)
 
   useEffect(() => {
     if (!company.classification || company.classification === 'Unclassified') {
@@ -178,62 +198,80 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
         onUpdate(company.id, { compliance: res.data.compliance })
       }
     } catch (e) {
-      console.error('Compliance error:', e)
       setComplianceResult({ error: 'Analysis failed: ' + (e.response?.data?.detail || e.message) })
     } finally {
       setCheckingCompliance(false)
     }
   }
 
-  const classColor = classificationColors[classification] || 'var(--gray-4)'
-  const statusColor = prospectColors[prospectStatus] || 'var(--gray-4)'
+  async function handleFillLinkedIn() {
+    setFillingLI(true)
+    setFillResult(null)
+    try {
+      const res = await autofillCompanyLinkedIn(company.id)
+      const { success, update, filled, linkedin_url, message } = res.data
+      if (success === false) {
+        setFillResult({ ok: false, msg: message || 'Could not find LinkedIn data' })
+      } else if (filled.length > 0) {
+        onUpdate(company.id, { ...update, linkedin_url: update.linkedin_url || linkedin_url || company.linkedin_url })
+        setFillResult({ ok: true, filled })
+      } else {
+        setFillResult({ ok: false, msg: 'All fields already filled' })
+      }
+    } catch (e) {
+      setFillResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Fill failed' })
+    } finally {
+      setFillingLI(false)
+    }
+  }
+
+  const classColor = classificationColors[classification] || '#a1a1a1'
+  const statusColor = prospectColors[prospectStatus] || '#a1a1a1'
   const isAnalyzing = analyzingId === company.id
   const typeBadgeStyle = getTypeBadge(company.company_type)
 
   return (
-    <div style={{ ...card.wrapper, borderLeft: '3px solid ' + classColor }}>
+    <div style={{ ...card.wrapper }}>
+
+      {/* Classification accent strip */}
+      <div style={{ height: '3px', background: classColor, borderRadius: '12px 12px 0 0', opacity: 0.7 }} />
 
       {/* Header */}
       <div style={card.header}>
         <div style={card.headerLeft}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '2px' }}>
             <h3 style={card.name}>{company.name}</h3>
-            {typeBadgeStyle && (
-              <span style={typeBadgeStyle}>{company.company_type.toUpperCase()}</span>
-            )}
+            {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
           </div>
           <p style={card.industry}>{company.industry || 'Industry unknown'}</p>
         </div>
         <div style={card.headerRight}>
-          
           {showCustomInput ? (
             <input
-              type="text" placeholder="Type industry..." autoFocus
-              style={{ ...card.select, width: '130px', color: 'var(--white)', borderColor: 'var(--amber)' }}
+              type="text" placeholder="Type category…" autoFocus
+              style={{ ...card.select, width: '120px', color: 'var(--text)', borderColor: 'var(--accent)' }}
               onBlur={e => { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }}
               onKeyDown={e => {
                 if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }
                 if (e.key === 'Escape') setShowCustomInput(false)
               }}
             />
-          ) 
-          : (
+          ) : (
             <select
               value={classification}
               onChange={e => { if (e.target.value === 'Custom...') setShowCustomInput(true); else handleClassificationChange(e.target.value) }}
-              style={{ ...card.select, color: classColor, borderColor: classColor }}
+              style={{ ...card.select, color: classColor, borderColor: `${classColor}40` }}
             >
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
           <input
-            type="checkbox"
-            checked={selected || false}
+            type="checkbox" checked={selected || false}
             onChange={() => onToggle(company.id)}
             onClick={e => e.stopPropagation()}
-            style={{ accentColor: 'var(--amber)', cursor: 'pointer', flexShrink: 0 }}
+            style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
           />
-          <button style={card.deleteBtn} onClick={() => onDelete(company.id)}>✕</button>
+          <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
         </div>
       </div>
 
@@ -261,7 +299,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
       {company.compliance && (
         <div style={card.complianceSection}>
           <p style={card.infoLabel}>COMPLIANCE</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' }}>
             {company.compliance.split(',').map(c => c.trim()).filter(Boolean).map(cert => (
               <span key={cert} style={card.complianceBadge}>{cert}</span>
             ))}
@@ -272,7 +310,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
       {/* Description */}
       {company.description && (
         <p style={card.description}>
-          {company.description.substring(0, 150)}{company.description.length > 150 ? '...' : ''}
+          {company.description.substring(0, 150)}{company.description.length > 150 ? '…' : ''}
         </p>
       )}
 
@@ -281,27 +319,36 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
         <div style={card.notesHeader}>
           <p style={card.infoLabel}>NOTES</p>
           <button style={card.editBtn} onClick={() => editingNotes ? handleSaveNotes() : setEditingNotes(true)}>
-            {editingNotes ? 'SAVE' : 'EDIT'}
+            {editingNotes ? 'Save' : 'Edit'}
           </button>
         </div>
         {editingNotes
-          ? <textarea value={notes} onChange={e => setNotes(e.target.value)} style={card.textarea} placeholder="Add notes..." rows={2} autoFocus />
+          ? <textarea value={notes} onChange={e => setNotes(e.target.value)} style={card.textarea} placeholder="Add notes…" rows={2} autoFocus />
           : <p style={card.notesText}>{notes || 'No notes yet.'}</p>
         }
       </div>
 
+      {/* LinkedIn fill result */}
+      {fillResult && (
+        <div style={{ padding: '8px 16px', background: fillResult.ok ? 'rgba(74,124,89,0.07)' : 'rgba(168,100,72,0.07)', borderTop: `1px solid ${fillResult.ok ? 'rgba(74,124,89,0.2)' : 'rgba(168,100,72,0.2)'}` }}>
+          {fillResult.ok
+            ? <p style={{ fontSize: '11px', color: '#4a7c59', fontWeight: '500' }}>✓ Filled: {fillResult.filled.join(', ')}</p>
+            : <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '500' }}>⚠ {fillResult.msg}</p>
+          }
+        </div>
+      )}
+
       {/* Compliance result */}
       {complianceResult && (
-        <div style={{ padding: '12px 20px', background: complianceResult.error ? 'rgba(255,45,45,0.06)' : 'rgba(0,230,118,0.06)', borderTop: '1px solid var(--gray-2)' }}>
+        <div style={{ padding: '10px 16px', background: complianceResult.error ? 'rgba(184,50,50,0.06)' : 'rgba(74,124,89,0.06)', borderTop: '1px solid var(--border)' }}>
           {complianceResult.error
-            ? <p style={{ fontSize: '12px', color: '#ff2d2d' }}>{complianceResult.error}</p>
+            ? <p style={{ fontSize: '12px', color: 'var(--red)' }}>{complianceResult.error}</p>
             : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <p style={{ fontSize: '11px', fontWeight: '700', color: 'var(--green)', letterSpacing: '1px' }}>✓ AI COMPLIANCE CHECK COMPLETE</p>
-                <p style={{ fontSize: '12px', color: 'var(--gray-5)' }}>Certifications: <strong style={{ color: 'var(--white)' }}>{complianceResult.compliance}</strong></p>
-                <p style={{ fontSize: '12px', color: 'var(--gray-5)' }}>Security Team: <strong style={{ color: 'var(--white)' }}>{complianceResult.has_security_team}</strong></p>
-                <p style={{ fontSize: '11px', color: 'var(--gray-4)', fontStyle: 'italic' }}>{complianceResult.security_notes}</p>
-                <p style={{ fontSize: '10px', color: 'var(--gray-4)' }}>Confidence: {complianceResult.confidence}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <p style={{ fontSize: '11px', fontWeight: '600', color: '#4a7c59' }}>Compliance check complete</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Certs: <strong style={{ color: 'var(--text)' }}>{complianceResult.compliance}</strong></p>
+                <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Security team: <strong style={{ color: 'var(--text)' }}>{complianceResult.has_security_team}</strong></p>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{complianceResult.security_notes}</p>
               </div>
             )
           }
@@ -310,24 +357,28 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
 
       {/* Footer */}
       <div style={card.footer}>
-        <select value={prospectStatus} onChange={e => handleStatusChange(e.target.value)} style={{ ...card.statusSelect, color: statusColor, borderColor: statusColor }}>
+        <select value={prospectStatus} onChange={e => handleStatusChange(e.target.value)}
+          style={{ ...card.statusSelect, color: statusColor, borderColor: `${statusColor}40` }}>
           {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          <button style={{ ...card.complianceBtn, opacity: checkingCompliance ? 0.6 : 1 }} onClick={handleCheckCompliance} disabled={checkingCompliance}>
-            {checkingCompliance ? '⏳...' : '🔍 Compliance'}
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button style={{ ...card.actionBtn, opacity: checkingCompliance ? 0.5 : 1 }} onClick={handleCheckCompliance} disabled={checkingCompliance}>
+            {checkingCompliance ? 'Checking…' : 'Compliance'}
           </button>
           <button
-            style={{ ...card.complianceBtn, color: isAnalyzing ? 'var(--gray-4)' : '#00d4ff', borderColor: isAnalyzing ? 'var(--gray-3)' : '#00d4ff', opacity: isAnalyzing ? 0.6 : 1, cursor: isAnalyzing ? 'not-allowed' : 'pointer' }}
-            onClick={() => onAnalyzeWebsite(company)}
-            disabled={isAnalyzing}
-          >
-            {isAnalyzing ? '⏳ Analyzing...' : '🌐 Analyze'}
+            style={{ ...card.actionBtn, opacity: isAnalyzing ? 0.5 : 1 }}
+            onClick={() => onAnalyzeWebsite(company)} disabled={isAnalyzing}>
+            {isAnalyzing ? 'Analyzing…' : 'Analyze'}
+          </button>
+          <button
+            style={{ ...card.actionBtn, color: fillingLI ? 'var(--text-muted)' : 'var(--accent)', borderColor: fillingLI ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: fillingLI ? 0.5 : 1 }}
+            onClick={handleFillLinkedIn} disabled={fillingLI}>
+            {fillingLI ? 'Filling…' : '↯ Fill LI'}
           </button>
           {company.linkedin_url && (
-            <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LinkedIn →</a>
+            <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LinkedIn ↗</a>
           )}
-          <button style={card.findBtn} onClick={() => onViewLeads(company)}>View Leads →</button>
+          <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
         </div>
       </div>
     </div>
@@ -342,7 +393,7 @@ function EmptyLeadsLink({ company }) {
   const slug = parts[1] ? parts[1].split('/')[0] : ''
   if (!slug) return null
   return (
-    <a href={`https://www.linkedin.com/company/${slug}/people/`} style={{ color: 'var(--green)', fontSize: '13px', fontWeight: '600', display: 'block', marginTop: '12px' }}>
+    <a href={`https://www.linkedin.com/company/${slug}/people/`} style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: '500', display: 'block', marginTop: '12px' }}>
       Open {company.name} People Page →
     </a>
   )
@@ -366,8 +417,8 @@ function LeadsModal({ company, onClose }) {
   }, [company.id])
 
   return (
-    <div style={modal.overlay}>
-      <div style={modal.box}>
+    <div style={modal.overlay} onClick={onClose}>
+      <div style={modal.box} onClick={e => e.stopPropagation()}>
         <div style={modal.header}>
           <div>
             <p style={modal.eyebrow}>COMPANY LEADS</p>
@@ -376,10 +427,10 @@ function LeadsModal({ company, onClose }) {
           <button style={modal.closeBtn} onClick={onClose}>✕ Close</button>
         </div>
         {loading ? (
-          <p style={modal.empty}>Loading leads...</p>
+          <p style={modal.empty}>Loading leads…</p>
         ) : leads.length === 0 ? (
           <div style={modal.emptyState}>
-            <p style={modal.emptyTitle}>No leads found for this company</p>
+            <p style={modal.emptyTitle}>No leads found</p>
             <p style={modal.emptyText}>Visit the company LinkedIn people page and use the extension to extract leads.</p>
             <EmptyLeadsLink company={company} />
           </div>
@@ -406,96 +457,69 @@ function LeadsModal({ company, onClose }) {
 
 function AnalysisModal({ result, onClose }) {
   const { company, analysis } = result
-
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '32px', maxWidth: '560px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
-
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.5)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', maxWidth: '540px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
           <div>
-            <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#111', marginBottom: '4px' }}>{company.name}</h2>
-            <p style={{ fontSize: '12px', color: '#999' }}>Website Analysis — Gemini / GPT-4o / Groq</p>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text)', marginBottom: '3px' }}>{company.name}</h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Website Analysis</p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#999', padding: '0 4px' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>✕</button>
         </div>
 
         {analysis.error ? (
-          <div style={{ padding: '14px 16px', background: '#ffebee', borderRadius: '8px', marginBottom: '20px' }}>
-            <p style={{ fontSize: '13px', color: '#c62828', marginBottom: '6px' }}>⚠ {analysis.error}</p>
-            <p style={{ fontSize: '12px', color: '#999' }}>Check the website URL is correct and publicly accessible.</p>
+          <div style={{ padding: '14px 16px', background: 'var(--red-dim)', borderRadius: '8px', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--red)' }}>{analysis.error}</p>
           </div>
         ) : (
           <>
-            {/* Key metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
               {[
-                { label: 'Company Type', value: analysis.company_type || '—', color: analysis.company_type === 'Product' ? '#1565c0' : analysis.company_type === 'Services' ? '#e65100' : '#6a1b9a' },
-                { label: 'Is SaaS', value: analysis.is_saas === true ? '✓ Yes' : analysis.is_saas === false ? '✗ No' : '—', color: analysis.is_saas ? '#2e7d32' : '#c62828' },
-                { label: 'Target Market', value: analysis.target_market || '—', color: '#111' },
-                { label: 'Has Login Module', value: analysis.has_login === true ? '✓ Yes' : analysis.has_login === false ? '✗ No' : '—', color: analysis.has_login ? '#2e7d32' : '#c62828' },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{ padding: '14px', background: '#f8f8f8', borderRadius: '8px' }}>
-                  <p style={{ fontSize: '9px', color: '#aaa', fontWeight: '700', letterSpacing: '1px', marginBottom: '6px' }}>{label.toUpperCase()}</p>
-                  <p style={{ fontSize: '15px', fontWeight: '800', color }}>{value}</p>
+                { label: 'Company Type', value: analysis.company_type || '—' },
+                { label: 'Is SaaS', value: analysis.is_saas === true ? 'Yes' : analysis.is_saas === false ? 'No' : '—' },
+                { label: 'Target Market', value: analysis.target_market || '—' },
+                { label: 'Has Login', value: analysis.has_login === true ? 'Yes' : analysis.has_login === false ? 'No' : '—' },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ padding: '12px 14px', background: 'var(--surface)', borderRadius: '10px' }}>
+                  <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', marginBottom: '5px', textTransform: 'uppercase' }}>{label}</p>
+                  <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>{value}</p>
                 </div>
               ))}
             </div>
 
-            {/* Compliance */}
             {analysis.compliance?.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: '#aaa', fontWeight: '700', letterSpacing: '1px', marginBottom: '10px' }}>COMPLIANCE DETECTED</p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Compliance</p>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   {analysis.compliance.map(c => (
-                    <span key={c} style={{ padding: '4px 12px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '4px', fontSize: '12px', fontWeight: '700' }}>{c}</span>
+                    <span key={c} style={{ padding: '3px 10px', background: 'rgba(74,124,89,0.10)', color: '#4a7c59', borderRadius: '4px', fontSize: '12px', fontWeight: '600', border: '1px solid rgba(74,124,89,0.2)' }}>{c}</span>
                   ))}
                 </div>
-                {analysis.compliance_evidence && !['None', 'None found'].includes(analysis.compliance_evidence) && (
-                  <p style={{ fontSize: '11px', color: '#999', marginTop: '8px', lineHeight: 1.5 }}>{analysis.compliance_evidence}</p>
-                )}
               </div>
             )}
 
-            {/* Products / Services */}
             {analysis.products_or_services?.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: '#aaa', fontWeight: '700', letterSpacing: '1px', marginBottom: '10px' }}>PRODUCTS / SERVICES</p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Products / Services</p>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                   {analysis.products_or_services.map(p => (
-                    <span key={p} style={{ padding: '4px 12px', background: '#e3f2fd', color: '#1565c0', borderRadius: '4px', fontSize: '12px' }}>{p}</span>
+                    <span key={p} style={{ padding: '3px 10px', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: '4px', fontSize: '12px' }}>{p}</span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Login evidence */}
-            {analysis.login_evidence && !['None', 'None found', 'N/A', 'No website analyzed'].includes(analysis.login_evidence) && (
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: '#aaa', fontWeight: '700', letterSpacing: '1px', marginBottom: '6px' }}>LOGIN EVIDENCE</p>
-                <p style={{ fontSize: '13px', color: '#333', lineHeight: 1.5 }}>{analysis.login_evidence}</p>
-              </div>
-            )}
-
-            {/* Website summary */}
             {analysis.website_summary && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: '#aaa', fontWeight: '700', letterSpacing: '1px', marginBottom: '6px' }}>WEBSITE SUMMARY</p>
-                <p style={{ fontSize: '13px', color: '#333', lineHeight: 1.6 }}>{analysis.website_summary}</p>
-              </div>
-            )}
-
-            {/* Company type reason */}
-            {analysis.company_type_reason && (
-              <div style={{ marginBottom: '24px', padding: '12px 16px', background: '#fffde7', borderRadius: '6px', border: '1px solid #fff176' }}>
-                <p style={{ fontSize: '12px', color: '#795548', lineHeight: 1.6 }}>
-                  <strong>Why {analysis.company_type}?</strong> {analysis.company_type_reason}
-                </p>
+                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Summary</p>
+                <p style={{ fontSize: '13px', color: 'var(--text-soft)', lineHeight: 1.6 }}>{analysis.website_summary}</p>
               </div>
             )}
           </>
         )}
 
-        <button onClick={onClose} style={{ width: '100%', padding: '14px', background: '#111', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+        <button onClick={onClose} style={{ width: '100%', padding: '12px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
           Close
         </button>
       </div>
@@ -518,6 +542,7 @@ export default function Companies() {
   const [showDMFinder, setShowDMFinder] = useState(false)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => { fetchCompanies() }, [])
 
@@ -548,40 +573,27 @@ export default function Companies() {
     const geminiKey = localStorage.getItem('geminiKey') || ''
     const openaiKey = localStorage.getItem('openaiKey') || ''
     const groqKey = localStorage.getItem('groqKey') || ''
-
     if (!geminiKey && !openaiKey && !groqKey) {
       alert('Please add an AI key in Settings. Gemini is free at aistudio.google.com')
       return
     }
-
     if (!company.website && !groqKey) {
-      alert('Add this company\'s website URL first, then click Analyze. Or add a Groq key for classification without website.')
+      alert("Add this company's website URL first, then click Analyze.")
       return
     }
-
     setAnalyzingId(company.id)
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(`http://localhost:8000/api/companies/${company.id}/analyze-website`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          gemini_key: geminiKey,
-          openai_key: openaiKey,
-          groq_key: groqKey,
-          website: company.website
-        })
+        body: JSON.stringify({ gemini_key: geminiKey, openai_key: openaiKey, groq_key: groqKey, website: company.website })
       })
       const data = await res.json()
       if (data.success && data.analysis) {
         setCompanies(prev => prev.map(c => {
           if (c.id !== company.id) return c
-          return {
-            ...c,
-            classification: data.analysis.company_type || c.classification,
-            compliance: data.analysis.compliance?.join(', ') || c.compliance,
-            company_type: data.analysis.company_type || c.company_type,
-          }
+          return { ...c, classification: data.analysis.company_type || c.classification, compliance: data.analysis.compliance?.join(', ') || c.compliance, company_type: data.analysis.company_type || c.company_type }
         }))
         setAnalysisResult({ company, analysis: data.analysis })
       } else {
@@ -606,8 +618,13 @@ export default function Companies() {
 
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
   const notFitCount = companies.filter(c => c.prospect_status === 'Not a Fit').length
-  const productCount = companies.filter(c => c.company_type === 'Product').length
-  const servicesCount = companies.filter(c => c.company_type === 'Services').length
+
+  function handleBulkDelete() {
+    if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
+    Promise.all(selectedIds.map(id => deleteCompany(id)))
+      .then(() => { setCompanies(prev => prev.filter(c => !selectedIds.includes(c.id))); setSelectedIds([]) })
+      .catch(e => console.error(e))
+  }
 
   return (
     <div style={s.page}>
@@ -615,23 +632,25 @@ export default function Companies() {
 
       <div style={s.hero}>
         <div>
-          <p style={s.eyebrow}>COMPANY INTELLIGENCE</p>
-          <h1 style={s.heroTitle}>{filtered.length}<span style={s.heroUnit}> companies</span></h1>
+          <p style={s.eyebrow}>Company Intelligence</p>
+          <h1 style={s.heroTitle}>
+            {filtered.length}
+            <span style={s.heroUnit}> companies</span>
+          </h1>
           <div style={s.heroStats}>
-            <span style={{ color: 'var(--green)', fontSize: '12px', fontWeight: '600' }}>{prospectCount} prospects</span>
-            <span style={{ color: 'var(--gray-4)', fontSize: '12px' }}>·</span>
-            <span style={{ color: '#ff2d2d', fontSize: '12px', fontWeight: '600' }}>{notFitCount} not a fit</span>
-            {productCount > 0 && (<><span style={{ color: 'var(--gray-4)', fontSize: '12px' }}>·</span><span style={{ color: '#00d4ff', fontSize: '12px', fontWeight: '600' }}>{productCount} product</span></>)}
-            {servicesCount > 0 && (<><span style={{ color: 'var(--gray-4)', fontSize: '12px' }}>·</span><span style={{ color: 'var(--amber)', fontSize: '12px', fontWeight: '600' }}>{servicesCount} services</span></>)}
+            <span style={{ color: '#4a7c59', fontSize: '12px' }}>{prospectCount} prospects</span>
+            <span style={{ color: 'var(--border-strong)', fontSize: '12px' }}>·</span>
+            <span style={{ color: 'var(--red)', fontSize: '12px' }}>{notFitCount} not a fit</span>
           </div>
         </div>
       </div>
 
       <div style={s.container}>
+        {/* Filters */}
         <div style={s.filters}>
           <div style={s.searchBox}>
-            <span style={s.searchIcon}>↗</span>
-            <input type="text" placeholder="Search companies..." value={search} onChange={e => setSearch(e.target.value)} style={s.searchInput} />
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px', paddingLeft: '12px' }}>⌕</span>
+            <input type="text" placeholder="Search companies…" value={search} onChange={e => setSearch(e.target.value)} style={s.searchInput} />
           </div>
           <select value={classFilter} onChange={e => setClassFilter(e.target.value)} style={s.select}>
             <option value="all">All types</option>
@@ -642,54 +661,47 @@ export default function Companies() {
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={s.select}>
-            <option value="all">All — Product/Services</option>
-            <option value="Product">Product only</option>
-            <option value="Services">Services only</option>
+            <option value="all">Product / Services</option>
+            <option value="Product">Product</option>
+            <option value="Services">Services</option>
             <option value="Hybrid">Hybrid</option>
           </select>
           <select value={followerFilter} onChange={e => setFollowerFilter(e.target.value)} style={s.select}>
             <option value="all">All followers</option>
-            <option value="1000">1K+ followers</option>
-            <option value="5000">5K+ followers</option>
-            <option value="10000">10K+ followers</option>
-            <option value="50000">50K+ followers</option>
-            <option value="100000">100K+ followers</option>
+            <option value="1000">1K+</option>
+            <option value="5000">5K+</option>
+            <option value="10000">10K+</option>
+            <option value="50000">50K+</option>
+            <option value="100000">100K+</option>
           </select>
-          <button
-            onClick={() => setShowDMFinder(true)}
-            style={{ padding: '10px 18px', background: 'var(--amber)', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-          >
-            🎯 Find DMs
-          </button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--gray-4)', whiteSpace: 'nowrap', padding: '10px 0' }}>
+          <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
+          <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
               checked={selectedIds.length === filtered.length && filtered.length > 0}
               onChange={() => setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map(c => c.id))}
-              style={{ accentColor: 'var(--amber)', cursor: 'pointer' }}
+              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
             />
             Select all
           </label>
         </div>
+
         {selectedIds.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'var(--gray-1)', border: '1px solid var(--amber)', borderRadius: '6px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--amber)' }}>{selectedIds.length} selected</span>
-            <button onClick={handleBulkDelete} style={{ padding: '6px 14px', background: '#ff2d2d', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-              Delete selected
-            </button>
-              <button onClick={() => setShowDMFinder(true)} style={{ padding: '5px 12px', background: 'var(--amber)', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit' }}>🎯 Find DMs</button>
-            <button onClick={() => setSelectedIds([])} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--gray-3)', borderRadius: '4px', fontSize: '12px', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit' }}>
-              Clear
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500' }}>{selectedIds.length} selected</span>
+            <button onClick={handleBulkDelete} style={{ padding: '5px 12px', background: 'var(--red)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '500', color: '#fff', cursor: 'pointer' }}>Delete</button>
+            <button onClick={() => setShowDMFinder(true)} style={{ padding: '5px 12px', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer' }}>Find DMs</button>
+            <button onClick={() => setSelectedIds([])} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>Clear</button>
           </div>
         )}
 
         {loading ? (
-          <p style={s.empty}>Loading companies...</p>
+          <p style={s.empty}>Loading…</p>
         ) : filtered.length === 0 ? (
           <div style={s.emptyState}>
             <p style={s.emptyTitle}>No companies yet</p>
-            <p style={s.emptyText}>Use the extension on LinkedIn company search to extract companies.</p>
+            <p style={s.emptyText}>Use the extension on LinkedIn company search to extract companies, or click <strong>+ Add Company</strong> above.</p>
           </div>
         ) : (
           <div style={s.grid}>
@@ -703,13 +715,14 @@ export default function Companies() {
                 onAnalyzeWebsite={handleAnalyzeWebsite}
                 analyzingId={analyzingId}
                 selected={selectedIds.includes(company.id)}
-                onToggle={toggleSelect}
+                onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
               />
             ))}
           </div>
         )}
       </div>
 
+      {showAddModal && <AddCompanyModal onClose={() => setShowAddModal(false)} onRefresh={fetchCompanies} />}
       {selectedCompany && <LeadsModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />}
       {analysisResult && <AnalysisModal result={analysisResult} onClose={() => setAnalysisResult(null)} />}
       {showDMFinder && (
@@ -722,70 +735,77 @@ export default function Companies() {
   )
 }
 
+// ─── STYLES ───────────────────────────────────────────────────
+
 const s = {
-  page: { minHeight: '100vh', background: 'var(--black)' },
-  hero: { padding: '48px 32px 32px', borderBottom: '1px solid var(--gray-2)' },
-  eyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '12px' },
-  heroTitle: { fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '900', letterSpacing: '-2px', color: 'var(--white)', lineHeight: 1 },
-  heroUnit: { fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '300', color: 'var(--gray-4)', letterSpacing: '-1px' },
-  heroStats: { display: 'flex', gap: '12px', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap' },
-  container: { padding: '24px 32px' },
-  filters: { display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'center', flexWrap: 'wrap' },
-  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', flex: 1, minWidth: '200px' },
-  searchIcon: { padding: '0 14px', color: 'var(--gray-4)', fontSize: '16px' },
-  searchInput: { flex: 1, padding: '11px 14px 11px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--white)', fontFamily: 'inherit' },
-  select: { padding: '10px 14px', background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '12px', color: 'var(--white)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px' },
-  empty: { padding: '40px 0', fontSize: '13px', color: 'var(--gray-4)' },
+  page: { minHeight: '100vh', background: 'var(--bg)' },
+  hero: { padding: '48px 40px 32px', borderBottom: '1px solid var(--border)' },
+  eyebrow: { fontSize: '11px', fontWeight: '500', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' },
+  heroTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(44px, 6vw, 72px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1, marginBottom: '10px' },
+  heroUnit: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-1px' },
+  heroStats: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' },
+  container: { padding: '24px 40px' },
+  filters: { display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' },
+  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },
+  searchInput: { flex: 1, padding: '9px 12px', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text)', fontFamily: 'inherit' },
+  select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
+  primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '14px' },
+  empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
-  emptyTitle: { fontSize: '18px', fontWeight: '700', color: 'var(--gray-3)', marginBottom: '8px' },
-  emptyText: { fontSize: '13px', color: 'var(--gray-4)', lineHeight: 1.6 },
+  emptyTitle: { fontSize: '17px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' },
+  emptyText: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 },
 }
 
 const card = {
-  wrapper: { background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 20px 12px', gap: '12px' },
+  wrapper: {
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: '12px', overflow: 'hidden',
+    display: 'flex', flexDirection: 'column',
+    transition: 'box-shadow 0.2s',
+  },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 16px 10px', gap: '10px' },
   headerLeft: { flex: 1 },
-  headerRight: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 },
-  name: { fontSize: '16px', fontWeight: '700', color: 'var(--white)', letterSpacing: '-0.3px' },
-  industry: { fontSize: '11px', color: 'var(--gray-4)', letterSpacing: '0.5px', marginTop: '2px' },
-  select: { padding: '4px 8px', background: 'var(--black)', border: '1px solid', borderRadius: '3px', fontSize: '10px', fontWeight: '700', letterSpacing: '0.5px', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  deleteBtn: { background: 'none', border: 'none', color: 'var(--gray-4)', fontSize: '13px', cursor: 'pointer', padding: '4px', fontWeight: '700' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0', borderTop: '1px solid var(--gray-2)', borderBottom: '1px solid var(--gray-2)' },
-  infoItem: { padding: '10px 20px', borderRight: '1px solid var(--gray-2)' },
-  infoLabel: { fontSize: '8px', fontWeight: '700', letterSpacing: '2px', color: 'var(--gray-4)', marginBottom: '4px' },
-  infoValue: { fontSize: '12px', color: 'var(--white)', fontWeight: '500', margin: 0 },
-  infoLink: { fontSize: '12px', color: '#00d4ff', textDecoration: 'none' },
-  complianceSection: { padding: '12px 20px', borderBottom: '1px solid var(--gray-2)' },
-  complianceBadge: { padding: '2px 8px', border: '1px solid var(--green)', borderRadius: '2px', fontSize: '9px', fontWeight: '700', color: 'var(--green)', letterSpacing: '0.5px' },
-  description: { padding: '12px 20px', fontSize: '12px', color: 'var(--gray-4)', lineHeight: 1.5, borderBottom: '1px solid var(--gray-2)' },
-  notesSection: { padding: '12px 20px', borderBottom: '1px solid var(--gray-2)' },
-  notesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
-  editBtn: { background: 'none', border: '1px solid var(--gray-3)', borderRadius: '3px', color: 'var(--gray-4)', fontSize: '8px', fontWeight: '700', letterSpacing: '1px', cursor: 'pointer', padding: '2px 8px', fontFamily: 'inherit' },
-  notesText: { fontSize: '12px', color: 'var(--gray-4)', lineHeight: 1.5 },
-  textarea: { width: '100%', padding: '8px', background: 'var(--black)', border: '1px solid var(--gray-2)', borderRadius: '3px', fontSize: '12px', color: 'var(--white)', outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' },
-  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', flexWrap: 'wrap', gap: '8px', marginTop: 'auto' },
-  statusSelect: { padding: '4px 10px', background: 'var(--black)', border: '1px solid', borderRadius: '3px', fontSize: '11px', fontWeight: '600', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  complianceBtn: { padding: '6px 12px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '3px', fontSize: '11px', color: 'var(--gray-4)', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit' },
-  linkedinBtn: { padding: '6px 12px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '3px', fontSize: '11px', color: 'var(--gray-4)', textDecoration: 'none', fontWeight: '600' },
-  findBtn: { padding: '6px 14px', background: 'var(--white)', border: 'none', borderRadius: '3px', fontSize: '11px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit' },
+  headerRight: { display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 },
+  name: { fontSize: '15px', fontWeight: '600', color: 'var(--text)', letterSpacing: '-0.2px' },
+  industry: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' },
+  select: { padding: '3px 7px', background: 'var(--bg)', border: '1px solid', borderRadius: '4px', fontSize: '10px', fontWeight: '500', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
+  deleteBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', padding: '4px', opacity: 0.6 },
+  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' },
+  infoItem: { padding: '9px 16px', borderRight: '1px solid var(--border)' },
+  infoLabel: { fontSize: '8px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },
+  infoValue: { fontSize: '12px', color: 'var(--text)', fontWeight: '400', margin: 0 },
+  complianceSection: { padding: '10px 16px', borderBottom: '1px solid var(--border)' },
+  complianceBadge: { padding: '2px 7px', border: '1px solid rgba(74,124,89,0.3)', borderRadius: '3px', fontSize: '9px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.5px', background: 'rgba(74,124,89,0.07)' },
+  description: { padding: '10px 16px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.55, borderBottom: '1px solid var(--border)' },
+  notesSection: { padding: '10px 16px', borderBottom: '1px solid var(--border)', flex: 1 },
+  notesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' },
+  editBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '9px', fontWeight: '500', letterSpacing: '0.5px', cursor: 'pointer', padding: '2px 7px', fontFamily: 'inherit' },
+  notesText: { fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 },
+  textarea: { width: '100%', padding: '7px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' },
+  footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', flexWrap: 'wrap', gap: '8px', marginTop: 'auto' },
+  statusSelect: { padding: '4px 9px', background: 'var(--bg)', border: '1px solid', borderRadius: '5px', fontSize: '11px', fontWeight: '500', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
+  actionBtn: { padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
+  linkedinBtn: { padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'none' },
+  primaryBtn: { padding: '5px 12px', background: 'var(--text)', border: 'none', borderRadius: '5px', fontSize: '11px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
 }
 
 const modal = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' },
-  box: { background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '8px', width: '100%', maxWidth: '800px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '24px 28px', borderBottom: '1px solid var(--gray-2)' },
-  eyebrow: { fontSize: '9px', fontWeight: '700', letterSpacing: '3px', color: 'var(--gray-4)', marginBottom: '6px' },
-  title: { fontSize: '22px', fontWeight: '900', letterSpacing: '-1px', color: 'var(--white)' },
-  closeBtn: { padding: '8px 16px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '12px', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '600' },
-  empty: { padding: '32px 28px', fontSize: '13px', color: 'var(--gray-4)' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' },
+  box: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '100%', maxWidth: '800px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '24px 28px', borderBottom: '1px solid var(--border)' },
+  eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '5px', textTransform: 'uppercase' },
+  title: { fontSize: '20px', fontWeight: '600', color: 'var(--text)' },
+  closeBtn: { padding: '7px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
+  empty: { padding: '32px 28px', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '48px 28px', textAlign: 'center' },
-  emptyTitle: { fontSize: '16px', fontWeight: '700', color: 'var(--gray-3)', marginBottom: '8px' },
-  emptyText: { fontSize: '13px', color: 'var(--gray-4)', lineHeight: 1.6 },
-  leadsGrid: { padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px', overflowY: 'auto' },
-  leadCard: { background: 'var(--black)', border: '1px solid var(--gray-2)', borderRadius: '4px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '4px' },
-  leadName: { fontSize: '13px', fontWeight: '700', color: 'var(--white)' },
-  leadTitle: { fontSize: '11px', color: 'var(--gray-4)', lineHeight: 1.4 },
-  leadLocation: { fontSize: '11px', color: 'var(--gray-4)' },
-  leadLink: { fontSize: '10px', color: '#00d4ff', textDecoration: 'none', fontWeight: '700', marginTop: '4px' },
-} 
+  emptyTitle: { fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' },
+  emptyText: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 },
+  leadsGrid: { padding: '20px 28px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px', overflowY: 'auto' },
+  leadCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '3px' },
+  leadName: { fontSize: '13px', fontWeight: '600', color: 'var(--text)' },
+  leadTitle: { fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 },
+  leadLocation: { fontSize: '11px', color: 'var(--text-muted)' },
+  leadLink: { fontSize: '11px', color: 'var(--accent)', textDecoration: 'none', fontWeight: '500', marginTop: '4px' },
+}

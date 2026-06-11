@@ -1,4 +1,5 @@
 import logging
+import requests
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
@@ -494,6 +495,87 @@ async def spreadsheet_update_lead(
         return {"lead": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ─── COMPANY PREFILL ─────────────────────────────────────────
+
+@router.post("/companies/prefill")
+async def prefill_company(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    get_user_id(authorization)
+    import re as _re
+    name = (payload.get("name") or "").strip()
+    website_url = (payload.get("website_url") or "").strip()
+    openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Company name is required")
+
+    from .company_prefill import search_company_website, extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3, scrape_linkedin_data
+
+    if not website_url:
+        website_url = search_company_website(name) or ""
+
+    if not website_url:
+        return {"name": name, "website_url": None, "linkedin_url": None, "linkedin_people_url": None,
+                "message": "Could not find official website. Provide the website URL manually.",
+                "linkedin_data": {}}
+
+    url = website_url if website_url.startswith("http") else "https://" + website_url
+    linkedin_url = None
+    try:
+        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}, timeout=12, allow_redirects=True)
+        html = r.text
+        linkedin_url = extract_linkedin_url_from_html(html)
+        if not linkedin_url and openrouter_key:
+            linkedin_url = extract_linkedin_url_with_qwen3(html, name, openrouter_key)
+    except Exception as e:
+        print(f"Prefill website fetch error: {e}")
+
+    linkedin_people_url = None
+    if linkedin_url:
+        m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin_url)
+        if m:
+            linkedin_people_url = f'https://www.linkedin.com/company/{m.group(1)}/people/'
+
+    # Scrape LinkedIn for followers, location, employee count
+    linkedin_data = {}
+    if linkedin_url:
+        linkedin_data = scrape_linkedin_data(linkedin_url)
+
+    return {
+        "name": name,
+        "website_url": website_url,
+        "linkedin_url": linkedin_url,
+        "linkedin_people_url": linkedin_people_url,
+        "message": "LinkedIn URL found" if linkedin_url else "LinkedIn URL not found on website. Provide it manually.",
+        "linkedin_data": linkedin_data,
+    }
+
+
+# ─── UPDATE COMPANY SIZE BY NAME (called by extension after people page scrape) ──
+
+@router.patch("/companies/size-by-name")
+async def update_company_size_by_name(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    name = (payload.get("name") or "").strip()
+    size = (payload.get("size") or "").strip()
+    if not name or not size:
+        raise HTTPException(status_code=400, detail="name and size required")
+    try:
+        res = supabase.table("companies").select("id").eq("user_id", user_id).ilike("name", name).execute()
+        if not res.data:
+            return {"updated": False, "message": "Company not found"}
+        company_id = res.data[0]["id"]
+        supabase.table("companies").update({"size": size}).eq("id", company_id).execute()
+        return {"updated": True, "company_id": company_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ─── COMPANY UPDATE ───────────────────────────────────────────
 
@@ -1064,6 +1146,91 @@ async def analyze_company_website(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── AUTOFILL FROM LINKEDIN ──────────────────────────────────
+
+@router.post("/companies/{company_id}/autofill-linkedin")
+async def autofill_company_from_linkedin(
+    company_id: str,
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    import re as _re
+    try:
+        co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+        if not co_res.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+        company = co_res.data[0]
+
+        from .company_prefill import search_company_website, search_linkedin_url_direct, extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3, scrape_linkedin_data
+
+        openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
+
+        # Resolve LinkedIn URL: existing → website HTML → Qwen3 → DuckDuckGo direct search
+        linkedin_url = company.get("linkedin_url") or ""
+        if not linkedin_url:
+            website = company.get("website") or ""
+            if not website:
+                website = search_company_website(company.get("name", "")) or ""
+            if website:
+                try:
+                    r = requests.get(
+                        website if website.startswith("http") else "https://" + website,
+                        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
+                        timeout=12, allow_redirects=True
+                    )
+                    linkedin_url = extract_linkedin_url_from_html(r.text)
+                    if not linkedin_url and openrouter_key:
+                        linkedin_url = extract_linkedin_url_with_qwen3(r.text, company.get("name", ""), openrouter_key)
+                except Exception as e:
+                    print(f"Website fetch for autofill: {e}")
+
+        # Final fallback: search DuckDuckGo for the LinkedIn URL directly
+        if not linkedin_url:
+            linkedin_url = search_linkedin_url_direct(company.get("name", "")) or ""
+
+        if not linkedin_url:
+            return {"success": False, "filled": [], "update": {}, "linkedin_url": None,
+                    "message": "Could not find a LinkedIn page for this company. Try adding the LinkedIn URL manually on the card."}
+
+        # Scrape LinkedIn
+        li = scrape_linkedin_data(linkedin_url)
+
+        # Build update — only overwrite fields that are currently empty
+        update_data = {}
+        if linkedin_url and not company.get("linkedin_url"):
+            update_data["linkedin_url"] = linkedin_url
+        if li.get("location") and not company.get("headquarters"):
+            update_data["headquarters"] = li["location"]
+        if li.get("followers") and not company.get("followers"):
+            update_data["followers"] = li["followers"]
+        if li.get("employee_count") and not company.get("size"):
+            update_data["size"] = f"{li['employee_count']} employees"
+        if li.get("description") and not company.get("description"):
+            update_data["description"] = li["description"]
+
+        if update_data:
+            supabase.table("companies").update(update_data).eq("id", company_id).execute()
+
+        posthog.capture(user_id, "company_autofilled_linkedin", {
+            "fields_filled": list(update_data.keys()),
+            "had_linkedin_url": bool(company.get("linkedin_url")),
+        })
+        return {
+            "success": True,
+            "filled": list(update_data.keys()),
+            "update": update_data,
+            "linkedin_url": linkedin_url,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
 
 @router.post("/leads/bulk")

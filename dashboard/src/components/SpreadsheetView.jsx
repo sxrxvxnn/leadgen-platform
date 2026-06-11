@@ -47,11 +47,11 @@ function getCellValue(lead, key) {
 }
 
 function getStatusColor(status) {
-  if (!status || status === 'Not Requested') return 'var(--gray-4)'
-  if (status === 'Connected') return 'var(--green)'
-  if (status === 'Not Interested' || status === 'No Response') return 'var(--gray-4)'
-  if (status.includes('Transferred')) return '#00d4ff'
-  return 'var(--amber)'
+  if (!status || status === 'Not Requested') return 'var(--text-muted)'
+  if (status === 'Connected') return '#4a7c59'
+  if (status === 'Not Interested' || status === 'No Response') return 'var(--text-muted)'
+  if (status.includes('Transferred')) return '#5b8db8'
+  return 'var(--accent)'
 }
 
 function EditableCell({ lead, col, onSave, isEditing, onStartEdit, onStopEdit }) {
@@ -107,7 +107,7 @@ function EditableCell({ lead, col, onSave, isEditing, onStartEdit, onStopEdit })
     let color = 'var(--gray-5)'
     if (isStatusCol) color = getStatusColor(displayVal)
     else if ((isSecTeam || isAppt) && displayVal === 'Yes') color = 'var(--green)'
-    else if ((isSecTeam || isAppt) && displayVal === 'No') color = '#ff2d2d'
+    else if ((isSecTeam || isAppt) && displayVal === 'No') color = 'var(--red)'
     return React.createElement('div', { style: { ...cell.text, color, cursor: 'pointer' }, onClick: onStartEdit }, displayVal || '—')
   }
 
@@ -162,7 +162,7 @@ function ResizableHeader({ col, colIndex, onResize }) {
       onMouseDown: handleMouseDown,
       onDoubleClick: () => onResize(colIndex, Math.max(80, col.label.length * 9 + 40)),
       style: { position: 'absolute', right: 0, top: 0, bottom: 0, width: '5px', cursor: 'col-resize', background: 'transparent', zIndex: 1 },
-      onMouseEnter: (e) => { e.target.style.background = 'var(--amber)' },
+      onMouseEnter: (e) => { e.target.style.background = 'var(--accent)' },
       onMouseLeave: (e) => { e.target.style.background = 'transparent' },
     })
   )
@@ -346,7 +346,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
           autofillMsg && React.createElement('span', {
             style: {
               fontSize: '11px',
-              color: autofillMsg.startsWith('Done') ? 'var(--green)' : autofillMsg.startsWith('Refresh') ? 'var(--gray-4)' : 'var(--amber)',
+              color: autofillMsg.startsWith('Done') ? '#4a7c59' : autofillMsg.startsWith('Refresh') ? 'var(--text-muted)' : 'var(--accent)',
               fontWeight: '600',
               whiteSpace: 'nowrap'
             }
@@ -369,13 +369,13 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
               key: f,
               onClick: () => setViewFilter(f),
               style: {
-                padding: '7px 12px',
-                background: viewFilter === f ? 'var(--amber)' : 'transparent',
-                border: `1px solid ${viewFilter === f ? 'var(--amber)' : 'var(--gray-2)'}`,
-                borderRadius: '4px',
+                padding: '6px 12px',
+                background: viewFilter === f ? 'var(--text)' : 'transparent',
+                border: `1px solid ${viewFilter === f ? 'var(--text)' : 'var(--border)'}`,
+                borderRadius: '7px',
                 fontSize: '11px',
-                fontWeight: '700',
-                color: viewFilter === f ? 'var(--black)' : 'var(--gray-4)',
+                fontWeight: viewFilter === f ? '500' : '400',
+                color: viewFilter === f ? 'var(--bg)' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
@@ -415,7 +415,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
                   type: 'checkbox',
                   checked: selected.length === filtered.length && filtered.length > 0,
                   onChange: toggleSelectAll,
-                  style: { accentColor: 'var(--white)', cursor: 'pointer' }
+                  style: { accentColor: 'var(--accent)', cursor: 'pointer' }
                 })
               ),
               ...columns.map((col, colIndex) =>
@@ -432,9 +432,9 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
                   key: lead.id,
                   style: {
                     background: selected.includes(lead.id)
-                      ? 'rgba(255,171,0,0.06)'
-                      : rowIndex % 2 === 0 ? 'var(--black)' : 'rgba(255,255,255,0.02)',
-                    borderLeft: lead.starred ? '3px solid var(--amber)' : '3px solid transparent',
+                      ? 'rgba(168,100,72,0.06)'
+                      : rowIndex % 2 === 0 ? 'var(--bg)' : 'var(--surface)',
+                    borderLeft: lead.starred ? '3px solid var(--accent)' : '3px solid transparent',
                   }
                 },
                 React.createElement('td', { style: { ...td, width: '44px', textAlign: 'center' } },
@@ -442,7 +442,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
                     type: 'checkbox',
                     checked: selected.includes(lead.id),
                     onChange: () => toggleSelect(lead.id),
-                    style: { accentColor: 'var(--white)', cursor: 'pointer' }
+                    style: { accentColor: 'var(--accent)', cursor: 'pointer' }
                   })
                 ),
                 ...columns.map(col =>
@@ -470,33 +470,33 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
   )
 }
 
-const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 1000, display: 'flex', flexDirection: 'column' }
-const modal = { background: 'var(--black)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', flexDirection: 'column' }
+const modal = { background: 'var(--bg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
 
 const hdr = {
-  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--gray-2)', background: 'var(--gray-1)', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
+  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
   left: {},
-  label: { fontSize: '9px', fontWeight: '700', letterSpacing: '3px', color: 'var(--gray-4)', marginBottom: '4px' },
-  title: { fontSize: '22px', fontWeight: '900', letterSpacing: '-1px', color: 'var(--white)', lineHeight: 1 },
-  unit: { fontSize: '14px', fontWeight: '300', color: 'var(--gray-4)' },
+  label: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
+  title: { fontFamily: "'DM Serif Display', serif", fontSize: '22px', fontWeight: '400', letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 },
+  unit: { fontFamily: "'DM Serif Display', serif", fontSize: '14px', fontWeight: '400', color: 'var(--text-muted)' },
   right: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-  saving: { fontSize: '10px', color: 'var(--amber)', fontWeight: '700', letterSpacing: '2px' },
-  input: { padding: '8px 14px', background: 'var(--black)', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '12px', color: 'var(--white)', outline: 'none', width: '160px', fontFamily: 'inherit' },
-  select: { padding: '8px 12px', background: 'var(--black)', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '12px', color: 'var(--white)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  autofillBtn: { padding: '8px 16px', background: 'var(--amber)', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: 'var(--black)', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-  exportBtn: { padding: '8px 16px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: '700', color: 'var(--black)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-  closeBtn: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '12px', fontWeight: '600', color: 'var(--gray-4)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  saving: { fontSize: '10px', color: 'var(--accent)', fontWeight: '600', letterSpacing: '1px' },
+  input: { padding: '7px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', width: '160px', fontFamily: 'inherit' },
+  select: { padding: '7px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
+  autofillBtn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', fontFamily: 'inherit', whiteSpace: 'nowrap', cursor: 'pointer' },
+  exportBtn: { padding: '7px 14px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  closeBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
 }
 
-const th = { padding: '10px 12px', fontSize: '10px', fontWeight: '700', letterSpacing: '0.5px', color: 'var(--gray-4)', background: 'var(--gray-1)', borderBottom: '2px solid var(--gray-2)', borderRight: '1px solid var(--gray-2)', textAlign: 'left', whiteSpace: 'nowrap', userSelect: 'none', position: 'relative' }
-const td = { padding: '0', borderBottom: '1px solid rgba(255,255,255,0.05)', borderRight: '1px solid rgba(255,255,255,0.04)', height: '44px', verticalAlign: 'middle', overflow: 'hidden' }
+const th = { padding: '9px 12px', fontSize: '10px', fontWeight: '600', letterSpacing: '0.5px', color: 'var(--text-muted)', background: 'var(--surface)', borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)', textAlign: 'left', whiteSpace: 'nowrap', userSelect: 'none', position: 'relative' }
+const td = { padding: '0', borderBottom: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)', height: '40px', verticalAlign: 'middle', overflow: 'hidden' }
 
 const cell = {
-  text: { padding: '0 12px', fontSize: '13px', color: 'var(--gray-5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: '44px', display: 'flex', alignItems: 'center' },
-  readonly: { padding: '0 12px', fontSize: '12px', color: 'var(--gray-4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: '44px', display: 'flex', alignItems: 'center' },
-  serial: { padding: '0 12px', fontSize: '12px', color: 'var(--gray-3)', display: 'flex', alignItems: 'center', height: '44px' },
-  empty: { padding: '0 12px', fontSize: '13px', color: 'var(--gray-3)', cursor: 'text', height: '44px', display: 'flex', alignItems: 'center' },
-  input: { width: '100%', height: '44px', padding: '0 12px', background: 'var(--gray-2)', border: 'none', borderTop: '2px solid var(--amber)', borderBottom: '2px solid var(--amber)', outline: 'none', fontSize: '13px', color: 'var(--white)', fontFamily: 'inherit' },
-  select: { width: '100%', height: '44px', padding: '0 12px', background: 'var(--gray-2)', border: 'none', borderTop: '2px solid var(--amber)', borderBottom: '2px solid var(--amber)', outline: 'none', fontSize: '13px', color: 'var(--white)', fontFamily: 'inherit', cursor: 'pointer' },
-  link: { padding: '0 12px', fontSize: '12px', color: '#00d4ff', textDecoration: 'none', height: '44px', display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  text: { padding: '0 12px', fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: '40px', display: 'flex', alignItems: 'center' },
+  readonly: { padding: '0 12px', fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', height: '40px', display: 'flex', alignItems: 'center' },
+  serial: { padding: '0 12px', fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', height: '40px' },
+  empty: { padding: '0 12px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'text', height: '40px', display: 'flex', alignItems: 'center' },
+  input: { width: '100%', height: '40px', padding: '0 12px', background: 'rgba(168,100,72,0.06)', border: 'none', borderTop: '2px solid var(--accent)', borderBottom: '2px solid var(--accent)', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'inherit' },
+  select: { width: '100%', height: '40px', padding: '0 12px', background: 'rgba(168,100,72,0.06)', border: 'none', borderTop: '2px solid var(--accent)', borderBottom: '2px solid var(--accent)', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'inherit', cursor: 'pointer' },
+  link: { padding: '0 12px', fontSize: '12px', color: 'var(--accent)', textDecoration: 'none', height: '40px', display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
 }

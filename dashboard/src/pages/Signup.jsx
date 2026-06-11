@@ -9,11 +9,8 @@ export default function Signup() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const { signup } = useAuth()
   const navigate = useNavigate()
-
-  useEffect(() => { setTimeout(() => setMounted(true), 50) }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -32,62 +29,64 @@ export default function Signup() {
     }
   }
 
-  const t = { transition: 'all 0.8s cubic-bezier(0.16,1,0.3,1)' }
-
   return (
     <div style={s.page}>
-      <div style={s.left}>
-        <div style={{ ...s.leftInner, opacity: mounted ? 1 : 0, transform: mounted ? 'none' : 'translateY(20px)', ...t }}>
-          <p style={s.eyebrow}>LEADGEN ENGINE</p>
+      <div style={s.card}>
+        <div style={s.left}>
+          <div style={s.brandMark}>L</div>
           <h1 style={s.bigTitle}>Start.<br />Scale.<br />Win.</h1>
-          <p style={s.tagline}>Join thousands of sales operators using LeadGen Engine to find and close their best leads.</p>
+          <p style={s.tagline}>Join thousands of sales operators using LeadGen to find and close their best leads.</p>
           <div style={s.stats}>
-            {[['10k+', 'Leads extracted daily'], ['3min', 'Average setup time'], ['100%', 'Live LinkedIn data']].map(([val, label]) => (
-              <div key={val} style={s.stat}>
+            {[['10k+', 'Leads extracted daily'], ['3 min', 'Average setup time'], ['100%', 'Live LinkedIn data']].map(([val, label]) => (
+              <div key={val}>
                 <p style={s.statVal}>{val}</p>
                 <p style={s.statLabel}>{label}</p>
               </div>
             ))}
           </div>
         </div>
-      </div>
-      <div style={s.right}>
-        <div style={{ ...s.form, opacity: mounted ? 1 : 0, transform: mounted ? 'none' : 'translateY(20px)', ...t, transitionDelay: '0.1s' }}>
+
+        <div style={s.right}>
           <div style={s.formHeader}>
-            <p style={s.formEyebrow}>CREATE ACCOUNT</p>
+            <p style={s.formEyebrow}>Create account</p>
             <h2 style={s.formTitle}>Get started.</h2>
           </div>
+
           {error && (
             <div style={s.errorBox}>
-              <span style={s.dot} />
+              <span style={s.errorDot} />
               {error}
             </div>
           )}
           {success && (
             <div style={s.successBox}>
-              <span style={{ ...s.dot, background: 'var(--green)' }} />
+              <span style={{ ...s.errorDot, background: '#4a7c59' }} />
               {success}
             </div>
           )}
+
           <form onSubmit={handleSubmit} style={s.formInner}>
-            {[
-              { label: 'Full Name', type: 'text', val: fullName, set: setFullName, ph: 'Your name' },
-              { label: 'Email', type: 'email', val: email, set: setEmail, ph: 'you@company.com' },
-              { label: 'Password', type: 'password', val: password, set: setPassword, ph: 'Min. 8 characters' },
-            ].map(({ label, type, val, set, ph }) => (
-              <div key={label} style={s.field}>
-                <label style={s.label}>{label}</label>
-                <input type={type} value={val} onChange={(e) => set(e.target.value)} style={s.input} placeholder={ph} required data-hover="true" />
-              </div>
-            ))}
-            <button type="submit" style={{ ...s.btn, opacity: loading ? 0.6 : 1 }} disabled={loading} data-hover="true">
-              <span>{loading ? 'Creating account...' : 'Create account'}</span>
-              <span style={s.btnArrow}>→</span>
+            <div style={s.field}>
+              <label style={s.label}>Full Name</label>
+              <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} style={s.input} placeholder="Your name" required />
+            </div>
+            <div style={s.field}>
+              <label style={s.label}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={s.input} placeholder="you@company.com" required />
+            </div>
+            <div style={s.field}>
+              <label style={s.label}>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={s.input} placeholder="Min. 8 characters" required />
+            </div>
+            <button type="submit" style={{ ...s.btn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
+              <span>{loading ? 'Creating account…' : 'Create account'}</span>
+              <span>→</span>
             </button>
           </form>
+
           <p style={s.switchText}>
             Already have an account?{' '}
-            <Link to="/login" style={s.switchLink} data-hover="true">Sign in</Link>
+            <Link to="/login" style={s.switchLink}>Sign in</Link>
           </p>
         </div>
       </div>
@@ -96,30 +95,27 @@ export default function Signup() {
 }
 
 const s = {
-  page: { display: 'flex', minHeight: '100vh', background: 'var(--black)' },
-  left: { flex: 1, background: 'var(--gray-1)', borderRight: '1px solid var(--gray-2)', display: 'flex', alignItems: 'flex-end', padding: '60px', overflow: 'hidden' },
-  leftInner: { width: '100%' },
-  eyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '32px' },
-  bigTitle: { fontSize: 'clamp(56px, 6vw, 88px)', fontWeight: '900', lineHeight: 0.95, letterSpacing: '-3px', color: 'var(--white)', marginBottom: '32px' },
-  tagline: { fontSize: '14px', color: 'var(--gray-5)', lineHeight: 1.7, maxWidth: '340px', marginBottom: '48px' },
-  stats: { display: 'flex', gap: '40px', borderTop: '1px solid var(--gray-2)', paddingTop: '32px' },
-  stat: {},
-  statVal: { fontSize: '28px', fontWeight: '900', letterSpacing: '-1px', color: 'var(--white)', marginBottom: '4px' },
-  statLabel: { fontSize: '11px', color: 'var(--gray-4)', letterSpacing: '1px' },
-  right: { width: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px' },
-  form: { width: '100%' },
-  formHeader: { marginBottom: '40px' },
-  formEyebrow: { fontSize: '11px', fontWeight: '600', letterSpacing: '4px', color: 'var(--gray-4)', marginBottom: '12px' },
-  formTitle: { fontSize: '36px', fontWeight: '900', letterSpacing: '-1.5px', color: 'var(--white)', lineHeight: 1 },
-  errorBox: { display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: '4px', padding: '12px 16px', fontSize: '13px', color: 'var(--red)', marginBottom: '24px' },
-  successBox: { display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--green-dim)', border: '1px solid var(--green)', borderRadius: '4px', padding: '12px 16px', fontSize: '13px', color: 'var(--green)', marginBottom: '24px' },
-  dot: { width: '6px', height: '6px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0 },
-  formInner: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  field: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  label: { fontSize: '11px', fontWeight: '600', letterSpacing: '2px', color: 'var(--gray-4)', textTransform: 'uppercase' },
-  input: { padding: '14px 16px', background: 'var(--gray-1)', border: '1px solid var(--gray-2)', borderRadius: '4px', fontSize: '14px', color: 'var(--white)', outline: 'none' },
-  btn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'var(--white)', border: 'none', borderRadius: '4px', fontSize: '14px', fontWeight: '700', color: 'var(--black)', cursor: 'none', marginTop: '8px' },
-  btnArrow: { fontSize: '18px' },
-  switchText: { marginTop: '32px', fontSize: '13px', color: 'var(--gray-4)' },
-  switchLink: { color: 'var(--white)', fontWeight: '600', borderBottom: '1px solid var(--gray-3)' },
+  page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px' },
+  card: { display: 'flex', width: '100%', maxWidth: '860px', minHeight: '540px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 40px rgba(29,27,27,0.08)' },
+  left: { flex: 1, padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'var(--text)', color: 'var(--bg)' },
+  brandMark: { width: '32px', height: '32px', background: 'var(--bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700', color: 'var(--text)', fontFamily: "'DM Serif Display', serif", marginBottom: 'auto' },
+  bigTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: '400', lineHeight: 1.05, letterSpacing: '-1.5px', color: 'rgba(253,253,253,0.95)', marginBottom: '20px' },
+  tagline: { fontSize: '13px', color: 'rgba(253,253,253,0.55)', lineHeight: 1.7, maxWidth: '280px', marginBottom: '28px' },
+  stats: { display: 'flex', gap: '28px', borderTop: '1px solid rgba(253,253,253,0.12)', paddingTop: '24px' },
+  statVal: { fontSize: '22px', fontFamily: "'DM Serif Display', serif", fontWeight: '400', color: 'rgba(253,253,253,0.9)', marginBottom: '3px', letterSpacing: '-0.5px' },
+  statLabel: { fontSize: '11px', color: 'rgba(253,253,253,0.45)', lineHeight: 1.4 },
+  right: { width: '380px', padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--bg)' },
+  formHeader: { marginBottom: '28px' },
+  formEyebrow: { fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' },
+  formTitle: { fontFamily: "'DM Serif Display', serif", fontSize: '26px', fontWeight: '400', letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 },
+  errorBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--red)', marginBottom: '16px', lineHeight: 1.5 },
+  successBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'rgba(74,124,89,0.08)', border: '1px solid rgba(74,124,89,0.25)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#4a7c59', marginBottom: '16px', lineHeight: 1.5 },
+  errorDot: { width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' },
+  formInner: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  field: { display: 'flex', flexDirection: 'column', gap: '5px' },
+  label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' },
+  input: { padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s' },
+  btn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', marginTop: '4px', fontFamily: 'inherit' },
+  switchText: { marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)' },
+  switchLink: { color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' },
 }

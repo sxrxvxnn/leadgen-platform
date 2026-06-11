@@ -59,6 +59,18 @@ export const checkCompliance = (companyId, groqKey) =>
     groq_key: groqKey,
     gemini_key: localStorage.getItem('geminiKey') || '',
   })
+export const autofillCompanyLinkedIn = (id) =>
+  api.post(`/companies/${id}/autofill-linkedin`, {
+    openrouter_key: localStorage.getItem('openrouterKey') || '',
+  })
+export const prefillCompany = (name, websiteUrl) =>
+  api.post('/companies/prefill', {
+    name,
+    website_url: websiteUrl || '',
+    openrouter_key: localStorage.getItem('openrouterKey') || '',
+  })
+export const updateCompanySizeByName = (name, size) =>
+  api.patch('/companies/size-by-name', { name, size })
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
