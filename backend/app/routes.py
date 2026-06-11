@@ -1168,37 +1168,46 @@ async def autofill_company_from_linkedin(
 
         openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
 
-        # Resolve LinkedIn URL: existing → website HTML → Qwen3 → DuckDuckGo direct search
+        company_name = company.get("name", "")
+
+        # Step 1 — Resolve LinkedIn URL
+        # Priority: already stored → scrape company website → search LinkedIn directly
         linkedin_url = company.get("linkedin_url") or ""
+        found_website = company.get("website") or ""  # track website found along the way
+
         if not linkedin_url:
-            website = company.get("website") or ""
-            if not website:
-                website = search_company_website(company.get("name", "")) or ""
-            if website:
+            if not found_website:
+                found_website = search_company_website(company_name) or ""
+            if found_website:
                 try:
                     r = requests.get(
-                        website if website.startswith("http") else "https://" + website,
+                        found_website if found_website.startswith("http") else "https://" + found_website,
                         headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                         timeout=12, allow_redirects=True
                     )
                     linkedin_url = extract_linkedin_url_from_html(r.text)
                     if not linkedin_url and openrouter_key:
-                        linkedin_url = extract_linkedin_url_with_qwen3(r.text, company.get("name", ""), openrouter_key)
+                        linkedin_url = extract_linkedin_url_with_qwen3(r.text, company_name, openrouter_key)
                 except Exception as e:
                     print(f"Website fetch for autofill: {e}")
 
-        # Final fallback: search DuckDuckGo for the LinkedIn URL directly
+        # Fallback: search for LinkedIn URL directly via DDGS
         if not linkedin_url:
-            linkedin_url = search_linkedin_url_direct(company.get("name", "")) or ""
+            linkedin_url = search_linkedin_url_direct(company_name) or ""
 
         if not linkedin_url:
             return {"success": False, "filled": [], "update": {}, "linkedin_url": None,
                     "message": "Could not find a LinkedIn page for this company. Try adding the LinkedIn URL manually on the card."}
 
-        # Scrape LinkedIn
+        # Step 2 — Scrape LinkedIn (followers, HQ, size, description, website)
         li = scrape_linkedin_data(linkedin_url)
 
-        # Build update — only overwrite fields that are currently empty
+        # Step 3 — If website still not found, search independently via DDGS
+        if not found_website and not li.get("website"):
+            found_website = search_company_website(company_name) or ""
+        website_to_save = li.get("website") or found_website or ""
+
+        # Step 4 — Build update: only overwrite empty fields
         update_data = {}
         if linkedin_url and not company.get("linkedin_url"):
             update_data["linkedin_url"] = linkedin_url
@@ -1210,6 +1219,8 @@ async def autofill_company_from_linkedin(
             update_data["size"] = f"{li['employee_count']} employees"
         if li.get("description") and not company.get("description"):
             update_data["description"] = li["description"]
+        if website_to_save and not company.get("website"):
+            update_data["website"] = website_to_save
 
         if update_data:
             supabase.table("companies").update(update_data).eq("id", company_id).execute()

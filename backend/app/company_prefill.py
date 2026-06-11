@@ -20,7 +20,8 @@ _SKIP_DOMAINS = {
 
 def _guess_domain(name: str) -> str | None:
     """Try common domain patterns derived from the company name."""
-    words = re.sub(r'[^a-z0-9 ]', '', name.lower()).split()
+    raw = re.sub(r'[^a-z0-9 ]', '', name.lower()).split()
+    words = [w for w in raw if w not in _CORPORATE_SUFFIXES and len(w) > 1]
     slug = ''.join(words)
     slug2 = '-'.join(words)
     candidates = [
@@ -42,11 +43,14 @@ def _guess_domain(name: str) -> str | None:
     return None
 
 
+_CORPORATE_SUFFIXES = {'ltd', 'pvt', 'inc', 'llc', 'llp', 'corp', 'limited', 'private', 'public', 'gmbh', 'plc'}
+
 def _domain_is_relevant(domain: str, company_name: str) -> bool:
     """Check if a domain plausibly belongs to the company (not a directory/news site)."""
-    # Strip common TLDs and check if any company word appears in the domain
-    name_words = [w for w in re.sub(r'[^a-z0-9 ]', '', company_name.lower()).split() if len(w) > 2]
-    domain_clean = re.sub(r'\.(com|io|co|in|net|org|ai|app|tech|dev)$', '', domain.lower())
+    # Strip corporate suffixes and short words, keep meaningful words only
+    raw_words = re.sub(r'[^a-z0-9 ]', '', company_name.lower()).split()
+    name_words = [w for w in raw_words if len(w) > 2 and w not in _CORPORATE_SUFFIXES]
+    domain_clean = re.sub(r'\.(com|io|co|in|net|org|ai|app|tech|dev|co\.in)$', '', domain.lower())
     return any(w in domain_clean for w in name_words)
 
 
@@ -72,7 +76,8 @@ def search_company_website(company_name: str) -> str | None:
                         if not href:
                             continue
                         domain = urlparse(href).netloc.replace('www.', '')
-                        if any(s in domain for s in _SKIP_DOMAINS):
+                        # Match whole domain (not substring) to avoid "x.com" hitting "sequantix.com"
+                        if any(domain == s or domain.endswith('.' + s) for s in _SKIP_DOMAINS):
                             continue
                         # Require domain or title to mention the company
                         if _domain_is_relevant(domain, company_name) or company_name.lower() in title.lower():
@@ -88,35 +93,29 @@ def search_company_website(company_name: str) -> str | None:
 
 
 def search_linkedin_url_direct(company_name: str) -> str | None:
-    """Search DuckDuckGo for company's LinkedIn page URL directly."""
-    query = f"{company_name} linkedin.com/company"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
+    """Search for company's LinkedIn page URL using ddgs."""
+    queries = [
+        f'site:linkedin.com/company "{company_name}"',
+        f'{company_name} linkedin company page',
+    ]
     try:
-        res = requests.get(
-            'https://html.duckduckgo.com/html/',
-            params={'q': query, 'kl': 'us-en'},
-            headers=headers,
-            timeout=10
-        )
-        soup = BeautifulSoup(res.text, 'html.parser')
-        for link in soup.select('a.result__a'):
-            href = link.get('href', '')
-            if 'uddg=' in href:
-                parsed = urlparse(href if href.startswith('http') else 'https:' + href)
-                params = parse_qs(parsed.query)
-                url = params.get('uddg', [None])[0]
-                if url:
-                    url = unquote(url)
-                    match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', url)
-                    if match:
-                        slug = match.group(1)
-                        if slug not in ('linkedin', 'company', 'showcase', 'school'):
-                            return f'https://www.linkedin.com/company/{slug}/'
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            for q in queries:
+                try:
+                    for r in ddgs.text(q, max_results=6):
+                        href = r.get('href', '') or r.get('url', '')
+                        match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+                        if match:
+                            slug = match.group(1)
+                            if slug not in ('linkedin', 'company', 'showcase', 'school', 'about'):
+                                return f'https://www.linkedin.com/company/{slug}/'
+                except Exception:
+                    continue
+    except ImportError:
+        pass
     except Exception as e:
-        print(f"DuckDuckGo LinkedIn search error: {e}")
+        print(f"DDGS LinkedIn search error: {e}")
     return None
 
 
@@ -194,6 +193,7 @@ def scrape_linkedin_data(linkedin_url: str) -> dict:
         'employee_count': None,
         'description': None,
         'industry': None,
+        'website': None,
     }
     try:
         url = linkedin_url.rstrip('/') + '/'
@@ -238,6 +238,16 @@ def scrape_linkedin_data(linkedin_url: str) -> dict:
                         # Description
                         if item.get('description') and not result['description']:
                             result['description'] = item['description'][:300]
+                        # Website URL from Organization.url or sameAs
+                        if not result['website']:
+                            org_url = item.get('url', '')
+                            if org_url and 'linkedin.com' not in org_url:
+                                result['website'] = org_url
+                        if not result['website']:
+                            for same in (item.get('sameAs') or []):
+                                if isinstance(same, str) and 'linkedin.com' not in same and same.startswith('http'):
+                                    result['website'] = same
+                                    break
                         break
             except Exception:
                 pass
@@ -253,6 +263,13 @@ def scrape_linkedin_data(linkedin_url: str) -> dict:
             m = re.search(r'data-test-id="about-us__headquarters"[^>]*>.*?Headquarters.*?<[^<]{0,10}>\s*([^<]{5,60})<', html, re.S)
             if m:
                 result['location'] = m.group(1).strip()
+
+        # --- Fallback: website from page body (LinkedIn shows it in about section) ---
+        if not result['website']:
+            # Pattern: link in the about section that is external (not linkedin.com)
+            m = re.search(r'href="(https?://(?!(?:www\.)?linkedin\.com)[^"]{5,100})"[^>]*>\s*(?:Website|Visit website|website)', html, re.I)
+            if m:
+                result['website'] = m.group(1)
 
     except Exception as e:
         print(f"LinkedIn scrape error for {linkedin_url}: {e}")
