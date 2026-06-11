@@ -234,7 +234,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
         onUpdate(company.id, { ...update, linkedin_url: update.linkedin_url || linkedin_url || company.linkedin_url })
         setFillResult({ ok: true, filled })
       } else {
-        setFillResult({ ok: false, msg: 'All fields already filled' })
+        // Check if fields are actually empty — if so, LinkedIn scraping likely failed
+        const hasGaps = !company.website || !company.headquarters || !company.followers
+        setFillResult({ ok: false, msg: hasGaps ? 'LinkedIn scraping blocked — try again or add details manually' : 'All fields already filled' })
       }
     } catch (e) {
       setFillResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Fill failed' })

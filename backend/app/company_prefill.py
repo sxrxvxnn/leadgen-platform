@@ -177,12 +177,32 @@ def _call_qwen3(prompt: str, api_key: str) -> str | None:
         return None
 
 
+_LI_UA_LIST = [
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+]
+
 _LI_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
 }
+
+
+def _fetch_linkedin_html(url: str) -> str | None:
+    """Try fetching a LinkedIn URL with multiple user agents, return HTML on first 200."""
+    for ua in _LI_UA_LIST:
+        try:
+            r = requests.get(url, headers={**_LI_HEADERS, 'User-Agent': ua},
+                             timeout=14, allow_redirects=True)
+            if r.status_code == 200 and len(r.text) > 3000:
+                return r.text
+        except Exception:
+            continue
+    return None
 
 
 def scrape_linkedin_data(linkedin_url: str) -> dict:
@@ -197,10 +217,9 @@ def scrape_linkedin_data(linkedin_url: str) -> dict:
     }
     try:
         url = linkedin_url.rstrip('/') + '/'
-        res = requests.get(url, headers=_LI_HEADERS, timeout=15, allow_redirects=True)
-        if res.status_code != 200:
+        html = _fetch_linkedin_html(url)
+        if not html:
             return result
-        html = res.text
         soup = BeautifulSoup(html, 'html.parser')
 
         # --- Followers from og:description: "Company | 1,234,567 followers on LinkedIn" ---
@@ -244,7 +263,10 @@ def scrape_linkedin_data(linkedin_url: str) -> dict:
                             if org_url and 'linkedin.com' not in org_url:
                                 result['website'] = org_url
                         if not result['website']:
-                            for same in (item.get('sameAs') or []):
+                            same_as = item.get('sameAs') or []
+                            if isinstance(same_as, str):
+                                same_as = [same_as]
+                            for same in same_as:
                                 if isinstance(same, str) and 'linkedin.com' not in same and same.startswith('http'):
                                     result['website'] = same
                                     break
