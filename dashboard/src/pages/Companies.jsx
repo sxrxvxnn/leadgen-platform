@@ -148,6 +148,19 @@ function EditableWebsite({ value, onSave }) {
 
 // ─── COMPANY CARD ─────────────────────────────────────────────
 
+const COMPANY_EDIT_FIELDS = [
+  { key: 'name',         label: 'Company Name',  type: 'text' },
+  { key: 'website',      label: 'Website',        type: 'text', placeholder: 'https://company.com' },
+  { key: 'linkedin_url', label: 'LinkedIn URL',   type: 'text', placeholder: 'https://linkedin.com/company/…' },
+  { key: 'headquarters', label: 'HQ / Location',  type: 'text', placeholder: 'City, State, Country' },
+  { key: 'size',         label: 'Employees',      type: 'text', placeholder: 'e.g. 200 employees' },
+  { key: 'followers',    label: 'Followers',      type: 'text', placeholder: 'e.g. 12,500 followers' },
+  { key: 'revenue',      label: 'Revenue',        type: 'text', placeholder: 'e.g. $5M ARR' },
+  { key: 'compliance',   label: 'Compliance',     type: 'text', placeholder: 'ISO 27001, SOC 2, …' },
+  { key: 'company_type', label: 'Type',           type: 'select', options: ['', 'Product', 'Services', 'Hybrid'] },
+  { key: 'description',  label: 'Description',    type: 'textarea' },
+]
+
 function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsite, analyzingId, selected, onToggle }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
@@ -158,6 +171,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
   const [complianceResult, setComplianceResult] = useState(null)
   const [fillingLI, setFillingLI] = useState(false)
   const [fillResult, setFillResult] = useState(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editForm, setEditForm] = useState({})
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!company.classification || company.classification === 'Unclassified') {
@@ -227,6 +243,30 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
     }
   }
 
+  function openEdit() {
+    setEditForm({
+      name:         company.name || '',
+      website:      company.website || '',
+      linkedin_url: company.linkedin_url || '',
+      headquarters: company.headquarters || '',
+      size:         company.size || '',
+      followers:    company.followers || '',
+      revenue:      company.revenue || '',
+      compliance:   company.compliance || '',
+      company_type: company.company_type || '',
+      description:  company.description || '',
+    })
+    setShowEdit(true)
+  }
+
+  async function saveEdit() {
+    setSaving(true)
+    const cleaned = Object.fromEntries(Object.entries(editForm).filter(([, v]) => v !== undefined))
+    await onUpdate(company.id, cleaned)
+    setShowEdit(false)
+    setSaving(false)
+  }
+
   const classColor = classificationColors[classification] || '#a1a1a1'
   const statusColor = prospectColors[prospectStatus] || '#a1a1a1'
   const isAnalyzing = analyzingId === company.id
@@ -273,9 +313,52 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
             onClick={e => e.stopPropagation()}
             style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
           />
+          <button style={card.editCardBtn} onClick={openEdit} title="Edit">✎</button>
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
         </div>
       </div>
+
+      {/* Edit panel */}
+      {showEdit && (
+        <div style={card.editPanel}>
+          <div style={card.editGrid}>
+            {COMPANY_EDIT_FIELDS.map(f => (
+              <div key={f.key} style={{ gridColumn: f.type === 'textarea' ? '1 / -1' : 'auto' }}>
+                <label style={card.editLabel}>{f.label}</label>
+                {f.type === 'textarea' ? (
+                  <textarea
+                    value={editForm[f.key] || ''}
+                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ ...card.editInput, height: '64px', resize: 'vertical' }}
+                    placeholder="Description…"
+                  />
+                ) : f.type === 'select' ? (
+                  <select
+                    value={editForm[f.key] || ''}
+                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={card.editInput}
+                  >
+                    {f.options.map(o => <option key={o} value={o}>{o || '—'}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="text" value={editForm[f.key] || ''}
+                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder || ''}
+                    style={card.editInput}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={card.editFooter}>
+            <button onClick={() => setShowEdit(false)} style={card.editCancelBtn}>Cancel</button>
+            <button onClick={saveEdit} disabled={saving} style={{ ...card.editSaveBtn, opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Info grid */}
       <div style={card.infoGrid}>
@@ -547,6 +630,8 @@ export default function Companies() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showBulkAdd, setShowBulkAdd] = useState(false)
   const [showSpreadsheet, setShowSpreadsheet] = useState(false)
+  const [bulkFilling, setBulkFilling] = useState(false)
+  const [bulkFillMsg, setBulkFillMsg] = useState('')
 
   useEffect(() => { fetchCompanies() }, [])
 
@@ -634,6 +719,31 @@ export default function Companies() {
     link.click(); URL.revokeObjectURL(url)
   }
 
+  async function handleBulkAutofill() {
+    const targets = selectedIds.length
+      ? companies.filter(c => selectedIds.includes(c.id))
+      : companies
+    if (!targets.length) return
+    setBulkFilling(true)
+    setBulkFillMsg(`Starting autofill for ${targets.length} companies…`)
+    let done = 0, filled = 0
+    for (const company of targets) {
+      setBulkFillMsg(`Autofilling ${done + 1} / ${targets.length} — ${company.name}`)
+      try {
+        const res = await autofillCompanyLinkedIn(company.id)
+        const { success, update } = res.data
+        if (success && update && Object.keys(update).length > 0) {
+          setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...update } : c))
+          filled++
+        }
+      } catch { /* skip failed */ }
+      done++
+    }
+    setBulkFillMsg(`Done — ${filled} of ${done} companies updated`)
+    setBulkFilling(false)
+    setTimeout(() => setBulkFillMsg(''), 5000)
+  }
+
   function handleBulkDelete() {
     if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
     Promise.all(selectedIds.map(id => deleteCompany(id)))
@@ -696,6 +806,10 @@ export default function Companies() {
           </select>
           <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
           <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>
+          <button onClick={handleBulkAutofill} disabled={bulkFilling}
+            style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: bulkFilling ? 0.5 : 1, whiteSpace: 'nowrap' }}>
+            {bulkFilling ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+          </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -706,6 +820,13 @@ export default function Companies() {
             Select all
           </label>
         </div>
+
+        {bulkFillMsg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: bulkFilling ? 'rgba(168,100,72,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid ${bulkFilling ? 'rgba(168,100,72,0.2)' : 'rgba(74,124,89,0.2)'}`, borderRadius: '8px', marginBottom: '12px' }}>
+            {bulkFilling && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
+            <span style={{ fontSize: '12px', color: bulkFilling ? 'var(--accent)' : '#4a7c59', fontWeight: '500' }}>{bulkFillMsg}</span>
+          </div>
+        )}
 
         {selectedIds.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px' }}>
@@ -794,7 +915,15 @@ const card = {
   name: { fontSize: '15px', fontWeight: '600', color: 'var(--text)', letterSpacing: '-0.2px' },
   industry: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' },
   select: { padding: '3px 7px', background: 'var(--bg)', border: '1px solid', borderRadius: '4px', fontSize: '10px', fontWeight: '500', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
+  editCardBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', padding: '3px 6px', lineHeight: 1 },
   deleteBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '12px', cursor: 'pointer', padding: '4px', opacity: 0.6 },
+  editPanel: { padding: '14px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)' },
+  editGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' },
+  editLabel: { fontSize: '9px', fontWeight: '600', letterSpacing: '1.2px', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' },
+  editInput: { width: '100%', padding: '7px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
+  editFooter: { display: 'flex', justifyContent: 'flex-end', gap: '8px' },
+  editCancelBtn: { padding: '7px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' },
+  editSaveBtn: { padding: '7px 16px', background: 'var(--text)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
   infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' },
   infoItem: { padding: '9px 16px', borderRight: '1px solid var(--border)' },
   infoLabel: { fontSize: '8px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },

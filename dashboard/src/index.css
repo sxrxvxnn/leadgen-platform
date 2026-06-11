@@ -75,3 +75,5 @@ input, select, textarea { font-family: inherit; }
 .fade-in { animation: fadeIn 0.3s ease forwards; }
 
 ::selection { background: var(--text); color: var(--bg); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
