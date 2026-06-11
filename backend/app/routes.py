@@ -1,6 +1,9 @@
+import logging
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
 import os
+import posthog
 from .models import LeadCreate, LeadUpdate, CompanyCreate, CompanyUpdate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
 from .database import supabase
 
@@ -22,6 +25,8 @@ async def signup(user: UserSignup):
                 "email": user.email,
                 "full_name": user.full_name or ""
             }).execute()
+            posthog.identify(response.user.id, {"has_full_name": bool(user.full_name)})
+            posthog.capture(response.user.id, "user_signed_up", {"signup_method": "email"})
         return {"message": "Signup successful. Check your email to confirm."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -34,6 +39,8 @@ async def login(user: UserLogin):
             "email": user.email,
             "password": user.password
         })
+        posthog.identify(response.user.id, {})
+        posthog.capture(response.user.id, "user_logged_in", {"login_method": "password"})
         return {
             "access_token": response.session.access_token,
             "user": {
@@ -92,6 +99,10 @@ async def create_lead(lead: LeadCreate, authorization: str = Header(...)):
                 raise HTTPException(status_code=409, detail="Lead already exists")
 
         response = supabase.table("leads").insert(data).execute()
+        posthog.capture(user_id, "lead_created", {
+            "has_email": bool(data.get("email")),
+            "has_company": bool(data.get("company")),
+        })
         return {"lead": response.data[0]}
     except HTTPException:
         raise
@@ -130,6 +141,7 @@ async def delete_lead(lead_id: str, authorization: str = Header(...)):
             .eq("id", lead_id)\
             .eq("user_id", user_id)\
             .execute()
+        posthog.capture(user_id, "lead_deleted")
         return {"message": "Lead deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -161,6 +173,10 @@ async def create_company(
         data = company.dict()
         data["user_id"] = user_id
         response = supabase.table("companies").insert(data).execute()
+        posthog.capture(user_id, "company_created", {
+            "has_website": bool(data.get("website")),
+            "has_industry": bool(data.get("industry")),
+        })
         return {"company": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -192,6 +208,7 @@ async def create_icp_profile(
         data = profile.dict()
         data["user_id"] = user_id
         response = supabase.table("icp_profiles").insert(data).execute()
+        posthog.capture(user_id, "icp_profile_created")
         return {"profile": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -341,8 +358,10 @@ async def enrich_lead_route(
             update_data = {"email": result["email"]}
             supabase.table("leads").update(update_data).eq("id", lead_id).execute()
             updated_lead = {**lead, **update_data}
+            posthog.capture(user_id, "lead_enriched", {"source": "hunter", "success": True})
             return {"lead": updated_lead, "enriched": True, "message": "Email found via Hunter"}
 
+        posthog.capture(user_id, "lead_enriched", {"source": "hunter", "success": False})
         return {
             "lead": lead,
             "enriched": False,
@@ -406,6 +425,11 @@ async def bulk_enrich_leads(
             skipped_count += 1
             continue
 
+    posthog.capture(user_id, "leads_bulk_enriched", {
+        "enriched": enriched_count,
+        "skipped": skipped_count,
+        "total": len(lead_ids),
+    })
     return {
         "enriched": enriched_count,
         "skipped": skipped_count,
@@ -504,6 +528,7 @@ async def delete_company(
             .eq("id", company_id)\
             .eq("user_id", user_id)\
             .execute()
+        posthog.capture(user_id, "company_deleted")
         return {"message": "Company deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -589,6 +614,11 @@ async def bulk_create_companies(
             skipped += 1
             continue
 
+    posthog.capture(user_id, "companies_bulk_created", {
+        "inserted": len(inserted),
+        "skipped": skipped,
+        "total": len(companies),
+    })
     return {
         "inserted": len(inserted),
         "skipped": skipped,
@@ -700,6 +730,12 @@ IMPORTANT: Return empty additional_compliance array if not sure. Do not guess.""
         if compliance_found:
             supabase.table("companies").update({"compliance": compliance_str}).eq("id", company_id).execute()
 
+        posthog.capture(user_id, "company_compliance_checked", {
+            "compliance_found": len(compliance_found),
+            "has_security_team": has_security_team,
+            "confidence": confidence,
+            "source": "website+ai" if website else "ai_only",
+        })
         return {
             "compliance": compliance_str,
             "has_security_team": has_security_team,
@@ -936,6 +972,12 @@ Be conservative and accurate. No explanation."""
                 print(f"Error processing lead {lead.get('id')}: {e}")
                 continue
 
+        posthog.capture(user_id, "leads_autofill_completed", {
+            "processed": len(results),
+            "has_more": has_more,
+            "batch_start": batch_start,
+            "total": len(lead_ids),
+        })
         return {
             "results": results,
             "processed": len(results),
@@ -1010,6 +1052,12 @@ async def analyze_company_website(
             if update_data:
                 supabase.table("companies").update(update_data).eq("id", company_id).execute()
 
+        ai_provider = "gemini" if gemini_key else "openai" if openai_key else "groq"
+        posthog.capture(user_id, "company_website_analyzed", {
+            "has_website": bool(website),
+            "ai_provider": ai_provider,
+            "has_result": bool(result and not result.get("error")),
+        })
         return {"success": True, "analysis": result, "company_id": company_id}
 
     except HTTPException:
@@ -1098,6 +1146,11 @@ async def bulk_create_leads(
             skipped += 1
             continue
 
+    posthog.capture(user_id, "leads_bulk_imported", {
+        "inserted": len(inserted),
+        "skipped": skipped,
+        "total": len(leads),
+    })
     return {
         "inserted": len(inserted),
         "skipped": skipped,
