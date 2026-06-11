@@ -685,7 +685,7 @@ async def bulk_create_companies(
                 "headquarters": company.get("headquarters") or None,
                 "description": company.get("description") or None,
                 "website": company.get("website") or None,
-                "linkedin_url": company.get("linkedinUrl") or company.get("salesNavUrl") or None,
+                "linkedin_url": company.get("linkedin_url") or company.get("linkedinUrl") or company.get("salesNavUrl") or None,
             }
 
             response = supabase.table("companies").insert(data).execute()

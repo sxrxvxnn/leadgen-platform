@@ -19,7 +19,7 @@ const COLUMNS = [
   { key: 'name',           label: 'Name',           width: 200, type: 'text' },
   { key: 'classification', label: 'Classification', width: 150, type: 'select', options: CLASSIFICATIONS },
   { key: 'prospect_status',label: 'Status',         width: 130, type: 'select', options: PROSPECT_STATUSES },
-  { key: 'website_url',    label: 'Website',        width: 170, type: 'url' },
+  { key: 'website',        label: 'Website',        width: 170, type: 'url' },
   { key: 'linkedin_url',   label: 'LinkedIn URL',   width: 200, type: 'url' },
   { key: 'headquarters',   label: 'HQ',             width: 150, type: 'text' },
   { key: 'size',           label: 'Employees',      width: 130, type: 'text' },
