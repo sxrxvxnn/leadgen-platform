@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap');
+/* ── Fonts are loaded in index.html via Google Fonts ────────────────── */
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -6,34 +6,55 @@
   padding: 0;
 }
 
+/* ── Design tokens — exact runner.now system ─────────────────────────── */
 :root {
-  /* ── runner.now design tokens ── */
+  /* Backgrounds */
   --bg:               #fdfdfd;
   --surface:          #f5f5f2;
   --surface-raised:   #eeecea;
+
+  /* Text */
   --text:             #1d1b1b;
   --text-soft:        #464242;
   --text-secondary:   #6e6e6e;
   --text-muted:       #a1a1a1;
+
+  /* Borders */
   --border:           rgba(196, 193, 189, 0.65);
   --border-strong:    rgba(29, 27, 27, 0.14);
   --border-subtle:    rgba(196, 193, 189, 0.35);
+  --border-dash:      #c4c1bd;   /* for border-style: dashed */
 
-  /* Warm terracotta accent */
+  /* Accent — terracotta */
   --accent:           #a86448;
   --accent-warm:      #cd704c;
+  --accent-brown:     #824b2f;
   --accent-dim:       rgba(168, 100, 72, 0.10);
   --accent-dimmer:    rgba(168, 100, 72, 0.06);
+  --ambient-primary:  rgba(168, 100, 72, 0.15);
 
   /* Status */
   --green:            #4a7c59;
   --green-dim:        rgba(74, 124, 89, 0.10);
+  --blue:             #5b8db8;
+  --blue-dim:         rgba(91, 141, 184, 0.10);
   --amber:            #a86448;
   --amber-dim:        rgba(168, 100, 72, 0.10);
   --red:              #b83232;
   --red-dim:          rgba(184, 50, 50, 0.08);
 
-  /* Backwards-compat aliases (existing code uses these) */
+  /* Fonts */
+  --font-display:     'Fraunces', Georgia, serif;
+  --font-mono:        'Geist Mono', 'JetBrains Mono', monospace;
+  --font-body:        'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Nav */
+  --nav-bg:           rgba(253, 253, 253, 0.75);
+  --nav-bg-scrolled:  rgba(253, 253, 253, 0.92);
+  --nav-border:       rgba(29, 27, 27, 0.08);
+  --nav-height:       54px;
+
+  /* Backwards-compat aliases */
   --black:            var(--bg);
   --white:            var(--text);
   --gray-1:           var(--surface);
@@ -43,11 +64,13 @@
   --gray-5:           var(--text-muted);
 }
 
+/* ── Base ────────────────────────────────────────────────────────────── */
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -57,12 +80,16 @@ a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
 
-/* Scrollbar */
+/* ── Typography helpers ──────────────────────────────────────────────── */
+.font-display { font-family: var(--font-display) !important; }
+.font-mono    { font-family: var(--font-mono) !important; }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--gray-3); border-radius: 4px; }
 
-/* Animations */
+/* ── Animations ──────────────────────────────────────────────────────── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -71,9 +98,92 @@ input, select, textarea { font-family: inherit; }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 .fade-up { animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .fade-in { animation: fadeIn 0.3s ease forwards; }
 
-::selection { background: var(--text); color: var(--bg); }
+/* ── Shared UI primitives ────────────────────────────────────────────── */
 
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Eyebrow label — Geist Mono, all-caps, wide tracking */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Page hero heading — Fraunces serif */
+.hero-heading {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* Primary button — dark pill, Geist Mono */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 9px 16px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: #2d2b2b; }
+
+/* Ghost button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 7px 14px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-dash);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-ghost:hover { background: var(--surface); color: var(--text); }
+
+/* Dashed structural divider — matches runner.now section borders */
+.dash-border-t { border-top: 1px dashed var(--border-dash); }
+.dash-border-b { border-bottom: 1px dashed var(--border-dash); }
+.dash-border   { border: 1px dashed var(--border-dash); }
+
+/* Card — cream surface, dashed border */
+.runner-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* Mono label used on stat numbers, data values */
+.mono-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+::selection { background: var(--text); color: var(--bg); }

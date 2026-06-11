@@ -27,69 +27,74 @@ export default function Dashboard() {
   const displayName = localStorage.getItem('fullName') || user?.email?.split('@')[0] || 'there'
 
   return (
-    <div style={s.page}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Navbar />
 
-      <div style={s.hero}>
-        <div>
+      {/* Hero */}
+      <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
+        {/* Ambient glow */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Overview</p>
           <h1 style={s.heroTitle}>
             {loading ? '—' : stats.totalLeads}
             <span style={s.heroUnit}> leads</span>
           </h1>
-          <p style={s.heroSub}>Welcome back, {displayName}</p>
+          <p style={s.heroSub}>welcome back, {displayName}</p>
         </div>
       </div>
 
-      <div style={s.container}>
-        <div style={s.statsRow}>
-          {[
-            { label: 'New',       value: stats.newLeads,    note: 'awaiting action' },
-            { label: 'Contacted', value: stats.contacted,   note: 'in progress' },
-            { label: 'Companies', value: stats.companies,   note: 'tracked' },
-            { label: 'Total',     value: stats.totalLeads,  note: 'all leads' },
-          ].map(({ label, value, note }) => (
-            <div key={label} style={s.statCard}>
-              <p style={s.statLabel}>{label}</p>
-              <p style={s.statValue}>{loading ? '—' : value}</p>
-              <p style={s.statNote}>{note}</p>
-            </div>
-          ))}
+      {/* Stats — gap-px grid, no rounded cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', borderBottom: '1px dashed var(--border-dash)' }}>
+        {[
+          { label: 'New',       value: stats.newLeads,   note: 'awaiting action' },
+          { label: 'Contacted', value: stats.contacted,  note: 'in progress' },
+          { label: 'Companies', value: stats.companies,  note: 'tracked' },
+          { label: 'Total',     value: stats.totalLeads, note: 'all leads' },
+        ].map(({ label, value, note }) => (
+          <div key={label} style={{ background: 'var(--bg)', padding: '28px 32px' }}>
+            <p style={s.statLabel}>{label}</p>
+            <p style={s.statValue}>{loading ? '—' : value}</p>
+            <p style={s.statNote}>{note}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent leads */}
+      <div style={{ padding: '0 48px 48px' }}>
+        {/* Section header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 0 16px', borderBottom: '1px dashed var(--border-dash)', marginBottom: '0' }}>
+          <p style={s.sectionTitle}>Recent leads</p>
+          <button style={s.viewAllBtn} onClick={() => navigate('/leads')}>View all →</button>
         </div>
 
-        <div style={s.section}>
-          <div style={s.sectionHead}>
-            <p style={s.sectionTitle}>Recent leads</p>
-            <button style={s.viewAllBtn} onClick={() => navigate('/leads')}>View all →</button>
+        {loading ? (
+          <p style={s.empty}>Loading…</p>
+        ) : recentLeads.length === 0 ? (
+          <div style={s.emptyState}>
+            <p style={s.emptyTitle}>No leads yet</p>
+            <p style={s.emptyText}>Use the Chrome extension on LinkedIn to extract your first leads.</p>
           </div>
-
-          {loading ? (
-            <p style={s.empty}>Loading…</p>
-          ) : recentLeads.length === 0 ? (
-            <div style={s.emptyState}>
-              <p style={s.emptyTitle}>No leads yet</p>
-              <p style={s.emptyText}>Use the Chrome extension on LinkedIn to extract your first leads.</p>
-            </div>
-          ) : (
-            <div style={s.table}>
-              <div style={s.thead}>
-                {['Name', 'Role', 'Company', 'Status'].map(h => (
-                  <span key={h} style={{ ...s.th, flex: h === 'Status' ? 1 : 2 }}>{h}</span>
-                ))}
-              </div>
-              {recentLeads.map((lead, i) => (
-                <div key={lead.id} style={{ ...s.trow, animationDelay: i * 0.04 + 's' }}>
-                  <span style={{ ...s.td, flex: 2, color: 'var(--text)', fontWeight: '500' }}>{lead.name || '—'}</span>
-                  <span style={{ ...s.td, flex: 2 }}>{lead.title || '—'}</span>
-                  <span style={{ ...s.td, flex: 2 }}>{lead.company || '—'}</span>
-                  <span style={{ flex: 1 }}>
-                    <span style={{ ...s.badge, ...statusBadge(lead.status) }}>{(lead.status || 'new')}</span>
-                  </span>
-                </div>
+        ) : (
+          <div>
+            {/* Table head */}
+            <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid rgba(196,193,189,0.5)' }}>
+              {['Name', 'Role', 'Company', 'Status'].map(h => (
+                <span key={h} style={{ ...s.th, flex: h === 'Status' ? 1 : 2 }}>{h}</span>
               ))}
             </div>
-          )}
-        </div>
+            {recentLeads.map((lead) => (
+              <div key={lead.id} style={s.trow}>
+                <span style={{ flex: 2, fontSize: '13px', color: 'var(--text)', fontWeight: '500' }}>{lead.name || '—'}</span>
+                <span style={{ flex: 2, fontSize: '12px', color: 'var(--text-secondary)' }}>{lead.title || '—'}</span>
+                <span style={{ flex: 2, fontSize: '12px', color: 'var(--text-secondary)' }}>{lead.company || '—'}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ ...s.badge, ...statusBadge(lead.status) }}>{lead.status || 'new'}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -97,40 +102,30 @@ export default function Dashboard() {
 
 function statusBadge(status) {
   const map = {
-    new:           { color: '#4a7c59', background: 'rgba(74,124,89,0.10)',  border: 'rgba(74,124,89,0.22)' },
-    contacted:     { color: '#a86448', background: 'rgba(168,100,72,0.10)', border: 'rgba(168,100,72,0.22)' },
-    qualified:     { color: '#5b8db8', background: 'rgba(91,141,184,0.10)', border: 'rgba(91,141,184,0.22)' },
-    disqualified:  { color: '#a1a1a1', background: 'rgba(161,161,161,0.10)', border: 'rgba(161,161,161,0.22)' },
+    new:          { color: '#4a7c59', background: 'rgba(74,124,89,0.10)',  border: 'rgba(74,124,89,0.22)' },
+    contacted:    { color: '#a86448', background: 'rgba(168,100,72,0.10)', border: 'rgba(168,100,72,0.22)' },
+    qualified:    { color: '#5b8db8', background: 'rgba(91,141,184,0.10)', border: 'rgba(91,141,184,0.22)' },
+    disqualified: { color: '#a1a1a1', background: 'rgba(161,161,161,0.10)', border: 'rgba(161,161,161,0.22)' },
   }
   const st = map[status] || map.new
   return { color: st.color, background: st.background, border: `1px solid ${st.border}` }
 }
 
 const s = {
-  page: { minHeight: '100vh', background: 'var(--bg)' },
-  hero: { padding: '48px 40px 32px', borderBottom: '1px solid var(--border)' },
-  eyebrow: { fontSize: '11px', fontWeight: '500', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' },
-  heroTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(44px, 6vw, 72px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1, marginBottom: '8px' },
-  heroUnit: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: '400', color: 'var(--text-muted)' },
-  heroSub: { fontSize: '13px', color: 'var(--text-muted)' },
-  container: { padding: '28px 40px' },
-  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '28px' },
-  statCard: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px 22px' },
-  statLabel: { fontSize: '10px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' },
-  statValue: { fontFamily: "'DM Serif Display', serif", fontSize: '36px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-1px', lineHeight: 1, marginBottom: '4px' },
-  statNote: { fontSize: '11px', color: 'var(--text-muted)' },
-  section: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' },
-  sectionHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' },
-  sectionTitle: { fontSize: '13px', fontWeight: '500', color: 'var(--text)' },
-  viewAllBtn: { background: 'none', border: 'none', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' },
-  table: { display: 'flex', flexDirection: 'column' },
-  thead: { display: 'flex', padding: '10px 20px', background: 'var(--bg)' },
-  th: { fontSize: '10px', fontWeight: '600', letterSpacing: '1px', color: 'var(--text-muted)', textTransform: 'uppercase' },
-  trow: { display: 'flex', padding: '12px 20px', borderTop: '1px solid var(--border)', alignItems: 'center' },
-  td: { fontSize: '13px', color: 'var(--text-secondary)' },
-  badge: { fontSize: '10px', fontWeight: '500', padding: '2px 8px', borderRadius: '4px' },
-  empty: { padding: '28px 20px', fontSize: '13px', color: 'var(--text-muted)' },
-  emptyState: { padding: '56px 24px', textAlign: 'center' },
-  emptyTitle: { fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' },
-  emptyText: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 },
+  eyebrow:    { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
+  heroTitle:  { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: '12px' },
+  heroUnit:   { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '400', color: 'var(--text-muted)' },
+  heroSub:    { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.04em' },
+  statLabel:  { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' },
+  statValue:  { fontFamily: 'var(--font-display)', fontSize: 'clamp(36px, 4vw, 52px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.04em', lineHeight: 1, marginBottom: '6px' },
+  statNote:   { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' },
+  sectionTitle: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.1em', color: 'var(--text)', textTransform: 'uppercase' },
+  viewAllBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: 'none', fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' },
+  th:         { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' },
+  trow:       { display: 'flex', padding: '14px 0', borderBottom: '1px solid rgba(196,193,189,0.4)', alignItems: 'center' },
+  badge:      { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', padding: '2px 8px', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase' },
+  empty:      { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' },
+  emptyState: { padding: '72px 0', textAlign: 'center' },
+  emptyTitle: { fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '-0.03em' },
+  emptyText:  { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7 },
 }

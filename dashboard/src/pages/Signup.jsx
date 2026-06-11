@@ -1,6 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+function LogoMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 18 18" fill="none">
+      <rect x="0"  y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="10" y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="0"  y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="10" y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+    </svg>
+  )
+}
 
 export default function Signup() {
   const [fullName, setFullName] = useState('')
@@ -33,7 +44,7 @@ export default function Signup() {
     <div style={s.page}>
       <div style={s.card}>
         <div style={s.left}>
-          <div style={s.brandMark}>L</div>
+          <div style={s.brandMark}><LogoMark /></div>
           <h1 style={s.bigTitle}>Start.<br />Scale.<br />Win.</h1>
           <p style={s.tagline}>Join thousands of sales operators using LeadGen to find and close their best leads.</p>
           <div style={s.stats}>
@@ -98,16 +109,16 @@ const s = {
   page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px' },
   card: { display: 'flex', width: '100%', maxWidth: '860px', minHeight: '540px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 40px rgba(29,27,27,0.08)' },
   left: { flex: 1, padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'var(--text)', color: 'var(--bg)' },
-  brandMark: { width: '32px', height: '32px', background: 'var(--bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700', color: 'var(--text)', fontFamily: "'DM Serif Display', serif", marginBottom: 'auto' },
-  bigTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: '400', lineHeight: 1.05, letterSpacing: '-1.5px', color: 'rgba(253,253,253,0.95)', marginBottom: '20px' },
+  brandMark: { display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 'auto' },
+  bigTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: '400', lineHeight: 1.05, letterSpacing: '-0.05em', color: 'rgba(253,253,253,0.95)', marginBottom: '20px' },
   tagline: { fontSize: '13px', color: 'rgba(253,253,253,0.55)', lineHeight: 1.7, maxWidth: '280px', marginBottom: '28px' },
   stats: { display: 'flex', gap: '28px', borderTop: '1px solid rgba(253,253,253,0.12)', paddingTop: '24px' },
-  statVal: { fontSize: '22px', fontFamily: "'DM Serif Display', serif", fontWeight: '400', color: 'rgba(253,253,253,0.9)', marginBottom: '3px', letterSpacing: '-0.5px' },
+  statVal: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', color: 'rgba(253,253,253,0.9)', marginBottom: '3px', letterSpacing: '-0.04em' },
   statLabel: { fontSize: '11px', color: 'rgba(253,253,253,0.45)', lineHeight: 1.4 },
   right: { width: '380px', padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--bg)' },
   formHeader: { marginBottom: '28px' },
-  formEyebrow: { fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' },
-  formTitle: { fontFamily: "'DM Serif Display', serif", fontSize: '26px', fontWeight: '400', letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 },
+  formEyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' },
+  formTitle: { fontFamily: 'var(--font-display)', fontSize: '26px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1 },
   errorBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--red)', marginBottom: '16px', lineHeight: 1.5 },
   successBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'rgba(74,124,89,0.08)', border: '1px solid rgba(74,124,89,0.25)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#4a7c59', marginBottom: '16px', lineHeight: 1.5 },
   errorDot: { width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' },
@@ -115,7 +126,7 @@ const s = {
   field: { display: 'flex', flexDirection: 'column', gap: '5px' },
   label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' },
   input: { padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s' },
-  btn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', marginTop: '4px', fontFamily: 'inherit' },
+  btn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', marginTop: '4px', fontFamily: 'var(--font-mono)' },
   switchText: { marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)' },
   switchLink: { color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' },
 }

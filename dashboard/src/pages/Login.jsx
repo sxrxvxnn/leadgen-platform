@@ -2,6 +2,17 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+function LogoMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 18 18" fill="none">
+      <rect x="0"  y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="10" y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="0"  y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+      <rect x="10" y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
+    </svg>
+  )
+}
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,53 +35,73 @@ export default function Login() {
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div style={s.left}>
-          <div style={s.brandMark}>L</div>
-          <h1 style={s.bigTitle}>Find.<br />Target.<br />Close.</h1>
-          <p style={s.tagline}>The intelligence platform for modern sales teams. Extract, enrich and track leads — all in one place.</p>
-          <div style={s.featureList}>
-            {['LinkedIn scraping', 'Lead enrichment', 'ICP building', 'Persona engine'].map(f => (
-              <div key={f} style={s.featureItem}>
-                <span style={s.featureDot} />
-                <span style={s.featureText}>{f}</span>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+
+      {/* Left — dark brand panel */}
+      <div style={{ position: 'relative', width: '45%', minWidth: '360px', background: '#1d1b1b', display: 'flex', flexDirection: 'column', padding: '48px', overflow: 'hidden' }}>
+        {/* Ambient glow */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 60% at 20% 80%, rgba(168,100,72,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+        {/* Logo */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'auto' }}>
+          <LogoMark />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'rgba(253,253,253,0.6)', letterSpacing: '-0.02em' }}>leadgen engine</span>
+        </div>
+
+        {/* Headline */}
+        <div style={{ position: 'relative', marginTop: 'auto' }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(52px, 5.5vw, 80px)', fontWeight: '400', lineHeight: 0.95, letterSpacing: '-0.05em', color: 'rgba(253,253,253,0.95)', marginBottom: '24px' }}>
+            Find.<br />Target.<br />Close.
+          </h1>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.4)', lineHeight: 1.8, maxWidth: '300px', marginBottom: '36px' }}>
+            The intelligence platform for modern sales teams. Extract, enrich and track leads.
+          </p>
+
+          {/* Feature dots */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '28px', borderTop: '1px solid rgba(253,253,253,0.08)' }}>
+            {['LinkedIn scraping', 'Lead enrichment', 'ICP targeting', 'Persona engine'].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#a86448', flexShrink: 0 }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.45)' }}>{f}</span>
               </div>
             ))}
           </div>
         </div>
+      </div>
 
-        <div style={s.right}>
-          <div style={s.formHeader}>
-            <p style={s.formEyebrow}>Sign in</p>
-            <h2 style={s.formTitle}>Welcome back.</h2>
-          </div>
+      {/* Right — form panel */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px', borderLeft: '1px solid var(--border)' }}>
+        <div style={{ width: '100%', maxWidth: '360px' }}>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase' }}>Sign in</p>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '36px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1, marginBottom: '36px' }}>Welcome back.</h2>
 
           {error && (
-            <div style={s.errorBox}>
-              <span style={s.errorDot} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)', marginBottom: '20px', lineHeight: 1.5 }}>
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' }} />
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={s.formInner}>
-            <div style={s.field}>
-              <label style={s.label}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={s.input} placeholder="you@company.com" required />
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                style={inputStyle} placeholder="you@company.com" required />
             </div>
-            <div style={s.field}>
-              <label style={s.label}>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={s.input} placeholder="••••••••" required />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                style={inputStyle} placeholder="••••••••" required />
             </div>
-            <button type="submit" style={{ ...s.btn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
+            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', background: '#1d1b1b', border: 'none', borderRadius: '8px', fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '500', color: '#fdfdfd', cursor: 'pointer', opacity: loading ? 0.6 : 1, marginTop: '4px', transition: 'background 0.15s' }} disabled={loading}>
               <span>{loading ? 'Signing in…' : 'Sign in'}</span>
               <span>→</span>
             </button>
           </form>
 
-          <p style={s.switchText}>
+          <p style={{ marginTop: '24px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
             No account?{' '}
-            <Link to="/signup" style={s.switchLink}>Create one</Link>
+            <Link to="/signup" style={{ color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' }}>Create one</Link>
           </p>
         </div>
       </div>
@@ -78,28 +109,16 @@ export default function Login() {
   )
 }
 
-const s = {
-  page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px' },
-  card: { display: 'flex', width: '100%', maxWidth: '860px', minHeight: '520px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 8px 40px rgba(29,27,27,0.08)' },
-  left: { flex: 1, padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'var(--text)', color: 'var(--bg)' },
-  brandMark: { width: '32px', height: '32px', background: 'var(--bg)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700', color: 'var(--text)', fontFamily: "'DM Serif Display', serif", marginBottom: 'auto' },
-  bigTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: '400', lineHeight: 1.05, letterSpacing: '-1.5px', color: 'rgba(253,253,253,0.95)', marginBottom: '20px' },
-  tagline: { fontSize: '13px', color: 'rgba(253,253,253,0.55)', lineHeight: 1.7, maxWidth: '280px', marginBottom: '32px' },
-  featureList: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  featureItem: { display: 'flex', alignItems: 'center', gap: '8px' },
-  featureDot: { width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(253,253,253,0.4)', flexShrink: 0 },
-  featureText: { fontSize: '12px', color: 'rgba(253,253,253,0.55)' },
-  right: { width: '360px', padding: '48px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'var(--bg)' },
-  formHeader: { marginBottom: '28px' },
-  formEyebrow: { fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' },
-  formTitle: { fontFamily: "'DM Serif Display', serif", fontSize: '26px', fontWeight: '400', letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 },
-  errorBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--red)', marginBottom: '18px', lineHeight: 1.5 },
-  errorDot: { width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' },
-  formInner: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  field: { display: 'flex', flexDirection: 'column', gap: '5px' },
-  label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' },
-  input: { padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s' },
-  btn: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', marginTop: '4px', fontFamily: 'inherit' },
-  switchText: { marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)' },
-  switchLink: { color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' },
+const inputStyle = {
+  padding: '11px 14px',
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
+  borderRadius: '8px',
+  fontSize: '13px',
+  color: 'var(--text)',
+  outline: 'none',
+  fontFamily: 'inherit',
+  transition: 'border-color 0.15s',
+  width: '100%',
+  boxSizing: 'border-box',
 }

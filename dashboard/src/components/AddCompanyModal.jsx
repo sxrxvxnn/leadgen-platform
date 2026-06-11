@@ -236,7 +236,7 @@ const s = {
   modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '100%', maxWidth: '540px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(29,27,27,0.12)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 0', flexShrink: 0 },
   eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
-  title: { fontSize: '18px', fontWeight: '600', color: 'var(--text)', fontFamily: "'DM Serif Display', serif", letterSpacing: '-0.3px' },
+  title: { fontSize: '18px', fontWeight: '600', color: 'var(--text)', fontFamily: "var(--font-display)", letterSpacing: '-0.3px' },
   closeBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '15px', cursor: 'pointer', padding: '4px', flexShrink: 0 },
   body: { padding: '16px 24px 20px', overflowY: 'auto' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginBottom: '12px' },

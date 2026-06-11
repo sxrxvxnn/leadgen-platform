@@ -360,7 +360,7 @@ const s = {
   container: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0 },
   eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },
-  title: { fontSize: '16px', fontFamily: "'DM Serif Display', serif", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
+  title: { fontSize: '16px', fontFamily: "var(--font-display)", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
   countBadge: { padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' },
   searchInput: { padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', width: '180px' },
   btn: { padding: '7px 14px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },

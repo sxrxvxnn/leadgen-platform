@@ -83,7 +83,7 @@ export default function ICP() {
       <Navbar />
       <div style={{ padding: '40px 32px 24px', borderBottom: '1px solid var(--border)' }}>
         <p style={lbl}>Ideal Customer Profile</p>
-        <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: '400', letterSpacing: '-1px', color: 'var(--text)', lineHeight: 1 }}>ICP Filter</h1>
+        <h1 style={{ fontFamily: "var(--font-display)", fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: '400', letterSpacing: '-1px', color: 'var(--text)', lineHeight: 1 }}>ICP Filter</h1>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px' }}>Filter your leads by ideal customer criteria and find the best matches.</p>
       </div>
 
@@ -186,7 +186,7 @@ export default function ICP() {
             ].map(({ label, value, color }) => (
               <div key={label} style={{ padding: '16px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px' }}>
                 <p style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>{label}</p>
-                <p style={{ fontFamily: "'DM Serif Display', serif", fontSize: '32px', fontWeight: '400', color, letterSpacing: '-1px', lineHeight: 1 }}>{value}</p>
+                <p style={{ fontFamily: "var(--font-display)", fontSize: '32px', fontWeight: '400', color, letterSpacing: '-1px', lineHeight: 1 }}>{value}</p>
               </div>
             ))}
           </div>

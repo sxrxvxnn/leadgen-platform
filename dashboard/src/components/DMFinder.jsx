@@ -35,7 +35,7 @@ export default function DMFinder({ companies, onClose }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <p style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>Batch DM Finder</p>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '22px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Find Decision Makers</h2>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: '22px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.5px', marginBottom: '4px' }}>Find Decision Makers</h2>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>Open each people page → Extension extracts DMs → Leads saved automatically</p>
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px', padding: '4px' }}>✕</button>
@@ -49,7 +49,7 @@ export default function DMFinder({ companies, onClose }) {
               { label: 'Done', value: done, color: '#4a7c59' },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ textAlign: 'center', padding: '12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-                <p style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', fontWeight: '400', color, lineHeight: 1 }}>{value}</p>
+                <p style={{ fontFamily: "var(--font-display)", fontSize: '24px', fontWeight: '400', color, lineHeight: 1 }}>{value}</p>
                 <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '500', letterSpacing: '0.5px', marginTop: '4px' }}>{label}</p>
               </div>
             ))}

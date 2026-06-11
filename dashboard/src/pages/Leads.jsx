@@ -362,14 +362,15 @@ export default function Leads() {
       <Navbar />
 
       <div style={s.hero}>
-        <div>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Lead Intelligence</p>
           <h1 style={s.heroTitle}>
             {filtered.length}
             <span style={s.heroUnit}>{' targets'}</span>
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ position: 'relative', display: 'flex', gap: '10px', alignItems: 'center' }}>
           {enrichMsg && <span style={{ fontSize: '12px', color: '#4a7c59', fontWeight: '500' }}>{enrichMsg}</span>}
           <button
             style={{ ...s.starFilterBtn, background: starredOnly ? 'var(--accent)' : 'transparent', color: starredOnly ? 'var(--bg)' : 'var(--accent)', borderColor: 'rgba(168,100,72,0.4)' }}
@@ -482,31 +483,31 @@ export default function Leads() {
 
 const s = {
   page: { minHeight: '100vh', background: 'var(--bg)' },
-  hero: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '48px 32px 32px', borderBottom: '1px solid var(--border)' },
-  eyebrow: { fontSize: '11px', fontWeight: '500', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase' },
-  heroTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: '400', letterSpacing: '-1.5px', color: 'var(--text)', lineHeight: 1 },
-  heroUnit: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(20px, 2.5vw, 32px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.5px' },
-  starFilterBtn: { padding: '8px 14px', border: '1px solid', borderRadius: '7px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  spreadsheetBtn: { padding: '9px 16px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
-  exportBtn: { padding: '9px 18px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
-  container: { padding: '24px 32px' },
-  viewTabs: { display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' },
-  viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  viewTabActive: { background: 'var(--text)', color: 'var(--bg)', border: '1px solid var(--text)' },
-  viewTabCount: { padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: '500' },
-  filters: { display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
-  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },
-  searchIcon: { padding: '0 14px', color: 'var(--text-muted)', fontSize: '15px' },
-  searchInput: { flex: 1, padding: '10px 14px 10px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text)', fontFamily: 'inherit' },
-  filterTabs: { display: 'flex', gap: '4px' },
-  filterTab: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '400', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  filterTabActive: { background: 'var(--text)', color: 'var(--bg)', border: '1px solid var(--text)' },
-  table: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' },
-  thead: { display: 'flex', padding: '10px 24px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', alignItems: 'center' },
-  th: { fontSize: '9px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', textTransform: 'uppercase' },
-  trow: { display: 'flex', padding: '0 24px', borderTop: '1px solid var(--border)', alignItems: 'center', minHeight: '52px', transition: 'background 0.1s' },
+  hero: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '64px 48px 40px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
+  heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 },
+  heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
+  starFilterBtn: { padding: '7px 12px', border: '1px solid', borderRadius: '6px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
+  spreadsheetBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)' },
+  exportBtn: { padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
+  container: { padding: '20px 48px' },
+  viewTabs: { display: 'flex', gap: '2px', marginBottom: '16px', borderBottom: '1px dashed var(--border-dash)', paddingBottom: '16px' },
+  viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'transparent', border: 'none', fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'color 0.15s', borderRadius: '5px' },
+  viewTabActive: { background: '#1d1b1b', color: '#fdfdfd' },
+  viewTabCount: { padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: '600' },
+  filters: { display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
+  searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', flex: 1, minWidth: '200px' },
+  searchIcon: { padding: '0 12px', color: 'var(--text-muted)', fontSize: '14px' },
+  searchInput: { flex: 1, padding: '9px 12px 9px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'inherit' },
+  filterTabs: { display: 'flex', gap: '2px' },
+  filterTab: { padding: '6px 11px', background: 'transparent', border: '1px solid transparent', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: '500', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
+  filterTabActive: { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' },
+  table: { background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.5)', borderRadius: '0', overflow: 'hidden' },
+  thead: { display: 'flex', padding: '10px 20px', background: 'var(--surface)', borderBottom: '1px solid rgba(196,193,189,0.4)', alignItems: 'center' },
+  th: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' },
+  trow: { display: 'flex', padding: '0 20px', borderTop: '1px solid rgba(196,193,189,0.35)', alignItems: 'center', minHeight: '50px', transition: 'background 0.1s' },
   td: { padding: '4px 8px 4px 0', display: 'flex', alignItems: 'center' },
-  empty: { padding: '40px 24px', fontSize: '13px', color: 'var(--text-muted)' },
+  empty: { padding: '40px 20px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' },
 }
 
 const sub = {

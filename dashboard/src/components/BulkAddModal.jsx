@@ -387,7 +387,7 @@ const s = {
   modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(29,27,27,0.12)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', flexShrink: 0 },
   eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
-  title: { fontSize: '18px', fontFamily: "'DM Serif Display', serif", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
+  title: { fontSize: '18px', fontFamily: "var(--font-display)", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
   closeBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '15px', cursor: 'pointer', padding: '4px' },
   tabs: { display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px', flexShrink: 0 },
   tab: { padding: '10px 14px', background: 'none', border: 'none', borderBottom: '2px solid transparent', fontSize: '12px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },

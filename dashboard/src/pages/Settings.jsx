@@ -124,17 +124,17 @@ function ExtLink({ href, children }) {
 }
 
 const s = {
-  eyebrow: { fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' },
-  title: { fontFamily: "'DM Serif Display', serif", fontSize: '32px', fontWeight: '400', letterSpacing: '-0.5px', marginBottom: '36px', color: 'var(--text)' },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '32px', fontWeight: '400', letterSpacing: '-0.04em', marginBottom: '36px', color: 'var(--text)' },
   section: { marginBottom: '36px', paddingBottom: '36px', borderBottom: '1px solid var(--border)' },
-  sectionTitle: { fontSize: '14px', fontWeight: '600', color: 'var(--text)', marginBottom: '6px' },
+  sectionTitle: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', marginBottom: '6px' },
   sectionHint: { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: 1.6 },
   field: { marginBottom: '18px' },
-  label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' },
+  label: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px', flexWrap: 'wrap' },
   hint: { fontSize: '11px', color: 'var(--text-muted)', marginBottom: '7px', lineHeight: 1.6 },
   input: { width: '100%', padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
   keySet: { fontSize: '11px', color: '#4a7c59', marginTop: '5px', fontWeight: '500' },
-  saveBtn: { width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '24px', transition: 'background 0.2s' },
+  saveBtn: { width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'var(--font-mono)', marginBottom: '24px', transition: 'background 0.2s' },
   infoBox: { padding: '18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' },
   badge: {
     green: { fontSize: '9px', fontWeight: '600', background: 'rgba(74,124,89,0.10)', color: '#4a7c59', padding: '2px 7px', borderRadius: '3px', border: '1px solid rgba(74,124,89,0.22)', whiteSpace: 'nowrap' },

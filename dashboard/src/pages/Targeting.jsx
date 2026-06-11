@@ -27,11 +27,12 @@ const DEFAULT_FILTERS = {
 function Chip({ label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
-      padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '500',
-      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-      background: active ? 'var(--accent)' : 'var(--surface)',
-      color: active ? 'var(--bg)' : 'var(--text-secondary)',
-      border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+      padding: '4px 10px', borderRadius: '4px',
+      fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: active ? '600' : '400',
+      cursor: 'pointer', transition: 'all 0.12s', letterSpacing: '0.02em',
+      background: active ? '#1d1b1b' : 'transparent',
+      color: active ? '#fdfdfd' : 'var(--text-muted)',
+      border: `1px solid ${active ? '#1d1b1b' : 'rgba(196,193,189,0.6)'}`,
     }}>{label}</button>
   )
 }
@@ -158,12 +159,13 @@ export default function Targeting() {
       <Navbar />
 
       {/* Hero */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '40px 32px 28px', borderBottom: '1px solid var(--border)' }}>
-        <div>
+      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '56px 48px 36px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative' }}>
           <p style={lbl}>Targeting Engine</p>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(36px, 4.5vw, 56px)', fontWeight: '400', letterSpacing: '-1.5px', color: 'var(--text)', lineHeight: 1 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(56px, 8vw, 96px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 }}>
             {displayLeads.length}
-            <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(18px, 2vw, 28px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.5px' }}> targets</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' }}> targets</span>
           </h1>
           {bothActive && (
             <p style={{ fontSize: '11px', color: '#5b8db8', fontWeight: '500', marginTop: '6px', letterSpacing: '0.3px' }}>
@@ -174,18 +176,18 @@ export default function Targeting() {
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {totalFilterCount > 0 && (
             <button onClick={() => { setFilters(DEFAULT_FILTERS); setActiveProfile(null) }}
-              style={{ padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '11px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
               Clear all ({totalFilterCount})
             </button>
           )}
           {displayLeads.length > 0 && (
             <button onClick={exportCSV}
-              style={{ padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' }}>
+              style={{ padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
               Export CSV
             </button>
           )}
           <button onClick={() => setShowSave(!showSave)}
-            style={{ padding: '8px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '11px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
             {showSave ? 'Cancel' : 'Save Profile'}
           </button>
         </div>
@@ -194,7 +196,7 @@ export default function Targeting() {
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 205px)' }}>
 
         {/* Sidebar */}
-        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px solid var(--border)', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px dashed var(--border-dash)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
 
           {/* Saved profiles */}
           {profiles.length > 0 && (
@@ -230,19 +232,19 @@ export default function Targeting() {
                   <input type="checkbox" checked={filters.requireSecurity}
                     onChange={e => { setFilters(prev => ({ ...prev, requireSecurity: e.target.checked })); setActiveProfile(null) }}
                     style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Has security team</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)' }}>Has security team</span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
                   <input type="checkbox" checked={filters.requireProduct}
                     onChange={e => { setFilters(prev => ({ ...prev, requireProduct: e.target.checked })); setActiveProfile(null) }}
                     style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Product company only</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)' }}>Product company only</span>
                 </label>
               </div>
             </div>
           </div>
 
-          <div style={{ height: '1px', background: 'var(--border)' }} />
+          <div style={{ height: '1px', background: 'var(--border-dash)', borderTop: '1px dashed var(--border-dash)' }} />
 
           {/* Contact criteria (Persona) */}
           <div>
@@ -285,17 +287,17 @@ export default function Targeting() {
         {/* Main panel */}
         <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto' }}>
 
-          {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
+          {/* Stats — gap-px grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', marginBottom: '24px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #c4c1bd' }}>
             {[
-              { label: 'Total Leads',    value: leads.length,           color: 'var(--text)',   dim: false },
-              { label: 'Company Match',  value: companyMatchCount ?? '—', color: 'var(--accent)', dim: !hasCompanyFilters },
-              { label: 'Contact Match',  value: personMatchCount ?? '—',  color: '#4a7c59',       dim: !hasPersonFilters },
-              { label: 'Best Fits',      value: bothActive ? bestFits.length : '—', color: '#5b8db8', dim: !bothActive },
+              { label: 'Total Leads',    value: leads.length,                        color: 'var(--text)',   dim: false },
+              { label: 'Company Match',  value: companyMatchCount ?? '—',             color: 'var(--accent)', dim: !hasCompanyFilters },
+              { label: 'Contact Match',  value: personMatchCount ?? '—',              color: '#4a7c59',       dim: !hasPersonFilters },
+              { label: 'Best Fits',      value: bothActive ? bestFits.length : '—',   color: '#5b8db8',       dim: !bothActive },
             ].map(({ label, value, color, dim }) => (
-              <div key={label} style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px' }}>
-                <p style={{ fontSize: '9px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase' }}>{label}</p>
-                <p style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', fontWeight: '400', color: dim ? 'var(--text-muted)' : color, letterSpacing: '-1px', lineHeight: 1 }}>{value}</p>
+              <div key={label} style={{ padding: '18px 20px', background: 'var(--bg)' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>{label}</p>
+                <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 2.5vw, 36px)', fontWeight: '400', color: dim ? 'var(--text-muted)' : color, letterSpacing: '-0.04em', lineHeight: 1 }}>{value}</p>
               </div>
             ))}
           </div>
@@ -404,5 +406,5 @@ export default function Targeting() {
   )
 }
 
-const lbl = { fontSize: '10px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' }
-const sub = { fontSize: '10px', color: 'var(--text-muted)', marginBottom: '7px', fontWeight: '500', letterSpacing: '0.5px' }
+const lbl = { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' }
+const sub = { fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase' }
