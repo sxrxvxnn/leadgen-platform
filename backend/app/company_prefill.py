@@ -5,34 +5,85 @@ from bs4 import BeautifulSoup
 from urllib.parse import unquote, urlparse, parse_qs
 
 
+_SKIP_DOMAINS = {
+    'linkedin.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com',
+    'youtube.com', 'duckduckgo.com', 'google.com', 'bing.com', 'wikipedia.org',
+    'crunchbase.com', 'glassdoor.com', 'indeed.com', 'g2.com', 'capterra.com',
+    'trustpilot.com', 'yelp.com', 'bloomberg.com', 'forbes.com', 'techcrunch.com',
+    'zoominfo.com', 'clutch.co', 'owler.com', 'dnb.com', 'apollo.io',
+    'tracxn.com', 'pitchbook.com', 'cbinsights.com', 'rocketreach.co',
+    'yourstory.com', 'technopark.in', 'ambitionbox.com', 'tofler.in',
+    'startupindia.gov.in', 'mca.gov.in', 'economictimes.com',
+    'businessinsider.com', 'inc42.com', 'entrackr.com',
+}
+
+
+def _guess_domain(name: str) -> str | None:
+    """Try common domain patterns derived from the company name."""
+    words = re.sub(r'[^a-z0-9 ]', '', name.lower()).split()
+    slug = ''.join(words)
+    slug2 = '-'.join(words)
+    candidates = [
+        f"https://{slug}.com",
+        f"https://{slug}.io",
+        f"https://{slug}.co",
+        f"https://{slug}.in",
+        f"https://www.{slug}.com",
+        f"https://{slug2}.com",
+    ]
+    for url in candidates:
+        try:
+            r = requests.head(url, timeout=5, allow_redirects=True,
+                              headers={'User-Agent': 'Mozilla/5.0'})
+            if r.status_code < 400:
+                return url
+        except Exception:
+            continue
+    return None
+
+
+def _domain_is_relevant(domain: str, company_name: str) -> bool:
+    """Check if a domain plausibly belongs to the company (not a directory/news site)."""
+    # Strip common TLDs and check if any company word appears in the domain
+    name_words = [w for w in re.sub(r'[^a-z0-9 ]', '', company_name.lower()).split() if len(w) > 2]
+    domain_clean = re.sub(r'\.(com|io|co|in|net|org|ai|app|tech|dev)$', '', domain.lower())
+    return any(w in domain_clean for w in name_words)
+
+
 def search_company_website(company_name: str) -> str | None:
-    query = f"{company_name} official website"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
-    skip_domains = {'linkedin.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'duckduckgo.com', 'google.com', 'bing.com', 'wikipedia.org', 'crunchbase.com', 'glassdoor.com', 'indeed.com'}
+    # 1. Try guessing the domain directly first (fastest, most accurate for known companies)
+    guessed = _guess_domain(company_name)
+    if guessed:
+        return guessed
+
+    # 2. Search with ddgs and require the domain to be relevant to the company name
     try:
-        res = requests.get(
-            'https://html.duckduckgo.com/html/',
-            params={'q': query, 'kl': 'us-en'},
-            headers=headers,
-            timeout=10
-        )
-        soup = BeautifulSoup(res.text, 'html.parser')
-        for link in soup.select('a.result__a'):
-            href = link.get('href', '')
-            if 'uddg=' in href:
-                parsed = urlparse(href if href.startswith('http') else 'https:' + href)
-                params = parse_qs(parsed.query)
-                url = params.get('uddg', [None])[0]
-                if url:
-                    url = unquote(url)
-                    domain = urlparse(url).netloc.replace('www.', '')
-                    if url.startswith('http') and not any(d in domain for d in skip_domains):
-                        return url
+        from ddgs import DDGS
+        queries = [
+            f'"{company_name}" official website',
+            f'{company_name} company official site',
+        ]
+        with DDGS() as ddgs:
+            for q in queries:
+                try:
+                    for r in ddgs.text(q, max_results=8):
+                        href = r.get('href', '')
+                        title = r.get('title', '')
+                        if not href:
+                            continue
+                        domain = urlparse(href).netloc.replace('www.', '')
+                        if any(s in domain for s in _SKIP_DOMAINS):
+                            continue
+                        # Require domain or title to mention the company
+                        if _domain_is_relevant(domain, company_name) or company_name.lower() in title.lower():
+                            return href
+                except Exception:
+                    continue
+    except ImportError:
+        pass
     except Exception as e:
-        print(f"DuckDuckGo search error: {e}")
+        print(f"DDGS search error: {e}")
+
     return None
 
 
