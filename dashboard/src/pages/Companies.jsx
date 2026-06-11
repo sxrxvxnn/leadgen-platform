@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn } from '../services/api'
 import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
+import BulkAddModal from '../components/BulkAddModal'
+import CompaniesSpreadsheet from '../components/CompaniesSpreadsheet'
 import Navbar from '../components/Navbar'
 
 const CLASSIFICATIONS = [
@@ -543,6 +545,8 @@ export default function Companies() {
   const [analysisResult, setAnalysisResult] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showBulkAdd, setShowBulkAdd] = useState(false)
+  const [showSpreadsheet, setShowSpreadsheet] = useState(false)
 
   useEffect(() => { fetchCompanies() }, [])
 
@@ -619,6 +623,17 @@ export default function Companies() {
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
   const notFitCount = companies.filter(c => c.prospect_status === 'Not a Fit').length
 
+  function exportCompaniesCSV() {
+    const cols = ['name', 'classification', 'prospect_status', 'website_url', 'linkedin_url', 'headquarters', 'size', 'followers', 'revenue', 'compliance', 'company_type', 'description', 'notes']
+    const headers = ['Name', 'Classification', 'Status', 'Website', 'LinkedIn URL', 'HQ', 'Employees', 'Followers', 'Revenue', 'Compliance', 'Type', 'Description', 'Notes']
+    const rows = companies.map(c => cols.map(k => { const v = (c[k] || '').toString(); return v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v }).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a'); link.href = url; link.download = `companies-${new Date().toISOString().split('T')[0]}.csv`
+    link.click(); URL.revokeObjectURL(url)
+  }
+
   function handleBulkDelete() {
     if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
     Promise.all(selectedIds.map(id => deleteCompany(id)))
@@ -630,7 +645,7 @@ export default function Companies() {
     <div style={s.page}>
       <Navbar />
 
-      <div style={s.hero}>
+      <div style={{ ...s.hero, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <p style={s.eyebrow}>Company Intelligence</p>
           <h1 style={s.heroTitle}>
@@ -642,6 +657,11 @@ export default function Companies() {
             <span style={{ color: 'var(--border-strong)', fontSize: '12px' }}>·</span>
             <span style={{ color: 'var(--red)', fontSize: '12px' }}>{notFitCount} not a fit</span>
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button onClick={() => setShowBulkAdd(true)} style={s.heroBtn}>⊕ Bulk Add</button>
+          <button onClick={() => setShowSpreadsheet(true)} style={s.heroBtn}>⊞ Spreadsheet</button>
+          <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: 'var(--text)', color: 'var(--bg)', border: 'none' }}>Export →</button>
         </div>
       </div>
 
@@ -723,6 +743,8 @@ export default function Companies() {
       </div>
 
       {showAddModal && <AddCompanyModal onClose={() => setShowAddModal(false)} onRefresh={fetchCompanies} />}
+      {showBulkAdd && <BulkAddModal onClose={() => setShowBulkAdd(false)} onRefresh={fetchCompanies} />}
+      {showSpreadsheet && <CompaniesSpreadsheet companies={companies} onClose={() => setShowSpreadsheet(false)} onRefresh={fetchCompanies} />}
       {selectedCompany && <LeadsModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />}
       {analysisResult && <AnalysisModal result={analysisResult} onClose={() => setAnalysisResult(null)} />}
       {showDMFinder && (
@@ -744,6 +766,7 @@ const s = {
   heroTitle: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(44px, 6vw, 72px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1, marginBottom: '10px' },
   heroUnit: { fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-1px' },
   heroStats: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' },
+  heroBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
   container: { padding: '24px 40px' },
   filters: { display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },

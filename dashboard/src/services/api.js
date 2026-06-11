@@ -71,6 +71,7 @@ export const prefillCompany = (name, websiteUrl) =>
   })
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
+export const bulkCreateCompanies = (companies) => api.post('/companies/bulk', { companies })
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
