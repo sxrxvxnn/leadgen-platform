@@ -32,12 +32,11 @@ export default function Navbar() {
 
       <div style={s.center}>
         {[
-          ['Overview',  '/dashboard'],
-          ['Companies', '/companies'],
-          ['Leads',     '/leads'],
-          ['ICP',       '/icp'],
-          ['Persona',   '/persona'],
-          ['Settings',  '/settings'],
+          ['Overview',   '/dashboard'],
+          ['Companies',  '/companies'],
+          ['Leads',      '/leads'],
+          ['Targeting',  '/targeting'],
+          ['Settings',   '/settings'],
         ].map(([label, path]) => (
           <Link key={path} to={path} style={{ ...s.link, ...(isActive(path) ? s.linkActive : {}) }}>
             {label}
