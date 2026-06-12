@@ -816,7 +816,7 @@ export default function Companies() {
             style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: bulkFilling ? 0.5 : 1, whiteSpace: 'nowrap' }}>
             {bulkFilling ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
           </button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
               checked={selectedIds.length === filtered.length && filtered.length > 0}
@@ -830,16 +830,16 @@ export default function Companies() {
         {bulkFillMsg && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: bulkFilling ? 'rgba(168,100,72,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid ${bulkFilling ? 'rgba(168,100,72,0.2)' : 'rgba(74,124,89,0.2)'}`, borderRadius: '8px', marginBottom: '12px' }}>
             {bulkFilling && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
-            <span style={{ fontSize: '12px', color: bulkFilling ? 'var(--accent)' : '#4a7c59', fontWeight: '500' }}>{bulkFillMsg}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: bulkFilling ? 'var(--accent)' : '#4a7c59', fontWeight: '500' }}>{bulkFillMsg}</span>
           </div>
         )}
 
         {selectedIds.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500' }}>{selectedIds.length} selected</span>
-            <button onClick={handleBulkDelete} style={{ padding: '5px 12px', background: 'var(--red)', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '500', color: '#fff', cursor: 'pointer' }}>Delete</button>
-            <button onClick={() => setShowDMFinder(true)} style={{ padding: '5px 12px', background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer' }}>Find DMs</button>
-            <button onClick={() => setSelectedIds([])} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>Clear</button>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.06em', color: 'var(--text)', fontWeight: '600' }}>{selectedIds.length} selected</span>
+            <button onClick={handleBulkDelete} style={{ padding: '5px 12px', background: 'var(--red)', border: 'none', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fff', cursor: 'pointer' }}>Delete</button>
+            <button onClick={() => setShowDMFinder(true)} style={{ padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text)', cursor: 'pointer' }}>Find DMs</button>
+            <button onClick={() => setSelectedIds([])} style={{ padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', cursor: 'pointer' }}>Clear</button>
           </div>
         )}
 
@@ -897,15 +897,15 @@ const s = {
   container: { padding: '20px 48px' },
   filters: { display: 'flex', gap: '8px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },
-  searchInput: { flex: 1, padding: '9px 12px', background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: 'var(--text)', fontFamily: 'inherit' },
-  select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' },
-  secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '11px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' },
+  searchInput: { flex: 1, padding: '9px 12px', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' },
+  select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.04em' },
+  primaryBtn: { padding: '9px 16px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
+  secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
-  emptyTitle: { fontSize: '17px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' },
-  emptyText: { fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 },
+  emptyTitle: { fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '-0.03em' },
+  emptyText: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7 },
 }
 
 const card = {
