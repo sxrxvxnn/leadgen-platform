@@ -1,5 +1,6 @@
 import logging
 import requests
+from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
@@ -512,7 +513,11 @@ async def prefill_company(
     if not name:
         raise HTTPException(status_code=400, detail="Company name is required")
 
-    from .company_prefill import search_company_website, extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3, scrape_linkedin_data
+    from .company_prefill import (
+        search_company_website, extract_linkedin_url_from_html,
+        extract_linkedin_url_with_qwen3, scrape_linkedin_data,
+        search_linkedin_url_direct,
+    )
 
     if not website_url:
         website_url = search_company_website(name) or ""
@@ -532,6 +537,52 @@ async def prefill_company(
             linkedin_url = extract_linkedin_url_with_qwen3(html, name, openrouter_key)
     except Exception as e:
         print(f"Prefill website fetch error: {e}")
+
+    # Fallback 1: DDGS search for LinkedIn URL by company name
+    if not linkedin_url:
+        try:
+            linkedin_url = search_linkedin_url_direct(name)
+            if linkedin_url:
+                print(f"LinkedIn URL found via DDGS for {name}: {linkedin_url}")
+        except Exception as e:
+            print(f"DDGS LinkedIn fallback error: {e}")
+
+    # Fallback 2: Apollo.io organization enrichment by domain
+    if not linkedin_url:
+        try:
+            apollo_key = os.getenv("APOLLO_API_KEY", "")
+            domain = urlparse(url).netloc.replace("www.", "")
+            if apollo_key and domain:
+                apollo_res = requests.post(
+                    "https://api.apollo.io/api/v1/organizations/enrich",
+                    json={"api_key": apollo_key, "domain": domain},
+                    timeout=10,
+                )
+                if apollo_res.status_code == 200:
+                    org = apollo_res.json().get("organization") or {}
+                    li = org.get("linkedin_url") or ""
+                    if li and "linkedin.com/company/" in li:
+                        linkedin_url = li if li.startswith("http") else "https://" + li
+                        print(f"LinkedIn URL found via Apollo for {name}: {linkedin_url}")
+        except Exception as e:
+            print(f"Apollo LinkedIn fallback error: {e}")
+
+    # Fallback 3: Guess slug from domain (e.g. sequantix.com → /company/sequantix)
+    if not linkedin_url:
+        try:
+            domain = urlparse(url).netloc.replace("www.", "")
+            slug = domain.split(".")[0]
+            guessed = f"https://www.linkedin.com/company/{slug}/"
+            probe = requests.get(
+                guessed,
+                headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en-US"},
+                timeout=8, allow_redirects=True,
+            )
+            if probe.status_code == 200 and "linkedin.com/company/" in probe.url:
+                linkedin_url = probe.url
+                print(f"LinkedIn URL guessed from domain slug for {name}: {linkedin_url}")
+        except Exception as e:
+            print(f"Domain-slug LinkedIn guess error: {e}")
 
     linkedin_people_url = None
     if linkedin_url:
