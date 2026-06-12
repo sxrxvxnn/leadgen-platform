@@ -114,7 +114,10 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
       setStep('saved')
       onRefresh()
     } catch (e) {
-      const msg = e.response?.data?.detail || e.message || 'Save failed.'
+      const raw = e.response?.data?.detail || e.message || 'Save failed.'
+      const msg = typeof raw === 'string' && raw.includes("'message'")
+        ? (raw.match(/'message':\s*'([^']+)'/) || [])[1] || raw
+        : raw
       setError(msg.includes('duplicate') || msg.includes('already') ? 'This company is already in your list.' : msg)
     } finally {
       setSaving(false)

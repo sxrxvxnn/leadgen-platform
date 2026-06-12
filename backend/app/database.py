@@ -13,3 +13,6 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
 
 # Service client — used for admin operations in backend
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+# supabase-py v2 sets apikey header but not Authorization on PostgREST by default
+# Without this, PostgREST treats requests as anon and RLS blocks inserts
+supabase.postgrest.auth(SUPABASE_SERVICE_KEY)
