@@ -288,7 +288,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
             <h3 style={card.name}>{company.name}</h3>
             {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
           </div>
-          <p style={card.industry}>{company.industry || 'Industry unknown'}</p>
+          <p style={card.industry}>{company.classification || company.industry || 'Unknown industry'}</p>
         </div>
         <div style={card.headerRight}>
           {showCustomInput ? (
@@ -379,7 +379,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
         </div>
         <div style={card.infoItem}>
           <p style={card.infoLabel}>FOLLOWERS</p>
-          <p style={card.infoValue}>{company.followers || '—'}</p>
+          <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
         </div>
       </div>
 
@@ -418,25 +418,31 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
 
       {/* LinkedIn fill result */}
       {fillResult && (
-        <div style={{ padding: '8px 16px', background: fillResult.ok ? 'rgba(74,124,89,0.07)' : 'rgba(168,100,72,0.07)', borderTop: `1px solid ${fillResult.ok ? 'rgba(74,124,89,0.2)' : 'rgba(168,100,72,0.2)'}` }}>
+        <div style={{ padding: '8px 16px', background: fillResult.ok ? 'rgba(74,124,89,0.05)' : 'rgba(168,100,72,0.05)', borderTop: `1px dashed ${fillResult.ok ? 'rgba(74,124,89,0.2)' : 'rgba(168,100,72,0.2)'}` }}>
           {fillResult.ok
-            ? <p style={{ fontSize: '11px', color: '#4a7c59', fontWeight: '500' }}>✓ Filled: {fillResult.filled.join(', ')}</p>
-            : <p style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '500' }}>⚠ {fillResult.msg}</p>
+            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.04em' }}>✓ Filled: {fillResult.filled.join(', ')}</p>
+            : <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: 'var(--accent)', letterSpacing: '0.04em' }}>⚠ {fillResult.msg}</p>
           }
         </div>
       )}
 
       {/* Compliance result */}
       {complianceResult && (
-        <div style={{ padding: '10px 16px', background: complianceResult.error ? 'rgba(184,50,50,0.06)' : 'rgba(74,124,89,0.06)', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '12px 16px', background: complianceResult.error ? 'rgba(184,50,50,0.04)' : 'rgba(74,124,89,0.04)', borderTop: `1px dashed ${complianceResult.error ? 'rgba(184,50,50,0.18)' : 'rgba(74,124,89,0.18)'}` }}>
           {complianceResult.error
-            ? <p style={{ fontSize: '12px', color: 'var(--red)' }}>{complianceResult.error}</p>
+            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--red)', letterSpacing: '0.04em' }}>{complianceResult.error}</p>
             : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <p style={{ fontSize: '11px', fontWeight: '600', color: '#4a7c59' }}>Compliance check complete</p>
-                <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Certs: <strong style={{ color: 'var(--text)' }}>{complianceResult.compliance}</strong></p>
-                <p style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Security team: <strong style={{ color: 'var(--text)' }}>{complianceResult.has_security_team}</strong></p>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>{complianceResult.security_notes}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: '#4a7c59', textTransform: 'uppercase', marginBottom: '2px' }}>Compliance check complete</p>
+                {complianceResult.compliance && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {complianceResult.compliance.split(',').map(c => c.trim()).filter(Boolean).map(cert => (
+                      <span key={cert} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.06em', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '2px 7px', borderRadius: '3px' }}>{cert}</span>
+                    ))}
+                  </div>
+                )}
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Security team: <span style={{ fontWeight: '600', color: complianceResult.has_security_team === 'Yes' ? '#4a7c59' : 'var(--text-muted)' }}>{complianceResult.has_security_team || '—'}</span></p>
+                {complianceResult.security_notes && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.02em', lineHeight: 1.6 }}>{complianceResult.security_notes}</p>}
               </div>
             )
           }
@@ -546,70 +552,79 @@ function LeadsModal({ company, onClose }) {
 function AnalysisModal({ result, onClose }) {
   const { company, analysis } = result
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.5)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', maxWidth: '540px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.5)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '520px', maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(29,27,27,0.14)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px dashed var(--border-dash)', flexShrink: 0 }}>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text)', marginBottom: '3px' }}>{company.name}</h2>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Website Analysis</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '5px' }}>Website Analysis</p>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1 }}>{company.name}</h2>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 4px' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer', padding: '5px 10px', letterSpacing: '0.04em', flexShrink: 0 }}>✕</button>
         </div>
 
-        {analysis.error ? (
-          <div style={{ padding: '14px 16px', background: 'var(--red-dim)', borderRadius: '8px', marginBottom: '20px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--red)' }}>{analysis.error}</p>
-          </div>
-        ) : (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}>
-              {[
-                { label: 'Company Type', value: analysis.company_type || '—' },
-                { label: 'Is SaaS', value: analysis.is_saas === true ? 'Yes' : analysis.is_saas === false ? 'No' : '—' },
-                { label: 'Target Market', value: analysis.target_market || '—' },
-                { label: 'Has Login', value: analysis.has_login === true ? 'Yes' : analysis.has_login === false ? 'No' : '—' },
-              ].map(({ label, value }) => (
-                <div key={label} style={{ padding: '12px 14px', background: 'var(--surface)', borderRadius: '10px' }}>
-                  <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', marginBottom: '5px', textTransform: 'uppercase' }}>{label}</p>
-                  <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text)' }}>{value}</p>
-                </div>
-              ))}
+        {/* Body */}
+        <div style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {analysis.error ? (
+            <div style={{ padding: '12px 14px', background: 'rgba(184,50,50,0.05)', border: '1px solid rgba(184,50,50,0.18)', borderRadius: '7px' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)', letterSpacing: '0.02em' }}>{analysis.error}</p>
             </div>
+          ) : (
+            <>
+              {/* Stats gap-px grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+                {[
+                  { label: 'Company Type',  value: analysis.company_type || '—' },
+                  { label: 'Is SaaS',       value: analysis.is_saas === true ? 'Yes' : analysis.is_saas === false ? 'No' : '—' },
+                  { label: 'Target Market', value: analysis.target_market || '—' },
+                  { label: 'Has Login',     value: analysis.has_login === true ? 'Yes' : analysis.has_login === false ? 'No' : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>{label}</p>
+                    <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text)', lineHeight: 1 }}>{value}</p>
+                  </div>
+                ))}
+              </div>
 
-            {analysis.compliance?.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Compliance</p>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {analysis.compliance.map(c => (
-                    <span key={c} style={{ padding: '3px 10px', background: 'rgba(74,124,89,0.10)', color: '#4a7c59', borderRadius: '4px', fontSize: '12px', fontWeight: '600', border: '1px solid rgba(74,124,89,0.2)' }}>{c}</span>
-                  ))}
+              {analysis.compliance?.length > 0 && (
+                <div>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Compliance</p>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {analysis.compliance.map(c => (
+                      <span key={c} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', padding: '4px 10px', background: 'rgba(74,124,89,0.08)', color: '#4a7c59', border: '1px solid rgba(74,124,89,0.22)', borderRadius: '4px' }}>{c}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {analysis.products_or_services?.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>Products / Services</p>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {analysis.products_or_services.map(p => (
-                    <span key={p} style={{ padding: '3px 10px', background: 'var(--surface)', color: 'var(--text-secondary)', borderRadius: '4px', fontSize: '12px' }}>{p}</span>
-                  ))}
+              {analysis.products_or_services?.length > 0 && (
+                <div>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Products / Services</p>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {analysis.products_or_services.map(p => (
+                      <span key={p} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.02em', padding: '4px 10px', background: 'var(--surface)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '4px' }}>{p}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {analysis.website_summary && (
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '6px' }}>Summary</p>
-                <p style={{ fontSize: '13px', color: 'var(--text-soft)', lineHeight: 1.6 }}>{analysis.website_summary}</p>
-              </div>
-            )}
-          </>
-        )}
+              {analysis.website_summary && (
+                <div>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Summary</p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.8, letterSpacing: '0.01em' }}>{analysis.website_summary}</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
-        <button onClick={onClose} style={{ width: '100%', padding: '12px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
-          Close
-        </button>
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', borderTop: '1px dashed var(--border-dash)', flexShrink: 0 }}>
+          <button onClick={onClose} style={{ width: '100%', padding: '10px', background: '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', cursor: 'pointer' }}>
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )
