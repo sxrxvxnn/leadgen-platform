@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { prefillCompany, createCompany } from '../services/api'
 
 const EMPTY_FORM = { name: '', website: '', linkedin_url: '', headquarters: '', followers: '', size: '', description: '' }
@@ -13,8 +13,62 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
   const [error, setError] = useState('')
   const [foundFields, setFoundFields] = useState([])
 
+  const [suggestions, setSuggestions] = useState([])
+  const [showSugg, setShowSugg] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(-1)
+  const debounceRef = useRef(null)
+  const suggRef = useRef(null)
+
+  function handleNameChange(e) {
+    const val = e.target.value
+    setName(val)
+    setActiveIdx(-1)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (val.trim().length < 2) { setSuggestions([]); setShowSugg(false); return }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(val.trim())}`)
+        const data = await res.json()
+        setSuggestions(data.slice(0, 7))
+        setShowSugg(data.length > 0)
+      } catch { setSuggestions([]); setShowSugg(false) }
+    }, 280)
+  }
+
+  function pickSuggestion(s) {
+    setName(s.name)
+    setWebsiteUrl(s.domain ? `https://${s.domain}` : '')
+    setSuggestions([])
+    setShowSugg(false)
+    setActiveIdx(-1)
+  }
+
+  function handleNameKeyDown(e) {
+    if (!showSugg || suggestions.length === 0) {
+      if (e.key === 'Enter') handleFind()
+      return
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, -1)) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeIdx >= 0) pickSuggestion(suggestions[activeIdx])
+      else handleFind()
+    }
+    else if (e.key === 'Escape') { setShowSugg(false); setActiveIdx(-1) }
+  }
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (suggRef.current && !suggRef.current.contains(e.target)) setShowSugg(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   async function handleFind() {
     if (!name.trim()) return
+    setShowSugg(false)
     setStep('loading')
     setError('')
     try {
@@ -33,7 +87,7 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
         linkedin_url: d.linkedin_url || '',
         headquarters: li.location || '',
         followers: li.followers || '',
-        size: li.employee_count ? `${li.employee_count} employees` : '',
+        size: li.employee_count ? `${li.employee_count}` : '',
         description: li.description || '',
       })
       setLinkedinPeopleUrl(d.linkedin_people_url || '')
@@ -74,6 +128,8 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
     setName('')
     setWebsiteUrl('')
     setFoundFields([])
+    setSuggestions([])
+    setShowSugg(false)
   }
 
   function field(key) {
@@ -107,20 +163,42 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
           <div style={s.body}>
             <div style={s.fieldRow}>
               <label style={s.label}>Company name <span style={s.required}>*</span></label>
-              <input autoFocus type="text" placeholder="e.g. Beagle Security" value={name}
-                onChange={e => setName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleFind()}
-                style={s.input} />
+              <div style={{ position: 'relative' }} ref={suggRef}>
+                <input
+                  autoFocus type="text" placeholder="e.g. Beagle Security" value={name}
+                  onChange={handleNameChange}
+                  onKeyDown={handleNameKeyDown}
+                  onFocus={() => suggestions.length > 0 && setShowSugg(true)}
+                  style={s.input}
+                />
+                {showSugg && suggestions.length > 0 && (
+                  <div style={s.dropdown}>
+                    {suggestions.map((c, i) => (
+                      <div key={c.domain || c.name} onMouseDown={() => pickSuggestion(c)}
+                        style={{ ...s.suggItem, background: i === activeIdx ? 'var(--surface)' : 'transparent' }}>
+                        {c.logo
+                          ? <img src={c.logo} alt="" style={s.logo} onError={e => { e.target.style.display = 'none' }} />
+                          : <div style={s.logoPlaceholder}>{c.name[0]}</div>
+                        }
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={s.suggName}>{c.name}</p>
+                          {c.domain && <p style={s.suggDomain}>{c.domain}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div style={s.fieldRow}>
-              <label style={s.label}>Website <span style={s.optional}>— optional, leave blank to auto-search</span></label>
+              <label style={s.label}>Website <span style={s.optional}>— auto-filled when you pick a suggestion</span></label>
               <input type="text" placeholder="https://company.com" value={websiteUrl}
                 onChange={e => setWebsiteUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleFind()}
                 style={s.input} />
             </div>
             {error && <p style={s.errorMsg}>{error}</p>}
-            <p style={s.hint}>We'll find the website → extract LinkedIn URL → scrape followers, location, and employee count.</p>
+            <p style={s.hint}>Type a company name → pick from suggestions → hit Find & Fill to enrich with LinkedIn data.</p>
             <button onClick={handleFind} disabled={!name.trim()}
               style={{ ...s.primaryBtn, opacity: name.trim() ? 1 : 0.4, cursor: name.trim() ? 'pointer' : 'not-allowed' }}>
               Find & Fill →
@@ -257,4 +335,11 @@ const s = {
   actions: { display: 'flex', gap: '10px', marginTop: '4px' },
   primaryBtn: { padding: '10px 18px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', cursor: 'pointer' },
   secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer' },
+  // Autocomplete dropdown
+  dropdown: { position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(29,27,27,0.12)', zIndex: 100, overflow: 'hidden' },
+  suggItem: { display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', cursor: 'pointer', transition: 'background 0.1s' },
+  logo: { width: '22px', height: '22px', borderRadius: '4px', objectFit: 'contain', flexShrink: 0, border: '1px solid var(--border)' },
+  logoPlaceholder: { width: '22px', height: '22px', borderRadius: '4px', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: 'var(--text-muted)', flexShrink: 0 },
+  suggName: { fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  suggDomain: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.02em', marginTop: '1px' },
 }
