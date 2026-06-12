@@ -200,7 +200,7 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       <div style={{ width: '100px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
         {lead.profile_url && <ViewLink url={lead.profile_url} />}
         {!lead.email && (
-          <button style={{ fontSize: '11px', color: isEnriching ? 'var(--text-muted)' : 'var(--accent)', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
+          <button style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: isEnriching ? 'var(--text-muted)' : 'var(--accent)', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnrich(lead.id) }}>
             {isEnriching ? '...' : 'Enrich'}
           </button>
@@ -494,9 +494,9 @@ const s = {
   eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
   heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 },
   heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
-  starFilterBtn: { padding: '7px 12px', border: '1px solid', borderRadius: '6px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
-  spreadsheetBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)' },
-  exportBtn: { padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
+  starFilterBtn: { padding: '8px 14px', border: '1px solid', borderRadius: '7px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
+  spreadsheetBtn: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
+  exportBtn: { padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
   container: { padding: '20px 48px' },
   viewTabs: { display: 'flex', gap: '2px', marginBottom: '16px', borderBottom: '1px dashed var(--border-dash)', paddingBottom: '16px' },
   viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'transparent', border: 'none', fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'color 0.15s', borderRadius: '5px' },
@@ -518,8 +518,8 @@ const s = {
 }
 
 const sub = {
-  link: { fontSize: '10px', fontWeight: '500', letterSpacing: '0.5px', color: 'var(--text-muted)', textDecoration: 'none' },
-  deleteBtn: { fontSize: '11px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '500', padding: '2px 4px' },
+  link: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-muted)', textDecoration: 'none' },
+  deleteBtn: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: '500', padding: '2px 4px' },
   checkbox: { cursor: 'pointer', accentColor: 'var(--accent)' },
   cellInput: { width: '100%', padding: '4px 8px', border: '1px solid var(--border-strong)', borderRadius: '5px', fontSize: '12px', outline: 'none', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' },
   cellSelect: { padding: '4px 8px', border: '1px solid var(--border-strong)', borderRadius: '5px', fontSize: '12px', outline: 'none', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'inherit' },
@@ -529,28 +529,28 @@ const bulk = {
   bar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
     padding: '12px 16px', background: 'var(--surface)', border: '1px solid rgba(168,100,72,0.3)',
-    borderRadius: '10px', marginBottom: '16px', gap: '16px',
+    borderRadius: '7px', marginBottom: '16px', gap: '16px',
   },
   left: { display: 'flex', alignItems: 'center', gap: '12px' },
-  count: { fontSize: '13px', fontWeight: '500', color: 'var(--accent)' },
-  clearBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' },
+  count: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: 'var(--accent)', letterSpacing: '0.06em' },
+  clearBtn: { background: 'none', border: 'none', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer' },
   actions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
   actionBtn: {
     padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)',
-    borderRadius: '7px', fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)',
-    cursor: 'pointer', fontFamily: 'inherit',
+    borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500',
+    letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer',
   },
   dropdown: {
     position: 'absolute', top: '100%', left: 0, marginTop: '4px',
     background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: '10px', zIndex: 100, minWidth: '160px',
+    borderRadius: '8px', zIndex: 100, minWidth: '160px',
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
     boxShadow: '0 4px 20px rgba(29,27,27,0.08)',
   },
   dropdownItem: {
-    padding: '10px 14px', background: 'none', border: 'none',
-    color: 'var(--text)', fontSize: '12px', fontWeight: '400',
-    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+    padding: '9px 14px', background: 'none', border: 'none',
+    fontFamily: 'var(--font-mono)', color: 'var(--text)', fontSize: '10px', fontWeight: '500',
+    letterSpacing: '0.04em', cursor: 'pointer', textAlign: 'left',
     borderBottom: '1px solid var(--border)',
   },
 }
