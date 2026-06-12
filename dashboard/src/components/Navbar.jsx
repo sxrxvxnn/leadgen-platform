@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react'
 const NAV_LINKS = [
   { label: 'Overview',  path: '/dashboard' },
   { label: 'Companies', path: '/companies' },
-  { label: 'Directory', path: '/directory' },
+  { label: 'Discovery', path: '/directory' },
   { label: 'Leads',     path: '/leads' },
   { label: 'Targeting', path: '/targeting' },
   { label: 'Settings',  path: '/settings' },
