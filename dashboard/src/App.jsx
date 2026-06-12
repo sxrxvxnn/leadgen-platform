@@ -8,6 +8,7 @@ import Leads from './pages/Leads'
 import Targeting from './pages/Targeting'
 import Settings from './pages/Settings'
 import Companies from './pages/Companies'
+import CompanyDirectory from './pages/CompanyDirectory'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/persona" element={<Navigate to="/targeting" replace />} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/companies" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
+          <Route path="/directory" element={<ProtectedRoute><CompanyDirectory /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

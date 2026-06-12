@@ -446,11 +446,18 @@ export default function Leads() {
 
           {loading && <p style={s.empty}>Loading...</p>}
           {!loading && filtered.length === 0 && (
-            <p style={s.empty}>
-              {viewFilter === 'decision-makers' ? 'No decision makers found. Extract more leads or adjust filters.' :
-               viewFilter === 'security' ? 'No security leads found.' :
-               starredOnly ? 'No starred leads. Click ☆ to star a lead.' : 'No targets found.'}
-            </p>
+            <div style={{ padding: '72px 20px', textAlign: 'center' }}>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                {viewFilter === 'decision-makers' ? 'No decision makers.' :
+                 viewFilter === 'security' ? 'No security leads.' :
+                 starredOnly ? 'Nothing starred yet.' : 'No targets found.'}
+              </p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                {viewFilter !== 'all' ? 'Try switching to All leads or adjusting filters.' :
+                 leads.length === 0 ? 'Use the Chrome extension on LinkedIn to extract your first leads.' :
+                 'Clear your search to see all leads.'}
+              </p>
+            </div>
           )}
           {!loading && filtered.map((lead) => (
             <LeadRow
@@ -498,7 +505,7 @@ const s = {
   filters: { display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', flex: 1, minWidth: '200px' },
   searchIcon: { padding: '0 12px', color: 'var(--text-muted)', fontSize: '14px' },
-  searchInput: { flex: 1, padding: '9px 12px 9px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'inherit' },
+  searchInput: { flex: 1, padding: '9px 12px 9px 0', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' },
   filterTabs: { display: 'flex', gap: '2px' },
   filterTab: { padding: '6px 11px', background: 'transparent', border: '1px solid transparent', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '10px', fontWeight: '500', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
   filterTabActive: { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' },

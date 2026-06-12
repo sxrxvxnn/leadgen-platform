@@ -345,13 +345,13 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
           saving && React.createElement('span', { style: hdr.saving }, '● SAVING'),
           autofillMsg && React.createElement('span', {
             style: {
-              fontSize: '11px',
-              color: autofillMsg.startsWith('Done') ? '#4a7c59' : autofillMsg.startsWith('Refresh') ? 'var(--text-muted)' : 'var(--accent)',
+              fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em',
+              color: autofillMsg.startsWith('Done') ? '#4a7c59' : autofillMsg.startsWith('Refresh') ? 'rgba(253,253,253,0.4)' : 'var(--accent)',
               fontWeight: '600',
               whiteSpace: 'nowrap'
             }
           }, autofillMsg),
-          React.createElement('p', { style: { fontSize: '10px', color: 'var(--gray-4)', whiteSpace: 'nowrap' } },
+          React.createElement('p', { style: { fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.3)', whiteSpace: 'nowrap' } },
             selected.length > 0 ? selected.length + ' selected' : 'Drag edge to resize'
           ),
           React.createElement('input', {
@@ -370,14 +370,15 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
               onClick: () => setViewFilter(f),
               style: {
                 padding: '6px 12px',
-                background: viewFilter === f ? 'var(--text)' : 'transparent',
-                border: `1px solid ${viewFilter === f ? 'var(--text)' : 'var(--border)'}`,
+                background: viewFilter === f ? 'rgba(253,253,253,0.15)' : 'transparent',
+                border: `1px solid ${viewFilter === f ? 'rgba(253,253,253,0.2)' : 'rgba(253,253,253,0.1)'}`,
                 borderRadius: '7px',
-                fontSize: '11px',
-                fontWeight: viewFilter === f ? '500' : '400',
-                color: viewFilter === f ? 'var(--bg)' : 'var(--text-secondary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10px',
+                fontWeight: viewFilter === f ? '600' : '400',
+                letterSpacing: '0.04em',
+                color: viewFilter === f ? '#fdfdfd' : 'rgba(253,253,253,0.45)',
                 cursor: 'pointer',
-                fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
               }
             }, f === 'all' ? 'All' : f === 'dm' ? 'Decision Makers' : f === 'security' ? 'Security' : '★ Starred')
@@ -474,21 +475,21 @@ const overlay = { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)',
 const modal = { background: 'var(--bg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
 
 const hdr = {
-  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
+  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: '#1d1b1b', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
   left: {},
-  label: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
-  title: { fontFamily: "var(--font-display)", fontSize: '22px', fontWeight: '400', letterSpacing: '-0.5px', color: 'var(--text)', lineHeight: 1 },
-  unit: { fontFamily: "var(--font-display)", fontSize: '14px', fontWeight: '400', color: 'var(--text-muted)' },
+  label: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: '4px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'rgba(253,253,253,0.95)', lineHeight: 1 },
+  unit: { fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: '400', color: 'rgba(253,253,253,0.35)' },
   right: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
-  saving: { fontSize: '10px', color: 'var(--accent)', fontWeight: '600', letterSpacing: '1px' },
-  input: { padding: '7px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', width: '160px', fontFamily: 'inherit' },
-  select: { padding: '7px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  autofillBtn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', fontFamily: 'inherit', whiteSpace: 'nowrap', cursor: 'pointer' },
-  exportBtn: { padding: '7px 14px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-  closeBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', fontWeight: '400', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
+  saving: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', fontWeight: '600', letterSpacing: '0.08em' },
+  input: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.85)', outline: 'none', width: '160px' },
+  select: { padding: '7px 10px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(253,253,253,0.75)', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
+  autofillBtn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', whiteSpace: 'nowrap', cursor: 'pointer', letterSpacing: '0.04em' },
+  exportBtn: { padding: '7px 14px', background: 'rgba(253,253,253,0.9)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#1d1b1b', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
+  closeBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid rgba(253,253,253,0.15)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', color: 'rgba(253,253,253,0.5)', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
 }
 
-const th = { padding: '9px 12px', fontSize: '10px', fontWeight: '600', letterSpacing: '0.5px', color: 'var(--text-muted)', background: 'var(--surface)', borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)', textAlign: 'left', whiteSpace: 'nowrap', userSelect: 'none', position: 'relative' }
+const th = { padding: '9px 12px', fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.1em', color: 'var(--text-muted)', background: 'var(--surface)', borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)', textAlign: 'left', whiteSpace: 'nowrap', userSelect: 'none', position: 'relative', textTransform: 'uppercase' }
 const td = { padding: '0', borderBottom: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)', height: '40px', verticalAlign: 'middle', overflow: 'hidden' }
 
 const cell = {

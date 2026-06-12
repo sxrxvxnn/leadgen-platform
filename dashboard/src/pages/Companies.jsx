@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, bulkAutofillCompanies } from '../services/api'
+import { syncToDirectory } from '../services/companyDirectory'
 import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
 import BulkAddModal from '../components/BulkAddModal'
@@ -641,6 +642,7 @@ export default function Companies() {
     try {
       const res = await getCompanies()
       setCompanies(res.data.companies)
+      syncToDirectory(res.data.companies)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
