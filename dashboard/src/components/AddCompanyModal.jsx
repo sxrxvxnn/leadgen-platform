@@ -131,8 +131,8 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
         {/* LOADING */}
         {step === 'loading' && (
           <div style={{ ...s.body, textAlign: 'center', padding: '48px 24px' }}>
-            <p style={{ fontSize: '14px', color: 'var(--text)', marginBottom: '6px' }}>Looking up <strong>{name}</strong>…</p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Searching website → extracting LinkedIn → scraping public data</p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: '8px' }}>Looking up {name}…</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7 }}>Searching website → extracting LinkedIn → scraping public data</p>
           </div>
         )}
 
@@ -197,7 +197,7 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
 
             {linkedinPeopleUrl && foundFields.length < 3 && (
               <div style={s.extensionNote}>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>For associated members, visit the People tab with the extension:</p>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.6 }}>For associated members, visit the People tab with the extension:</p>
                 <a href={linkedinPeopleUrl} target="_blank" rel="noreferrer" style={s.peopleLinkBtn}>Open People Tab →</a>
               </div>
             )}
@@ -217,12 +217,12 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
         {/* SAVED */}
         {step === 'saved' && (
           <div style={{ ...s.body, textAlign: 'center', padding: '40px 24px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(74,124,89,0.12)', border: '1px solid rgba(74,124,89,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontSize: '18px' }}>✓</div>
-            <p style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text)', marginBottom: '4px' }}>{form.name} saved</p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '24px' }}>Company added to your list.</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: '#4a7c59', textTransform: 'uppercase', marginBottom: '10px' }}>Saved</p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '6px' }}>{form.name}</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '28px' }}>Company added to your list.</p>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button onClick={handleReset} style={s.secondaryBtn}>Add Another</button>
-              <button onClick={onClose} style={s.primaryBtn}>Done</button>
+              <button onClick={onClose} style={s.primaryBtn}>Done →</button>
             </div>
           </div>
         )}
@@ -232,29 +232,29 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
 }
 
 const s = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
-  modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '100%', maxWidth: '540px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(29,27,27,0.12)' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 0', flexShrink: 0 },
-  eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
-  title: { fontSize: '18px', fontWeight: '600', color: 'var(--text)', fontFamily: "var(--font-display)", letterSpacing: '-0.3px' },
-  closeBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '15px', cursor: 'pointer', padding: '4px', flexShrink: 0 },
-  body: { padding: '16px 24px 20px', overflowY: 'auto' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.5)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
+  modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '540px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(29,27,27,0.14)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px dashed var(--border-dash)', flexShrink: 0 },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '5px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.04em', lineHeight: 1 },
+  closeBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer', padding: '5px 10px', flexShrink: 0 },
+  body: { padding: '18px 24px 20px', overflowY: 'auto' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px', marginBottom: '12px' },
   fieldRow: { display: 'flex', flexDirection: 'column', gap: '5px' },
   labelRow: { display: 'flex', alignItems: 'center', gap: '6px' },
-  label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' },
+  label: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', letterSpacing: '0.06em' },
   required: { color: 'var(--accent)', fontWeight: '600' },
-  optional: { fontSize: '10px', fontWeight: '400', color: 'var(--text-muted)' },
+  optional: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', color: 'var(--text-muted)' },
   input: { width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
-  hint: { fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '14px' },
-  banner: { fontSize: '12px', fontWeight: '500', color: '#4a7c59', padding: '9px 12px', background: 'rgba(74,124,89,0.08)', border: '1px solid rgba(74,124,89,0.2)', borderRadius: '8px', marginBottom: '14px' },
-  foundBadge: { fontSize: '9px', fontWeight: '600', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '1px 6px', borderRadius: '3px' },
-  emptyBadge: { fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: '3px' },
-  visitLink: { color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', padding: '6px 8px', border: '1px solid rgba(168,100,72,0.3)', borderRadius: '5px' },
-  extensionNote: { padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '12px' },
-  peopleLinkBtn: { display: 'inline-block', fontSize: '11px', fontWeight: '500', color: 'var(--accent)', border: '1px solid rgba(168,100,72,0.3)', padding: '4px 10px', borderRadius: '5px', textDecoration: 'none' },
-  errorMsg: { fontSize: '12px', color: 'var(--red)', margin: '8px 0' },
+  hint: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', marginBottom: '14px' },
+  banner: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '500', color: '#4a7c59', padding: '9px 12px', background: 'rgba(74,124,89,0.07)', border: '1px solid rgba(74,124,89,0.18)', borderRadius: '6px', marginBottom: '14px' },
+  foundBadge: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '1px 6px', borderRadius: '3px', letterSpacing: '0.04em' },
+  emptyBadge: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 6px', borderRadius: '3px', letterSpacing: '0.04em' },
+  visitLink: { fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: '10px', fontWeight: '600', textDecoration: 'none', padding: '5px 9px', border: '1px solid rgba(168,100,72,0.3)', borderRadius: '5px', letterSpacing: '0.04em' },
+  extensionNote: { padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', marginBottom: '12px' },
+  peopleLinkBtn: { display: 'inline-block', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: 'var(--accent)', border: '1px solid rgba(168,100,72,0.3)', padding: '4px 10px', borderRadius: '5px', textDecoration: 'none' },
+  errorMsg: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)', margin: '8px 0' },
   actions: { display: 'flex', gap: '10px', marginTop: '4px' },
-  primaryBtn: { padding: '10px 18px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
-  secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '400' },
+  primaryBtn: { padding: '10px 18px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', cursor: 'pointer' },
+  secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer' },
 }

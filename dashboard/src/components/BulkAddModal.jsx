@@ -197,13 +197,13 @@ export default function BulkAddModal({ onClose, onRefresh }) {
           <div style={s.body}>
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <div style={s.successCircle}>✓</div>
-              <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text)', marginBottom: '6px' }}>Import complete</p>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '6px' }}>Import complete.</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '28px', lineHeight: 1.7 }}>
                 {result.inserted} added · {result.skipped} skipped (duplicates or errors)
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 <button onClick={resetAll} style={s.secondaryBtn}>Add More</button>
-                <button onClick={onClose} style={s.primaryBtn}>Done</button>
+                <button onClick={onClose} style={s.primaryBtn}>Done →</button>
               </div>
             </div>
           </div>
@@ -239,9 +239,9 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                           {row.status === 'idle' && row.name.trim() && (
                             <button onClick={() => fillRow(row)} disabled={!!fillTarget} style={s.fillBtn}>↯ Fill</button>
                           )}
-                          {row.status === 'loading' && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>…</span>}
-                          {row.status === 'filled' && <span style={{ fontSize: '11px', color: '#4a7c59', fontWeight: '500' }}>✓ done</span>}
-                          {row.status === 'error' && <span style={{ fontSize: '11px', color: 'var(--red)' }}>not found</span>}
+                          {row.status === 'loading' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>…</span>}
+                          {row.status === 'filled' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.04em' }}>✓ done</span>}
+                          {row.status === 'error' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--red)' }}>not found</span>}
                         </div>
                         <button onClick={() => removeRow(row.id)} style={s.removeBtn}>✕</button>
                       </div>
@@ -274,9 +274,9 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                   <>
                     <div style={s.dropzone} onClick={() => fileRef.current?.click()}>
                       <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" style={{ display: 'none' }} onChange={handleFileUpload} />
-                      <p style={{ fontSize: '24px', marginBottom: '10px' }}>📄</p>
-                      <p style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text)', marginBottom: '4px' }}>Drop or click to upload CSV</p>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>CSV, TSV, or TXT · first row must be headers</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '24px', marginBottom: '10px', color: 'var(--text-muted)' }}>↑</p>
+                      <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text)', marginBottom: '6px' }}>Drop or click to upload</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>CSV, TSV, or TXT · first row must be headers</p>
                     </div>
                     <p style={s.hint}>Required column: <strong>name</strong> or <strong>company</strong>. Optional: <strong>website</strong> or <strong>url</strong>.</p>
                   </>
@@ -316,7 +316,7 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                         ))}
                       </div>
                     </div>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '8px 0 14px' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', margin: '8px 0 14px', letterSpacing: '0.04em' }}>
                       {csvRows.length} rows · {csvRows.filter(r => r[colMap.name]?.trim()).length} valid
                     </p>
                     <div style={s.footer}>
@@ -340,7 +340,7 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                   onChange={e => { setPasteText(e.target.value); setPasteRows([]) }}
                   placeholder={'Stripe\nTwilio\thttps://twilio.com\nBeagle Security\thttps://beaglesecurity.com'}
                   rows={7}
-                  style={{ ...s.cellInput, width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: '12px', marginBottom: '10px', boxSizing: 'border-box', borderColor: 'var(--border)' }}
+                  style={{ ...s.cellInput, width: '100%', resize: 'vertical', fontSize: '12px', marginBottom: '10px', boxSizing: 'border-box', borderColor: 'var(--border)' }}
                 />
                 {pasteRows.length === 0 ? (
                   <button onClick={parsePaste} disabled={!pasteText.trim()}
@@ -363,7 +363,7 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                         ))}
                       </div>
                     </div>
-                    <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '8px 0 14px' }}>{pasteRows.length} companies parsed</p>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', margin: '8px 0 14px', letterSpacing: '0.04em' }}>{pasteRows.length} companies parsed</p>
                     <div style={s.footer}>
                       <button onClick={() => setPasteRows([])} style={s.secondaryBtn}>← Edit</button>
                       <button onClick={importPaste} disabled={importing}
@@ -383,31 +383,31 @@ export default function BulkAddModal({ onClose, onRefresh }) {
 }
 
 const s = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)', backdropFilter: 'blur(6px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
-  modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(29,27,27,0.12)' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', flexShrink: 0 },
-  eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' },
-  title: { fontSize: '18px', fontFamily: "var(--font-display)", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
-  closeBtn: { background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '15px', cursor: 'pointer', padding: '4px' },
-  tabs: { display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 24px', flexShrink: 0 },
-  tab: { padding: '10px 14px', background: 'none', border: 'none', borderBottom: '2px solid transparent', fontSize: '12px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' },
-  tabActive: { borderBottomColor: 'var(--accent)', color: 'var(--text)', fontWeight: '500' },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.5)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' },
+  modal: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(29,27,27,0.14)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px dashed var(--border-dash)', flexShrink: 0 },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '5px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.04em', lineHeight: 1 },
+  closeBtn: { background: 'none', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer', padding: '5px 10px' },
+  tabs: { display: 'flex', gap: '4px', padding: '12px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0 },
+  tab: { padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', letterSpacing: '0.04em', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.15s' },
+  tabActive: { background: '#1d1b1b', borderColor: '#1d1b1b', color: '#fdfdfd', fontWeight: '600' },
   body: { padding: '20px 24px 24px', overflowY: 'auto', flex: 1 },
-  hint: { fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '14px' },
-  table: { border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '10px' },
+  hint: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '14px' },
+  table: { border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' },
   tableHead: { display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '8px 0', alignItems: 'center' },
   tableRow: { display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', minHeight: '40px' },
-  th: { fontSize: '9px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', textTransform: 'uppercase', padding: '0 8px' },
-  cellInput: { padding: '8px', background: 'transparent', border: '1px solid transparent', borderRadius: '5px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s' },
-  fillBtn: { fontSize: '10px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(168,100,72,0.08)', border: '1px solid rgba(168,100,72,0.25)', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-  removeBtn: { width: '28px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', flexShrink: 0, textAlign: 'center' },
-  filledBanner: { padding: '9px 14px', background: 'rgba(74,124,89,0.07)', borderTop: '1px solid rgba(74,124,89,0.15)', fontSize: '11px', fontWeight: '500', color: '#4a7c59' },
-  addRowBtn: { background: 'none', border: 'none', color: 'var(--accent)', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', padding: '4px 0', marginBottom: '14px' },
+  th: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', padding: '0 8px' },
+  cellInput: { padding: '8px', background: 'transparent', border: '1px solid transparent', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', outline: 'none', transition: 'border-color 0.15s' },
+  fillBtn: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(168,100,72,0.08)', border: '1px solid rgba(168,100,72,0.25)', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap' },
+  removeBtn: { width: '28px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '11px', flexShrink: 0, textAlign: 'center' },
+  filledBanner: { fontFamily: 'var(--font-mono)', padding: '9px 14px', background: 'rgba(74,124,89,0.07)', borderTop: '1px solid rgba(74,124,89,0.15)', fontSize: '11px', fontWeight: '500', color: '#4a7c59' },
+  addRowBtn: { background: 'none', border: 'none', fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', cursor: 'pointer', padding: '4px 0', marginBottom: '14px' },
   footer: { display: 'flex', gap: '10px', marginTop: '4px' },
-  primaryBtn: { padding: '10px 18px', background: 'var(--text)', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
-  secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
-  dropzone: { border: '2px dashed var(--border)', borderRadius: '12px', padding: '40px 24px', textAlign: 'center', cursor: 'pointer', marginBottom: '12px', transition: 'border-color 0.15s' },
-  label: { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)', display: 'block', marginBottom: '5px' },
-  select: { width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  successCircle: { width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(74,124,89,0.12)', border: '1px solid rgba(74,124,89,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '20px', color: '#4a7c59' },
+  primaryBtn: { padding: '10px 18px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', cursor: 'pointer' },
+  secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer' },
+  dropzone: { border: '1px dashed var(--border-dash)', borderRadius: '8px', padding: '40px 24px', textAlign: 'center', cursor: 'pointer', marginBottom: '12px', transition: 'border-color 0.15s' },
+  label: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block', marginBottom: '5px' },
+  select: { width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer', letterSpacing: '0.02em' },
+  successCircle: { width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontFamily: 'var(--font-mono)', fontSize: '16px', color: '#4a7c59' },
 }

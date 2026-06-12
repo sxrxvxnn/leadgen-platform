@@ -268,7 +268,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
               placeholder="Search…" style={s.searchInput}
             />
 
-            {autofillMsg && <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: '500' }}>{autofillMsg}</span>}
+            {autofillMsg && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: autofillMsg.startsWith('Done') ? '#4a7c59' : 'var(--accent)', fontWeight: '600', whiteSpace: 'nowrap' }}>{autofillMsg}</span>}
 
             <button onClick={autofillSelected} disabled={autofilling} style={{ ...s.btn, opacity: autofilling ? 0.5 : 1 }}>
               ↯ Autofill{selected.length ? ` (${selected.length})` : ' All'}
@@ -339,16 +339,17 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
             </tbody>
           </table>
           {filteredRows.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No companies match your search
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '6px' }}>No companies match.</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>Clear your search to see all.</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div style={s.footer}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Click any cell to edit · Click header resize handle to adjust column width · Double-click handle to auto-size</span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{filteredRows.length} of {local.length} shown</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Click any cell to edit · Drag header edge to resize · Double-click to auto-size</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{filteredRows.length} of {local.length} shown</span>
         </div>
       </div>
     </div>
@@ -358,16 +359,16 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 const s = {
   overlay: { position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 900, display: 'flex', flexDirection: 'column' },
   container: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
-  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexShrink: 0 },
-  eyebrow: { fontSize: '9px', fontWeight: '600', letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },
-  title: { fontSize: '16px', fontFamily: "var(--font-display)", fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.3px' },
-  countBadge: { padding: '3px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '20px', fontSize: '11px', color: 'var(--text-muted)', fontWeight: '500' },
-  searchInput: { padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', width: '180px' },
-  btn: { padding: '7px 14px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' },
-  exportBtn: { padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit' },
-  closeBtn: { padding: '7px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' },
-  selectedBanner: { padding: '7px 24px', background: 'rgba(168,100,72,0.06)', borderBottom: '1px solid rgba(168,100,72,0.15)', fontSize: '12px', color: 'var(--text)', flexShrink: 0 },
-  bannerAction: { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', padding: 0 },
+  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: '#1d1b1b', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: '3px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', color: 'rgba(253,253,253,0.95)', letterSpacing: '-0.04em', lineHeight: 1 },
+  countBadge: { padding: '3px 10px', background: 'rgba(253,253,253,0.08)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '20px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(253,253,253,0.45)', letterSpacing: '0.04em' },
+  searchInput: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.85)', outline: 'none', width: '180px' },
+  btn: { padding: '7px 14px', background: 'rgba(253,253,253,0.9)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#1d1b1b', cursor: 'pointer', whiteSpace: 'nowrap' },
+  exportBtn: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.55)', cursor: 'pointer' },
+  closeBtn: { padding: '7px 14px', background: 'transparent', border: '1px solid rgba(253,253,253,0.15)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.45)', cursor: 'pointer' },
+  selectedBanner: { padding: '7px 24px', background: 'rgba(168,100,72,0.06)', borderBottom: '1px solid rgba(168,100,72,0.15)', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', color: 'var(--text)', flexShrink: 0 },
+  bannerAction: { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', padding: 0 },
   tableWrap: { flex: 1, overflow: 'auto' },
   table: { borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' },
   footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', flexShrink: 0 },
@@ -375,17 +376,17 @@ const s = {
 
 const th = {
   padding: '0 10px', height: '36px', background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-  fontSize: '10px', fontWeight: '600', letterSpacing: '0.8px', color: 'var(--text-muted)', textTransform: 'uppercase',
+  fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase',
   textAlign: 'left', userSelect: 'none', whiteSpace: 'nowrap', overflow: 'hidden', position: 'relative', boxSizing: 'border-box',
 }
 
 const td = { padding: 0, height: '40px', overflow: 'hidden', boxSizing: 'border-box', verticalAlign: 'middle' }
 
 const cell = {
-  readonly: { padding: '0 10px', fontSize: '11px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center' },
-  text: { padding: '0 10px', fontSize: '12px', color: 'var(--text)', height: '100%', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  input: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
-  select: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', cursor: 'pointer' },
-  link: { padding: '0 10px', fontSize: '12px', color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', height: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  empty: { padding: '0 10px', fontSize: '12px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center', cursor: 'pointer' },
+  readonly: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center' },
+  text: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', height: '100%', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  input: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', boxSizing: 'border-box' },
+  select: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer' },
+  link: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', height: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  empty: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center', cursor: 'pointer' },
 }
