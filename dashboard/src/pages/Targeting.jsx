@@ -337,24 +337,23 @@ export default function Targeting() {
           {/* Results */}
           {!hasAnyFilters ? (
             <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '32px', marginBottom: '16px' }}>🎯</p>
-              <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>Build your targeting profile</p>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.8, maxWidth: '400px', margin: '0 auto' }}>
-                Use <strong style={{ color: 'var(--text-secondary)', fontWeight: '500' }}>Company Criteria</strong> to filter by org size and type,
-                and <strong style={{ color: 'var(--text-secondary)', fontWeight: '500' }}>Contact Criteria</strong> to filter by role, status, and location.
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '10px' }}>Build your targeting profile</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.9, maxWidth: '380px', margin: '0 auto', letterSpacing: '0.02em' }}>
+                Use <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: '600' }}>Company Criteria</strong> to filter by org size and type,
+                and <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: '600' }}>Contact Criteria</strong> to filter by role, status, and location.
                 Enable both to find your Best Fits — leads that match everything.
               </p>
             </div>
           ) : loading ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading...</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Loading…</p>
           ) : displayLeads.length === 0 ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '15px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>No matches found</p>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Try broadening your criteria.</p>
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '8px' }}>No matches found.</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Try broadening your criteria.</p>
             </div>
           ) : (
             <div>
-              <p style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '1.5px', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' }}>
                 {bothActive ? 'Best Fits' : 'Matched Leads'} · {displayLeads.length}
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>

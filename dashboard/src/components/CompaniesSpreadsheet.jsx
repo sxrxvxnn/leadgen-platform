@@ -45,7 +45,10 @@ function getProspectColor(status) {
 
 function getCellValue(company, key) {
   if (key === '_serial') return ''
-  return company[key] || ''
+  const val = company[key] || ''
+  if (key === 'size') return typeof val === 'string' ? val.replace(/\s*employees?\s*/gi, '').trim() : val
+  if (key === 'followers') return typeof val === 'string' ? val.replace(/\s*followers?\s*/gi, '').trim() : val
+  return val
 }
 
 function EditableCell({ company, col, onSave, isEditing, onStartEdit, onStopEdit }) {
@@ -254,12 +257,9 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 
         {/* Toolbar */}
         <div style={s.toolbar}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <p style={s.eyebrow}>Companies</p>
-              <h2 style={s.title}>Spreadsheet View</h2>
-            </div>
-            <div style={s.countBadge}>{local.length} companies</div>
+          <div>
+            <p style={s.eyebrow}>COMPANIES</p>
+            <h2 style={s.title}>{filteredRows.length}<span style={s.unit}> companies</span></h2>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -360,11 +360,11 @@ const s = {
   overlay: { position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 900, display: 'flex', flexDirection: 'column' },
   container: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: '#1d1b1b', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
-  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: '3px', textTransform: 'uppercase' },
-  title: { fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', color: 'rgba(253,253,253,0.95)', letterSpacing: '-0.04em', lineHeight: 1 },
-  countBadge: { padding: '3px 10px', background: 'rgba(253,253,253,0.08)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '20px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(253,253,253,0.45)', letterSpacing: '0.04em' },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: '4px', textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', color: 'rgba(253,253,253,0.95)', letterSpacing: '-0.04em', lineHeight: 1 },
+  unit: { fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: '400', color: 'rgba(253,253,253,0.35)' },
   searchInput: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.85)', outline: 'none', width: '180px' },
-  btn: { padding: '7px 14px', background: 'rgba(253,253,253,0.9)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#1d1b1b', cursor: 'pointer', whiteSpace: 'nowrap' },
+  btn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', cursor: 'pointer', whiteSpace: 'nowrap' },
   exportBtn: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.55)', cursor: 'pointer' },
   closeBtn: { padding: '7px 14px', background: 'transparent', border: '1px solid rgba(253,253,253,0.15)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.45)', cursor: 'pointer' },
   selectedBanner: { padding: '7px 24px', background: 'rgba(168,100,72,0.06)', borderBottom: '1px solid rgba(168,100,72,0.15)', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', color: 'var(--text)', flexShrink: 0 },
@@ -375,18 +375,18 @@ const s = {
 }
 
 const th = {
-  padding: '0 10px', height: '36px', background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+  padding: '9px 12px', background: 'var(--surface)', borderBottom: '2px solid var(--border)', borderRight: '1px solid var(--border)',
   fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase',
-  textAlign: 'left', userSelect: 'none', whiteSpace: 'nowrap', overflow: 'hidden', position: 'relative', boxSizing: 'border-box',
+  textAlign: 'left', userSelect: 'none', whiteSpace: 'nowrap', position: 'relative',
 }
 
-const td = { padding: 0, height: '40px', overflow: 'hidden', boxSizing: 'border-box', verticalAlign: 'middle' }
+const td = { padding: 0, height: '40px', overflow: 'hidden', verticalAlign: 'middle', borderBottom: '1px solid var(--border-subtle)', borderRight: '1px solid var(--border-subtle)' }
 
 const cell = {
-  readonly: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center' },
-  text: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', height: '100%', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  input: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', boxSizing: 'border-box' },
-  select: { width: '100%', height: '100%', padding: '0 10px', border: 'none', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.05)', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer' },
-  link: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', height: '100%', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  empty: { padding: '0 10px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', height: '100%', display: 'flex', alignItems: 'center', cursor: 'pointer' },
+  readonly: { padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', height: '40px', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  text: { padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)', height: '40px', display: 'flex', alignItems: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  input: { width: '100%', height: '40px', padding: '0 12px', border: 'none', borderTop: '2px solid var(--accent)', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.06)', fontFamily: 'inherit', fontSize: '12px', color: 'var(--text)', outline: 'none' },
+  select: { width: '100%', height: '40px', padding: '0 12px', border: 'none', borderTop: '2px solid var(--accent)', borderBottom: '2px solid var(--accent)', background: 'rgba(168,100,72,0.06)', fontFamily: 'inherit', fontSize: '12px', color: 'var(--text)', outline: 'none', cursor: 'pointer' },
+  link: { padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--accent)', textDecoration: 'none', display: 'flex', alignItems: 'center', height: '40px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  empty: { padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)', height: '40px', display: 'flex', alignItems: 'center', cursor: 'pointer' },
 }
