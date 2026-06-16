@@ -10,10 +10,10 @@ import { useState, useEffect } from 'react'
 
 const NAV_LINKS = [
   { label: 'Overview',  path: '/dashboard' },
-  { label: 'Companies', path: '/companies' },
   { label: 'Discovery', path: '/directory' },
-  { label: 'Leads',     path: '/leads' },
+  { label: 'Companies', path: '/companies' },
   { label: 'Targeting', path: '/targeting' },
+  { label: 'Leads',     path: '/leads' },
   { label: 'Settings',  path: '/settings' },
 ]
 

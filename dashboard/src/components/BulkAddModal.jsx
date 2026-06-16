@@ -1,17 +1,18 @@
-import React, { useState, useRef } from 'react'
-import { prefillCompany, bulkCreateCompanies } from '../services/api'
+import React, { useState, useRef, useMemo } from 'react'
+import { prefillCompany, bulkCreateCompanies, getTechnoparkDirectory, bulkCreateLeads } from '../services/api'
 
 const TABS = [
-  { key: 'manual', label: 'Manual Entry' },
-  { key: 'csv',    label: 'Import CSV' },
-  { key: 'paste',  label: 'Paste List' },
+  { key: 'manual',     label: 'Manual Entry' },
+  { key: 'csv',        label: 'Import CSV' },
+  { key: 'paste',      label: 'Paste List' },
+  { key: 'technopark', label: 'Technopark' },
 ]
 
 let _id = 0
 const newRow = () => ({ id: ++_id, name: '', website: '', status: 'idle', filled: null })
 
-export default function BulkAddModal({ onClose, onRefresh }) {
-  const [tab, setTab] = useState('manual')
+export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual' }) {
+  const [tab, setTab] = useState(initialTab)
   const [rows, setRows] = useState([newRow(), newRow(), newRow()])
   const [fillTarget, setFillTarget] = useState(null)
   const [fillingAll, setFillingAll] = useState(false)
@@ -21,12 +22,23 @@ export default function BulkAddModal({ onClose, onRefresh }) {
   // CSV state
   const [csvHeaders, setCsvHeaders] = useState([])
   const [csvRows, setCsvRows] = useState([])
-  const [colMap, setColMap] = useState({ name: '', website: '' })
+  const [colMap, setColMap] = useState({ name: '', website: '', employees: '', followers: '' })
   const fileRef = useRef(null)
 
   // Paste state
   const [pasteText, setPasteText] = useState('')
   const [pasteRows, setPasteRows] = useState([])
+
+  // Technopark state
+  const [tpData, setTpData] = useState(null)       // { companies, parks, buildings }
+  const [tpLoading, setTpLoading] = useState(false)
+  const [tpSearch, setTpSearch] = useState('')
+  const [tpPark, setTpPark] = useState('')
+  const [tpBuilding, setTpBuilding] = useState('')
+  const [tpSelected, setTpSelected] = useState(new Set())
+  const [tpAdding, setTpAdding] = useState(false)
+  const [tpAddMsg, setTpAddMsg] = useState('')
+  const [tpError, setTpError] = useState('')
 
   // ── Manual tab ────────────────────────────────────────────────
 
@@ -54,6 +66,10 @@ export default function BulkAddModal({ onClose, onRefresh }) {
         followers:    li.followers || null,
         size:         li.employee_count ? `${li.employee_count} employees` : null,
         description:  li.description || null,
+        phone:        li.phone || null,
+        founded:      li.founded || null,
+        specialties:  li.specialties || null,
+        tagline:      li.tagline || null,
       }
       setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: 'filled', filled, website: filled.website || r.website } : r))
     } catch {
@@ -113,8 +129,10 @@ export default function BulkAddModal({ onClose, onRefresh }) {
       setCsvHeaders(headers)
       setCsvRows(rows)
       setColMap({
-        name:    headers.find(h => /name|company/i.test(h)) || '',
-        website: headers.find(h => /website|url|web|domain/i.test(h)) || '',
+        name:      headers.find(h => /^(name|company)$/i.test(h.trim())) || headers.find(h => /name|company/i.test(h)) || '',
+        website:   headers.find(h => /website|url|web|domain/i.test(h)) || '',
+        employees: headers.find(h => /employee|headcount|staff|size/i.test(h)) || '',
+        followers: headers.find(h => /follower|follow/i.test(h)) || '',
       })
     }
     reader.readAsText(file)
@@ -124,10 +142,16 @@ export default function BulkAddModal({ onClose, onRefresh }) {
     if (!colMap.name) return
     const companies = csvRows
       .filter(r => r[colMap.name]?.trim())
-      .map(r => ({
-        name:    r[colMap.name].trim(),
-        website: colMap.website ? (r[colMap.website]?.trim() || null) : null,
-      }))
+      .map(r => {
+        const rawEmp = colMap.employees ? r[colMap.employees]?.replace(/,/g, '').trim() : ''
+        const rawFol = colMap.followers ? r[colMap.followers]?.replace(/,/g, '').trim() : ''
+        return {
+          name:      r[colMap.name].trim(),
+          website:   colMap.website ? (r[colMap.website]?.trim() || null) : null,
+          size:      rawEmp ? rawEmp : null,
+          followers: rawFol ? rawFol : null,
+        }
+      })
     await doImport(companies)
   }
 
@@ -150,7 +174,7 @@ export default function BulkAddModal({ onClose, onRefresh }) {
     setImporting(true)
     try {
       const res = await bulkCreateCompanies(companies)
-      setResult({ inserted: res.data.inserted, skipped: res.data.skipped })
+      setResult({ inserted: res.data.inserted, updated: res.data.updated || 0, skipped: res.data.skipped })
       onRefresh()
     } catch (e) {
       console.error('Bulk import error:', e)
@@ -165,13 +189,105 @@ export default function BulkAddModal({ onClose, onRefresh }) {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  // ── Technopark tab ───────────────────────────────────────────
+
+  async function loadTechnopark() {
+    if (tpData) return
+    setTpLoading(true)
+    setTpError('')
+    try {
+      const res = await getTechnoparkDirectory()
+      setTpData(res.data)
+    } catch (e) {
+      console.error('Technopark load error:', e)
+      setTpError(e.code === 'ERR_NETWORK' ? 'Cannot reach backend — is the server running?' : (e.response?.data?.detail || e.message || 'Failed to load directory'))
+    } finally {
+      setTpLoading(false)
+    }
+  }
+
+  const tpFiltered = useMemo(() => {
+    if (!tpData) return []
+    let list = tpData.companies
+    if (tpSearch.trim()) {
+      const q = tpSearch.toLowerCase()
+      list = list.filter(c => c.name.toLowerCase().includes(q))
+    }
+    if (tpPark) list = list.filter(c => c.park === tpPark)
+    if (tpBuilding) list = list.filter(c => c.building === tpBuilding)
+    return list
+  }, [tpData, tpSearch, tpPark, tpBuilding])
+
+  function tpToggle(name) {
+    setTpSelected(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
+  function tpSelectAll() {
+    const eligible = tpFiltered.filter(c => !c.already_added)
+    setTpSelected(new Set(eligible.map(c => c.name)))
+  }
+
+  function tpClearSelection() { setTpSelected(new Set()) }
+
+  async function tpAddSelected() {
+    const toAdd = tpFiltered.filter(c => tpSelected.has(c.name))
+    if (!toAdd.length) return
+    setTpAdding(true)
+    setTpAddMsg(`Adding ${toAdd.length} companies…`)
+    try {
+      const payload = toAdd.map(c => ({ name: c.name, website: c.website || null }))
+      const res = await bulkCreateCompanies(payload)
+      const { inserted, updated } = res.data
+
+      // Also create leads for contacts from Technopark directory
+      const leadPayload = toAdd
+        .filter(c => c.contact_name)
+        .map(c => ({ name: c.contact_name, title: c.contact_title || null, company: c.name, website: c.website || null }))
+      if (leadPayload.length) {
+        await bulkCreateLeads({ leads: leadPayload })
+      }
+
+      setTpAddMsg(`Done — ${inserted} added${updated ? ` · ${updated} updated` : ''}${leadPayload.length ? ` · ${leadPayload.length} contacts imported` : ''}. Use "Fill All" to enrich.`)
+      setTpSelected(new Set())
+      // Refresh already_added flags
+      const refreshed = await getTechnoparkDirectory({ search: tpSearch, park: tpPark, building: tpBuilding })
+      setTpData(refreshed.data)
+      onRefresh()
+    } catch (e) {
+      setTpAddMsg('Error: ' + e.message)
+    } finally {
+      setTpAdding(false)
+      setTimeout(() => setTpAddMsg(''), 6000)
+    }
+  }
+
+  const [tpLeadImporting, setTpLeadImporting] = useState(new Set())
+
+  async function tpImportLead(c) {
+    if (!c.contact_name || tpLeadImporting.has(c.technopark_id)) return
+    setTpLeadImporting(prev => new Set(prev).add(c.technopark_id))
+    try {
+      await bulkCreateLeads({ leads: [{ name: c.contact_name, title: c.contact_title || null, company: c.name, website: c.website || null }] })
+      setTpAddMsg(`Lead imported: ${c.contact_name} → ${c.name}`)
+      setTimeout(() => setTpAddMsg(''), 4000)
+    } catch (e) {
+      setTpAddMsg('Lead import failed: ' + e.message)
+    } finally {
+      setTpLeadImporting(prev => { const next = new Set(prev); next.delete(c.technopark_id); return next })
+    }
+  }
+
   const validManualCount = rows.filter(r => r.name.trim()).length
   const filledCount = rows.filter(r => r.status === 'filled').length
   const pendingFill = rows.filter(r => r.name.trim() && r.status === 'idle')
 
   return (
     <div style={s.overlay} onClick={onClose}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
+      <div style={{ ...s.modal, maxWidth: tab === 'technopark' ? '820px' : '600px' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={s.header}>
@@ -185,7 +301,11 @@ export default function BulkAddModal({ onClose, onRefresh }) {
         {/* Tabs */}
         <div style={s.tabs}>
           {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
+            <button key={t.key}
+              onClick={() => {
+                setTab(t.key)
+                if (t.key === 'technopark') loadTechnopark()
+              }}
               style={{ ...s.tab, ...(tab === t.key ? s.tabActive : {}) }}>
               {t.label}
             </button>
@@ -199,7 +319,7 @@ export default function BulkAddModal({ onClose, onRefresh }) {
               <div style={s.successCircle}>✓</div>
               <p style={{ fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '6px' }}>Import complete.</p>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '28px', lineHeight: 1.7 }}>
-                {result.inserted} added · {result.skipped} skipped (duplicates or errors)
+                {result.inserted} added{result.updated > 0 ? ` · ${result.updated} updated (website/size corrected)` : ''} · {result.skipped} skipped
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 <button onClick={resetAll} style={s.secondaryBtn}>Add More</button>
@@ -282,17 +402,31 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                   </>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', gap: '14px', marginBottom: '14px' }}>
-                      <div style={{ flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                      <div>
                         <label style={s.label}>Name column *</label>
                         <select value={colMap.name} onChange={e => setColMap(p => ({ ...p, name: e.target.value }))} style={s.select}>
                           <option value="">— select —</option>
                           {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <label style={s.label}>Website column (optional)</label>
+                      <div>
+                        <label style={s.label}>Website (optional)</label>
                         <select value={colMap.website} onChange={e => setColMap(p => ({ ...p, website: e.target.value }))} style={s.select}>
+                          <option value="">— none —</option>
+                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={s.label}>Employee Count (optional)</label>
+                        <select value={colMap.employees} onChange={e => setColMap(p => ({ ...p, employees: e.target.value }))} style={s.select}>
+                          <option value="">— none —</option>
+                          {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={s.label}>Followers (optional)</label>
+                        <select value={colMap.followers} onChange={e => setColMap(p => ({ ...p, followers: e.target.value }))} style={s.select}>
                           <option value="">— none —</option>
                           {csvHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
@@ -324,6 +458,156 @@ export default function BulkAddModal({ onClose, onRefresh }) {
                       <button onClick={importCSV} disabled={importing || !colMap.name}
                         style={{ ...s.primaryBtn, flex: 1, opacity: importing || !colMap.name ? 0.4 : 1 }}>
                         {importing ? 'Importing…' : `Import ${csvRows.filter(r => r[colMap.name]?.trim()).length} companies →`}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ── TECHNOPARK ── */}
+            {tab === 'technopark' && (
+              <>
+                {tpLoading && (
+                  <div style={{ textAlign: 'center', padding: '40px 0', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Loading Technopark directory…
+                  </div>
+                )}
+
+                {!tpLoading && tpError && (
+                  <div style={{ padding: '20px', textAlign: 'center' }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red, #b83232)', marginBottom: '12px' }}>{tpError}</p>
+                    <button onClick={() => { setTpError(''); setTpData(null); loadTechnopark() }} style={{ ...s.secondaryBtn, fontSize: '10px' }}>Retry</button>
+                  </div>
+                )}
+
+                {!tpLoading && tpData && (
+                  <>
+                    {/* Filters */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                      <input
+                        value={tpSearch}
+                        onChange={e => setTpSearch(e.target.value)}
+                        placeholder="Search companies…"
+                        style={{ ...s.cellInput, border: '1px solid var(--border)', borderRadius: '6px', flex: '1 1 180px', minWidth: '0' }}
+                      />
+                      <select value={tpPark} onChange={e => setTpPark(e.target.value)}
+                        style={{ ...s.select, flex: '0 0 150px' }}>
+                        <option value="">All Phases</option>
+                        {tpData.parks.map(p => (
+                          <option key={p} value={p}>{p.replace('TECHNOPARK ', '')}</option>
+                        ))}
+                      </select>
+                      <select value={tpBuilding} onChange={e => setTpBuilding(e.target.value)}
+                        style={{ ...s.select, flex: '0 0 140px' }}>
+                        <option value="">All Buildings</option>
+                        {tpData.buildings.map(b => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Selection controls */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', flex: 1 }}>
+                        {tpFiltered.length} companies · {tpFiltered.filter(c => c.already_added).length} already added
+                      </span>
+                      {tpSelected.size > 0 && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', fontWeight: '600' }}>
+                          {tpSelected.size} selected
+                        </span>
+                      )}
+                      <button onClick={tpSelectAll} style={s.tpLinkBtn}>Select all new</button>
+                      {tpSelected.size > 0 && <button onClick={tpClearSelection} style={s.tpLinkBtn}>Clear</button>}
+                    </div>
+
+                    {/* Company list */}
+                    <div style={{ border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', marginBottom: '12px' }}>
+                      <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                        {tpFiltered.length === 0 && (
+                          <div style={{ padding: '24px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            No companies found
+                          </div>
+                        )}
+                        {tpFiltered.map((c, i) => {
+                          const checked = tpSelected.has(c.name)
+                          return (
+                            <div key={c.technopark_id}
+                              onClick={() => !c.already_added && tpToggle(c.name)}
+                              style={{
+                                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                                padding: '10px 12px',
+                                borderBottom: i < tpFiltered.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                                background: c.already_added ? 'rgba(74,124,89,0.04)' : checked ? 'rgba(168,100,72,0.05)' : 'transparent',
+                                cursor: c.already_added ? 'default' : 'pointer',
+                                transition: 'background 0.1s',
+                              }}>
+                              <div style={{ paddingTop: '2px', flexShrink: 0 }}>
+                                {c.already_added
+                                  ? <span style={{ fontSize: '12px', color: '#4a7c59' }}>✓</span>
+                                  : <input type="checkbox" checked={checked} onChange={() => tpToggle(c.name)}
+                                      onClick={e => e.stopPropagation()}
+                                      style={{ cursor: 'pointer', accentColor: 'var(--accent)' }} />
+                                }
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', color: c.already_added ? '#4a7c59' : 'var(--text)' }}>
+                                    {c.name}
+                                  </span>
+                                  {c.already_added && (
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', background: 'rgba(74,124,89,0.10)', color: '#4a7c59', border: '1px solid rgba(74,124,89,0.2)', borderRadius: '3px', padding: '1px 5px', letterSpacing: '0.06em' }}>
+                                      IN PIPELINE
+                                    </span>
+                                  )}
+                                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '3px', padding: '1px 5px' }}>
+                                    {c.building}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '3px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  {c.website && (
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                                      🌐 {c.website.replace('https://', '')}
+                                    </span>
+                                  )}
+                                  {c.contact_name && (
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>
+                                      👤 {c.contact_name}{c.contact_title ? ` · ${c.contact_title}` : ''}
+                                    </span>
+                                  )}
+                                  {c.contact_name && c.already_added && (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); tpImportLead(c) }}
+                                      disabled={tpLeadImporting.has(c.technopark_id)}
+                                      style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(168,100,72,0.07)', border: '1px solid rgba(168,100,72,0.2)', borderRadius: '3px', padding: '1px 6px', cursor: 'pointer', letterSpacing: '0.04em', opacity: tpLeadImporting.has(c.technopark_id) ? 0.5 : 1 }}>
+                                      {tpLeadImporting.has(c.technopark_id) ? '…' : '+ Lead'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Status message */}
+                    {tpAddMsg && (
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '10px', padding: '8px 12px', background: 'var(--surface)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                        {tpAddMsg}
+                      </div>
+                    )}
+
+                    {/* Footer */}
+                    <div style={s.footer}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                        {tpData.total} total companies in Technopark
+                      </span>
+                      <button
+                        onClick={tpAddSelected}
+                        disabled={tpSelected.size === 0 || tpAdding}
+                        style={{ ...s.primaryBtn, opacity: (tpSelected.size === 0 || tpAdding) ? 0.4 : 1 }}>
+                        {tpAdding ? tpAddMsg || 'Working…' : `Add ${tpSelected.size || 0} + Autofill →`}
                       </button>
                     </div>
                   </>
@@ -410,4 +694,5 @@ const s = {
   label: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block', marginBottom: '5px' },
   select: { width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer', letterSpacing: '0.02em' },
   successCircle: { width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', fontFamily: 'var(--font-mono)', fontSize: '16px', color: '#4a7c59' },
+  tpLinkBtn: { background: 'none', border: 'none', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', cursor: 'pointer', padding: '2px 0', letterSpacing: '0.04em', fontWeight: '600' },
 }

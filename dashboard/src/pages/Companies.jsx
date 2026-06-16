@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { getCompanies, updateCompany, deleteCompany, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, bulkAutofillCompanies } from '../services/api'
+import React, { useState, useEffect, useRef } from 'react'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany } from '../services/api'
+import { useBulkOps } from '../context/BulkOpsContext'
 import { syncToDirectory } from '../services/companyDirectory'
 import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
@@ -55,10 +56,12 @@ function getTypeBadge(type) {
   if (!type) return null
   const map = {
     'Product':  { bg: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: 'rgba(91,141,184,0.25)' },
+    'Service':  { bg: 'rgba(168,100,72,0.10)',  color: '#a86448', border: 'rgba(168,100,72,0.25)' },
     'Services': { bg: 'rgba(168,100,72,0.10)',  color: '#a86448', border: 'rgba(168,100,72,0.25)' },
     'Hybrid':   { bg: 'rgba(123,107,174,0.10)', color: '#7b6bae', border: 'rgba(123,107,174,0.25)' },
   }
-  const st = map[type] || map['Hybrid']
+  const st = map[type]
+  if (!st) return null
   return {
     fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
     padding: '2px 7px', borderRadius: '4px',
@@ -80,23 +83,38 @@ async function handleBulkDelete() {
 }
 
 function classifyCompany(company) {
-  const text = [company.name, company.industry, company.description].join(' ').toLowerCase()
+  const text = [company.name, company.industry, company.description, company.products_or_services].join(' ').toLowerCase()
   if (/fintech|payment|lending|neobank|wallet|crypto|blockchain|insurtech/.test(text)) return 'Fintech'
-  if (/health|medical|pharma|clinic|hospital|biotech|telemedicine/.test(text)) return 'Healthtech'
-  if (/cyber|security|vapt|penetration|vulnerability|compliance|soc|siem/.test(text)) return 'Cybersecurity'
-  if (/it services|it consulting|information technology|managed service|msp/.test(text)) return 'IT Services'
-  if (/saas|cloud platform|api|developer tools|devops/.test(text)) return 'SaaS'
+  if (/health|medical|pharma|clinic|hospital|biotech|telemedicine|healthcare/.test(text)) return 'Healthtech'
+  if (/cyber|security|vapt|penetration|vulnerability|soc\b|siem/.test(text)) return 'Cybersecurity'
+  if (/\bit services\b|it consulting|managed service|msp|tech support/.test(text)) return 'IT Services'
+  if (/\bsaas\b|cloud platform|cloud-based|software-as|subscription.{0,10}software/.test(text)) return 'SaaS'
   if (/ecommerce|e-commerce|retail|shopping|marketplace/.test(text)) return 'E-commerce'
-  if (/edtech|education|learning|school|university|training/.test(text)) return 'Edtech'
-  if (/logistics|supply chain|shipping|freight|transport/.test(text)) return 'Logistics'
+  if (/edtech|education tech|learning management|lms|e-learning/.test(text)) return 'Edtech'
+  if (/logistics|supply chain|shipping|freight|transport|warehouse/.test(text)) return 'Logistics'
   if (/manufactur|factory|industrial|hardware/.test(text)) return 'Manufacturing'
-  if (/bank|banking/.test(text)) return 'Banking'
+  if (/\bbank|banking/.test(text)) return 'Banking'
   if (/insurance|insurer/.test(text)) return 'Insurance'
   if (/venture|capital|investment|fund|private equity/.test(text)) return 'VC / Investment'
-  if (/media|news|publishing|broadcast/.test(text)) return 'Media'
+  if (/media|news|publishing|broadcast|content creation/.test(text)) return 'Media'
   if (/consult|advisory/.test(text)) return 'Consulting'
   if (/government|ministry|department|public sector/.test(text)) return 'Government'
+  if (/3d|animation|visual|render|graphic|design|ar\b|vr\b|augmented|virtual reality/.test(text)) return 'Other'
+  if (/software|platform|application|app\b|mobile app|web app/.test(text)) return 'SaaS'
+  if (/development|engineer|coding|programming|outsourc/.test(text)) return 'IT Services'
   return 'Unclassified'
+}
+
+const KEY_FIELDS = [
+  { key: 'website',      label: 'website' },
+  { key: 'linkedin_url', label: 'LinkedIn' },
+  { key: 'headquarters', label: 'HQ' },
+  { key: 'size',         label: 'size' },
+  { key: 'description',  label: 'description' },
+]
+
+function getMissingFields(company) {
+  return KEY_FIELDS.filter(f => !company[f.key] || !String(company[f.key]).trim()).map(f => f.label)
 }
 
 function parseFollowers(str) {
@@ -151,25 +169,98 @@ function EditableWebsite({ value, onSave }) {
 
 const COMPANY_EDIT_FIELDS = [
   { key: 'name',         label: 'Company Name',  type: 'text' },
+  { key: 'tagline',     label: 'Tagline',        type: 'text', placeholder: 'e.g. Unlocking Innovation, Empowering Enterprises' },
   { key: 'website',      label: 'Website',        type: 'text', placeholder: 'https://company.com' },
   { key: 'linkedin_url', label: 'LinkedIn URL',   type: 'text', placeholder: 'https://linkedin.com/company/…' },
   { key: 'headquarters', label: 'HQ / Location',  type: 'text', placeholder: 'City, State, Country' },
   { key: 'size',         label: 'Employees',      type: 'text', placeholder: 'e.g. 200 employees' },
   { key: 'followers',    label: 'Followers',      type: 'text', placeholder: 'e.g. 12,500 followers' },
+  { key: 'phone',        label: 'Phone',          type: 'text', placeholder: 'e.g. +91 471 123 4567' },
   { key: 'revenue',      label: 'Revenue',        type: 'text', placeholder: 'e.g. $5M ARR' },
   { key: 'compliance',   label: 'Compliance',     type: 'text', placeholder: 'ISO 27001, SOC 2, …' },
-  { key: 'company_type', label: 'Type',           type: 'select', options: ['', 'Product', 'Services', 'Hybrid'] },
+  { key: 'founded',      label: 'Founded',        type: 'text', placeholder: 'e.g. 2018' },
+  { key: 'specialties',  label: 'Specialties',    type: 'text', placeholder: 'e.g. AI/ML, SaaS, Cloud' },
+  { key: 'company_type', label: 'Type',           type: 'select', options: ['', 'Product', 'Service', 'Hybrid'] },
   { key: 'description',  label: 'Description',    type: 'textarea' },
 ]
 
-function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsite, analyzingId, selected, onToggle }) {
+// ─── ACCURACY CHECK ───────────────────────────────────────────
+const ACCURACY_GENERIC = new Set([
+  'pvt','ltd','inc','llc','corp','private','limited','the','and','for','with',
+  'india','global','group','company','business','technology','technologies',
+  'solutions','services','systems','digital','software','enterprise','consulting',
+  'management','international','national','associates','partners','infotech',
+  'infosystems','corporation','ventures','holdings',
+])
+
+function _nameWords(name) {
+  return (name || '').toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(' ')
+    .filter(w => w.length > 2 && !ACCURACY_GENERIC.has(w))
+}
+
+function _domainOf(url) {
+  try {
+    const u = url.includes('://') ? url : 'https://' + url
+    return new URL(u).hostname.replace(/^www\./, '').toLowerCase()
+  } catch { return null }
+}
+
+function checkCompanyAccuracy(company) {
+  // Strongest signal: a correct LinkedIn company profile lists the real website.
+  // If it disagrees with our stored website, that overrides the keyword heuristic
+  // below in both directions — agreement is stronger proof than any name match.
+  if (company.linkedin_website && company.website) {
+    const d1 = _domainOf(company.website)
+    const d2 = _domainOf(company.linkedin_website)
+    if (d1 && d2) {
+      return d1 === d2
+        ? { confidence: 'high', issues: [] }
+        : { confidence: 'low', issues: ['linkedin-website-mismatch'] }
+    }
+  }
+
+  const words = _nameWords(company.name)
+  const issues = []
+  if (words.length === 0 || !(company.website || company.linkedin_url)) {
+    return { confidence: 'none', issues: [] }
+  }
+  if (company.website) {
+    try {
+      const url = company.website.includes('://') ? company.website : 'https://' + company.website
+      const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
+      const domainCore = hostname.split('.')[0]
+      const initials = words.map(w => w[0]).join('')
+      const hit = words.some(w => domainCore.includes(w)) ||
+                  domainCore === initials || domainCore.startsWith(initials) || initials.startsWith(domainCore)
+      if (!hit) issues.push('website')
+    } catch {}
+  }
+  if (company.linkedin_url) {
+    const m = (company.linkedin_url || '').match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)/i)
+    if (m) {
+      const slug = m[1].toLowerCase().replace(/-/g, '')
+      const initials = words.map(w => w[0]).join('')
+      const hit = words.some(w => slug.includes(w)) ||
+                  slug === initials || slug.startsWith(initials) || initials.startsWith(slug)
+      if (!hit) issues.push('linkedin')
+    }
+  }
+  return {
+    confidence: issues.length === 0 ? 'high' : issues.length === 1 ? 'medium' : 'low',
+    issues,
+  }
+}
+
+function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
   const [notes, setNotes] = useState(company.notes || '')
   const [editingNotes, setEditingNotes] = useState(false)
   const [showCustomInput, setShowCustomInput] = useState(false)
-  const [checkingCompliance, setCheckingCompliance] = useState(false)
-  const [complianceResult, setComplianceResult] = useState(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeResult, setAnalyzeResult] = useState(null)
   const [fillingLI, setFillingLI] = useState(false)
   const [fillResult, setFillResult] = useState(null)
   const [showEdit, setShowEdit] = useState(false)
@@ -201,25 +292,47 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
     setEditingNotes(false)
   }
 
-  async function handleCheckCompliance() {
-    const groqKey = localStorage.getItem('groqKey') || ''
-    const geminiKey = localStorage.getItem('geminiKey') || ''
-    if (!groqKey && !geminiKey) {
-      alert('Please add your Gemini or Groq API key in Settings first.')
-      return
-    }
-    setCheckingCompliance(true)
-    setComplianceResult(null)
+  async function handleAnalyze() {
+    setAnalyzing(true)
+    setAnalyzeResult(null)
     try {
-      const res = await checkCompliance(company.id, groqKey)
-      setComplianceResult(res.data)
-      if (res.data.compliance && res.data.compliance !== 'None detected') {
-        onUpdate(company.id, { compliance: res.data.compliance })
+      const res = await analyzeCompany(company.id, {
+        gemini_key:       localStorage.getItem('geminiKey')       || '',
+        openai_key:       localStorage.getItem('openaiKey')       || '',
+        groq_key:         localStorage.getItem('groqKey')         || '',
+        openrouter_key:   localStorage.getItem('openrouterKey')   || '',
+        openrouter_model: localStorage.getItem('openrouterModel') || '',
+        website:          company.website,
+      })
+      const data = res.data
+      if (data.success && data.analysis) {
+        const a = data.analysis
+        const patch = {}
+        if (a.company_type) patch.company_type = a.company_type
+        if (a.compliance?.length) patch.compliance = a.compliance.join(', ')
+        if (a.website_summary && !company.description) patch.description = a.website_summary
+        const currentClass = company.classification || 'Unclassified'
+        if (currentClass === 'Unclassified') {
+          const enriched = {
+            ...company,
+            description: a.website_summary || company.description || '',
+            products_or_services: (a.products_or_services || []).join(' '),
+          }
+          const autoClass = classifyCompany(enriched)
+          if (autoClass !== 'Unclassified') {
+            patch.classification = autoClass
+            setClassification(autoClass)
+          }
+        }
+        if (Object.keys(patch).length) onUpdate(company.id, patch)
+        setAnalyzeResult({ ok: true, analysis: a })
+      } else {
+        setAnalyzeResult({ ok: false, msg: data.detail || 'Analysis failed' })
       }
     } catch (e) {
-      setComplianceResult({ error: 'Analysis failed: ' + (e.response?.data?.detail || e.message) })
+      setAnalyzeResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Analysis failed' })
     } finally {
-      setCheckingCompliance(false)
+      setAnalyzing(false)
     }
   }
 
@@ -228,11 +341,25 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
     setFillResult(null)
     try {
       const res = await autofillCompanyLinkedIn(company.id)
-      const { success, update, filled, linkedin_url, message } = res.data
+      const { success, update, filled, linkedin_url, message, classification: newClass } = res.data
       if (success === false) {
         setFillResult({ ok: false, msg: message || 'Could not find LinkedIn data' })
       } else if (filled.length > 0) {
-        onUpdate(company.id, { ...update, linkedin_url: update.linkedin_url || linkedin_url || company.linkedin_url })
+        const patch = { ...update, linkedin_url: update.linkedin_url || linkedin_url || company.linkedin_url }
+        // Apply backend-resolved classification immediately
+        if (newClass) {
+          patch.classification = newClass
+          setClassification(newClass)
+        } else {
+          // Frontend fallback: re-run classifier on enriched company
+          const enriched = { ...company, ...patch }
+          const autoClass = classifyCompany(enriched)
+          if (autoClass !== 'Unclassified' && (company.classification || 'Unclassified') === 'Unclassified') {
+            patch.classification = autoClass
+            setClassification(autoClass)
+          }
+        }
+        onUpdate(company.id, patch)
         setFillResult({ ok: true, filled })
       } else {
         // Check if fields are actually empty — if so, LinkedIn scraping likely failed
@@ -249,6 +376,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
   function openEdit() {
     setEditForm({
       name:         company.name || '',
+      tagline:      company.tagline || '',
       website:      company.website || '',
       linkedin_url: company.linkedin_url || '',
       headquarters: company.headquarters || '',
@@ -272,14 +400,15 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
 
   const classColor = classificationColors[classification] || '#a1a1a1'
   const statusColor = prospectColors[prospectStatus] || '#a1a1a1'
-  const isAnalyzing = analyzingId === company.id
   const typeBadgeStyle = getTypeBadge(company.company_type)
+  const missingFields = getMissingFields(company)
+  const isSuspicious = accuracy?.confidence === 'low' || accuracy?.confidence === 'medium'
 
   return (
     <div style={{ ...card.wrapper }}>
 
-      {/* Classification accent strip */}
-      <div style={{ height: '2px', background: classColor, opacity: 0.75 }} />
+      {/* Accent strip — orange when data is missing, amber when suspicious, classification color when clean */}
+      <div style={{ height: '2px', background: missingFields.length > 0 ? 'rgba(168,100,72,0.5)' : isSuspicious ? 'rgba(217,119,6,0.6)' : classColor, opacity: 0.75 }} />
 
       {/* Header */}
       <div style={card.header}>
@@ -288,7 +417,28 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
             <h3 style={card.name}>{company.name}</h3>
             {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
           </div>
+          {company.tagline && company.tagline.length <= 100 && (
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '2px', lineHeight: 1.4 }}>{company.tagline}</p>
+          )}
           <p style={card.industry}>{company.classification || company.industry || 'Unknown industry'}</p>
+          {missingFields.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+              {missingFields.map(f => (
+                <span key={f} style={{ fontSize: '8px', fontFamily: 'monospace', color: 'var(--text-muted)', background: 'rgba(168,100,72,0.07)', border: '1px solid rgba(168,100,72,0.18)', borderRadius: '3px', padding: '1px 4px', letterSpacing: '0.04em' }}>
+                  no {f}
+                </span>
+              ))}
+            </div>
+          )}
+          {isSuspicious && (
+            <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '8px', fontFamily: 'monospace', fontWeight: '600', color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '3px', padding: '1px 5px', letterSpacing: '0.04em' }}>
+                ⊘ {accuracy.issues.includes('linkedin-website-mismatch')
+                  ? 'LinkedIn lists a different website'
+                  : accuracy.issues.map(i => `${i}?`).join(' · ')}
+              </span>
+            </div>
+          )}
         </div>
         <div style={card.headerRight}>
           {showCustomInput ? (
@@ -381,7 +531,29 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
           <p style={card.infoLabel}>FOLLOWERS</p>
           <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
         </div>
+        {company.founded && (
+          <div style={card.infoItem}>
+            <p style={card.infoLabel}>FOUNDED</p>
+            <p style={card.infoValue}>{company.founded}</p>
+          </div>
+        )}
+        {company.phone && (
+          <div style={{ ...card.infoItem, gridColumn: '1 / -1' }}>
+            <p style={card.infoLabel}>PHONE</p>
+            <a href={`tel:${company.phone}`} style={{ ...card.infoValue, color: 'var(--accent)', textDecoration: 'none' }}>
+              {company.phone}
+            </a>
+          </div>
+        )}
       </div>
+
+      {/* Specialties */}
+      {company.specialties && (
+        <div style={{ padding: '8px 16px', borderTop: '1px dashed var(--border-dash)' }}>
+          <p style={{ ...card.infoLabel, marginBottom: '5px' }}>SPECIALTIES</p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: 1.6, letterSpacing: '0.01em' }}>{company.specialties}</p>
+        </div>
+      )}
 
       {/* Compliance badges */}
       {company.compliance && (
@@ -426,25 +598,51 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
         </div>
       )}
 
-      {/* Compliance result */}
-      {complianceResult && (
-        <div style={{ padding: '12px 16px', background: complianceResult.error ? 'rgba(184,50,50,0.04)' : 'rgba(74,124,89,0.04)', borderTop: `1px dashed ${complianceResult.error ? 'rgba(184,50,50,0.18)' : 'rgba(74,124,89,0.18)'}` }}>
-          {complianceResult.error
-            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--red)', letterSpacing: '0.04em' }}>{complianceResult.error}</p>
-            : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: '#4a7c59', textTransform: 'uppercase', marginBottom: '2px' }}>Compliance check complete</p>
-                {complianceResult.compliance && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {complianceResult.compliance.split(',').map(c => c.trim()).filter(Boolean).map(cert => (
-                      <span key={cert} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.06em', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '2px 7px', borderRadius: '3px' }}>{cert}</span>
-                    ))}
+      {/* Combined analyze result */}
+      {analyzeResult && (
+        <div style={{ padding: '12px 16px', background: analyzeResult.ok ? 'rgba(74,124,89,0.04)' : 'rgba(184,50,50,0.04)', borderTop: `1px dashed ${analyzeResult.ok ? 'rgba(74,124,89,0.18)' : 'rgba(184,50,50,0.18)'}` }}>
+          {!analyzeResult.ok
+            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', letterSpacing: '0.04em' }}>⚠ {analyzeResult.msg}</p>
+            : (() => {
+                const a = analyzeResult.analysis
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {/* Type row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: '#4a7c59', textTransform: 'uppercase' }}>
+                        Type
+                      </span>
+                      {a.company_type && (
+                        <span style={{ ...getTypeBadge(a.company_type), display: 'inline-block' }}>
+                          {a.company_type}
+                        </span>
+                      )}
+                      {a.company_type_confidence && (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)' }}>
+                          ({a.company_type_confidence} confidence)
+                        </span>
+                      )}
+                    </div>
+                    {/* Reasoning */}
+                    {a.company_type_reason && (
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.02em', lineHeight: 1.6, margin: 0 }}>
+                        {a.company_type_reason}
+                      </p>
+                    )}
+                    {/* Compliance */}
+                    {a.compliance?.length > 0 && (
+                      <div>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: '#4a7c59', textTransform: 'uppercase' }}>Compliance · </span>
+                        <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {a.compliance.map(c => (
+                            <span key={c} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.06em', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '2px 7px', borderRadius: '3px' }}>{c}</span>
+                          ))}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Security team: <span style={{ fontWeight: '600', color: complianceResult.has_security_team === 'Yes' ? '#4a7c59' : 'var(--text-muted)' }}>{complianceResult.has_security_team || '—'}</span></p>
-                {complianceResult.security_notes && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.02em', lineHeight: 1.6 }}>{complianceResult.security_notes}</p>}
-              </div>
-            )
+                )
+              })()
           }
         </div>
       )}
@@ -456,13 +654,10 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, onAnalyzeWebsit
           {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button style={{ ...card.actionBtn, opacity: checkingCompliance ? 0.5 : 1 }} onClick={handleCheckCompliance} disabled={checkingCompliance}>
-            {checkingCompliance ? 'Checking…' : 'Compliance'}
-          </button>
           <button
-            style={{ ...card.actionBtn, opacity: isAnalyzing ? 0.5 : 1 }}
-            onClick={() => onAnalyzeWebsite(company)} disabled={isAnalyzing}>
-            {isAnalyzing ? 'Analyzing…' : 'Analyze'}
+            style={{ ...card.actionBtn, opacity: analyzing ? 0.5 : 1 }}
+            onClick={handleAnalyze} disabled={analyzing}>
+            {analyzing ? 'Analyzing…' : 'Analyze'}
           </button>
           <button
             style={{ ...card.actionBtn, color: fillingLI ? 'var(--text-muted)' : 'var(--accent)', borderColor: fillingLI ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: fillingLI ? 0.5 : 1 }}
@@ -633,6 +828,8 @@ function AnalysisModal({ result, onClose }) {
 // ─── MAIN COMPANIES PAGE ──────────────────────────────────────
 
 export default function Companies() {
+  const { autofill, analyze, maps, runAutofill, runAnalyze, runMapsEnrich, registerLive, drainPending } = useBulkOps()
+
   const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -640,24 +837,42 @@ export default function Companies() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [followerFilter, setFollowerFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [fillFilter, setFillFilter] = useState('all')
+  const [accuracyMap, setAccuracyMap] = useState({})
   const [selectedCompany, setSelectedCompany] = useState(null)
-  const [analyzingId, setAnalyzingId] = useState(null)
   const [showDMFinder, setShowDMFinder] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState(null)
   const [selectedIds, setSelectedIds] = useState([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [showBulkAdd, setShowBulkAdd] = useState(false)
   const [showSpreadsheet, setShowSpreadsheet] = useState(false)
-  const [bulkFilling, setBulkFilling] = useState(false)
-  const [bulkFillMsg, setBulkFillMsg] = useState('')
+
+  // Register with BulkOpsContext while mounted so streaming results update local state live.
+  // On unmount the context buffers results; on remount drainPending() catches up.
+  useEffect(() => {
+    registerLive(result => {
+      setCompanies(prev => {
+        const next = [...prev]
+        const idx = next.findIndex(c => c.id === result.id)
+        if (idx !== -1) next[idx] = { ...next[idx], ...result.update }
+        return next
+      })
+    })
+    return () => registerLive(null)
+  }, [])
 
   useEffect(() => { fetchCompanies() }, [])
 
   async function fetchCompanies() {
     try {
       const res = await getCompanies()
-      setCompanies(res.data.companies)
-      syncToDirectory(res.data.companies)
+      const fresh = res.data.companies
+      // Apply any updates that arrived while this component was unmounted
+      const missed = drainPending()
+      const merged = Object.keys(missed).length
+        ? fresh.map(c => missed[c.id] ? { ...c, ...missed[c.id] } : c)
+        : fresh
+      setCompanies(merged)
+      syncToDirectory(merged)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -677,42 +892,10 @@ export default function Companies() {
     } catch (e) { console.error(e) }
   }
 
-  async function handleAnalyzeWebsite(company) {
-    const geminiKey = localStorage.getItem('geminiKey') || ''
-    const openaiKey = localStorage.getItem('openaiKey') || ''
-    const groqKey = localStorage.getItem('groqKey') || ''
-    if (!geminiKey && !openaiKey && !groqKey) {
-      alert('Please add an AI key in Settings. Gemini is free at aistudio.google.com')
-      return
-    }
-    if (!company.website && !groqKey) {
-      alert("Add this company's website URL first, then click Analyze.")
-      return
-    }
-    setAnalyzingId(company.id)
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:8000/api/companies/${company.id}/analyze-website`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ gemini_key: geminiKey, openai_key: openaiKey, groq_key: groqKey, website: company.website })
-      })
-      const data = await res.json()
-      if (data.success && data.analysis) {
-        setCompanies(prev => prev.map(c => {
-          if (c.id !== company.id) return c
-          return { ...c, classification: data.analysis.company_type || c.classification, compliance: data.analysis.compliance?.join(', ') || c.compliance, company_type: data.analysis.company_type || c.company_type }
-        }))
-        setAnalysisResult({ company, analysis: data.analysis })
-      } else {
-        alert('Analysis failed. Check your API key and website URL.')
-      }
-    } catch (e) {
-      console.error('Analysis error:', e)
-      alert('Analysis failed. Make sure the backend is running.')
-    } finally {
-      setAnalyzingId(null)
-    }
+  function runAccuracyCheck() {
+    const map = {}
+    for (const c of companies) map[c.id] = checkCompanyAccuracy(c)
+    setAccuracyMap(map)
   }
 
   const filtered = companies.filter(c => {
@@ -720,12 +903,18 @@ export default function Companies() {
     const mc = classFilter === 'all' || c.classification === classFilter || (!c.classification && classFilter === 'Unclassified')
     const ms2 = statusFilter === 'all' || c.prospect_status === statusFilter
     const mf = followerFilter === 'all' || parseFollowers(c.followers) >= parseInt(followerFilter)
-    const mt = typeFilter === 'all' || c.company_type === typeFilter
-    return ms && mc && ms2 && mf && mt
+    const ct = c.company_type === 'Services' ? 'Service' : c.company_type
+    const mt = typeFilter === 'all' || ct === typeFilter
+    const missing = getMissingFields(c).length
+    const acc = accuracyMap[c.id]
+    const isSusp = acc?.confidence === 'low' || acc?.confidence === 'medium'
+    const mfill = fillFilter === 'all' || (fillFilter === 'complete' && missing === 0) || (fillFilter === 'incomplete' && missing > 0) || (fillFilter === 'suspicious' && isSusp) || (fillFilter === 'accurate' && acc?.confidence === 'high')
+    return ms && mc && ms2 && mf && mt && mfill
   })
 
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
   const notFitCount = companies.filter(c => c.prospect_status === 'Not a Fit').length
+  const needsDataCount = companies.filter(c => getMissingFields(c).length > 0).length
 
   function exportCompaniesCSV() {
     const cols = ['name', 'classification', 'prospect_status', 'website_url', 'linkedin_url', 'headquarters', 'size', 'followers', 'revenue', 'compliance', 'company_type', 'description', 'notes']
@@ -738,39 +927,44 @@ export default function Companies() {
     link.click(); URL.revokeObjectURL(url)
   }
 
-  async function handleBulkAutofill() {
-    const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
-    if (!targetIds.length) return
-    setBulkFilling(true)
-    setBulkFillMsg(`Autofilling ${targetIds.length} companies in parallel…`)
-    try {
-      const res = await bulkAutofillCompanies(targetIds)
-      const { results, filled: filledCount, total } = res.data
-      // Apply all updates to local state at once
-      setCompanies(prev => {
-        const updated = [...prev]
-        for (const r of results) {
-          if (r.success && r.update && Object.keys(r.update).length > 0) {
-            const idx = updated.findIndex(c => c.id === r.id)
-            if (idx !== -1) updated[idx] = { ...updated[idx], ...r.update }
-          }
-        }
-        return updated
-      })
-      setBulkFillMsg(`Done — ${filledCount} of ${total} companies updated`)
-    } catch (e) {
-      setBulkFillMsg('Autofill failed — ' + (e.response?.data?.detail || e.message))
-    } finally {
-      setBulkFilling(false)
-      setTimeout(() => setBulkFillMsg(''), 5000)
-    }
+  function isIncomplete(c) {
+    return !c.website || !c.linkedin_url || !c.headquarters || !c.size || !c.followers || !c.description
   }
 
-  function handleBulkDelete() {
+  function handleBulkAutofill(incompleteOnly = false) {
+    if (autofill.running) return
+    const pool = selectedIds.length ? companies.filter(c => selectedIds.includes(c.id)) : companies
+    const targetIds = incompleteOnly ? pool.filter(isIncomplete).map(c => c.id) : pool.map(c => c.id)
+    if (!targetIds.length) return
+    runAutofill(targetIds)
+  }
+
+  function handleBulkAnalyze() {
+    if (analyze.running) return
+    const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
+    if (!targetIds.length) return
+    runAnalyze(targetIds)
+  }
+
+  function handleBulkMapsEnrich() {
+    const mapsKey = localStorage.getItem('mapsKey') || ''
+    if (!mapsKey) { alert('Add your Google Maps API key in Settings first.'); return }
+    const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
+    if (!targetIds.length) return
+    runMapsEnrich(targetIds, mapsKey)
+  }
+
+  async function handleBulkDelete() {
     if (!window.confirm(`Delete ${selectedIds.length} companies?`)) return
-    Promise.all(selectedIds.map(id => deleteCompany(id)))
-      .then(() => { setCompanies(prev => prev.filter(c => !selectedIds.includes(c.id))); setSelectedIds([]) })
-      .catch(e => console.error(e))
+    const ids = [...selectedIds]
+    setCompanies(prev => prev.filter(c => !ids.includes(c.id)))
+    setSelectedIds([])
+    try {
+      await bulkDeleteCompanies(ids)
+    } catch (e) {
+      console.error('Bulk delete failed:', e)
+      fetchCompanies()
+    }
   }
 
   return (
@@ -785,10 +979,16 @@ export default function Companies() {
             {filtered.length}
             <span style={s.heroUnit}> companies</span>
           </h1>
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px', alignItems: 'center' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#4a7c59' }}>{prospectCount} prospects</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>·</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--red)' }}>{notFitCount} not a fit</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)' }}>·</span>
+            <button
+              onClick={() => setFillFilter(f => f === 'incomplete' ? 'all' : 'incomplete')}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: needsDataCount > 0 ? '#a86448' : '#4a7c59', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.02em' }}>
+              {needsDataCount > 0 ? `${needsDataCount} need data` : 'all filled ✓'}
+            </button>
           </div>
         </div>
         <div style={{ position: 'relative', display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -799,7 +999,45 @@ export default function Companies() {
       </div>
 
       <div style={s.container}>
-        {/* Filters */}
+        {/* Action toolbar — left-aligned chips */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
+          <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>
+          <span style={{ width: '1px', height: '18px', background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
+          <button onClick={() => handleBulkAutofill(false)} disabled={autofill.running || analyze.running}
+            style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: autofill.running || analyze.running ? 0.5 : 1 }}>
+            {autofill.running ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+          </button>
+          {(() => {
+            const pool = selectedIds.length ? companies.filter(c => selectedIds.includes(c.id)) : companies
+            const incompleteCount = pool.filter(isIncomplete).length
+            return incompleteCount > 0 && incompleteCount < pool.length ? (
+              <button onClick={() => handleBulkAutofill(true)} disabled={autofill.running || analyze.running}
+                style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: autofill.running || analyze.running ? 0.5 : 1 }}>
+                {autofill.running ? 'Filling…' : `↯ Fill Incomplete (${incompleteCount})`}
+              </button>
+            ) : null
+          })()}
+          <button onClick={handleBulkAnalyze} disabled={analyze.running || autofill.running}
+            style={{ ...s.secondaryBtn, color: '#7b6bae', borderColor: 'rgba(123,107,174,0.3)', opacity: analyze.running || autofill.running ? 0.5 : 1 }}>
+            {analyze.running ? 'Analyzing…' : `⬡ Analyze All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+          </button>
+          <button onClick={runAccuracyCheck} disabled={companies.length === 0}
+            style={{ ...s.secondaryBtn, color: '#92400e', borderColor: 'rgba(217,119,6,0.3)', opacity: companies.length === 0 ? 0.4 : 1 }}>
+            ⊘ Check Accuracy
+          </button>
+          <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.length === filtered.length && filtered.length > 0}
+              onChange={() => setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map(c => c.id))}
+              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+            Select all
+          </label>
+        </div>
+
+        {/* Filters row */}
         <div style={s.filters}>
           <div style={s.searchBox}>
             <span style={{ color: 'var(--text-muted)', fontSize: '13px', paddingLeft: '12px' }}>⌕</span>
@@ -814,9 +1052,9 @@ export default function Companies() {
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={s.select}>
-            <option value="all">Product / Services</option>
+            <option value="all">All · Product / Service</option>
             <option value="Product">Product</option>
-            <option value="Services">Services</option>
+            <option value="Service">Service</option>
             <option value="Hybrid">Hybrid</option>
           </select>
           <select value={followerFilter} onChange={e => setFollowerFilter(e.target.value)} style={s.select}>
@@ -827,29 +1065,57 @@ export default function Companies() {
             <option value="50000">50K+</option>
             <option value="100000">100K+</option>
           </select>
-          <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
-          <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>
-          <button onClick={handleBulkAutofill} disabled={bulkFilling}
-            style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: bulkFilling ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-            {bulkFilling ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-          </button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={selectedIds.length === filtered.length && filtered.length > 0}
-              onChange={() => setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map(c => c.id))}
-              style={{ accentColor: 'var(--accent)', cursor: 'pointer' }}
-            />
-            Select all
-          </label>
+          <select value={fillFilter} onChange={e => setFillFilter(e.target.value)} style={{ ...s.select, color: fillFilter === 'incomplete' ? 'var(--accent)' : fillFilter === 'complete' ? '#4a7c59' : fillFilter === 'suspicious' ? '#92400e' : fillFilter === 'accurate' ? '#4a7c59' : 'var(--text-secondary)', borderColor: fillFilter !== 'all' ? (fillFilter === 'incomplete' ? 'rgba(168,100,72,0.35)' : fillFilter === 'suspicious' ? 'rgba(217,119,6,0.35)' : 'rgba(74,124,89,0.35)') : 'var(--border)' }}>
+            <option value="all">All · Data</option>
+            <option value="complete">✓ Complete</option>
+            <option value="incomplete">⚠ Needs data</option>
+            <option value="accurate">✓ Accurate</option>
+            <option value="suspicious">⊘ Suspicious</option>
+          </select>
         </div>
 
-        {bulkFillMsg && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: bulkFilling ? 'rgba(168,100,72,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid ${bulkFilling ? 'rgba(168,100,72,0.2)' : 'rgba(74,124,89,0.2)'}`, borderRadius: '8px', marginBottom: '12px' }}>
-            {bulkFilling && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: bulkFilling ? 'var(--accent)' : '#4a7c59', fontWeight: '500' }}>{bulkFillMsg}</span>
+        {autofill.msg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: autofill.running ? 'rgba(168,100,72,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid ${autofill.running ? 'rgba(168,100,72,0.2)' : 'rgba(74,124,89,0.2)'}`, borderRadius: '8px', marginBottom: '12px' }}>
+            {autofill.running && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: autofill.running ? 'var(--accent)' : '#4a7c59', fontWeight: '500' }}>{autofill.msg}</span>
           </div>
         )}
+        {analyze.msg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: analyze.running ? 'rgba(123,107,174,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid ${analyze.running ? 'rgba(123,107,174,0.2)' : 'rgba(74,124,89,0.2)'}`, borderRadius: '8px', marginBottom: '12px' }}>
+            {analyze.running && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid #7b6bae', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: analyze.running ? '#7b6bae' : '#4a7c59', fontWeight: '500' }}>{analyze.msg}</span>
+          </div>
+        )}
+        {maps.msg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: maps.running ? 'rgba(74,124,89,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid rgba(74,124,89,0.2)`, borderRadius: '8px', marginBottom: '12px' }}>
+            {maps.running && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid #4a7c59', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: '#4a7c59', fontWeight: '500' }}>{maps.msg}</span>
+          </div>
+        )}
+
+        {Object.keys(accuracyMap).length > 0 && (() => {
+          const vals = Object.values(accuracyMap)
+          const suspicious = vals.filter(a => a.confidence === 'low' || a.confidence === 'medium').length
+          const accurate   = vals.filter(a => a.confidence === 'high').length
+          const unverifiable = vals.filter(a => a.confidence === 'none').length
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: 'rgba(217,119,6,0.05)', border: '1px solid rgba(217,119,6,0.2)', borderRadius: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <button onClick={() => setFillFilter('accurate')} style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#4a7c59', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.02em', textDecoration: 'underline' }}>
+                ✓ {accurate} accurate
+              </button>
+              {suspicious > 0 && <>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>·</span>
+                <button onClick={() => setFillFilter('suspicious')} style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#92400e', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.02em', textDecoration: 'underline' }}>
+                  ⊘ {suspicious} suspicious
+                </button>
+              </>}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>·</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>{unverifiable} unverifiable</span>
+              <button onClick={() => { setAccuracyMap({}); setFillFilter(f => f === 'suspicious' || f === 'accurate' ? 'all' : f) }}
+                style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', padding: '2px 8px', letterSpacing: '0.04em' }}>✕ clear</button>
+            </div>
+          )
+        })()}
 
         {selectedIds.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px' }}>
@@ -876,10 +1142,9 @@ export default function Companies() {
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
                 onViewLeads={setSelectedCompany}
-                onAnalyzeWebsite={handleAnalyzeWebsite}
-                analyzingId={analyzingId}
                 selected={selectedIds.includes(company.id)}
                 onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+                accuracy={accuracyMap[company.id]}
               />
             ))}
           </div>
@@ -887,10 +1152,9 @@ export default function Companies() {
       </div>
 
       {showAddModal && <AddCompanyModal onClose={() => setShowAddModal(false)} onRefresh={fetchCompanies} />}
-      {showBulkAdd && <BulkAddModal onClose={() => setShowBulkAdd(false)} onRefresh={fetchCompanies} />}
+      {showBulkAdd && <BulkAddModal onClose={() => setShowBulkAdd(false)} onRefresh={fetchCompanies} initialTab={typeof showBulkAdd === 'string' ? showBulkAdd : 'manual'} />}
       {showSpreadsheet && <CompaniesSpreadsheet companies={companies} onClose={() => setShowSpreadsheet(false)} onRefresh={fetchCompanies} />}
       {selectedCompany && <LeadsModal company={selectedCompany} onClose={() => setSelectedCompany(null)} />}
-      {analysisResult && <AnalysisModal result={analysisResult} onClose={() => setAnalysisResult(null)} />}
       {showDMFinder && (
         <DMFinder
           companies={selectedIds.length > 0 ? companies.filter(c => selectedIds.includes(c.id)) : filtered}

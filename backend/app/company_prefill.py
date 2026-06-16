@@ -1,5 +1,6 @@
 import re
 import json
+import html as _html
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import unquote, urlparse, parse_qs
@@ -15,6 +16,11 @@ _SKIP_DOMAINS = {
     'yourstory.com', 'technopark.in', 'ambitionbox.com', 'tofler.in',
     'startupindia.gov.in', 'mca.gov.in', 'economictimes.com',
     'businessinsider.com', 'inc42.com', 'entrackr.com',
+    # Data aggregators that sometimes appear as "website" on LinkedIn pages
+    'ampliz.com', 'growjo.com', 'signalhire.com', 'contactout.com',
+    'lusha.com', 'seamless.ai', 'hunter.io', 'clearbit.com',
+    'similarweb.com', 'semrush.com', 'builtwith.com',
+    'researchsolutions.com', 'questarai.com',
 }
 
 
@@ -55,6 +61,7 @@ def _domain_is_relevant(domain: str, company_name: str) -> bool:
 
 
 def search_company_website(company_name: str) -> str | None:
+    company_name = clean_name_for_search(company_name)
     # 1. Try guessing the domain directly first (fastest, most accurate for known companies)
     guessed = _guess_domain(company_name)
     if guessed:
@@ -92,12 +99,63 @@ def search_company_website(company_name: str) -> str | None:
     return None
 
 
-def search_linkedin_url_direct(company_name: str) -> str | None:
-    """Search for company's LinkedIn page URL using ddgs."""
+def clean_name_for_search(name: str) -> str:
+    """Strip acquisition / rebranding disambiguation from a company name before web/DDGS search.
+
+    "Ipreo/S&P Global"                  → "Ipreo"
+    "Divvy from BILL/BILL"              → "Divvy"
+    "RPM Technologies (now Broadridge)" → "RPM Technologies"
+    "Skrill, a Paysafe Experience"      → "Skrill"
+    "DriDrop Hydration,PBC"             → "DriDrop Hydration"
+    "Questar Assessment inc./NWEA"      → "Questar Assessment inc."
+    """
+    # "X/Y" — take the first part (original entity before acquisition)
+    name = re.split(r'\s*/\s*', name)[0].strip()
+    # "X from Y" — strip " from Y" suffix
+    name = re.sub(r'\s+from\s+\S.*$', '', name, flags=re.I).strip()
+    # "(now X)" rebranding notes
+    name = re.sub(r'\s*\(now\s+[^)]+\)', '', name, flags=re.I).strip()
+    # ", a X Experience" / ",PBC" / ", Inc." trailing corp note after comma
+    name = re.sub(r',\s*(?:a\s+.+|pbc|inc\.?|corp\.?|llc|llp|ltd\.?)$', '', name, flags=re.I).strip()
+    return name or name
+
+
+_LEGAL_SUFFIX_RE = re.compile(
+    r'\s*[\(\[]?(?:p\.?\s*)?(?:pvt\.?|private)\s*[\)\]]?\s*'
+    r'|[\(\[]p[\)\]]\s*'
+    r'|\b(?:private\s+limited|pvt\.?\s*ltd\.?|p\.?\s*ltd\.?|limited|ltd\.?|inc\.?|llc|corp\.?|gmbh|plc|llp)\b',
+    re.I,
+)
+
+
+def _linkedin_search_name(company_name: str) -> str:
+    """Return a cleaned name suitable for LinkedIn/DDGS search (strip legal suffixes)."""
+    cleaned = _LEGAL_SUFFIX_RE.sub(' ', company_name).strip()
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+    return cleaned or company_name
+
+
+def _is_indian_entity(company_name: str) -> bool:
+    return bool(re.search(r'\bindia\b|\bpvt\.?\s*ltd\b|\bp\.?\s*ltd\b|\bprivate\s+limited\b', company_name, re.I))
+
+
+def search_linkedin_url_by_domain(website_url: str) -> str | None:
+    """Find a company's LinkedIn page by searching for its known domain.
+
+    Far more precise than name search — avoids wrong-entity matches.
+    e.g. searching "navigatewell.com" finds Navigate's health-tech page,
+    while searching "Navigate" finds NVGT the sports consulting firm.
+    """
+    clean = website_url.replace('https://', '').replace('http://', '')
+    clean = clean.replace('www.', '').split('/')[0].strip()
+    if not clean:
+        return None
+
     queries = [
-        f'site:linkedin.com/company "{company_name}"',
-        f'{company_name} linkedin company page',
+        f'site:linkedin.com/company "{clean}"',
+        f'linkedin.com/company {clean}',
     ]
+    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
     try:
         from ddgs import DDGS
         with DDGS() as ddgs:
@@ -106,16 +164,74 @@ def search_linkedin_url_direct(company_name: str) -> str | None:
                     for r in ddgs.text(q, max_results=6):
                         href = r.get('href', '') or r.get('url', '')
                         match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
-                        if match:
-                            slug = match.group(1)
-                            if slug not in ('linkedin', 'company', 'showcase', 'school', 'about'):
+                        if not match:
+                            continue
+                        slug = match.group(1)
+                        if slug in _SKIP_SLUGS:
+                            continue
+                        return f'https://www.linkedin.com/company/{slug}/'
+                except Exception:
+                    continue
+    except Exception as e:
+        print(f"DDGS domain LinkedIn search error for {clean}: {e}")
+    return None
+
+
+def search_linkedin_url_direct(company_name: str) -> str | None:
+    """Search for company's LinkedIn page URL using ddgs."""
+    is_indian = _is_indian_entity(company_name)
+    # Clean disambiguation before searching, then strip legal suffixes
+    search_name = _linkedin_search_name(clean_name_for_search(company_name))
+
+    # For Indian entities ensure "india" is in the search term so DDGS finds the India page
+    if is_indian and 'india' not in search_name.lower():
+        search_name = search_name + ' India'
+
+    queries = [
+        f'site:linkedin.com/company "{search_name}"',
+        f'{search_name} linkedin.com/company',
+    ]
+    # Also try exact original name
+    if search_name != company_name:
+        queries.append(f'site:linkedin.com/company "{company_name}"')
+
+    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
+
+    fallback_slug = None
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            for q in queries:
+                try:
+                    for r in ddgs.text(q, max_results=8):
+                        href = r.get('href', '') or r.get('url', '')
+                        match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+                        if not match:
+                            continue
+                        slug = match.group(1)
+                        if slug in _SKIP_SLUGS:
+                            continue
+                        # For Indian entities: prefer slugs containing "india"
+                        if is_indian:
+                            if 'india' in slug.lower():
+                                # Perfect match — India entity slug
                                 return f'https://www.linkedin.com/company/{slug}/'
+                            else:
+                                # Keep as fallback in case no India-slug is found
+                                if not fallback_slug:
+                                    fallback_slug = slug
+                                continue
+                        return f'https://www.linkedin.com/company/{slug}/'
                 except Exception:
                     continue
     except ImportError:
         pass
     except Exception as e:
         print(f"DDGS LinkedIn search error: {e}")
+
+    # Use best fallback slug found (Indian entity whose slug doesn't contain "india")
+    if fallback_slug:
+        return f'https://www.linkedin.com/company/{fallback_slug}/'
     return None
 
 
@@ -192,106 +308,309 @@ _LI_HEADERS = {
 }
 
 
-def _fetch_linkedin_html(url: str) -> str | None:
-    """Try fetching a LinkedIn URL with multiple user agents, return HTML on first 200."""
-    for ua in _LI_UA_LIST:
+def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> str | None:
+    """Try fetching a LinkedIn URL with multiple user agents, return HTML on first 200.
+    fast=True uses shorter timeout and fewer UAs — for bulk autofill where speed matters.
+    li_cookie: value of the 'li_at' session cookie — when provided, LinkedIn serves the
+    full authenticated page with all About fields instead of the login wall.
+    """
+    ua_list = _LI_UA_LIST[:2] if fast else _LI_UA_LIST
+    timeout = 4 if fast else 8
+    cookie_header = f'li_at={li_cookie}' if li_cookie else ''
+    for ua in ua_list:
         try:
-            r = requests.get(url, headers={**_LI_HEADERS, 'User-Agent': ua},
-                             timeout=14, allow_redirects=True)
+            hdrs = {**_LI_HEADERS, 'User-Agent': ua}
+            if cookie_header:
+                hdrs['Cookie'] = cookie_header
+            r = requests.get(url, headers=hdrs, timeout=timeout, allow_redirects=True)
             if r.status_code == 200 and len(r.text) > 3000:
+                # Reject the generic login wall (og:description is the sign-in pitch)
+                if 'keep in touch with people you know' in r.text[:5000]:
+                    continue
                 return r.text
         except Exception:
             continue
     return None
 
 
-def scrape_linkedin_data(linkedin_url: str) -> dict:
-    """Scrape public LinkedIn company page for followers, location, employee count, description."""
+def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str = '') -> dict:
+    """Scrape public LinkedIn company About page for all visible fields."""
     result = {
         'followers': None,
+        'tagline': None,
         'location': None,
         'employee_count': None,
         'description': None,
         'industry': None,
         'website': None,
+        'phone': None,
+        'founded': None,
+        'specialties': None,
     }
     try:
-        url = linkedin_url.rstrip('/') + '/'
-        html = _fetch_linkedin_html(url)
+        base = linkedin_url.rstrip('/')
+        # The /about/ endpoint exposes phone, founded, specialties, industry in full.
+        # Try it first; fall back to the base company page if it returns nothing.
+        html = _fetch_linkedin_html(base + '/about/', fast=fast, li_cookie=li_cookie)
+        if not html:
+            html = _fetch_linkedin_html(base + '/', fast=fast, li_cookie=li_cookie)
         if not html:
             return result
         soup = BeautifulSoup(html, 'html.parser')
 
-        # --- Followers from og:description: "Company | 1,234,567 followers on LinkedIn" ---
+        # --- Followers + tagline from og:description ---
+        # Format: "138 followers on LinkedIn. Unlocking Innovation, Empowering Enterprises"
         og_desc = soup.find('meta', {'property': 'og:description'}) or soup.find('meta', {'name': 'description'})
         if og_desc:
             desc_content = og_desc.get('content', '')
             m = re.search(r'([\d,]+)\s*followers', desc_content, re.I)
             if m:
                 result['followers'] = m.group(0).strip()
+            tl_m = re.search(r'followers?\s+on\s+LinkedIn\.\s+(.{5,200})', desc_content, re.I)
+            if tl_m:
+                tl_text = _html.unescape(tl_m.group(1).strip())
+                if len(tl_text) <= 100:
+                    # Genuine short tagline/slogan
+                    result['tagline'] = tl_text
+                elif not result['description']:
+                    # LinkedIn put the company overview in og:description — use it as description
+                    result['description'] = tl_text
 
-        # --- JSON-LD Organization block: address, numberOfEmployees, description ---
+        # --- JSON-LD Organization block ---
         for script in soup.find_all('script', type='application/ld+json'):
             try:
                 data = json.loads(script.string or '')
                 items = data.get('@graph', [data]) if isinstance(data, dict) else [data]
                 for item in items:
-                    if not isinstance(item, dict):
+                    if not isinstance(item, dict) or item.get('@type') != 'Organization':
                         continue
-                    if item.get('@type') == 'Organization':
-                        # Location
-                        addr = item.get('address', {})
-                        if isinstance(addr, dict):
-                            parts = [
-                                addr.get('addressLocality'),
-                                addr.get('addressRegion'),
-                                addr.get('addressCountry'),
-                            ]
-                            parts = [p for p in parts if p]
-                            if parts:
-                                result['location'] = ', '.join(parts)
-                        # Employee count
-                        emp = item.get('numberOfEmployees', {})
-                        if isinstance(emp, dict) and emp.get('value'):
-                            result['employee_count'] = str(emp['value'])
-                        # Description
-                        if item.get('description') and not result['description']:
-                            result['description'] = item['description'][:300]
-                        # Website URL from Organization.url or sameAs
-                        if not result['website']:
-                            org_url = item.get('url', '')
-                            if org_url and 'linkedin.com' not in org_url:
-                                result['website'] = org_url
-                        if not result['website']:
-                            same_as = item.get('sameAs') or []
-                            if isinstance(same_as, str):
-                                same_as = [same_as]
-                            for same in same_as:
-                                if isinstance(same, str) and 'linkedin.com' not in same and same.startswith('http'):
-                                    result['website'] = same
-                                    break
-                        break
+                    # Location
+                    addr = item.get('address', {})
+                    if isinstance(addr, dict):
+                        parts = [addr.get('addressLocality'), addr.get('addressRegion'), addr.get('addressCountry')]
+                        parts = [p for p in parts if p]
+                        if parts:
+                            result['location'] = ', '.join(parts)
+                    # Employee count
+                    emp = item.get('numberOfEmployees', {})
+                    if isinstance(emp, dict) and emp.get('value'):
+                        result['employee_count'] = str(emp['value'])
+                    # Founded year
+                    founding = item.get('foundingDate') or item.get('foundingYear') or ''
+                    if founding and not result['founded']:
+                        m = re.search(r'\d{4}', str(founding))
+                        if m:
+                            result['founded'] = m.group(0)
+                    # Description — no length cap, LinkedIn overview is authoritative
+                    if item.get('description') and not result['description']:
+                        result['description'] = item['description'].strip()
+                    # Website
+                    if not result['website']:
+                        org_url = item.get('url', '')
+                        if org_url and 'linkedin.com' not in org_url:
+                            result['website'] = org_url
+                    if not result['website']:
+                        for same in ([item.get('sameAs')] if isinstance(item.get('sameAs'), str) else (item.get('sameAs') or [])):
+                            if isinstance(same, str) and 'linkedin.com' not in same and same.startswith('http'):
+                                result['website'] = same
+                                break
+                    break
             except Exception:
                 pass
 
-        # --- Fallback: followers from page text ---
+        # --- LinkedIn Voyager JSON embedded in <code> elements ---
+        # LinkedIn's SPA serialises full company data into <code> blobs on the page.
+        # These contain structured fields (phone, foundedOn, specialities, headquarter,
+        # staffCount) that are NOT present in the initial HTML markup.
+        def _walk_voyager(obj, depth=0):
+            if depth > 12 or not isinstance(obj, (dict, list)):
+                return
+            if isinstance(obj, list):
+                for item in obj:
+                    _walk_voyager(item, depth + 1)
+                return
+            # Phone
+            if not result['phone']:
+                ph = obj.get('phone') or obj.get('phoneNumber')
+                if isinstance(ph, dict):
+                    num = ph.get('number') or ph.get('phoneNumber') or ph.get('value', '')
+                    if num and re.search(r'\d{5,}', str(num)):
+                        result['phone'] = str(num).strip()
+                elif isinstance(ph, str) and re.search(r'\d{5,}', ph):
+                    result['phone'] = ph.strip()
+            # Founded year
+            if not result['founded']:
+                fo = obj.get('foundedOn') or obj.get('foundingDate') or obj.get('foundedYear')
+                if isinstance(fo, dict):
+                    yr = fo.get('year') or fo.get('value')
+                    if yr:
+                        result['founded'] = str(yr)
+                elif isinstance(fo, (int, str)):
+                    m2 = re.search(r'\d{4}', str(fo))
+                    if m2:
+                        result['founded'] = m2.group(0)
+            # Specialties — LinkedIn spells it "specialities"
+            if not result['specialties']:
+                sp = obj.get('specialities') or obj.get('specialties')
+                if isinstance(sp, list) and sp:
+                    result['specialties'] = ', '.join(str(s) for s in sp if s)
+                elif isinstance(sp, str) and len(sp) > 3:
+                    result['specialties'] = sp
+            # Location/HQ
+            if not result['location']:
+                hq = obj.get('headquarter') or obj.get('headquarters')
+                if isinstance(hq, dict):
+                    parts = [hq.get('city'), hq.get('geographicArea'), hq.get('country')]
+                    parts = [p for p in parts if p]
+                    if parts:
+                        result['location'] = ', '.join(parts)
+            # Employee count — prefer staffCountRange (e.g. {"start":2,"end":10}) over staffCount
+            if not result['employee_count']:
+                scr = obj.get('staffCountRange')
+                sc  = obj.get('staffCount')
+                if isinstance(scr, dict) and scr.get('start') is not None:
+                    start = scr['start']
+                    end   = scr.get('end')
+                    result['employee_count'] = f"{start}-{end}" if end else str(start)
+                elif sc is not None:
+                    result['employee_count'] = str(sc)
+            # Description (overview)
+            if not result['description']:
+                desc = obj.get('description') or obj.get('tagline')
+                if isinstance(desc, str) and len(desc) > 30:
+                    result['description'] = desc.strip()
+            # Industry
+            if not result['industry']:
+                ind = obj.get('industry') or obj.get('industries')
+                if isinstance(ind, dict):
+                    name = ind.get('localizedName') or ind.get('name')
+                    if name:
+                        result['industry'] = name
+                elif isinstance(ind, list) and ind:
+                    first = ind[0]
+                    if isinstance(first, dict):
+                        result['industry'] = first.get('localizedName') or first.get('name') or ''
+                    elif isinstance(first, str):
+                        result['industry'] = first
+                elif isinstance(ind, str):
+                    result['industry'] = ind
+            # Website
+            if not result['website']:
+                ws = obj.get('websiteUrl') or obj.get('website') or obj.get('companyPageUrl')
+                if isinstance(ws, str) and ws.startswith('http') and 'linkedin.com' not in ws:
+                    result['website'] = ws
+            # Followers
+            if not result['followers']:
+                fc = obj.get('followingInfo') or obj.get('followerCount')
+                if isinstance(fc, dict):
+                    cnt = fc.get('followerCount') or fc.get('count')
+                    if cnt is not None:
+                        result['followers'] = f"{cnt} followers"
+                elif isinstance(fc, int):
+                    result['followers'] = f"{fc} followers"
+            # Recurse into nested dicts/lists
+            for v in obj.values():
+                if isinstance(v, (dict, list)):
+                    _walk_voyager(v, depth + 1)
+
+        for code_el in soup.find_all('code'):
+            raw = (code_el.string or '').strip()
+            if not raw.startswith('{') and not raw.startswith('['):
+                continue
+            try:
+                blob = json.loads(raw)
+                _walk_voyager(blob)
+            except Exception:
+                pass
+
+        # --- HTML fallbacks for all About-section fields ---
+        # LinkedIn About pages use a consistent label → value structure.
+        # We try data-test-id patterns first, then simpler label-based regex.
+
+        def _extract_after_label(label: str, html: str, max_len: int = 200) -> str | None:
+            """Extract text that appears after a visible label in LinkedIn's About HTML."""
+            # data-test-id pattern (LinkedIn's structured markup)
+            pat1 = rf'data-test-id="about-us__{label.lower().replace(" ", "")}"[^>]*>.*?{label}.*?<[^<]{{0,20}}>\s*([^<]{{2,{max_len}}})<'
+            m = re.search(pat1, html, re.S | re.I)
+            if m:
+                return m.group(1).strip()
+            # Generic label → next tag content (works for both /about/ and main page)
+            pat2 = rf'>{re.escape(label)}<.*?>([^<]{{2,{max_len}}})<'
+            m = re.search(pat2, html, re.S | re.I)
+            if m:
+                val = m.group(1).strip()
+                # Skip if value looks like another heading (Title Case, short)
+                if not re.match(r'^[A-Z][a-z]+ [A-Z]', val) or len(val) > 30:
+                    return val
+            return None
+
         if not result['followers']:
             m = re.search(r'([\d,]+)\s*followers', html, re.I)
             if m:
                 result['followers'] = m.group(0).strip()
 
-        # --- Fallback: location from page body ---
         if not result['location']:
-            m = re.search(r'data-test-id="about-us__headquarters"[^>]*>.*?Headquarters.*?<[^<]{0,10}>\s*([^<]{5,60})<', html, re.S)
-            if m:
-                result['location'] = m.group(1).strip()
+            val = _extract_after_label('Headquarters', html)
+            if val:
+                result['location'] = val
 
-        # --- Fallback: website from page body (LinkedIn shows it in about section) ---
         if not result['website']:
-            # Pattern: link in the about section that is external (not linkedin.com)
-            m = re.search(r'href="(https?://(?!(?:www\.)?linkedin\.com)[^"]{5,100})"[^>]*>\s*(?:Website|Visit website|website)', html, re.I)
+            m = re.search(r'href="(https?://(?!(?:www\.)?linkedin\.com)[^"]{5,100})"[^>]*>\s*(?:Visit website|Website|website)', html, re.I)
             if m:
                 result['website'] = m.group(1)
+
+        if not result['phone']:
+            val = _extract_after_label('Phone', html, max_len=30)
+            if not val:
+                m = re.search(r'>Phone<.*?>([+\d][\d\s\-\(\).]{7,25})<', html, re.S)
+                if m:
+                    val = m.group(1).strip()
+            if val and re.search(r'[\d]{5,}', val):  # must have at least 5 digits
+                result['phone'] = val
+
+        if not result['industry']:
+            val = _extract_after_label('Industry', html)
+            if val:
+                result['industry'] = val
+
+        if not result['founded']:
+            val = _extract_after_label('Founded', html, max_len=10)
+            if not val:
+                m = re.search(r'>Founded<.*?>(\d{4})<', html, re.S)
+                if m:
+                    val = m.group(1)
+            if val:
+                m2 = re.search(r'\d{4}', val)
+                if m2:
+                    result['founded'] = m2.group(0)
+
+        if not result['specialties']:
+            val = _extract_after_label('Specialties', html, max_len=500)
+            if not val:
+                m = re.search(r'>Specialties<.*?>([^<]{15,500})<', html, re.S)
+                if m:
+                    val = m.group(1).strip()
+            if val:
+                result['specialties'] = val
+
+        if not result['description']:
+            # Overview paragraph text
+            m = re.search(r'class="[^"]*about-us__description[^"]*"[^>]*>([^<]{30,2000})<', html, re.S)
+            if not m:
+                m = re.search(r'data-test-id="about-us__description"[^>]*>([^<]{30,2000})<', html, re.S)
+            if m:
+                result['description'] = m.group(1).strip()
+
+        # Decode HTML entities in all text fields (&amp; → & etc.)
+        for _k in ('description', 'tagline', 'specialties', 'industry', 'location'):
+            if result[_k]:
+                result[_k] = _html.unescape(result[_k])
+
+        # Reject aggregator / data-broker sites
+        if result['website']:
+            ws_domain = urlparse(result['website']).netloc.replace('www.', '')
+            if any(ws_domain == s or ws_domain.endswith('.' + s) for s in _SKIP_DOMAINS):
+                result['website'] = None
 
     except Exception as e:
         print(f"LinkedIn scrape error for {linkedin_url}: {e}")

@@ -4,6 +4,8 @@ from datetime import datetime
 
 class LeadCreate(BaseModel):
     name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     title: Optional[str] = None
     company: Optional[str] = None
     location: Optional[str] = None
@@ -111,4 +113,12 @@ class CompanyUpdate(BaseModel):
     headquarters: Optional[str] = None
     description: Optional[str] = None
     linkedin_url: Optional[str] = None
+    linkedin_website: Optional[str] = None
+    phone: Optional[str] = None
+    founded: Optional[str] = None
+    specialties: Optional[str] = None
     size: Optional[str] = None
+    company_type: Optional[str] = None
+    compliance: Optional[str] = None
+    name: Optional[str] = None
+    tagline: Optional[str] = None

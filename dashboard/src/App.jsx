@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { BulkOpsProvider } from './context/BulkOpsContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -14,6 +15,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <BulkOpsProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
@@ -28,6 +30,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </BulkOpsProvider>
       </AuthProvider>
     </BrowserRouter>
   )

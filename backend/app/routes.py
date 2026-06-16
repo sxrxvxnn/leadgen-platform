@@ -1,7 +1,11 @@
 import logging
+import threading as _threading_mod
 import requests
 from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
+
+# Cap concurrent DDGS calls to 3 — prevents DuckDuckGo rate-limiting during bulk autofill
+_DDGS_SEM = _threading_mod.Semaphore(3)
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
 import os
@@ -45,6 +49,7 @@ async def login(user: UserLogin):
         posthog.capture(response.user.id, "user_logged_in", {"login_method": "password"})
         return {
             "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
             "user": {
                 "id": response.user.id,
                 "email": response.user.email
@@ -52,6 +57,18 @@ async def login(user: UserLogin):
         }
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+
+@router.post("/auth/refresh")
+async def refresh_token(payload: dict):
+    try:
+        response = supabase.auth.refresh_session(payload.get("refresh_token", ""))
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+        }
+    except Exception:
+        raise HTTPException(status_code=401, detail="Session expired — please log in again")
 
 
 # ─── HELPER: get user id from token ─────────────────────────
@@ -487,7 +504,7 @@ async def spreadsheet_update_lead(
 ):
     user_id = get_user_id(authorization)
     try:
-        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        update_data = {k: v for k, v in data.model_dump().items() if v is not None}
         response = supabase.table("leads")\
             .update(update_data)\
             .eq("id", lead_id)\
@@ -519,10 +536,17 @@ async def prefill_company(
         search_linkedin_url_direct,
     )
 
-    if not website_url:
+    # Indian "(P) Ltd" / "Pvt Ltd" entities must be found via LinkedIn direct search —
+    # website search returns the global parent company (e.g. hrblock.com for H&R Block India).
+    is_indian_entity = bool(_re.search(
+        r'\b(india|pvt\.?\s*ltd|p\.?\s*ltd|private\s+limited)\b', name, _re.I
+    ))
+
+    if not website_url and not is_indian_entity:
         website_url = search_company_website(name) or ""
 
-    if not website_url:
+    # For Indian entities: skip straight to LinkedIn search without needing a website
+    if not website_url and not is_indian_entity:
         return {"name": name, "website_url": None, "linkedin_url": None, "linkedin_people_url": None,
                 "message": "Could not find official website. Provide the website URL manually.",
                 "linkedin_data": {}}
@@ -593,7 +617,7 @@ async def prefill_company(
     # Scrape LinkedIn for followers, location, employee count
     linkedin_data = {}
     if linkedin_url:
-        linkedin_data = scrape_linkedin_data(linkedin_url)
+        linkedin_data = scrape_linkedin_data(linkedin_url, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
 
     return {
         "name": name,
@@ -603,6 +627,147 @@ async def prefill_company(
         "message": "LinkedIn URL found" if linkedin_url else "LinkedIn URL not found on website. Provide it manually.",
         "linkedin_data": linkedin_data,
     }
+
+
+# ─── PEOPLE SEARCH (Hunter + DDGS fallback) ──────────────────────────────────────
+
+def _hunter_domain_search(domain: str, roles: list) -> list:
+    """Search Hunter.io domain-search for people at a company domain."""
+    hunter_key = os.getenv("HUNTER_API_KEY", "")
+    if not hunter_key or not domain:
+        return []
+
+    clean_domain = domain.replace("https://", "").replace("http://", "").split("/")[0].strip()
+    params = {"domain": clean_domain, "api_key": hunter_key, "limit": 100, "type": "personal"}
+    try:
+        res = requests.get("https://api.hunter.io/v2/domain-search", params=params, timeout=12)
+        if res.status_code != 200:
+            print(f"Hunter domain-search returned {res.status_code}: {res.text[:200]}")
+            return []
+        emails = res.json().get("data", {}).get("emails") or []
+        people = []
+        for e in emails:
+            first = e.get("first_name") or ""
+            last  = e.get("last_name") or ""
+            title = e.get("position") or ""
+            # filter by role if specified
+            if roles:
+                title_lower = title.lower()
+                if not any(r.lower() in title_lower for r in roles):
+                    continue
+            people.append({
+                "first_name":   first,
+                "last_name":    last,
+                "name":         f"{first} {last}".strip(),
+                "title":        title,
+                "company":      e.get("company") or "",
+                "location":     "",
+                "linkedin_url": e.get("linkedin") or "",
+                "email":        e.get("value") or "",
+                "photo_url":    "",
+                "confidence":   e.get("confidence") or 0,
+            })
+        return people
+    except Exception as ex:
+        print(f"Hunter domain-search error: {ex}")
+        return []
+
+
+def _ddgs_linkedin_search(company_name: str, roles: list) -> list:
+    """Use DuckDuckGo to find LinkedIn profiles of people at a company."""
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        return []
+
+    queries = []
+    if roles:
+        for role in roles[:4]:  # cap to avoid too many queries
+            queries.append(f'site:linkedin.com/in/ "{company_name}" "{role}"')
+    else:
+        queries.append(f'site:linkedin.com/in/ "{company_name}"')
+
+    seen_urls = set()
+    people = []
+
+    try:
+        with DDGS() as ddgs:
+            for q in queries:
+                try:
+                    for r in ddgs.text(q, max_results=8):
+                        url = r.get("href", "")
+                        if "linkedin.com/in/" not in url:
+                            continue
+                        # normalise URL
+                        clean_url = url.split("?")[0].rstrip("/")
+                        if clean_url in seen_urls:
+                            continue
+                        seen_urls.add(clean_url)
+
+                        title_text = r.get("title", "")
+                        body_text  = r.get("body", "")
+
+                        # parse "First Last - Title - Company | LinkedIn"
+                        name, title = "", ""
+                        if " - " in title_text:
+                            parts = [p.strip() for p in title_text.split(" - ")]
+                            name  = parts[0]
+                            title = parts[1] if len(parts) > 1 else ""
+                        else:
+                            name = title_text.split("|")[0].strip()
+
+                        # strip "| LinkedIn" suffix
+                        name = name.replace("| LinkedIn", "").strip()
+
+                        name_parts = name.split(" ", 1)
+                        first = name_parts[0] if name_parts else ""
+                        last  = name_parts[1] if len(name_parts) > 1 else ""
+
+                        people.append({
+                            "first_name":   first,
+                            "last_name":    last,
+                            "name":         name,
+                            "title":        title,
+                            "company":      company_name,
+                            "location":     "",
+                            "linkedin_url": clean_url,
+                            "email":        "",
+                            "photo_url":    "",
+                        })
+                except Exception:
+                    continue
+    except Exception as ex:
+        print(f"DDGS people search error: {ex}")
+
+    return people
+
+
+@router.post("/companies/people-search")
+async def search_company_people(payload: dict, authorization: str = Header(...)):
+    """Find people at a company — Hunter domain search first, DDGS LinkedIn fallback."""
+    get_user_id(authorization)
+
+    company_name = (payload.get("company_name") or "").strip()
+    domain       = (payload.get("domain") or "").strip()
+    roles        = payload.get("roles") or []
+
+    if not company_name and not domain:
+        raise HTTPException(status_code=400, detail="company_name or domain required")
+
+    # 1. Hunter domain search (structured, has emails + LinkedIn)
+    people = _hunter_domain_search(domain, roles) if domain else []
+
+    # 2. DDGS LinkedIn search as fallback / supplement
+    if len(people) < 5:
+        ddgs_people = _ddgs_linkedin_search(company_name, roles)
+        # merge — deduplicate by linkedin_url
+        existing_urls = {p["linkedin_url"] for p in people if p["linkedin_url"]}
+        for p in ddgs_people:
+            if p["linkedin_url"] not in existing_urls:
+                people.append(p)
+                existing_urls.add(p["linkedin_url"])
+
+    return {"people": people, "total": len(people)}
 
 
 # ─── UPDATE COMPANY SIZE BY NAME (called by extension after people page scrape) ──
@@ -638,13 +803,16 @@ async def update_company(
 ):
     user_id = get_user_id(authorization)
     try:
-        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        update_data = {k: v for k, v in data.model_dump().items() if v is not None}
+        if not update_data:
+            co = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+            return {"company": co.data[0] if co.data else {}}
         response = supabase.table("companies")\
             .update(update_data)\
             .eq("id", company_id)\
             .eq("user_id", user_id)\
             .execute()
-        return {"company": response.data[0]}
+        return {"company": response.data[0] if response.data else {}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -663,6 +831,27 @@ async def delete_company(
             .execute()
         posthog.capture(user_id, "company_deleted")
         return {"message": "Company deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/companies")
+async def bulk_delete_companies(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    user_id = get_user_id(authorization)
+    ids = payload.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="No ids provided")
+    try:
+        supabase.table("companies")\
+            .delete()\
+            .in_("id", ids)\
+            .eq("user_id", user_id)\
+            .execute()
+        posthog.capture(user_id, "companies_bulk_deleted", {"count": len(ids)})
+        return {"deleted": len(ids)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -695,6 +884,126 @@ async def get_company_leads(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── TECHNOPARK DIRECTORY ────────────────────────────────────────
+
+_TECHNOPARK_DISK_CACHE = os.path.join(
+    "/tmp" if os.getenv("VERCEL") else os.path.dirname(__file__),
+    "_technopark_cache.json"
+)
+_technopark_cache: dict = {"data": None, "fetched_at": 0}
+
+# Load disk cache on startup so backend restarts don't lose data
+try:
+    import json as _json_cache
+    if os.path.exists(_TECHNOPARK_DISK_CACHE):
+        with open(_TECHNOPARK_DISK_CACHE) as _f:
+            _technopark_cache = _json_cache.load(_f)
+except Exception:
+    pass
+
+_GENERIC_EMAIL_DOMAINS = {
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+    'rediffmail.com', 'ymail.com', 'live.com', 'icloud.com',
+}
+
+@router.get("/companies/technopark-directory")
+async def get_technopark_directory(
+    search: str = "",
+    park:   str = "",
+    building: str = "",
+    authorization: str = Header(...)
+):
+    """Return Technopark company directory, filtered and enriched, with already-added flag."""
+    import time as _time
+    user_id = get_user_id(authorization)
+
+    # Refresh cache every 30 minutes; on failure serve stale data rather than erroring
+    if not _technopark_cache["data"] or (_time.time() - _technopark_cache["fetched_at"]) > 1800:
+        _fetch_error = None
+        for _url in [
+            "https://technopark.in/api/companies",
+            "http://technopark.in/api/companies",
+        ]:
+            try:
+                resp = requests.get(
+                    _url,
+                    headers={"Accept": "application/json",
+                             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"},
+                    timeout=15
+                )
+                resp.raise_for_status()
+                _technopark_cache["data"] = resp.json()
+                _technopark_cache["fetched_at"] = _time.time()
+                _fetch_error = None
+                try:
+                    import json as _jc
+                    with open(_TECHNOPARK_DISK_CACHE, "w") as _wf:
+                        _jc.dump(_technopark_cache, _wf)
+                except Exception:
+                    pass
+                break
+            except Exception as e:
+                _fetch_error = e
+                continue
+        if _fetch_error and not _technopark_cache["data"]:
+            raise HTTPException(status_code=502, detail=f"Could not fetch Technopark directory: {_fetch_error}")
+
+    raw = _technopark_cache["data"] or []
+
+    # Derive website from email domain
+    def _website_from_email(email: str) -> str | None:
+        if not email or '@' not in email:
+            return None
+        domain = email.split('@')[1].strip().lower()
+        if domain in _GENERIC_EMAIL_DOMAINS:
+            return None
+        return f"https://{domain}"
+
+    # Build normalised list
+    companies = []
+    for c in raw:
+        website = _website_from_email(c.get("company_email", ""))
+        companies.append({
+            "technopark_id": c.get("company_id"),
+            "name":          c.get("company_name", "").strip(),
+            "website":       website,
+            "email":         c.get("company_email", "").strip(),
+            "building":      c.get("company_buildings", "").strip(),
+            "park":          c.get("company_parks", "").strip(),
+            "address":       c.get("company_address", "").replace('\r\n', ', ').strip(),
+            "contact_name":  c.get("company_contact_person", "").strip(),
+            "contact_title": c.get("company_designation", "").strip(),
+        })
+
+    # Apply filters
+    if search:
+        q = search.lower()
+        companies = [c for c in companies if q in c["name"].lower()]
+    if park:
+        companies = [c for c in companies if park.lower() in c["park"].lower()]
+    if building:
+        companies = [c for c in companies if building.lower() in c["building"].lower()]
+
+    # Flag already-added companies
+    if companies:
+        existing = supabase.table("companies").select("name").eq("user_id", user_id).execute()
+        added_names = {r["name"].strip().lower() for r in (existing.data or [])}
+        for c in companies:
+            c["already_added"] = c["name"].lower() in added_names
+
+    # Unique building and park lists for filters
+    all_parks     = sorted({c["park"]     for c in _technopark_cache["data"] and
+                            [{"park": r.get("company_parks","").strip()} for r in _technopark_cache["data"]] or []})
+    all_buildings = sorted({r.get("company_buildings","").strip() for r in (_technopark_cache["data"] or []) if r.get("company_buildings")})
+
+    return {
+        "companies": companies,
+        "total":     len(companies),
+        "parks":     ["TECHNOPARK PHASE I", "TECHNOPARK PHASE II", "TECHNOPARK PHASE III"],
+        "buildings": all_buildings,
+    }
+
+
 # ─── BULK COMPANY SAVE ────────────────────────────────────────
 
 @router.post("/companies/bulk")
@@ -709,6 +1018,7 @@ async def bulk_create_companies(
         raise HTTPException(status_code=400, detail="No companies provided")
 
     inserted = []
+    updated = []
     skipped = 0
 
     for company in companies:
@@ -717,26 +1027,49 @@ async def bulk_create_companies(
                 skipped += 1
                 continue
 
-            # Check for duplicates by name
+            name = company["name"].strip()
+
+            # Check if this company already exists for this user
             existing = supabase.table("companies")\
-                .select("id")\
+                .select("id, website, size, followers")\
                 .eq("user_id", user_id)\
-                .eq("name", company["name"])\
+                .eq("name", name)\
                 .execute()
 
             if existing.data:
-                skipped += 1
+                # Upsert — overwrite website / size / followers with CSV values when provided.
+                # CSV is the source of truth for these fields; autofill enrichment data
+                # (linkedin_url, description, headquarters) is left untouched.
+                existing_id = existing.data[0]["id"]
+                patch = {}
+                if company.get("website"):
+                    patch["website"] = company["website"]
+                if company.get("size"):
+                    patch["size"] = company["size"]
+                if company.get("followers"):
+                    patch["followers"] = company["followers"]
+
+                if patch:
+                    supabase.table("companies").update(patch).eq("id", existing_id).execute()
+                    updated.append(existing_id)
+                else:
+                    skipped += 1
                 continue
 
             data = {
                 "user_id": user_id,
-                "name": company.get("name", "").strip(),
+                "name": name,
                 "industry": company.get("industry") or None,
                 "size": company.get("size") or None,
+                "followers": company.get("followers") or None,
                 "headquarters": company.get("headquarters") or None,
                 "description": company.get("description") or None,
                 "website": company.get("website") or None,
                 "linkedin_url": company.get("linkedin_url") or company.get("linkedinUrl") or company.get("salesNavUrl") or None,
+                "phone": company.get("phone") or None,
+                "founded": company.get("founded") or None,
+                "specialties": company.get("specialties") or None,
+                "tagline": company.get("tagline") or None,
             }
 
             response = supabase.table("companies").insert(data).execute()
@@ -749,13 +1082,16 @@ async def bulk_create_companies(
 
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
+        "updated": len(updated),
         "skipped": skipped,
         "total": len(companies),
     })
     return {
         "inserted": len(inserted),
+        "updated": len(updated),
         "skipped": skipped,
-        "companies": inserted
+        "companies": inserted,
+        "all_ids": [c["id"] for c in inserted] + updated,
     }
 
 # ─── COMPLIANCE CHECKER ───────────────────────────────────────
@@ -773,8 +1109,9 @@ async def check_compliance(
             raise HTTPException(status_code=404, detail="Company not found")
         company = co_res.data[0]
 
-        groq_key = payload.get("groq_key") or os.getenv("GROQ_API_KEY", "")
-        gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
+        groq_key        = payload.get("groq_key")       or os.getenv("GROQ_API_KEY", "")
+        gemini_key      = payload.get("gemini_key")     or os.getenv("GEMINI_API_KEY", "")
+        openrouter_key  = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
         website = company.get("website", "")
 
         compliance_found = []
@@ -800,7 +1137,7 @@ async def check_compliance(
                 security_notes = f"Detected from website: {website}"
 
         # Step 2 — use AI to verify and add more context only if AI key available
-        if (groq_key or gemini_key) and company.get("name"):
+        if (groq_key or gemini_key or openrouter_key) and company.get("name"):
             company_name = company.get("name", "")
             industry = company.get("industry", "")
             description = company.get("description", "")
@@ -819,24 +1156,38 @@ Reply with ONLY valid JSON:
 IMPORTANT: Return empty additional_compliance array if not sure. Do not guess."""
 
             try:
+                content = ""
                 if gemini_key:
                     res = requests.post(
-                        f'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}',
+                        f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}',
                         headers={'Content-Type': 'application/json'},
                         json={'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 200}},
                         timeout=15
                     )
-                    data = res.json()
-                    content = data['candidates'][0]['content']['parts'][0]['text'].strip()
-                else:
+                    d = res.json()
+                    if 'error' not in d:
+                        content = d['candidates'][0]['content']['parts'][0]['text'].strip()
+                if not content and openrouter_key:
+                    res = requests.post(
+                        'https://openrouter.ai/api/v1/chat/completions',
+                        headers={'Authorization': f'Bearer {openrouter_key}', 'Content-Type': 'application/json',
+                                 'HTTP-Referer': 'https://leadgen.app', 'X-Title': 'Leadgen Platform'},
+                        json={'model': 'google/gemini-2.0-flash-exp:free', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 200, 'temperature': 0.1},
+                        timeout=15
+                    )
+                    d = res.json()
+                    if 'choices' in d:
+                        content = d['choices'][0]['message']['content'].strip()
+                if not content and groq_key:
                     res = requests.post(
                         'https://api.groq.com/openai/v1/chat/completions',
                         headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
                         json={'model': 'llama-3.1-8b-instant', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 200, 'temperature': 0.1},
                         timeout=10
                     )
-                    data = res.json()
-                    content = data['choices'][0]['message']['content'].strip()
+                    d = res.json()
+                    if 'choices' in d:
+                        content = d['choices'][0]['message']['content'].strip()
 
                 import re, json as jsonlib
                 content = re.sub(r'^```json\s*', '', content)
@@ -1140,56 +1491,91 @@ async def analyze_company_website(
             raise HTTPException(status_code=404, detail="Company not found")
         company = co_res.data[0]
 
-        from .website_analyzer import fetch_website_content, analyze_with_gemini, analyze_with_openai, analyze_with_groq, classify_with_groq
+        from .website_analyzer import (
+            fetch_website_content, analyze_with_gemini, analyze_with_openai,
+            analyze_with_groq, classify_with_groq, classify_company_type_rules,
+            analyze_with_openrouter,
+        )
 
-        openai_key = payload.get("openai_key") or os.getenv("OPENAI_API_KEY", "")
-        gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
-        groq_key = payload.get("groq_key") or os.getenv("GROQ_API_KEY", "")
-        website = company.get("website") or payload.get("website", "")
+        openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
+        gemini_key      = payload.get("gemini_key")      or os.getenv("GEMINI_API_KEY", "")
+        groq_key        = payload.get("groq_key")        or os.getenv("GROQ_API_KEY", "")
+        openrouter_key  = payload.get("openrouter_key")  or os.getenv("OPENROUTER_API_KEY", "")
+        openrouter_model = payload.get("openrouter_model") or ""
+        website         = company.get("website") or payload.get("website", "")
 
+        # ── Step 1: fetch website content ──────────────────────────
+        website_data = fetch_website_content(website) if website else None
+
+        # ── Step 2: rule-based product/service classification ──────
+        rule_type, rule_confidence = classify_company_type_rules(
+            website_data, company.get("description", "")
+        )
+
+        # ── Step 3: AI analysis — Gemini → OpenRouter → OpenAI → Groq ──
         result = {}
+        if rule_confidence != "High":
+            if website_data and gemini_key:
+                result = analyze_with_gemini(website_data, company.get("name", ""), gemini_key)
+            if not result and openrouter_key:
+                kw = {"model": openrouter_model} if openrouter_model else {}
+                result = analyze_with_openrouter(website_data, company.get("name", ""), openrouter_key, **kw) or {}
+            if not result and website_data and openai_key:
+                ai_res = analyze_with_openai(website_data, company.get("name", ""), openai_key)
+                if not ai_res.get("_openai_error"):
+                    result = ai_res
+            if not result and groq_key:
+                result = analyze_with_groq(
+                    website_data, company.get("name", ""),
+                    company.get("industry", ""), company.get("description", ""), groq_key
+                )
 
-        # Fetch website content first if URL available
-        website_data = None
-        if website:
-            website_data = fetch_website_content(website)
-
-        # Try AI in priority order: Gemini → OpenAI → Groq
-        if website_data and gemini_key:
-            result = analyze_with_gemini(website_data, company.get("name", ""), gemini_key)
-        
-        if not result and website_data and openai_key:
-            ai_result = analyze_with_openai(website_data, company.get("name", ""), openai_key)
-            if not ai_result.get('_openai_error'):
-                result = ai_result
-
-        if not result and groq_key:
-            result = analyze_with_groq(
-                website_data,
-                company.get("name", ""),
-                company.get("industry", ""),
-                company.get("description", ""),
-                groq_key
+        # If no AI key and rules were Low-confidence, still return rule result
+        if not result and not rule_type:
+            raise HTTPException(
+                status_code=400,
+                detail="No AI key available and website signals are ambiguous. Add Gemini (free at aistudio.google.com), Groq, OpenRouter, or OpenAI key in Settings."
             )
 
-        if not result:
-            raise HTTPException(status_code=400, detail="No AI key available. Add Gemini (free), OpenAI, or Groq key in Settings.")
+        # ── Step 4: merge rule result with AI result ────────────────
+        # Normalize AI "Services" → "Service" for consistency
+        ai_type = result.get("company_type", "")
+        if ai_type == "Services": result["company_type"] = "Service"
 
-        # Save results to database
-        if result and not result.get("error"):
-            update_data = {}
-            if result.get("company_type"):
-                update_data["classification"] = result["company_type"]
-            if result.get("compliance"):
-                update_data["compliance"] = ", ".join(result["compliance"])
-            if update_data:
-                supabase.table("companies").update(update_data).eq("id", company_id).execute()
+        # Rules always win when they are High or Medium confidence
+        final_type = rule_type or result.get("company_type")
+        if rule_confidence in ("High", "Medium") and rule_type:
+            final_type = rule_type
+            result["company_type"] = rule_type
+            result["company_type_confidence"] = rule_confidence
+        else:
+            result["company_type_confidence"] = "AI"
 
-        ai_provider = "gemini" if gemini_key else "openai" if openai_key else "groq"
+        # Merge compliance from website scraping + AI
+        scraped_compliance = website_data.get("compliance_detected", []) if website_data else []
+        ai_compliance      = result.get("compliance", [])
+        merged_compliance  = list(dict.fromkeys(scraped_compliance + ai_compliance))  # dedup, preserve order
+
+        result["compliance"]    = merged_compliance
+        result["company_type"]  = final_type
+
+        # ── Step 5: save to DB ─────────────────────────────────────
+        update_data = {}
+        if final_type:
+            update_data["company_type"] = final_type          # Product / Service / Hybrid
+        if merged_compliance:
+            update_data["compliance"] = ", ".join(merged_compliance)
+        if result.get("website_summary") and not company.get("description"):
+            update_data["description"] = result["website_summary"]
+        if update_data:
+            supabase.table("companies").update(update_data).eq("id", company_id).execute()
+
+        ai_provider = "gemini" if gemini_key else "openai" if openai_key else "groq" if groq_key else "rules-only"
         posthog.capture(user_id, "company_website_analyzed", {
             "has_website": bool(website),
             "ai_provider": ai_provider,
-            "has_result": bool(result and not result.get("error")),
+            "company_type": final_type,
+            "rule_confidence": rule_confidence,
         })
         return {"success": True, "analysis": result, "company_id": company_id}
 
@@ -1215,24 +1601,39 @@ async def autofill_company_from_linkedin(
             raise HTTPException(status_code=404, detail="Company not found")
         company = co_res.data[0]
 
-        from .company_prefill import search_company_website, search_linkedin_url_direct, extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3, scrape_linkedin_data
+        from .company_prefill import (
+            search_company_website, search_linkedin_url_direct,
+            search_linkedin_url_by_domain,
+            extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3,
+            scrape_linkedin_data, _is_indian_entity, clean_name_for_search,
+        )
 
         openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
+        li_cookie      = payload.get("li_cookie") or os.getenv("LI_SESSION_COOKIE", "")
+        company_name   = company.get("name", "")
+        search_name    = clean_name_for_search(company_name)
+        is_indian      = _is_indian_entity(company_name)
 
-        company_name = company.get("name", "")
+        linkedin_url  = company.get("linkedin_url") or ""
+        stored_website = company.get("website") or ""  # original DB value — used for domain search
+        found_website  = stored_website                # may be updated below; used for saving
+
+        if is_indian:
+            # Reject stored linkedin_url that points to global parent (no "india" in slug)
+            if linkedin_url and 'india' not in linkedin_url.lower():
+                linkedin_url = ""
+            # Don't SAVE the stored website for Indian entities (may be global parent's site),
+            # but still USE it as a domain hint for LinkedIn search below.
+            found_website = ""
 
         # Step 1 — Resolve LinkedIn URL
-        # Priority: already stored → scrape company website → search LinkedIn directly
-        linkedin_url = company.get("linkedin_url") or ""
-        found_website = company.get("website") or ""  # track website found along the way
-
+        # Priority: (a) HTML extraction from website → (b) domain-based DDGS → (c) name-based DDGS
         if not linkedin_url:
-            if not found_website:
-                found_website = search_company_website(company_name) or ""
-            if found_website:
+            # (a) Try extracting LinkedIn link from the company's own website HTML
+            if not is_indian and stored_website:
                 try:
                     r = requests.get(
-                        found_website if found_website.startswith("http") else "https://" + found_website,
+                        stored_website if stored_website.startswith("http") else "https://" + stored_website,
                         headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
                         timeout=12, allow_redirects=True
                     )
@@ -1242,36 +1643,103 @@ async def autofill_company_from_linkedin(
                 except Exception as e:
                     print(f"Website fetch for autofill: {e}")
 
-        # Fallback: search for LinkedIn URL directly via DDGS
+            # If still no website and not Indian, discover it first
+            if not is_indian and not stored_website:
+                found_website = search_company_website(search_name) or ""
+                stored_website = found_website
+
+        # (b) Domain-based DDGS search — works for BOTH Indian and non-Indian entities.
+        #     Uses stored_website (the company's real domain) even when found_website is cleared.
+        #     This avoids name-search mismatches (e.g. "DIAGNAL (P) Ltd" → G3G).
+        if not linkedin_url and stored_website:
+            linkedin_url = search_linkedin_url_by_domain(stored_website) or ""
+
+        # (c) Name-based search — last resort, most likely to match wrong entity
         if not linkedin_url:
-            linkedin_url = search_linkedin_url_direct(company_name) or ""
+            linkedin_url = search_linkedin_url_direct(search_name) or ""
 
         if not linkedin_url:
             return {"success": False, "filled": [], "update": {}, "linkedin_url": None,
                     "message": "Could not find a LinkedIn page for this company. Try adding the LinkedIn URL manually on the card."}
 
-        # Step 2 — Scrape LinkedIn (followers, HQ, size, description, website)
-        li = scrape_linkedin_data(linkedin_url)
+        # Step 2 — Scrape LinkedIn
+        li = scrape_linkedin_data(linkedin_url, li_cookie=li_cookie)
 
-        # Step 3 — If website still not found, search independently via DDGS
-        if not found_website and not li.get("website"):
+        # If LinkedIn was blocked, try DDGS snippet fallback
+        if not any([li.get("followers"), li.get("employee_count"), li.get("description")]):
+            try:
+                from ddgs import DDGS
+                with DDGS() as ddgs:
+                    q = f'"{company_name}" linkedin followers employees'
+                    for sr in ddgs.text(q, max_results=5):
+                        body = sr.get("body", "")
+                        if not li.get("followers"):
+                            import re as _re2
+                            m = _re2.search(r'([\d,]+)\s*followers', body, _re2.I)
+                            if m: li["followers"] = m.group(0).strip()
+                        if not li.get("description") and len(body) > 40:
+                            li["description"] = body[:280]
+                        if li.get("followers") and li.get("description"): break
+            except Exception:
+                pass
+
+        # Step 3 — Website: prefer stored website over LinkedIn-scraped to avoid aggregator sites
+        # (e.g. LinkedIn page for SS&C shows ampliz.com, but stored website ssctech.com is correct)
+        if not is_indian and not found_website and not li.get("website"):
             found_website = search_company_website(company_name) or ""
-        website_to_save = li.get("website") or found_website or ""
+        # For Indian entities found_website is already "" (cleared above), so li.get("website") is used
+        website_to_save = (found_website if not is_indian else "") or li.get("website") or ""
 
-        # Step 4 — Build update: only overwrite empty fields
+        # Step 4 — Build update.
+        # "↯ Fill LI" is an explicit user action — LinkedIn is authoritative for its own fields,
+        # so always overwrite (not just fill-empty) for all LinkedIn-sourced data.
+        # Website is the exception: we keep the existing website unless it's empty, because
+        # LinkedIn sometimes lists aggregator/data-broker URLs instead of the real site.
         update_data = {}
-        if linkedin_url and not company.get("linkedin_url"):
+        if linkedin_url:
             update_data["linkedin_url"] = linkedin_url
-        if li.get("location") and not company.get("headquarters"):
+        if li.get("location"):
             update_data["headquarters"] = li["location"]
-        if li.get("followers") and not company.get("followers"):
+        if li.get("followers"):
             update_data["followers"] = li["followers"]
-        if li.get("employee_count") and not company.get("size"):
-            update_data["size"] = f"{li['employee_count']} employees"
-        if li.get("description") and not company.get("description"):
+        if li.get("employee_count"):
+            update_data["size"] = str(li["employee_count"])
+        if li.get("description"):
             update_data["description"] = li["description"]
-        if website_to_save and not company.get("website"):
+        if li.get("phone"):
+            update_data["phone"] = li["phone"]
+        if li.get("founded"):
+            update_data["founded"] = li["founded"]
+        if li.get("specialties"):
+            update_data["specialties"] = li["specialties"]
+        if li.get("tagline"):
+            update_data["tagline"] = li["tagline"]
+        # Website: only set when empty (or Indian entity where stored URL was the global parent)
+        if website_to_save and (not company.get("website") or is_indian):
             update_data["website"] = website_to_save
+
+        # Classification from LinkedIn industry (mirrors _LI_CLASS_MAP in _autofill_one)
+        current_class = company.get("classification") or "Unclassified"
+        if li.get("industry") and current_class == "Unclassified":
+            _LI_CLASS_MAP = {
+                'software development': 'IT Services', 'information technology': 'IT Services',
+                'it services': 'IT Services', 'computer software': 'SaaS', 'internet': 'SaaS',
+                'financial services': 'Fintech', 'banking': 'Banking', 'insurance': 'Insurance',
+                'hospital': 'Healthtech', 'health': 'Healthtech', 'e-learning': 'Edtech',
+                'education': 'Edtech', 'logistics': 'Logistics', 'transportation': 'Logistics',
+                'retail': 'Retail', 'real estate': 'Real Estate', 'venture capital': 'VC / Investment',
+                'private equity': 'VC / Investment', 'marketing': 'Media', 'broadcast': 'Media',
+                'management consulting': 'Consulting', 'consulting': 'Consulting',
+                'nonprofit': 'Non-profit', 'government': 'Government',
+                'security': 'Cybersecurity', 'cybersecurity': 'Cybersecurity',
+                'manufacturing': 'Manufacturing', 'e-commerce': 'E-commerce',
+                'business consulting': 'Consulting', 'staffing': 'IT Services',
+                'outsourcing': 'IT Services',
+            }
+            ind_lower = li["industry"].lower()
+            mapped = next((v for k, v in _LI_CLASS_MAP.items() if k in ind_lower), None)
+            if mapped:
+                update_data["classification"] = mapped
 
         if update_data:
             supabase.table("companies").update(update_data).eq("id", company_id).execute()
@@ -1285,6 +1753,7 @@ async def autofill_company_from_linkedin(
             "filled": list(update_data.keys()),
             "update": update_data,
             "linkedin_url": linkedin_url,
+            "classification": update_data.get("classification"),
         }
 
     except HTTPException:
@@ -1300,17 +1769,14 @@ async def bulk_autofill_companies(
     payload: dict = {},
     authorization: str = Header(...)
 ):
-    """Autofill LinkedIn data for multiple companies in parallel (5 workers)."""
+    """Autofill data for multiple companies in parallel (20 workers)."""
     user_id = get_user_id(authorization)
     company_ids = payload.get("company_ids", [])
-    openrouter_key = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
 
-    import re as _re
+    import threading as _threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from .company_prefill import (search_company_website, search_linkedin_url_direct,
-                                   extract_linkedin_url_from_html, extract_linkedin_url_with_qwen3,
-                                   scrape_linkedin_data)
+    from .website_analyzer import fetch_website_content, classify_company_type_rules
 
     # Fetch target companies
     try:
@@ -1322,56 +1788,510 @@ async def bulk_autofill_companies(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    import re as _re_mod
+    from .company_prefill import (
+        scrape_linkedin_data as _scrape_li,
+        search_linkedin_url_by_domain, search_linkedin_url_direct,
+        search_company_website, clean_name_for_search,
+    )
+
+    def _ddgs_run(fn, *args, timeout=15):
+        """Run fn under _DDGS_SEM (max 3 concurrent DDGS calls) with a per-call timeout.
+
+        The semaphore is acquired in the CALLING thread so the timeout only measures
+        the actual fn() execution, not time spent waiting for the semaphore slot.
+        With 20 pool workers and Semaphore(3), acquiring the semaphore in the thread
+        (old approach) meant the 15s timeout could expire before fn() ever started.
+        """
+        with _DDGS_SEM:
+            result = [None]
+            def _worker():
+                try:
+                    result[0] = fn(*args)
+                except Exception:
+                    pass
+            t = _threading_mod.Thread(target=_worker, daemon=True)
+            t.start()
+            t.join(timeout=timeout)
+            return result[0]
+
+    # ── Generic business words that appear on any company site ───────────────
+    _SITE_GENERIC = frozenset({
+        'pvt', 'ltd', 'inc', 'llc', 'corp', 'private', 'limited',
+        'the', 'and', 'for', 'with', 'india', 'global', 'group',
+        'company', 'business', 'technology', 'technologies',
+        'solutions', 'services', 'systems', 'digital', 'software',
+        'enterprise', 'consulting', 'management', 'international',
+        'national', 'associates', 'partners', 'infotech', 'infosystems',
+    })
+
+    def _sig_words(company_name: str) -> list:
+        """Significant (non-generic) words from a company name, same set as _SITE_GENERIC."""
+        clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
+        return [w for w in clean.split() if len(w) > 2 and w not in _SITE_GENERIC]
+
+    def _name_is_distinctive(company_name: str) -> bool:
+        """Return True if the name is specific enough that a LinkedIn slug match is trustworthy.
+
+        Generic names like "Apex" or "Prime Tech" match hundreds of companies on LinkedIn.
+        Distinctive names like "Mindzen" or "Cinch Business Solutions" are unlikely to collide.
+        Rule: at least 2 significant words, OR 1 word of length >= 7.
+        """
+        words = _sig_words(company_name)
+        return len(words) >= 2 or (len(words) == 1 and len(words[0]) >= 7)
+
+    def _website_matches_company(company_name: str, website_data: dict) -> bool:
+        """Return True if website content plausibly belongs to this company.
+
+        Prevents saving/using a DDGS-discovered website that actually belongs to a
+        different company (e.g. 'Cinch Business Solutions' → greencirclelife.com).
+        Requires at least one non-generic name word to appear on the page.
+        """
+        if not website_data:
+            return False
+        page_text = " ".join(filter(None, [
+            website_data.get("title", ""),
+            website_data.get("meta_description", ""),
+            website_data.get("hero", ""),
+            website_data.get("first_para", ""),
+        ])).lower()
+        clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
+        words = [w for w in clean.split() if len(w) > 2 and w not in _SITE_GENERIC]
+        if not words:
+            return True  # Name is entirely generic — cannot validate, accept
+        return any(w in page_text for w in words[:4])
+
+    def _linkedin_slug_matches(company_name: str, linkedin_url: str) -> bool:
+        """Validate that a LinkedIn URL slug plausibly belongs to this company.
+
+        LinkedIn slugs are derived from company names, so the slug for
+        'Cinch Business Solutions' would be 'cinch-business-solutions' or similar,
+        not 'green-circle-life'. At least one non-generic name word must appear
+        in the slug (or the URL path at minimum).
+        """
+        m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin_url)
+        if not m:
+            return False
+        slug = m.group(1).lower().replace('-', ' ').replace('_', ' ')
+        clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
+        words = [w for w in clean.split() if len(w) > 2 and w not in _SITE_GENERIC]
+        if not words:
+            return True  # Generic name — can't validate, accept
+        return any(w in slug for w in words[:4])
+
+    def _ddgs_linkedin_snippet(company_name: str, li_slug: str = "") -> dict:
+        """Pull employee count + followers from DDGS search snippets for a LinkedIn page.
+
+        LinkedIn blocks direct scraping without login. DDGS snippets for
+        linkedin.com/company/slug frequently contain "X followers" and "Y employees"
+        from Google/Bing knowledge panels — no login required.
+        """
+        result = {}
+        try:
+            from ddgs import DDGS
+            queries = []
+            if li_slug:
+                queries.append(f"site:linkedin.com/company/{li_slug}")
+            queries.append(f'"{company_name}" linkedin employees followers')
+            with DDGS() as ddgs:
+                for q in queries:
+                    try:
+                        for r in ddgs.text(q, max_results=4):
+                            body = " ".join(filter(None, [
+                                r.get("body"), r.get("title"), r.get("description"),
+                            ]))
+                            if not result.get("followers"):
+                                m = _re_mod.search(r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers', body, _re_mod.I)
+                                if m:
+                                    result["followers"] = m.group(0).strip()
+                            if not result.get("employee_count"):
+                                # Handles: "1,234 employees", "11-50 employees",
+                                # "5000 & Above employees", "501+ employees"
+                                m = _re_mod.search(
+                                    r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
+                                    r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
+                                    body, _re_mod.I,
+                                )
+                                if m:
+                                    result["employee_count"] = m.group(1).replace(",", "")
+                            if not result.get("headquarters"):
+                                # LinkedIn snippet format: "City, Country · Industry · X employees"
+                                m = _re_mod.search(r'·\s*([A-Z][^·|<]{4,50}(?:India|US|UAE|UK|Singapore|Malaysia|Canada|Australia))\s*[·|]', body)
+                                if m:
+                                    result["headquarters"] = m.group(1).strip()
+                            if result.get("followers") or result.get("employee_count"):
+                                return result
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return result
+
+    def _ddgs_general_info(company_name: str, out: dict, need_desc: bool, need_hq: bool) -> None:
+        """Write description / headquarters into *out* from DDGS company snippets.
+
+        Targets Tracxn, Clutch, LinkedIn, and similar business directories whose
+        search snippets typically include a one-liner description and city/country.
+        """
+        clean = clean_name_for_search(company_name)
+        try:
+            from ddgs import DDGS
+            queries = [
+                f'"{clean}" company description headquarters',
+                f'{clean} IT company Kerala India about',
+            ]
+            with DDGS() as ddgs:
+                for q in queries:
+                    try:
+                        for r in ddgs.text(q, max_results=5):
+                            body  = " ".join(filter(None, [r.get("body"), r.get("title")]))
+                            href  = r.get("href", "")
+                            # Skip results unlikely to be about this specific company
+                            if clean.lower().split()[0] not in body.lower():
+                                continue
+                            if need_desc and not out.get("description"):
+                                # Prefer sentences that sound like a company description
+                                m = _re_mod.search(
+                                    r'(?:is a|is an|provides?|offers?|develops?|builds?|specializes? in)'
+                                    r'[^.!?]{20,200}[.!?]',
+                                    body, _re_mod.I,
+                                )
+                                if m:
+                                    out["description"] = m.group(0).strip()
+                            if need_hq and not out.get("headquarters"):
+                                m = _re_mod.search(
+                                    r'(?:headquartered? in|located in|based in|offices? in|HQ[:\s]+)'
+                                    r'\s*([A-Z][a-zA-Z\s,]{4,50}?)(?:[,.]|\s*[-–]|\s*\|)',
+                                    body, _re_mod.I,
+                                )
+                                if m:
+                                    out["headquarters"] = m.group(1).strip()
+                            if (not need_desc or out.get("description")) and \
+                               (not need_hq  or out.get("headquarters")):
+                                return
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
     def _autofill_one(company: dict) -> dict:
         company_name = company.get("name", "")
-        found_website = company.get("website") or ""
-        linkedin_url  = company.get("linkedin_url") or ""
+        ws_url       = company.get("website") or ""
+        if ws_url and not ws_url.startswith("http"):
+            ws_url = "https://" + ws_url
+
+        needs_desc      = not company.get("description")
+        needs_hq        = not company.get("headquarters")
+        needs_type      = not company.get("company_type")
+        needs_site      = not company.get("website")
+        needs_linkedin  = not company.get("linkedin_url")
+        needs_size      = not company.get("size")
+        needs_followers = not company.get("followers")
+        # A correct LinkedIn company profile always lists the real website — if it
+        # disagrees with our stored website, that's a strong sign of a wrong match.
+        # Captured once per company (stored as "" if LinkedIn lists none) so this
+        # doesn't force a re-scrape on every future run.
+        needs_li_verify = bool(company.get("linkedin_url")) and company.get("linkedin_website") is None
+
+        if not any([needs_desc, needs_hq, needs_type, needs_site,
+                    needs_linkedin, needs_size, needs_followers, needs_li_verify]):
+            return {"id": company["id"], "name": company_name, "success": True,
+                    "filled": [], "update": {}, "message": "already complete"}
+
+        update_data = {}
 
         try:
-            # Find LinkedIn URL
-            if not linkedin_url:
-                if not found_website:
-                    found_website = search_company_website(company_name) or ""
-                if found_website:
-                    try:
-                        r = requests.get(
-                            found_website if found_website.startswith("http") else "https://" + found_website,
-                            headers={"User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"},
-                            timeout=10, allow_redirects=True
-                        )
-                        linkedin_url = extract_linkedin_url_from_html(r.text)
-                        if not linkedin_url and openrouter_key:
-                            linkedin_url = extract_linkedin_url_with_qwen3(r.text, company_name, openrouter_key)
-                    except Exception:
-                        pass
-            if not linkedin_url:
-                linkedin_url = search_linkedin_url_direct(company_name) or ""
-            if not linkedin_url:
-                return {"id": company["id"], "name": company_name, "success": False,
-                        "filled": [], "update": {}, "message": "LinkedIn not found"}
+            # ── Step 1: find official website via DDGS if missing ─────────────
+            if needs_site and not ws_url:
+                found = _ddgs_run(search_company_website, company_name, timeout=20)
+                if found:
+                    ws_url = found
+                    update_data["website"] = ws_url
 
-            # Scrape LinkedIn
-            li = scrape_linkedin_data(linkedin_url)
+            # ── Step 1b: LinkedIn-first website discovery ─────────────────────
+            # A correct LinkedIn company "About" section always lists the official
+            # site. Searching LinkedIn by name is often MORE reliable than a raw
+            # web search because the company itself controls the page.
+            # Strategy:
+            #   • Distinctive name (≥2 sig-words OR 1 word ≥7 chars) → trust the
+            #     LinkedIn-listed website directly; it's highly unlikely to be wrong.
+            #   • Ambiguous name (single short word like "Apex") → use the LinkedIn-
+            #     listed website as a candidate but still validate its content against
+            #     the company name before saving, matching multiple entities risk.
+            # This runs when we still need both the website AND the LinkedIn URL, OR
+            # when DDGS Step 1 returned nothing (ws_url is still empty).
+            li_url = company.get("linkedin_url") or ""
+            if needs_linkedin and (needs_site and not ws_url or (needs_site and not update_data.get("website"))):
+                try:
+                    _li_candidate = _ddgs_run(
+                        search_linkedin_url_direct, clean_name_for_search(company_name)
+                    ) or ""
+                    if _li_candidate and _linkedin_slug_matches(company_name, _li_candidate):
+                        # Scrape the LinkedIn page just for its About-section website
+                        _li_data_early = _scrape_li(_li_candidate, fast=False, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
+                        _li_ws_early = _li_data_early.get("website") or ""
+                        if _li_ws_early:
+                            if not _li_ws_early.startswith("http"):
+                                _li_ws_early = "https://" + _li_ws_early
+                            if _name_is_distinctive(company_name):
+                                # Trust directly — no content-validation needed
+                                ws_url = _li_ws_early
+                                update_data["website"] = ws_url
+                                update_data["linkedin_website"] = ws_url  # same source
+                            else:
+                                # Ambiguous name: treat as candidate, validate in Step 2
+                                ws_url = _li_ws_early
+                                update_data["website"] = ws_url
+                                update_data["linkedin_website"] = _li_ws_early
+                                # _website_matches_company check will run in Step 2
+                        # Either way, lock in the LinkedIn URL we found
+                        li_url = _li_candidate
+                        update_data["linkedin_url"] = li_url
+                        needs_linkedin = False  # don't re-search in Step 3
+                except Exception:
+                    pass
 
-            # Website fallback
-            if not found_website and not li.get("website"):
-                found_website = search_company_website(company_name) or ""
-            website_to_save = li.get("website") or found_website or ""
+            # ── Step 2: scrape website ────────────────────────────────────────
+            # fast=False (5s connect / 12s read) — fast=True's 2s kills ~80% of
+            # Indian IT sites. 20 workers × 12s ≈ 10 min for 1000 companies max.
+            website_data = None
+            _ws_url_used = None
+            if ws_url:
+                website_data = fetch_website_content(ws_url, fast=False)
+                _ws_url_used = ws_url
+                if not website_data:
+                    parsed = urlparse(ws_url)
+                    if not parsed.netloc.startswith("www."):
+                        _www = parsed.scheme + "://www." + parsed.netloc + parsed.path
+                        website_data = fetch_website_content(_www, fast=False)
+                        if website_data: _ws_url_used = _www
+                if not website_data and ws_url.startswith("http://"):
+                    _https = "https://" + ws_url[7:]
+                    website_data = fetch_website_content(_https, fast=False)
+                    if website_data: _ws_url_used = _https
 
-            # Build update (only empty fields)
-            update_data = {}
-            if linkedin_url and not company.get("linkedin_url"):
-                update_data["linkedin_url"] = linkedin_url
-            if li.get("location") and not company.get("headquarters"):
-                update_data["headquarters"] = li["location"]
-            if li.get("followers") and not company.get("followers"):
-                update_data["followers"] = li["followers"]
-            if li.get("employee_count") and not company.get("size"):
-                update_data["size"] = f"{li['employee_count']} employees"
-            if li.get("description") and not company.get("description"):
-                update_data["description"] = li["description"]
-            if website_to_save and not company.get("website"):
-                update_data["website"] = website_to_save
+            # Accuracy guard: reject website if its content doesn't mention the
+            # company name. Prevents "Cinch Business Solutions" → greencirclelife.com
+            # style mismatches where DDGS returns the wrong domain.
+            # Skipped when the website came directly from a validated LinkedIn About
+            # page for a distinctive company name — that source is authoritative.
+            _li_sourced_website = update_data.get("linkedin_website") == update_data.get("website") and bool(update_data.get("linkedin_website"))
+            if website_data and needs_site and _ws_url_used and not _li_sourced_website:
+                if not _website_matches_company(company_name, website_data):
+                    website_data = None
+                    _ws_url_used = None
+                    # Retract the URL we were about to save — it's the wrong company's site
+                    update_data.pop("website", None)
+                    ws_url = ""  # don't use for LinkedIn domain search either
+
+            if website_data:
+                if needs_type:
+                    ct, _ = classify_company_type_rules(website_data)
+                    if ct:
+                        update_data["company_type"] = ct
+                if needs_desc:
+                    desc = (website_data.get("meta_description") or
+                            website_data.get("first_para") or
+                            (website_data.get("hero", "")[:300].strip() or None))
+                    if desc:
+                        update_data["description"] = desc
+                if needs_hq:
+                    loc = website_data.get("location")
+                    if loc:
+                        update_data["headquarters"] = loc
+                compliance = website_data.get("compliance_detected") or []
+                if compliance and not company.get("compliance"):
+                    update_data["compliance"] = ", ".join(compliance)
+
+            # ── Step 3: LinkedIn URL ──────────────────────────────────────────
+            # Prefer update_data["linkedin_url"] — may have been set by Step 1b.
+            li_url = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
+
+            if needs_linkedin:
+                # Tier 1: LinkedIn href already in scraped HTML (free, instant)
+                if website_data and website_data.get("linkedin_url"):
+                    candidate = website_data["linkedin_url"]
+                    if _linkedin_slug_matches(company_name, candidate):
+                        li_url = candidate
+
+                # Tier 2: DDGS by domain — far more precise than name search
+                if not li_url and ws_url:
+                    candidate = _ddgs_run(search_linkedin_url_by_domain, ws_url) or ""
+                    if candidate and _linkedin_slug_matches(company_name, candidate):
+                        li_url = candidate
+
+                # Tier 3: DDGS by company name (last resort)
+                if not li_url:
+                    candidate = _ddgs_run(
+                        search_linkedin_url_direct, clean_name_for_search(company_name)
+                    ) or ""
+                    if candidate and _linkedin_slug_matches(company_name, candidate):
+                        li_url = candidate
+
+                if li_url:
+                    update_data["linkedin_url"] = li_url
+
+            # ── Step 4: scrape LinkedIn page (fast=False — all 4 UAs, 8s each) ─
+            # Also captures website URL from LinkedIn about section. If we had no
+            # website yet, use it to scrape for description/HQ/type. Otherwise it's
+            # stored for cross-validation against the website we already have.
+            if li_url and (needs_size or needs_followers or needs_hq or needs_desc or needs_site or needs_li_verify):
+                try:
+                    li_data = _scrape_li(li_url, fast=False, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
+                    if li_data.get("followers") and needs_followers:
+                        update_data["followers"] = li_data["followers"]
+                    if li_data.get("employee_count") and needs_size:
+                        update_data["size"] = str(li_data["employee_count"])
+                    if li_data.get("location") and needs_hq and not update_data.get("headquarters"):
+                        update_data["headquarters"] = li_data["location"]
+
+                    # Description — LinkedIn's About Overview is authoritative; use directly
+                    if li_data.get("description") and needs_desc and not update_data.get("description"):
+                        update_data["description"] = li_data["description"]
+
+                    # Phone from LinkedIn About (only if not already set from Maps)
+                    if li_data.get("phone") and not company.get("phone") and not update_data.get("phone"):
+                        update_data["phone"] = li_data["phone"]
+
+                    # Founded year
+                    if li_data.get("founded") and not company.get("founded"):
+                        update_data["founded"] = li_data["founded"]
+
+                    # Specialties
+                    if li_data.get("specialties") and not company.get("specialties"):
+                        update_data["specialties"] = li_data["specialties"]
+
+                    # Tagline (company slogan from LinkedIn og:description)
+                    if li_data.get("tagline") and not company.get("tagline"):
+                        update_data["tagline"] = li_data["tagline"]
+
+                    # Industry → classification (if not already set)
+                    if li_data.get("industry") and not company.get("classification") or company.get("classification") == "Unclassified":
+                        _LI_CLASS_MAP = {
+                            'software development': 'IT Services',
+                            'information technology': 'IT Services',
+                            'it services': 'IT Services',
+                            'computer software': 'SaaS',
+                            'internet': 'SaaS',
+                            'financial services': 'Fintech',
+                            'banking': 'Banking',
+                            'insurance': 'Insurance',
+                            'hospital': 'Healthtech',
+                            'health': 'Healthtech',
+                            'e-learning': 'Edtech',
+                            'education': 'Edtech',
+                            'logistics': 'Logistics',
+                            'transportation': 'Logistics',
+                            'retail': 'Retail',
+                            'real estate': 'Real Estate',
+                            'venture capital': 'VC / Investment',
+                            'private equity': 'VC / Investment',
+                            'marketing': 'Media',
+                            'broadcast': 'Media',
+                            'management consulting': 'Consulting',
+                            'consulting': 'Consulting',
+                            'nonprofit': 'Non-profit',
+                            'government': 'Government',
+                            'security': 'Cybersecurity',
+                            'cybersecurity': 'Cybersecurity',
+                            'manufacturing': 'Manufacturing',
+                            'e-commerce': 'E-commerce',
+                        }
+                        ind_lower = li_data["industry"].lower()
+                        mapped = next((v for k, v in _LI_CLASS_MAP.items() if k in ind_lower), None)
+                        if mapped:
+                            update_data["classification"] = mapped
+
+                    # LinkedIn about section often lists the official website.
+                    # Use it to scrape for description/type/HQ if website was unknown,
+                    # and always record it (even "" if absent) for accuracy cross-checks.
+                    li_website = li_data.get("website") or ""
+                    if li_website and not li_website.startswith("http"):
+                        li_website = "https://" + li_website
+                    # Always capture LinkedIn's stated website — keeps it fresh across fill runs.
+                    # needs_li_verify still gates whether Step 4 fires at all for complete records.
+                    if li_website:
+                        update_data["linkedin_website"] = li_website
+                    elif needs_li_verify:
+                        update_data["linkedin_website"] = ""  # sentinel: scraped, nothing listed
+                    if li_website and not website_data:
+                        ws2 = fetch_website_content(li_website, fast=False)
+                        if ws2:
+                            if needs_site and not update_data.get("website"):
+                                # For ambiguous company names (single short generic word) an
+                                # incorrect LinkedIn match could list its own site, which
+                                # would be wrong for us. Validate the content first.
+                                # For distinctive names this is guaranteed correct so skip.
+                                if _name_is_distinctive(company_name) or _website_matches_company(company_name, ws2):
+                                    update_data["website"] = li_website
+                            if needs_type and not update_data.get("company_type"):
+                                ct2, _ = classify_company_type_rules(ws2)
+                                if ct2: update_data["company_type"] = ct2
+                            if needs_desc and not update_data.get("description"):
+                                desc2 = (ws2.get("meta_description") or
+                                         ws2.get("first_para") or
+                                         (ws2.get("hero", "")[:300].strip() or None))
+                                if desc2: update_data["description"] = desc2
+                            if needs_hq and not update_data.get("headquarters"):
+                                loc2 = ws2.get("location")
+                                if loc2: update_data["headquarters"] = loc2
+                            if not company.get("compliance") and not update_data.get("compliance"):
+                                comp2 = ws2.get("compliance_detected") or []
+                                if comp2: update_data["compliance"] = ", ".join(comp2)
+                except Exception:
+                    pass
+
+            # ── Step 5: DDGS snippet — employee count, followers, HQ ──────────
+            # Runs regardless of whether li_url was found:
+            #   • With slug: targets the exact company page (most precise)
+            #   • Without slug: name-only query still surfaces LinkedIn cards
+            #     from search engine knowledge panels with employee/follower data
+            _needs_size_still      = needs_size      and not update_data.get("size")
+            _needs_followers_still = needs_followers  and not update_data.get("followers")
+            _needs_hq_still        = needs_hq         and not update_data.get("headquarters")
+            if _needs_size_still or _needs_followers_still or _needs_hq_still:
+                _m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url) if li_url else None
+                li_slug = _m.group(1) if _m else ""
+                snippet = _ddgs_run(_ddgs_linkedin_snippet, company_name, li_slug, timeout=20)
+                if snippet:
+                    if snippet.get("followers") and _needs_followers_still:
+                        update_data["followers"] = snippet["followers"]
+                    if snippet.get("employee_count") and _needs_size_still:
+                        update_data["size"] = str(snippet["employee_count"])
+                    if snippet.get("headquarters") and _needs_hq_still:
+                        update_data["headquarters"] = snippet["headquarters"]
+
+            # ── Step 6: DDGS general company info — description / HQ last resort ─
+            # When website + LinkedIn both failed, a plain company name search often
+            # returns snippets from Tracxn / Clutch / LinkedIn with useful metadata.
+            _needs_desc_still = needs_desc and not update_data.get("description")
+            _needs_hq_still2  = needs_hq   and not update_data.get("headquarters")
+            if _needs_desc_still or _needs_hq_still2:
+                _ddgs_run(_ddgs_general_info, company_name, update_data, _needs_desc_still, _needs_hq_still2, timeout=20)
+
+            # ── Step 7: mine description text for still-missing size / HQ ──────
+            # Directory snippets (Tracxn, Clutch, AmbitionBox) embed employee count
+            # and location inside the description we already fetched — e.g.
+            # "has 5000 & Above employees" or "based in Kerala". Extract them here
+            # instead of making another DDGS call.
+            desc_text = update_data.get("description") or company.get("description") or ""
+            if desc_text:
+                if needs_size and not update_data.get("size"):
+                    m = _re_mod.search(
+                        r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
+                        r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
+                        desc_text, _re_mod.I,
+                    )
+                    if m:
+                        update_data["size"] = m.group(1).replace(",", "")
+                if needs_hq and not update_data.get("headquarters"):
+                    m = _re_mod.search(
+                        r'(?:based in|headquartered? in|located in|offices? in)'
+                        r'\s*([A-Z][a-zA-Z\s]{3,40}?)(?:[,.]|\s+and\s|\s+with\s|$)',
+                        desc_text, _re_mod.I,
+                    )
+                    if m:
+                        update_data["headquarters"] = m.group(1).strip()
 
             if update_data:
                 supabase.table("companies").update(update_data).eq("id", company["id"]).execute()
@@ -1383,18 +2303,450 @@ async def bulk_autofill_companies(
             return {"id": company["id"], "name": company_name, "success": False,
                     "filled": [], "update": {}, "message": str(e)}
 
-    results = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(_autofill_one, c): c for c in companies}
-        for future in as_completed(futures):
-            try:
-                results.append(future.result())
-            except Exception as e:
-                results.append({"success": False, "message": str(e)})
+    import asyncio as _asyncio
+    import queue as _queue
+    import json as _json
+    from fastapi.responses import StreamingResponse
 
-    filled_count = sum(1 for r in results if r.get("filled"))
-    posthog.capture(user_id, "companies_bulk_autofilled", {"total": len(companies), "filled": filled_count})
-    return {"results": results, "total": len(companies), "filled": filled_count}
+    total = len(companies)
+    result_queue = _queue.Queue()
+
+    def _run_pool():
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(_autofill_one, c): c for c in companies}
+            for future in as_completed(futures):
+                try:
+                    result_queue.put(future.result())
+                except Exception as e:
+                    result_queue.put({"success": False, "filled": [], "update": {}, "message": str(e)})
+        result_queue.put(None)  # sentinel — pool is done
+
+    pool_thread = _threading.Thread(target=_run_pool, daemon=True)
+    pool_thread.start()
+
+    async def event_stream():
+        completed = 0
+        filled_count = 0
+        loop = _asyncio.get_running_loop()
+        while True:
+            result = await loop.run_in_executor(None, result_queue.get)
+            if result is None:
+                break
+            completed += 1
+            if result.get("filled"):
+                filled_count += 1
+            result["_progress"] = {"completed": completed, "total": total}
+            yield _json.dumps(result) + "\n"
+        posthog.capture(user_id, "companies_bulk_autofilled", {"total": total, "filled": filled_count})
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
+# ─── BULK ANALYZE ─────────────────────────────────────────────
+
+@router.post("/companies/bulk-analyze")
+async def bulk_analyze_companies(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Analyze websites for multiple companies in parallel — fills company_type, compliance, description."""
+    import time as _time
+    import threading as _threading
+    import queue as _queue
+    import json as _json
+    import asyncio as _asyncio
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from fastapi.responses import StreamingResponse
+
+    user_id = get_user_id(authorization)
+    company_ids = payload.get("company_ids", [])
+    gemini_key      = payload.get("gemini_key")      or os.getenv("GEMINI_API_KEY", "")
+    openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
+    groq_key        = payload.get("groq_key")        or os.getenv("GROQ_API_KEY", "")
+    openrouter_key  = payload.get("openrouter_key")  or os.getenv("OPENROUTER_API_KEY", "")
+    openrouter_model = payload.get("openrouter_model") or ""
+
+    from .website_analyzer import (fetch_website_content, classify_company_type_rules,
+                                    analyze_with_gemini, analyze_with_openai, analyze_with_groq,
+                                    analyze_with_openrouter)
+
+    try:
+        if company_ids:
+            co_res = supabase.table("companies").select("*").in_("id", company_ids).eq("user_id", user_id).execute()
+        else:
+            co_res = supabase.table("companies").select("*").eq("user_id", user_id).execute()
+        companies = [c for c in (co_res.data or []) if c.get("website")]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    def _analyze_one(company: dict) -> dict:
+        name = company.get("name", "")
+        cid  = company["id"]
+        try:
+            website = company.get("website", "")
+            if not website:
+                return {"id": cid, "name": name, "success": False, "filled": [], "update": {}, "message": "No website"}
+
+            website_data = fetch_website_content(website)
+            if not website_data:
+                return {"id": cid, "name": name, "success": False, "filled": [], "update": {}, "message": "Website unreachable"}
+
+            # Rules-based classification (fast, no AI cost)
+            rule_type, rule_confidence = classify_company_type_rules(website_data, company.get("description", ""))
+
+            # AI fallback when rules aren't High-confidence
+            # Chain: Gemini → OpenRouter → OpenAI → Groq
+            ai_result = {}
+            if rule_confidence != "High":
+                if gemini_key:
+                    ai_result = analyze_with_gemini(website_data, name, gemini_key) or {}
+                if not ai_result and openrouter_key:
+                    kw = {"model": openrouter_model} if openrouter_model else {}
+                    ai_result = analyze_with_openrouter(website_data, name, openrouter_key, **kw) or {}
+                if not ai_result and openai_key:
+                    r = analyze_with_openai(website_data, name, openai_key)
+                    if not r.get("_openai_error"):
+                        ai_result = r
+                if not ai_result and groq_key:
+                    ai_result = analyze_with_groq(website_data, name,
+                                                  company.get("industry", ""),
+                                                  company.get("description", ""), groq_key) or {}
+
+            # Determine final company_type (rules win at High/Medium)
+            ai_type = ai_result.get("company_type", "")
+            if ai_type == "Services": ai_type = "Service"
+            final_type = rule_type if rule_confidence in ("High", "Medium") and rule_type else (ai_type or rule_type)
+
+            # Merge compliance
+            scraped_compliance = website_data.get("compliance_detected") or []
+            ai_compliance      = ai_result.get("compliance") or []
+            merged_compliance  = list(dict.fromkeys(scraped_compliance + ai_compliance))
+
+            VALID_CLASSIFICATIONS = {
+                'Fintech', 'Healthtech', 'SaaS', 'Cybersecurity', 'IT Services',
+                'E-commerce', 'Edtech', 'Logistics', 'Manufacturing', 'Banking',
+                'Insurance', 'VC / Investment', 'Media', 'Consulting', 'Retail',
+                'Real Estate', 'Government', 'Non-profit', 'Other',
+            }
+
+            update_data = {}
+            if final_type and not company.get("company_type"):
+                update_data["company_type"] = final_type
+            if merged_compliance and not company.get("compliance"):
+                update_data["compliance"] = ", ".join(merged_compliance)
+
+            ws_description = (
+                ai_result.get("website_summary")
+                or website_data.get("meta_description")
+                or website_data.get("first_para")
+                or (website_data.get("hero", "")[:300].strip() or None)
+            )
+            if ws_description and not company.get("description"):
+                update_data["description"] = ws_description
+
+            ws_location = website_data.get("location")
+            if ws_location and not company.get("headquarters"):
+                update_data["headquarters"] = ws_location
+
+            ai_class = ai_result.get("classification", "").strip()
+            current_cls = company.get("classification") or ""
+            if ai_class in VALID_CLASSIFICATIONS and (not current_cls or current_cls == "Unclassified"):
+                update_data["classification"] = ai_class
+
+            if update_data:
+                supabase.table("companies").update(update_data).eq("id", cid).execute()
+
+            return {"id": cid, "name": name, "success": True, "filled": list(update_data.keys()), "update": update_data}
+
+        except Exception as e:
+            return {"id": cid, "name": name, "success": False, "filled": [], "update": {}, "message": str(e)}
+
+    total = len(companies)
+    result_queue = _queue.Queue()
+
+    def _run_pool():
+        with ThreadPoolExecutor(max_workers=15) as executor:
+            futures = {executor.submit(_analyze_one, c): c for c in companies}
+            for future in as_completed(futures):
+                try:
+                    result_queue.put(future.result())
+                except Exception as e:
+                    result_queue.put({"success": False, "filled": [], "update": {}, "message": str(e)})
+        result_queue.put(None)
+
+    pool_thread = _threading.Thread(target=_run_pool, daemon=True)
+    pool_thread.start()
+
+    async def event_stream():
+        completed = 0
+        filled_count = 0
+        loop = _asyncio.get_running_loop()
+        while True:
+            result = await loop.run_in_executor(None, result_queue.get)
+            if result is None:
+                break
+            completed += 1
+            if result.get("filled"):
+                filled_count += 1
+            result["_progress"] = {"completed": completed, "total": total}
+            yield _json.dumps(result) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
+# ─── BULK MAPS ENRICH ─────────────────────────────────────────
+
+@router.post("/companies/bulk-maps-enrich")
+async def bulk_maps_enrich(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Enrich companies with Google Maps Places API — fills HQ address, website, phone."""
+    import threading as _threading
+    import queue as _queue
+    import json as _json
+    import asyncio as _asyncio
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from fastapi.responses import StreamingResponse
+
+    user_id  = get_user_id(authorization)
+    company_ids = payload.get("company_ids", [])
+    maps_key    = payload.get("maps_key") or os.getenv("GOOGLE_MAPS_API_KEY", "")
+
+    if not maps_key:
+        raise HTTPException(status_code=400, detail="Google Maps API key required. Add it in Settings → Maps.")
+
+    try:
+        if company_ids:
+            co_res = supabase.table("companies").select("*").in_("id", company_ids).eq("user_id", user_id).execute()
+        else:
+            co_res = supabase.table("companies").select("*").eq("user_id", user_id).execute()
+        companies = co_res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    def _clean_name(name: str) -> str:
+        """Strip Indian legal suffixes so Maps can match the trade name."""
+        import re as _re
+        # Remove common suffixes in order (longest first)
+        suffixes = [
+            r'\s*\(P\)\s*Pvt\.?\s*Ltd\.?',
+            r'\s*\(P\)\s*Ltd\.?',
+            r'\s*Private\s+Limited',
+            r'\s*Pvt\.?\s*Ltd\.?',
+            r'\s*\bLLP\b',
+            r'\s*\bLLC\b',
+            r'\s*\bInc\.?',
+            r'\s*\bLtd\.?',
+            r'\s*\bLimited',
+            r'\s*\bPvt\.?',
+            r'\s*\bCorp\.?',
+        ]
+        # Use primary name only when there's a slash alias (e.g. "X LLP / ALIAS" → "X LLP")
+        cleaned = name.split(' / ')[0].strip()
+        for pat in suffixes:
+            cleaned = _re.sub(pat + r'\s*$', '', cleaned, flags=_re.IGNORECASE).strip()
+        return cleaned or name
+
+    def _maps_search(company_name: str, bias_lat: float = 8.5241, bias_lng: float = 76.9366) -> tuple:
+        """Call Google Places API (New) text search. Returns (place_dict, error_str)."""
+        search_name = _clean_name(company_name)
+        try:
+            resp = requests.post(
+                "https://places.googleapis.com/v1/places:searchText",
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Goog-Api-Key": maps_key,
+                    "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.websiteUri,places.nationalPhoneNumber,places.rating,places.userRatingCount",
+                },
+                json={
+                    "textQuery": search_name,
+                    "maxResultCount": 1,
+                    "locationBias": {
+                        "circle": {
+                            "center": {"latitude": bias_lat, "longitude": bias_lng},
+                            "radius": 80000.0,
+                        }
+                    },
+                },
+                timeout=8,
+            )
+            data = resp.json()
+            if "error" in data:
+                err = data["error"]
+                return {}, f"Maps API error {err.get('code', '?')}: {err.get('message', str(err))}"
+            places = data.get("places", [])
+            return (places[0] if places else {}), None
+        except Exception as e:
+            return {}, str(e)
+
+    def _enrich_one(company: dict) -> dict:
+        cid  = company["id"]
+        name = company.get("name", "")
+        try:
+            place, err = _maps_search(name)
+            if err:
+                return {"id": cid, "name": name, "success": False,
+                        "filled": [], "update": {}, "message": err}
+            if not place:
+                return {"id": cid, "name": name, "success": False,
+                        "filled": [], "update": {}, "message": "not found on Maps"}
+
+            update_data = {}
+
+            # Maps address is authoritative — always overwrite
+            address = place.get("formattedAddress", "")
+            if address:
+                update_data["headquarters"] = address
+
+            # Only fill website if missing
+            website = place.get("websiteUri", "").rstrip("/")
+            if website and not company.get("website"):
+                update_data["website"] = website
+
+            # Save phone to dedicated field
+            phone = place.get("nationalPhoneNumber", "") or place.get("internationalPhoneNumber", "")
+            if phone and not company.get("phone"):
+                update_data["phone"] = phone
+
+            rating = place.get("rating")
+            rating_count = place.get("userRatingCount")
+            if rating and not company.get("revenue"):
+                update_data["revenue"] = f"⭐ {rating} ({rating_count} reviews)"
+
+            if update_data:
+                supabase.table("companies").update(update_data).eq("id", cid).execute()
+
+            return {"id": cid, "name": name, "success": True,
+                    "filled": list(update_data.keys()), "update": update_data,
+                    "maps_address": address}
+
+        except Exception as e:
+            return {"id": cid, "name": name, "success": False,
+                    "filled": [], "update": {}, "message": str(e)}
+
+    total = len(companies)
+    result_queue = _queue.Queue()
+
+    def _run_pool():
+        # 10 workers — Maps API allows ~10 QPS on free tier
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(_enrich_one, c): c for c in companies}
+            for future in as_completed(futures):
+                try:
+                    result_queue.put(future.result())
+                except Exception as e:
+                    result_queue.put({"success": False, "filled": [], "update": {}, "message": str(e)})
+        result_queue.put(None)
+
+    pool_thread = _threading.Thread(target=_run_pool, daemon=True)
+    pool_thread.start()
+
+    async def event_stream():
+        completed = 0
+        filled_count = 0
+        loop = _asyncio.get_running_loop()
+        while True:
+            result = await loop.run_in_executor(None, result_queue.get)
+            if result is None:
+                break
+            completed += 1
+            if result.get("filled"):
+                filled_count += 1
+            result["_progress"] = {"completed": completed, "total": total}
+            yield _json.dumps(result) + "\n"
+        posthog.capture(user_id, "companies_bulk_maps_enriched", {"total": total, "filled": filled_count})
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
+# ─── MAPS DISCOVER ────────────────────────────────────────────
+
+@router.post("/companies/maps-discover")
+async def maps_discover(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Search Google Maps for companies by industry + location. Returns up to 20 prospects."""
+    get_user_id(authorization)
+    maps_key = payload.get("maps_key") or os.getenv("GOOGLE_MAPS_API_KEY", "")
+    if not maps_key:
+        raise HTTPException(status_code=400, detail="Google Maps API key required.")
+
+    query     = payload.get("query", "")          # e.g. "SaaS companies"
+    location  = payload.get("location", "")        # e.g. "Bangalore, India"
+    lat       = payload.get("lat")
+    lng       = payload.get("lng")
+    radius_km = float(payload.get("radius_km", 50))
+    max_res   = min(int(payload.get("max_results", 20)), 20)
+
+    if not query:
+        raise HTTPException(status_code=400, detail="query is required")
+
+    text_query = f"{query} {location}".strip()
+
+    body: dict = {
+        "textQuery": text_query,
+        "maxResultCount": max_res,
+    }
+    if lat and lng:
+        body["locationBias"] = {
+            "circle": {
+                "center": {"latitude": float(lat), "longitude": float(lng)},
+                "radius": radius_km * 1000,
+            }
+        }
+
+    try:
+        resp = requests.post(
+            "https://places.googleapis.com/v1/places:searchText",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": maps_key,
+                "X-Goog-FieldMask": (
+                    "places.displayName,places.formattedAddress,"
+                    "places.websiteUri,places.nationalPhoneNumber,"
+                    "places.rating,places.userRatingCount,places.types,"
+                    "places.location"
+                ),
+            },
+            json=body,
+            timeout=10,
+        )
+        data = resp.json()
+        if "error" in data:
+            err = data["error"]
+            raise HTTPException(status_code=502, detail=f"Maps API: {err.get('message', str(err))}")
+
+        places = data.get("places", [])
+        results = []
+        for p in places:
+            name    = (p.get("displayName") or {}).get("text", "")
+            website = p.get("websiteUri", "").rstrip("/")
+            domain = ""
+            if website:
+                from urllib.parse import urlparse as _up
+                domain = _up(website).netloc.replace("www.", "")
+            loc = p.get("location") or {}
+            results.append({
+                "name":         name,
+                "address":      p.get("formattedAddress", ""),
+                "website":      website,
+                "domain":       domain,
+                "phone":        p.get("nationalPhoneNumber", ""),
+                "rating":       p.get("rating"),
+                "rating_count": p.get("userRatingCount"),
+                "types":        p.get("types", []),
+                "lat":          loc.get("latitude"),
+                "lng":          loc.get("longitude"),
+            })
+
+        return {"results": results, "total": len(results), "query": text_query}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ─── BULK IMPORT FROM EXTENSION ──────────────────────────────
@@ -1422,7 +2774,12 @@ async def bulk_create_leads(
                 profile_url = profile_url.strip()
                 lead["profile_url"] = profile_url
 
-            # Only check duplicates if profile_url exists and is not empty
+            # Skip if no name
+            if not lead.get("name") or not lead["name"].strip():
+                skipped += 1
+                continue
+
+            # Dedup by profile_url (most reliable — covers LinkedIn scrapes)
             if profile_url and len(profile_url) > 10:
                 existing = supabase.table("leads")\
                     .select("id")\
@@ -1433,10 +2790,21 @@ async def bulk_create_leads(
                     skipped += 1
                     continue
 
-            # Skip if no name
-            if not lead.get("name") or not lead["name"].strip():
-                skipped += 1
-                continue
+            # Dedup by name + company for leads without a profile URL
+            # (prevents the same person being imported twice from different sources)
+            elif not profile_url:
+                lead_name  = (lead.get("name") or "").strip().lower()
+                lead_co    = (lead.get("company") or "").strip().lower()
+                if lead_name and lead_co:
+                    existing = supabase.table("leads")\
+                        .select("id")\
+                        .eq("user_id", user_id)\
+                        .ilike("name", lead_name)\
+                        .ilike("company", lead_co)\
+                        .execute()
+                    if existing.data:
+                        skipped += 1
+                        continue
 
             # Clean the data
             # Auto split name into first and last
@@ -1475,8 +2843,13 @@ async def bulk_create_leads(
             inserted.append(response.data[0])
 
         except Exception as e:
-            print(f"Lead insert error: {e}")
-            skipped += 1
+            err = str(e)
+            # DB unique constraint violation = duplicate; treat as skipped not error
+            if "duplicate" in err.lower() or "unique" in err.lower() or "23505" in err:
+                skipped += 1
+            else:
+                print(f"Lead insert error: {e}")
+                skipped += 1
             continue
 
     posthog.capture(user_id, "leads_bulk_imported", {

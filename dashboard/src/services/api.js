@@ -18,12 +18,81 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
       localStorage.removeItem('userEmail')
       window.location.href = '/login'
     }
     return Promise.reject(error)
   }
 )
+
+// Decode JWT expiry without a library
+function _tokenExpiresAt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return (payload.exp || 0) * 1000
+  } catch { return 0 }
+}
+
+// Call before any streaming fetch — refreshes token if <5 min remain
+async function ensureFreshToken() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+  const expiresAt = _tokenExpiresAt(token)
+  if (expiresAt - Date.now() > 5 * 60 * 1000) return  // still has 5+ min
+  const refreshToken = localStorage.getItem('refreshToken')
+  if (!refreshToken) return
+  try {
+    const res = await api.post('/auth/refresh', { refresh_token: refreshToken })
+    localStorage.setItem('token', res.data.access_token)
+    if (res.data.refresh_token) localStorage.setItem('refreshToken', res.data.refresh_token)
+  } catch {
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    window.location.href = '/login'
+  }
+}
+
+// Shared helper for streaming NDJSON fetch calls
+async function _streamingFetch(url, body, onProgress) {
+  await ensureFreshToken()
+  const token = localStorage.getItem('token')
+  const response = await fetch(`${BASE_URL}${url}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  })
+  if (response.status === 401) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    window.location.href = '/login'
+    throw new Error('Session expired — redirecting to login')
+  }
+  if (!response.ok) {
+    const txt = await response.text()
+    try { throw new Error(JSON.parse(txt).detail || txt) } catch { throw new Error(txt) }
+  }
+  const reader  = response.body.getReader()
+  const decoder = new TextDecoder()
+  const results = []
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop()
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const result = JSON.parse(line)
+        results.push(result)
+        if (onProgress) onProgress(result._progress?.completed, result._progress?.total, result)
+      } catch (_) {}
+    }
+  }
+  return results
+}
 
 // ─── AUTH ─────────────────────────────────────────────────────
 export const login = (data) => api.post('/auth/login', data)
@@ -53,6 +122,8 @@ export const getCompanies = () => api.get('/companies')
 export const createCompany = (data) => api.post('/companies', data)
 export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
 export const deleteCompany = (id) => api.delete(`/companies/${id}`)
+export const bulkDeleteCompanies = (ids) => api.delete('/companies', { data: { ids } })
+export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyze-website`, payload)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId, groqKey) =>
   api.post(`/companies/${companyId}/check-compliance`, {
@@ -62,6 +133,7 @@ export const checkCompliance = (companyId, groqKey) =>
 export const autofillCompanyLinkedIn = (id) =>
   api.post(`/companies/${id}/autofill-linkedin`, {
     openrouter_key: localStorage.getItem('openrouterKey') || '',
+    li_cookie:      localStorage.getItem('liCookie') || '',
   })
 export const prefillCompany = (name, websiteUrl) =>
   api.post('/companies/prefill', {
@@ -72,10 +144,26 @@ export const prefillCompany = (name, websiteUrl) =>
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
 export const bulkCreateCompanies = (companies) => api.post('/companies/bulk', { companies })
-export const bulkAutofillCompanies = (companyIds = []) => api.post('/companies/bulk-autofill', {
-  company_ids: companyIds,
-  openrouter_key: localStorage.getItem('openrouterKey') || '',
-})
+export const getTechnoparkDirectory = (params = {}) => api.get('/companies/technopark-directory', { params })
+export const mapsDiscover = (payload) => api.post('/companies/maps-discover', payload)
+export const bulkMapsEnrich = (companyIds = [], mapsKey = '', onProgress) =>
+  _streamingFetch('/companies/bulk-maps-enrich', { company_ids: companyIds, maps_key: mapsKey }, onProgress)
+
+export const bulkAnalyzeCompanies = (companyIds = [], onProgress) =>
+  _streamingFetch('/companies/bulk-analyze', {
+    company_ids:      companyIds,
+    gemini_key:       localStorage.getItem('geminiKey')       || '',
+    openai_key:       localStorage.getItem('openaiKey')       || '',
+    groq_key:         localStorage.getItem('groqKey')         || '',
+    openrouter_key:   localStorage.getItem('openrouterKey')   || '',
+    openrouter_model: localStorage.getItem('openrouterModel') || '',
+  }, onProgress)
+
+export const bulkAutofillCompanies = (companyIds = [], onProgress) =>
+  _streamingFetch('/companies/bulk-autofill', {
+    company_ids:    companyIds,
+    openrouter_key: localStorage.getItem('openrouterKey') || '',
+  }, onProgress)
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
@@ -86,6 +174,9 @@ export const updateICP = (id, data) => api.patch(`/icp/${id}`, data)
 export const updateICPProfile = (id, data) => api.patch(`/icp/${id}`, data)
 export const deleteICP = (id) => api.delete(`/icp/${id}`)
 export const deleteICPProfile = (id) => api.delete(`/icp/${id}`)
+
+export const searchCompanyPeople = (company_name, domain, roles = []) =>
+  api.post('/companies/people-search', { company_name, domain, roles })
 
 // ─── PERSONAS ─────────────────────────────────────────────────
 export const getPersonas = () => api.get('/personas')

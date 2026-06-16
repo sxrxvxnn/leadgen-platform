@@ -1,6 +1,72 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { updateCompany, autofillCompanyLinkedIn } from '../services/api'
 
+// ─── ACCURACY ─────────────────────────────────────────────────
+const _ACC_GENERIC = new Set([
+  'pvt','ltd','inc','llc','corp','private','limited','the','and','for','with',
+  'india','global','group','company','business','technology','technologies',
+  'solutions','services','systems','digital','software','enterprise','consulting',
+  'management','international','national','associates','partners','infotech',
+  'infosystems','corporation','ventures','holdings',
+])
+function _accWords(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(' ')
+    .filter(w => w.length > 2 && !_ACC_GENERIC.has(w))
+}
+function _accDomain(url) {
+  try {
+    const u = url.includes('://') ? url : 'https://' + url
+    return new URL(u).hostname.replace(/^www\./, '').toLowerCase()
+  } catch { return null }
+}
+function _computeAccuracy(company) {
+  // Strongest signal: a correct LinkedIn profile lists the real website — if it
+  // disagrees with our stored website, that overrides the keyword heuristic below.
+  if (company.linkedin_website && company.website) {
+    const d1 = _accDomain(company.website)
+    const d2 = _accDomain(company.linkedin_website)
+    if (d1 && d2) {
+      return d1 === d2
+        ? { confidence: 'high', issues: [] }
+        : { confidence: 'low', issues: ['linkedin-website-mismatch'] }
+    }
+  }
+
+  const words = _accWords(company.name)
+  const issues = []
+  if (words.length === 0 || !(company.website || company.linkedin_url)) return { confidence: 'none', issues: [] }
+  if (company.website) {
+    try {
+      const url = company.website.includes('://') ? company.website : 'https://' + company.website
+      const core = new URL(url).hostname.replace(/^www\./, '').toLowerCase().split('.')[0]
+      const ini = words.map(w => w[0]).join('')
+      if (!words.some(w => core.includes(w)) && core !== ini && !core.startsWith(ini) && !ini.startsWith(core)) issues.push('website')
+    } catch {}
+  }
+  if (company.linkedin_url) {
+    const m = company.linkedin_url.match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)/i)
+    if (m) {
+      const slug = m[1].toLowerCase().replace(/-/g, '')
+      const ini = words.map(w => w[0]).join('')
+      if (!words.some(w => slug.includes(w)) && slug !== ini && !slug.startsWith(ini) && !ini.startsWith(slug)) issues.push('linkedin')
+    }
+  }
+  return { confidence: issues.length === 0 ? 'high' : issues.length === 1 ? 'medium' : 'low', issues }
+}
+function _accLabel(company) {
+  const { confidence, issues } = _computeAccuracy(company)
+  if (confidence === 'high') return '✓ accurate'
+  if (issues.includes('linkedin-website-mismatch')) return '⊘ LI≠website'
+  if (confidence === 'low') return '⊘ suspicious'
+  if (confidence === 'medium') return `⊘ ${issues[0]}?`
+  return '—'
+}
+function _accColor(label) {
+  if (label.startsWith('✓')) return '#4a7c59'
+  if (label.startsWith('⊘')) return '#92400e'
+  return 'var(--text-muted)'
+}
+
 const CLASSIFICATIONS = [
   '', 'Unclassified', 'Fintech', 'Healthtech', 'SaaS', 'Cybersecurity',
   'IT Services', 'E-commerce', 'Edtech', 'Logistics', 'Manufacturing',
@@ -17,6 +83,7 @@ const COMPANY_TYPES = ['', 'Product', 'Services', 'Hybrid']
 const COLUMNS = [
   { key: '_serial',        label: '#',              width: 48,  type: 'serial' },
   { key: 'name',           label: 'Name',           width: 200, type: 'text' },
+  { key: '_accuracy',      label: 'Accuracy',       width: 120, type: 'computed' },
   { key: 'classification', label: 'Classification', width: 150, type: 'select', options: CLASSIFICATIONS },
   { key: 'prospect_status',label: 'Status',         width: 130, type: 'select', options: PROSPECT_STATUSES },
   { key: 'website',        label: 'Website',        width: 170, type: 'url' },
@@ -27,6 +94,8 @@ const COLUMNS = [
   { key: 'revenue',        label: 'Revenue',        width: 120, type: 'text' },
   { key: 'compliance',     label: 'Compliance',     width: 150, type: 'text' },
   { key: 'type',           label: 'Type',           width: 110, type: 'select', options: COMPANY_TYPES },
+  { key: 'founded',        label: 'Founded',        width: 90,  type: 'text' },
+  { key: 'specialties',   label: 'Specialties',    width: 260, type: 'text' },
   { key: 'description',    label: 'Description',    width: 280, type: 'text' },
   { key: 'notes',          label: 'Notes',          width: 220, type: 'text' },
 ]
@@ -45,6 +114,7 @@ function getProspectColor(status) {
 
 function getCellValue(company, key) {
   if (key === '_serial') return ''
+  if (key === '_accuracy') return _accLabel(company)
   const val = company[key] || ''
   if (key === 'size') return typeof val === 'string' ? val.replace(/\s*employees?\s*/gi, '').trim() : val
   if (key === 'followers') return typeof val === 'string' ? val.replace(/\s*followers?\s*/gi, '').trim() : val
@@ -70,6 +140,11 @@ function EditableCell({ company, col, onSave, isEditing, onStartEdit, onStopEdit
   }
 
   if (col.type === 'serial') return <div style={cell.readonly} />
+
+  if (col.type === 'computed') {
+    const label = getCellValue(company, col.key)
+    return <div style={{ ...cell.readonly, color: _accColor(label), fontWeight: label.startsWith('⊘') ? '600' : '400' }}>{label}</div>
+  }
 
   if (col.type === 'url') {
     if (isEditing) {
@@ -157,6 +232,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   const [editingCell, setEditingCell] = useState(null) // { rowId, colKey }
   const [selected, setSelected] = useState([])
   const [search, setSearch] = useState('')
+  const [accuracyFilter, setAccuracyFilter] = useState('all')
   const [autofilling, setAutofilling] = useState(false)
   const [autofillMsg, setAutofillMsg] = useState('')
   const [saving, setSaving] = useState(null)
@@ -212,9 +288,9 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   function exportCSV() {
     const exportCols = COLUMNS.filter(c => c.type !== 'serial')
     const header = exportCols.map(c => c.label).join(',')
-    const rows = local.map(company =>
+    const rows = filteredRows.map(company =>
       exportCols.map(col => {
-        const v = company[col.key] || ''
+        const v = getCellValue(company, col.key)
         return typeof v === 'string' && (v.includes(',') || v.includes('"') || v.includes('\n'))
           ? `"${v.replace(/"/g, '""')}"`
           : v
@@ -229,10 +305,9 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   }
 
   function exportXLSX() {
-    // Simple TSV download (opens cleanly in Excel)
     const exportCols = COLUMNS.filter(c => c.type !== 'serial')
     const header = exportCols.map(c => c.label).join('\t')
-    const rows = local.map(company => exportCols.map(col => (company[col.key] || '')).join('\t'))
+    const rows = filteredRows.map(company => exportCols.map(col => getCellValue(company, col.key)).join('\t'))
     const tsv = [header, ...rows].join('\n')
     const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -242,11 +317,17 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   }
 
   const filteredRows = local.filter(c => {
-    if (!search.trim()) return true
     const q = search.toLowerCase()
-    return (c.name || '').toLowerCase().includes(q) ||
-           (c.classification || '').toLowerCase().includes(q) ||
-           (c.headquarters || '').toLowerCase().includes(q)
+    const textMatch = !search.trim() || (c.name || '').toLowerCase().includes(q) ||
+                      (c.classification || '').toLowerCase().includes(q) ||
+                      (c.headquarters || '').toLowerCase().includes(q)
+    if (!textMatch) return false
+    if (accuracyFilter === 'all') return true
+    const conf = _computeAccuracy(c).confidence
+    if (accuracyFilter === 'accurate') return conf === 'high'
+    if (accuracyFilter === 'suspicious') return conf === 'low' || conf === 'medium'
+    if (accuracyFilter === 'unverifiable') return conf === 'none'
+    return true
   })
 
   const allSelected = filteredRows.length > 0 && filteredRows.every(c => selected.includes(c.id))
@@ -262,11 +343,18 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
             <h2 style={s.title}>{filteredRows.length}<span style={s.unit}> companies</span></h2>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             <input
               type="text" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search…" style={s.searchInput}
             />
+
+            <select value={accuracyFilter} onChange={e => setAccuracyFilter(e.target.value)} style={{ ...s.searchInput, width: '140px', color: accuracyFilter === 'accurate' ? '#4a7c59' : accuracyFilter === 'suspicious' ? '#92400e' : 'rgba(253,253,253,0.55)', cursor: 'pointer' }}>
+              <option value="all">All accuracy</option>
+              <option value="accurate">✓ Accurate</option>
+              <option value="suspicious">⊘ Suspicious</option>
+              <option value="unverifiable">— No data</option>
+            </select>
 
             {autofillMsg && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: autofillMsg.startsWith('Done') ? '#4a7c59' : 'var(--accent)', fontWeight: '600', whiteSpace: 'nowrap' }}>{autofillMsg}</span>}
 

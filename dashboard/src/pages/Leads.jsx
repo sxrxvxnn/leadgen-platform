@@ -249,20 +249,23 @@ export default function Leads() {
 
   async function handleDelete(leadId) {
     if (!window.confirm('Delete this lead?')) return
+    // Optimistic: remove immediately, restore on failure
+    setLeads(prev => prev.filter(l => l.id !== leadId))
+    setSelected(prev => prev.filter(id => id !== leadId))
     try {
       await deleteLead(leadId)
-      setLeads((prev) => prev.filter((l) => l.id !== leadId))
-      setSelected((prev) => prev.filter((id) => id !== leadId))
-    } catch (e) { console.error(e) }
+    } catch (e) { console.error(e); fetchLeads() }
   }
 
   async function handleBulkDelete() {
     if (!window.confirm('Delete ' + selected.length + ' selected leads?')) return
+    const ids = [...selected]
+    // Optimistic: remove immediately, restore on failure
+    setLeads(prev => prev.filter(l => !ids.includes(l.id)))
+    setSelected([])
     try {
-      await Promise.all(selected.map(id => deleteLead(id)))
-      setLeads((prev) => prev.filter((l) => !selected.includes(l.id)))
-      setSelected([])
-    } catch (e) { console.error(e) }
+      await Promise.all(ids.map(id => deleteLead(id)))
+    } catch (e) { console.error(e); fetchLeads() }
   }
 
   async function handleBulkStatus(status) {

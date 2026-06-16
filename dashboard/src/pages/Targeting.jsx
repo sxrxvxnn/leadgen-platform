@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { getLeads, getPersonas, createPersona, deletePersona } from '../services/api'
+import { getLeads, getCompanies, createLead, searchCompanyPeople } from '../services/api'
 
-const ORG_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
-const DM_ROLES = ['CEO', 'CTO', 'CPO', 'CISO', 'VP', 'Head of', 'Director', 'Founder', 'Co-Founder', 'Product Manager', 'Engineering Manager']
-const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'disqualified']
-const LOCATIONS = ['India', 'United States', 'United Kingdom', 'Singapore', 'Australia', 'Canada', 'Germany', 'UAE']
+const DM_ROLES = [
+  'CEO', 'CTO', 'CISO', 'CPO', 'CFO', 'COO', 'CMO', 'CRO',
+  'VP Engineering', 'VP Product', 'VP Sales', 'VP Marketing',
+  'Head of Engineering', 'Head of Product', 'Head of Security', 'Head of IT',
+  'Director of Engineering', 'Director of Product', 'Director of Sales',
+  'Founder', 'Co-Founder', 'Managing Director', 'General Manager',
+  'Engineering Manager', 'Product Manager', 'Security Manager',
+]
 
 const STATUS_COLORS = {
   new:          { color: '#4a7c59', bg: 'rgba(74,124,89,0.10)',   border: 'rgba(74,124,89,0.22)' },
@@ -14,389 +19,419 @@ const STATUS_COLORS = {
   disqualified: { color: '#a1a1a1', bg: 'rgba(161,161,161,0.10)', border: 'rgba(161,161,161,0.22)' },
 }
 
-const DEFAULT_FILTERS = {
-  orgSizes: [],
-  requireSecurity: false,
-  requireProduct: false,
-  roles: [],
-  statuses: [],
-  locations: [],
-  keyword: '',
-}
+// ── Company search dropdown ────────────────────────────────────
+function CompanyPicker({ companies, selected, onSelect }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
 
-function Chip({ label, active, onClick }) {
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  useEffect(() => {
+    if (selected) setQuery(selected.name)
+  }, [selected])
+
+  const filtered = query
+    ? companies.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    : companies
+
+  function pick(c) { onSelect(c); setQuery(c.name); setOpen(false) }
+  function clear() { onSelect(null); setQuery(''); setOpen(false) }
+
   return (
-    <button onClick={onClick} style={{
-      padding: '4px 10px', borderRadius: '4px',
-      fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: active ? '600' : '400',
-      cursor: 'pointer', transition: 'all 0.12s', letterSpacing: '0.02em',
-      background: active ? '#1d1b1b' : 'transparent',
-      color: active ? '#fdfdfd' : 'var(--text-muted)',
-      border: `1px solid ${active ? '#1d1b1b' : 'rgba(196,193,189,0.6)'}`,
-    }}>{label}</button>
+    <div ref={ref} style={{ position: 'relative', width: '100%' }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text" value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onSelect(null) }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search your pipeline…"
+          style={{ width: '100%', padding: '10px 36px 10px 12px', background: 'var(--bg)', border: `1px solid ${open ? 'rgba(29,27,27,0.28)' : 'var(--border)'}`, borderRadius: open && filtered.length > 0 ? '7px 7px 0 0' : '7px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', outline: 'none', boxSizing: 'border-box', letterSpacing: '0.02em', transition: 'border-color 0.1s' }}
+        />
+        {query && (
+          <button onClick={clear} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+        )}
+      </div>
+      {open && filtered.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300, background: 'var(--bg)', border: '1px solid rgba(29,27,27,0.18)', borderTop: 'none', borderRadius: '0 0 7px 7px', boxShadow: '0 10px 30px rgba(29,27,27,0.10)', maxHeight: '240px', overflowY: 'auto' }}>
+          {filtered.map(c => (
+            <button key={c.id} onClick={() => pick(c)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', background: selected?.id === c.id ? 'rgba(168,100,72,0.06)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              {c.logo ? (
+                <img src={c.logo} alt="" style={{ width: '22px', height: '22px', borderRadius: '4px', objectFit: 'contain', background: '#fff', flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} />
+              ) : (
+                <div style={{ width: '22px', height: '22px', borderRadius: '4px', background: 'var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', fontWeight: '700' }}>{(c.name || '?')[0].toUpperCase()}</span>
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: selected?.id === c.id ? 'var(--accent)' : 'var(--text)', fontWeight: selected?.id === c.id ? '600' : '400', letterSpacing: '0.02em', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</p>
+                {c.classification && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', margin: 0, letterSpacing: '0.04em' }}>{c.classification}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
+// ── Role chip row ──────────────────────────────────────────────
+function RoleChip({ label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{ padding: '5px 10px', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: active ? '600' : '400', cursor: 'pointer', background: active ? '#1d1b1b' : 'transparent', color: active ? '#fdfdfd' : 'var(--text-muted)', border: `1px solid ${active ? '#1d1b1b' : 'var(--border)'}`, letterSpacing: '0.04em', transition: 'all 0.1s', whiteSpace: 'nowrap' }}>{label}</button>
+  )
+}
+
+// ── Person card ────────────────────────────────────────────────
+function PersonCard({ person, addState, onAdd, existingLead }) {
+  const name = person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim() || '—'
+  const isAdded = addState === 'added' || !!existingLead
+  const isAdding = addState === 'adding'
+
+  return (
+    <div style={{ background: 'var(--bg)', border: `1px solid ${isAdded ? 'rgba(74,124,89,0.3)' : 'var(--border)'}`, borderRadius: '9px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+        {person.photo_url ? (
+          <img src={person.photo_url} alt="" style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border)' }} onError={e => { e.target.style.display = 'none' }} />
+        ) : (
+          <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--surface)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: '13px', color: 'var(--text-muted)' }}>{name[0]}</span>
+          </div>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: '400', letterSpacing: '-0.02em', color: 'var(--text)', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', fontWeight: '500', letterSpacing: '0.02em', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{person.title || '—'}</p>
+        </div>
+      </div>
+
+      {person.location && (
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', margin: 0, letterSpacing: '0.02em' }}>{person.location}</p>
+      )}
+
+      <div style={{ display: 'flex', gap: '7px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {person.linkedin_url && (
+          <a href={person.linkedin_url} target="_blank" rel="noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#5b8db8', textDecoration: 'none', fontWeight: '600', letterSpacing: '0.04em' }}>LinkedIn →</a>
+        )}
+        {isAdded ? (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.04em', marginLeft: 'auto' }}>✓ In leads</span>
+        ) : (
+          <button onClick={onAdd} disabled={isAdding} style={{ marginLeft: 'auto', padding: '5px 12px', background: isAdding ? 'var(--surface)' : '#1d1b1b', color: isAdding ? 'var(--text-muted)' : '#fdfdfd', border: 'none', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', cursor: isAdding ? 'default' : 'pointer', letterSpacing: '0.04em' }}>
+            {isAdding ? 'Adding…' : 'Add to Leads'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ──────────────────────────────────────────────────
 export default function Targeting() {
-  const [leads, setLeads] = useState([])
-  const [profiles, setProfiles] = useState([])
+  const [companies, setCompanies] = useState([])
+  const [existingLeads, setExistingLeads] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
-  const [activeProfile, setActiveProfile] = useState(null)
-  const [showSave, setShowSave] = useState(false)
-  const [profileName, setProfileName] = useState('')
-  const [saving, setSaving] = useState(false)
+
+  const [selectedCompany, setSelectedCompany] = useState(null)
+  const [selectedRoles, setSelectedRoles] = useState([])
+
+  const [searching, setSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState(null) // null = not searched yet
+  const [searchError, setSearchError] = useState('')
+
+  // per-person add state: { [linkedin_url|name]: 'idle'|'adding'|'added' }
+  const [addStates, setAddStates] = useState({})
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     async function load() {
       try {
-        const [lr, pr] = await Promise.all([getLeads(), getPersonas()])
-        setLeads(lr.data.leads || [])
-        setProfiles(pr.data.personas || [])
+        const [cr, lr] = await Promise.all([getCompanies(), getLeads()])
+        setCompanies(cr.data.companies || [])
+        setExistingLeads(lr.data.leads || [])
       } catch (e) { console.error(e) }
       finally { setLoading(false) }
     }
     load()
   }, [])
 
-  function toggle(key, val) {
-    setFilters(prev => ({
-      ...prev,
-      [key]: prev[key].includes(val) ? prev[key].filter(v => v !== val) : [...prev[key], val],
-    }))
-    setActiveProfile(null)
+  // Reset results when company changes
+  useEffect(() => {
+    setSearchResults(null)
+    setSearchError('')
+    setAddStates({})
+  }, [selectedCompany])
+
+  function toggleRole(role) {
+    setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
   }
 
-  function matchesCompany(lead) {
-    if (filters.orgSizes.length > 0 && !filters.orgSizes.includes(lead.org_size)) return false
-    if (filters.requireSecurity && lead.has_security_team !== 'Yes') return false
-    if (filters.requireProduct && lead.company_type !== 'Product') return false
-    return true
+  // Leads already in DB for the selected company
+  const companyLeads = useMemo(() => {
+    if (!selectedCompany) return []
+    return existingLeads.filter(l => (l.company || '').toLowerCase() === (selectedCompany.name || '').toLowerCase())
+  }, [selectedCompany, existingLeads])
+
+  // Existing lead lookup by linkedin_url or full name
+  const existingLeadKeys = useMemo(() => {
+    const keys = new Set()
+    existingLeads.forEach(l => {
+      if (l.profile_url) keys.add(l.profile_url.toLowerCase().replace(/\/$/, ''))
+      const n = `${l.first_name || ''} ${l.last_name || ''} ${l.company || ''}`.trim().toLowerCase()
+      if (n) keys.add(n)
+    })
+    return keys
+  }, [existingLeads])
+
+  function isAlreadyLead(person) {
+    const url = (person.linkedin_url || '').toLowerCase().replace(/\/$/, '')
+    if (url && existingLeadKeys.has(url)) return true
+    const n = `${person.first_name || ''} ${person.last_name || ''} ${person.company || ''}`.trim().toLowerCase()
+    return existingLeadKeys.has(n)
   }
 
-  function matchesPerson(lead) {
-    if (filters.roles.length > 0) {
-      const title = (lead.title || '').toLowerCase()
-      if (!filters.roles.some(r => title.includes(r.toLowerCase()))) return false
-    }
-    if (filters.statuses.length > 0 && !filters.statuses.includes(lead.status)) return false
-    if (filters.locations.length > 0) {
-      if (!filters.locations.some(l => (lead.location || '').toLowerCase().includes(l.toLowerCase()))) return false
-    }
-    if (filters.keyword) {
-      const kw = filters.keyword.toLowerCase()
-      if (![lead.name, lead.title, lead.company, lead.location].join(' ').toLowerCase().includes(kw)) return false
-    }
-    return true
+  function personKey(p) {
+    return (p.linkedin_url || p.name || `${p.first_name} ${p.last_name}`).toLowerCase()
   }
 
-  const hasCompanyFilters = filters.orgSizes.length > 0 || filters.requireSecurity || filters.requireProduct
-  const hasPersonFilters = filters.roles.length > 0 || filters.statuses.length > 0 || filters.locations.length > 0 || !!filters.keyword
-  const hasAnyFilters = hasCompanyFilters || hasPersonFilters
-
-  const companyMatchCount = hasCompanyFilters ? leads.filter(matchesCompany).length : null
-  const personMatchCount = hasPersonFilters ? leads.filter(matchesPerson).length : null
-  const bestFits = leads.filter(l => matchesCompany(l) && matchesPerson(l))
-
-  let displayLeads
-  if (hasCompanyFilters && hasPersonFilters) {
-    displayLeads = bestFits
-  } else if (hasCompanyFilters) {
-    displayLeads = leads.filter(matchesCompany)
-  } else if (hasPersonFilters) {
-    displayLeads = leads.filter(matchesPerson)
-  } else {
-    displayLeads = leads
-  }
-
-  const totalFilterCount = filters.orgSizes.length + filters.roles.length + filters.statuses.length +
-    filters.locations.length + (filters.requireSecurity ? 1 : 0) + (filters.requireProduct ? 1 : 0) + (filters.keyword ? 1 : 0)
-
-  async function saveProfile() {
-    if (!profileName.trim()) return
-    setSaving(true)
+  async function handleSearch() {
+    if (!selectedCompany) return
+    setSearching(true)
+    setSearchError('')
+    setSearchResults(null)
     try {
-      const res = await createPersona({ name: profileName, filters })
-      setProfiles(prev => [res.data.persona, ...prev])
-      setActiveProfile(res.data.persona.id)
-      setProfileName('')
-      setShowSave(false)
-    } catch (e) { console.error(e) }
-    finally { setSaving(false) }
+      const domain = selectedCompany.website
+        ? selectedCompany.website.replace(/https?:\/\//, '').replace(/\/.*/, '').trim()
+        : ''
+      const res = await searchCompanyPeople(selectedCompany.name, domain, selectedRoles)
+      setSearchResults(res.data.people || [])
+    } catch (e) {
+      setSearchError(e.response?.data?.detail || 'Search failed. Try again.')
+    } finally {
+      setSearching(false)
+    }
   }
 
-  async function handleDeleteProfile(id) {
+  async function handleAddLead(person) {
+    const key = personKey(person)
+    setAddStates(prev => ({ ...prev, [key]: 'adding' }))
     try {
-      await deletePersona(id)
-      setProfiles(prev => prev.filter(p => p.id !== id))
-      if (activeProfile === id) setActiveProfile(null)
-    } catch (e) { console.error(e) }
+      await createLead({
+        first_name: person.first_name,
+        last_name: person.last_name,
+        name: person.name,
+        title: person.title,
+        company: person.company || selectedCompany?.name,
+        location: person.location,
+        email: person.email || '',
+        profile_url: person.linkedin_url || '',
+        status: 'new',
+      })
+      setAddStates(prev => ({ ...prev, [key]: 'added' }))
+      // Add to local leads list so isAlreadyLead reflects immediately
+      setExistingLeads(prev => [...prev, {
+        first_name: person.first_name, last_name: person.last_name,
+        name: person.name, title: person.title,
+        company: person.company || selectedCompany?.name,
+        location: person.location, profile_url: person.linkedin_url || '',
+        status: 'new',
+      }])
+    } catch (e) {
+      setAddStates(prev => ({ ...prev, [key]: 'idle' }))
+    }
   }
 
-  function applyProfile(profile) {
-    setFilters({ ...DEFAULT_FILTERS, ...profile.filters })
-    setActiveProfile(profile.id)
-  }
-
-  function exportCSV() {
-    const headers = ['Name', 'Title', 'Company', 'Location', 'Status', 'Org Size', 'Company Type', 'Security Team', 'Profile URL']
-    const rows = displayLeads.map(l => [
-      l.name, l.title, l.company, l.location, l.status,
-      l.org_size, l.company_type, l.has_security_team, l.profile_url,
-    ].map(v => `"${(v || '').replace(/"/g, '""')}"`))
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'targeted-leads.csv'; a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const bothActive = hasCompanyFilters && hasPersonFilters
+  const isEmpty = companies.length === 0
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <Navbar />
 
       {/* Hero */}
-      <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '56px 48px 36px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative' }}>
           <p style={lbl}>Targeting Engine</p>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(56px, 8vw, 96px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 }}>
-            {displayLeads.length}
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' }}> targets</span>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px,7vw,80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '8px' }}>
+            Find decision makers
           </h1>
-          {bothActive && (
-            <p style={{ fontSize: '11px', color: '#5b8db8', fontWeight: '500', marginTop: '6px', letterSpacing: '0.3px' }}>
-              ICP + Persona active — showing best fits only
-            </p>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {totalFilterCount > 0 && (
-            <button onClick={() => { setFilters(DEFAULT_FILTERS); setActiveProfile(null) }}
-              style={{ padding: '7px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-              Clear all ({totalFilterCount})
-            </button>
-          )}
-          {displayLeads.length > 0 && (
-            <button onClick={exportCSV}
-              style={{ padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-              Export CSV
-            </button>
-          )}
-          <button onClick={() => setShowSave(!showSave)}
-            style={{ padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-            {showSave ? 'Cancel' : 'Save Profile'}
-          </button>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)', letterSpacing: '0.03em', lineHeight: 1.7, maxWidth: '520px' }}>
+            Pick a company from your pipeline, filter by role, then find and add decision makers directly to your leads list.
+          </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 205px)' }}>
+      <div style={{ display: 'flex', minHeight: 'calc(100vh - 208px)' }}>
 
-        {/* Sidebar */}
-        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px dashed var(--border-dash)', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+        {/* ── Sidebar ─────────────────────────────────────────── */}
+        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px dashed var(--border-dash)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', background: 'var(--bg)' }}>
 
-          {/* Saved profiles */}
-          {profiles.length > 0 && (
-            <div>
-              <p style={lbl}>Saved Profiles</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-                {profiles.map(p => (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: activeProfile === p.id ? 'var(--surface-raised)' : 'var(--surface)', border: `1px solid ${activeProfile === p.id ? 'var(--border-strong)' : 'var(--border)'}`, borderRadius: '8px', transition: 'all 0.15s' }}>
-                    <button onClick={() => applyProfile(p)} style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>{p.name}</button>
-                    <button onClick={() => handleDeleteProfile(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', padding: '0 2px' }}>✕</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Company criteria (ICP) */}
+          {/* Step 1 */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <p style={{ ...lbl, margin: 0 }}>Company Criteria</p>
-              {hasCompanyFilters && <span style={{ fontSize: '9px', fontWeight: '700', color: 'var(--accent)', background: 'rgba(168,100,72,0.10)', padding: '2px 6px', borderRadius: '3px', border: '1px solid rgba(168,100,72,0.2)', letterSpacing: '0.5px' }}>ON</span>}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <p style={sub}>Org Size</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {ORG_SIZES.map(s => <Chip key={s} label={s} active={filters.orgSizes.includes(s)} onClick={() => toggle('orgSizes', s)} />)}
+            <p style={stepLbl}><span style={stepNum}>1</span>Select Company</p>
+            <div style={{ marginTop: '10px' }}>
+              {isEmpty ? (
+                <div style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px dashed var(--border-dash)', borderRadius: '7px' }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '8px' }}>No companies in pipeline.</p>
+                  <button onClick={() => navigate('/directory')} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: '600', letterSpacing: '0.04em' }}>Go to Discovery →</button>
                 </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={filters.requireSecurity}
-                    onChange={e => { setFilters(prev => ({ ...prev, requireSecurity: e.target.checked })); setActiveProfile(null) }}
-                    style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)' }}>Has security team</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={filters.requireProduct}
-                    onChange={e => { setFilters(prev => ({ ...prev, requireProduct: e.target.checked })); setActiveProfile(null) }}
-                    style={{ accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)' }}>Product company only</span>
-                </label>
-              </div>
+              ) : (
+                <CompanyPicker companies={companies} selected={selectedCompany} onSelect={setSelectedCompany} />
+              )}
             </div>
           </div>
 
-          <div style={{ height: '1px', background: 'var(--border-dash)', borderTop: '1px dashed var(--border-dash)' }} />
+          <div style={{ borderTop: '1px dashed var(--border-dash)' }} />
 
-          {/* Contact criteria (Persona) */}
+          {/* Step 2 */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <p style={{ ...lbl, margin: 0 }}>Contact Criteria</p>
-              {hasPersonFilters && <span style={{ fontSize: '9px', fontWeight: '700', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', padding: '2px 6px', borderRadius: '3px', border: '1px solid rgba(74,124,89,0.2)', letterSpacing: '0.5px' }}>ON</span>}
+            <p style={stepLbl}><span style={stepNum}>2</span>Filter by Role</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', marginTop: '4px', marginBottom: '10px', letterSpacing: '0.04em' }}>Leave blank to find all members</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+              {DM_ROLES.map(r => (
+                <RoleChip key={r} label={r} active={selectedRoles.includes(r)} onClick={() => toggleRole(r)} />
+              ))}
             </div>
+            {selectedRoles.length > 0 && (
+              <button onClick={() => setSelectedRoles([])} style={{ marginTop: '8px', fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, letterSpacing: '0.04em' }}>Clear roles</button>
+            )}
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <p style={sub}>Keyword</p>
-                <input type="text" value={filters.keyword}
-                  onChange={e => { setFilters(prev => ({ ...prev, keyword: e.target.value })); setActiveProfile(null) }}
-                  placeholder="Name, title, company..."
-                  style={{ width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div>
-                <p style={sub}>Title / Role</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {DM_ROLES.map(r => <Chip key={r} label={r} active={filters.roles.includes(r)} onClick={() => toggle('roles', r)} />)}
-                </div>
-              </div>
-              <div>
-                <p style={sub}>Status</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {LEAD_STATUSES.map(st => <Chip key={st} label={st} active={filters.statuses.includes(st)} onClick={() => toggle('statuses', st)} />)}
-                </div>
-              </div>
-              <div>
-                <p style={sub}>Location</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {LOCATIONS.map(l => <Chip key={l} label={l} active={filters.locations.includes(l)} onClick={() => toggle('locations', l)} />)}
-                </div>
-              </div>
+          <div style={{ borderTop: '1px dashed var(--border-dash)' }} />
+
+          {/* Step 3 — search button */}
+          <div>
+            <p style={stepLbl}><span style={stepNum}>3</span>Find Contacts</p>
+            <div style={{ marginTop: '10px' }}>
+              <button
+                onClick={handleSearch}
+                disabled={!selectedCompany || searching}
+                style={{ width: '100%', padding: '10px 16px', background: selectedCompany ? '#1d1b1b' : 'var(--surface)', color: selectedCompany ? '#fdfdfd' : 'var(--text-muted)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: selectedCompany ? 'pointer' : 'default', letterSpacing: '0.06em', transition: 'background 0.15s' }}
+              >
+                {searching ? 'Searching…' : selectedCompany ? `Find at ${selectedCompany.name}` : 'Select a company first'}
+              </button>
+              {searchError && <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#c0392b', marginTop: '6px', letterSpacing: '0.02em' }}>{searchError}</p>}
             </div>
           </div>
+
         </div>
 
-        {/* Main panel */}
-        <div style={{ flex: 1, padding: '24px 32px', overflowY: 'auto' }}>
+        {/* ── Main Panel ──────────────────────────────────────── */}
+        <div style={{ flex: 1, padding: '28px 36px', overflowY: 'auto' }}>
 
-          {/* Stats — gap-px grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', marginBottom: '24px', borderRadius: '6px', overflow: 'hidden', border: '1px solid #c4c1bd' }}>
-            {[
-              { label: 'Total Leads',    value: leads.length,                        color: 'var(--text)',   dim: false },
-              { label: 'Company Match',  value: companyMatchCount ?? '—',             color: 'var(--accent)', dim: !hasCompanyFilters },
-              { label: 'Contact Match',  value: personMatchCount ?? '—',              color: '#4a7c59',       dim: !hasPersonFilters },
-              { label: 'Best Fits',      value: bothActive ? bestFits.length : '—',   color: '#5b8db8',       dim: !bothActive },
-            ].map(({ label, value, color, dim }) => (
-              <div key={label} style={{ padding: '18px 20px', background: 'var(--bg)' }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>{label}</p>
-                <p style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px, 2.5vw, 36px)', fontWeight: '400', color: dim ? 'var(--text-muted)' : color, letterSpacing: '-0.04em', lineHeight: 1 }}>{value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Save form */}
-          {showSave && (
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '18px', marginBottom: '20px' }}>
-              <p style={lbl}>Save targeting profile</p>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="text" value={profileName} onChange={e => setProfileName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') saveProfile() }}
-                  placeholder="e.g. SaaS CTOs India" autoFocus
-                  style={{ flex: 1, padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit' }} />
-                <button onClick={saveProfile} disabled={saving}
-                  style={{ padding: '8px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '12px', fontWeight: '500', color: 'var(--bg)', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {saving ? 'Saving...' : 'Save →'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Match rate bar */}
-          {hasAnyFilters && leads.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase' }}>Match Rate</span>
-                <span style={{ fontSize: '11px', fontWeight: '600', color: bothActive ? '#5b8db8' : '#4a7c59' }}>
-                  {Math.round(displayLeads.length / leads.length * 100)}%
-                </span>
-              </div>
-              <div style={{ height: '5px', background: 'var(--surface-raised)', borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.round(displayLeads.length / leads.length * 100)}%`, background: bothActive ? '#5b8db8' : '#4a7c59', borderRadius: '3px', transition: 'width 0.4s ease' }} />
-              </div>
-            </div>
-          )}
-
-          {/* Results */}
-          {!hasAnyFilters ? (
+          {!selectedCompany ? (
+            /* No company selected */
             <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '10px' }}>Build your targeting profile</p>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.9, maxWidth: '380px', margin: '0 auto', letterSpacing: '0.02em' }}>
-                Use <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: '600' }}>Company Criteria</strong> to filter by org size and type,
-                and <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', fontWeight: '600' }}>Contact Criteria</strong> to filter by role, status, and location.
-                Enable both to find your Best Fits — leads that match everything.
+              <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '10px' }}>
+                {isEmpty ? 'No companies in pipeline yet' : 'Select a company to begin'}
               </p>
-            </div>
-          ) : loading ? (
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Loading…</p>
-          ) : displayLeads.length === 0 ? (
-            <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '8px' }}>No matches found.</p>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Try broadening your criteria.</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.9, maxWidth: '380px', margin: '0 auto 20px', letterSpacing: '0.02em' }}>
+                {isEmpty
+                  ? 'Use Discovery to find and add companies first, then come back here to find their key contacts.'
+                  : 'Pick a company from your pipeline on the left, optionally filter by role, then click "Find Contacts" to search for decision makers via Apollo.'}
+              </p>
+              {isEmpty && (
+                <button onClick={() => navigate('/directory')} style={{ padding: '10px 22px', background: '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', letterSpacing: '0.06em' }}>
+                  Go to Discovery →
+                </button>
+              )}
             </div>
           ) : (
             <div>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' }}>
-                {bothActive ? 'Best Fits' : 'Matched Leads'} · {displayLeads.length}
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                {displayLeads.map(lead => {
-                  const st = STATUS_COLORS[lead.status] || STATUS_COLORS.new
-                  const isBestFit = bothActive && matchesCompany(lead) && matchesPerson(lead)
-                  return (
-                    <div key={lead.id} style={{ background: 'var(--surface)', border: `1px solid ${isBestFit ? 'rgba(91,141,184,0.4)' : 'var(--border)'}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', position: 'relative', transition: 'border-color 0.15s' }}>
-                      {isBestFit && (
-                        <div style={{ position: 'absolute', top: '12px', right: '12px', fontSize: '9px', fontWeight: '700', color: '#5b8db8', background: 'rgba(91,141,184,0.12)', padding: '2px 7px', borderRadius: '4px', border: '1px solid rgba(91,141,184,0.25)', letterSpacing: '0.3px' }}>BEST FIT</div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '40px' }}>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text)', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.name || '—'}</p>
-                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.title || '—'}</p>
-                        </div>
-                        <span style={{ fontSize: '10px', fontWeight: '500', padding: '2px 8px', borderRadius: '4px', color: st.color, background: st.bg, border: `1px solid ${st.border}`, whiteSpace: 'nowrap', flexShrink: 0 }}>{lead.status || 'new'}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.company || '—'}</span>
-                        {lead.location && <>
-                          <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'var(--border-strong)', flexShrink: 0 }} />
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.location}</span>
-                        </>}
-                      </div>
-                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                        {lead.has_security_team === 'Yes' && (
-                          <span style={{ fontSize: '9px', fontWeight: '600', color: '#4a7c59', background: 'rgba(74,124,89,0.10)', padding: '2px 6px', borderRadius: '3px', border: '1px solid rgba(74,124,89,0.2)' }}>SEC</span>
-                        )}
-                        {lead.company_type === 'Product' && (
-                          <span style={{ fontSize: '9px', fontWeight: '600', color: 'var(--accent)', background: 'rgba(168,100,72,0.10)', padding: '2px 6px', borderRadius: '3px', border: '1px solid rgba(168,100,72,0.2)' }}>PRODUCT</span>
-                        )}
-                        {lead.org_size && (
-                          <span style={{ fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', background: 'var(--surface-raised)', padding: '2px 6px', borderRadius: '3px' }}>{lead.org_size}</span>
-                        )}
-                      </div>
-                      {lead.profile_url && (
-                        <a href={lead.profile_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', textDecoration: 'none', fontWeight: '500', alignSelf: 'flex-start' }}>View profile →</a>
-                      )}
-                    </div>
-                  )
-                })}
+              {/* Company header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', paddingBottom: '20px', borderBottom: '1px dashed var(--border-dash)' }}>
+                {selectedCompany.logo ? (
+                  <img src={selectedCompany.logo} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', padding: '4px' }} onError={e => { e.target.style.display = 'none' }} />
+                ) : (
+                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '16px', color: 'var(--text-muted)' }}>{(selectedCompany.name || '?')[0]}</span>
+                  </div>
+                )}
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', margin: 0 }}>{selectedCompany.name}</h2>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', margin: '2px 0 0', letterSpacing: '0.04em' }}>
+                    {[selectedCompany.classification, selectedCompany.size, selectedCompany.headquarters].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
               </div>
+
+              {/* Existing leads section */}
+              {companyLeads.length > 0 && (
+                <div style={{ marginBottom: '36px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                    <p style={sectionLbl}>Already in leads</p>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '700', padding: '2px 7px', borderRadius: '3px', background: 'rgba(74,124,89,0.10)', color: '#4a7c59', border: '1px solid rgba(74,124,89,0.22)' }}>{companyLeads.length}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                    {companyLeads.map(lead => {
+                      const st = STATUS_COLORS[lead.status] || STATUS_COLORS.new
+                      const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.name || '—'
+                      return (
+                        <div key={lead.id} style={{ background: 'var(--bg)', border: '1px solid rgba(74,124,89,0.22)', borderRadius: '9px', padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontFamily: 'var(--font-display)', fontSize: '14px', letterSpacing: '-0.02em', color: 'var(--text)', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+                              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.title || '—'}</p>
+                            </div>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', padding: '2px 7px', borderRadius: '3px', color: st.color, background: st.bg, border: `1px solid ${st.border}`, flexShrink: 0, marginLeft: '8px' }}>{lead.status}</span>
+                          </div>
+                          {lead.profile_url && (
+                            <a href={lead.profile_url} target="_blank" rel="noreferrer" style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#5b8db8', textDecoration: 'none', fontWeight: '600', letterSpacing: '0.04em', alignSelf: 'flex-start' }}>LinkedIn →</a>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Search results */}
+              {searchResults === null && !searching ? (
+                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px dashed var(--border-dash)', borderRadius: '10px' }}>
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    Ready to search
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>
+                    {selectedRoles.length > 0
+                      ? `Will search for ${selectedRoles.join(', ')} at ${selectedCompany.name}`
+                      : `Will find all contacts at ${selectedCompany.name}`}
+                  </p>
+                </div>
+              ) : searching ? (
+                <div style={{ padding: '48px 0', textAlign: 'center' }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Searching Hunter + LinkedIn for people at {selectedCompany.name}…</p>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px dashed var(--border-dash)', borderRadius: '10px' }}>
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '6px' }}>No contacts found</p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Try removing role filters or searching by a different company name.</p>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                    <p style={sectionLbl}>Found via Apollo</p>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '700', padding: '2px 7px', borderRadius: '3px', background: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: '1px solid rgba(91,141,184,0.22)' }}>{searchResults.length}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(268px, 1fr))', gap: '10px' }}>
+                    {searchResults.map(person => {
+                      const key = personKey(person)
+                      const alreadyLead = isAlreadyLead(person)
+                      return (
+                        <PersonCard
+                          key={key}
+                          person={person}
+                          addState={addStates[key] || 'idle'}
+                          existingLead={alreadyLead}
+                          onAdd={() => handleAddLead(person)}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -405,5 +440,7 @@ export default function Targeting() {
   )
 }
 
-const lbl = { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase' }
-const sub = { fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase' }
+const lbl = { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase' }
+const stepLbl = { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '7px', margin: 0 }
+const stepNum = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', background: '#1d1b1b', color: '#fdfdfd', fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '700', flexShrink: 0 }
+const sectionLbl = { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase' }

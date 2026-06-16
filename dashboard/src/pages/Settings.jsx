@@ -5,6 +5,8 @@ const SECTIONS = [
   { id: 'profile',    num: '01', label: 'Profile' },
   { id: 'ai-keys',   num: '02', label: 'AI Keys' },
   { id: 'enrichment',num: '03', label: 'Enrichment' },
+  { id: 'maps',      num: '04', label: 'Maps' },
+  { id: 'linkedin',  num: '05', label: 'LinkedIn' },
 ]
 
 export default function Settings() {
@@ -12,9 +14,12 @@ export default function Settings() {
   const [geminiKey,     setGeminiKey]     = useState(localStorage.getItem('geminiKey') || '')
   const [openaiKey,     setOpenaiKey]     = useState(localStorage.getItem('openaiKey') || '')
   const [groqKey,       setGroqKey]       = useState(localStorage.getItem('groqKey') || '')
-  const [openrouterKey, setOpenrouterKey] = useState(localStorage.getItem('openrouterKey') || '')
+  const [openrouterKey,   setOpenrouterKey]   = useState(localStorage.getItem('openrouterKey') || '')
+  const [openrouterModel, setOpenrouterModel] = useState(localStorage.getItem('openrouterModel') || '')
   const [hunterKey,     setHunterKey]     = useState(localStorage.getItem('hunterKey') || '')
   const [apolloKey,     setApolloKey]     = useState(localStorage.getItem('apolloKey') || '')
+  const [mapsKey,       setMapsKey]       = useState(localStorage.getItem('mapsKey') || '')
+  const [liCookie,      setLiCookie]      = useState(localStorage.getItem('liCookie') || '')
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
 
@@ -22,6 +27,8 @@ export default function Settings() {
     profile:    useRef(null),
     'ai-keys':  useRef(null),
     enrichment: useRef(null),
+    maps:       useRef(null),
+    linkedin:   useRef(null),
   }
 
   function handleSave() {
@@ -29,9 +36,12 @@ export default function Settings() {
     localStorage.setItem('geminiKey',     geminiKey)
     localStorage.setItem('openaiKey',     openaiKey)
     localStorage.setItem('groqKey',       groqKey)
-    localStorage.setItem('openrouterKey', openrouterKey)
+    localStorage.setItem('openrouterKey',   openrouterKey)
+    localStorage.setItem('openrouterModel', openrouterModel)
     localStorage.setItem('hunterKey',     hunterKey)
     localStorage.setItem('apolloKey',     apolloKey)
+    localStorage.setItem('mapsKey',       mapsKey)
+    localStorage.setItem('liCookie',      liCookie)
     window.dispatchEvent(new Event('nameUpdated'))
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -68,7 +78,7 @@ export default function Settings() {
                 onClick={() => scrollTo(sec.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '8px 10px', background: 'none', border: 'none',
+                  padding: '8px 10px', border: 'none',
                   cursor: 'pointer', borderRadius: '6px', textAlign: 'left',
                   transition: 'background 0.15s',
                   background: activeSection === sec.id ? 'var(--surface)' : 'transparent',
@@ -120,19 +130,48 @@ export default function Settings() {
               <KeyInput value={groqKey} onChange={setGroqKey} placeholder="gsk_…" set={!!groqKey} />
             </Field>
 
-            <Field label="OpenRouter" badge="Qwen3 · Free tier" badgeColor="amber"
-              hint="Used to extract LinkedIn URLs from company websites when regex fails.">
+            <Field label="OpenRouter" badge="400+ models" badgeColor="amber"
+              hint="Fallback for all AI tasks — website analysis, classification, compliance. Access 400+ models with one key.">
               <KeyInput value={openrouterKey} onChange={setOpenrouterKey} placeholder="sk-or-…" set={!!openrouterKey} />
+              {openrouterKey && (
+                <div style={{ marginTop: '10px' }}>
+                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block', marginBottom: '5px' }}>
+                    Model <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(leave blank for default: gemini-2.0-flash free)</span>
+                  </label>
+                  <select
+                    value={openrouterModel}
+                    onChange={e => setOpenrouterModel(e.target.value)}
+                    style={{ width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}
+                  >
+                    <option value="">google/gemini-2.0-flash-exp:free (default)</option>
+                    <optgroup label="Free Models">
+                      <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
+                      <option value="mistralai/mistral-7b-instruct:free">mistralai/mistral-7b-instruct:free</option>
+                      <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free</option>
+                      <option value="qwen/qwq-32b:free">qwen/qwq-32b:free</option>
+                    </optgroup>
+                    <optgroup label="Paid — Best Quality">
+                      <option value="anthropic/claude-3-5-sonnet">anthropic/claude-3-5-sonnet</option>
+                      <option value="anthropic/claude-3-haiku">anthropic/claude-3-haiku</option>
+                      <option value="google/gemini-2.0-flash-001">google/gemini-2.0-flash-001</option>
+                      <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
+                      <option value="meta-llama/llama-3.3-70b-instruct">meta-llama/llama-3.3-70b-instruct</option>
+                      <option value="mistralai/mistral-nemo">mistralai/mistral-nemo</option>
+                    </optgroup>
+                  </select>
+                </div>
+              )}
             </Field>
 
             {/* How AI keys are used — gap-px grid */}
             <div style={{ marginTop: '24px' }}>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>How keys are used</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
                 {[
-                  { label: 'Gemini',  color: 'green', text: 'Website analysis, login detection, compliance, product classification, auto-fill.' },
-                  { label: 'OpenAI',  color: 'blue',  text: 'Same as Gemini but paid. Used if Gemini key not set.' },
-                  { label: 'Groq',    color: 'amber', text: 'Compliance checking, quick classification. Always free.' },
+                  { label: 'Gemini',      color: 'green', text: 'Primary — website analysis, compliance, classification. Free at aistudio.google.com.' },
+                  { label: 'OpenRouter',  color: 'amber', text: 'Secondary fallback — 400+ models. Use free tier (gemini-2.0-flash) or any paid model.' },
+                  { label: 'Groq',        color: 'amber', text: 'Third fallback — Llama 70B. Fast and free.' },
+                  { label: 'OpenAI',      color: 'blue',  text: 'Last resort — GPT-4o. Only used if Gemini, OpenRouter, and Groq all fail.' },
                 ].map(({ label, color, text }) => (
                   <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
                     <span style={badge[color]}>{label}</span>
@@ -144,7 +183,7 @@ export default function Settings() {
           </section>
 
           {/* 03 — Enrichment */}
-          <section ref={sectionRefs.enrichment} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
+          <section ref={sectionRefs.enrichment} style={s.section}>
             <SectionHeader num="03" title="Enrichment" />
             <p style={s.sectionHint}>Used to find email addresses for leads.</p>
 
@@ -155,6 +194,69 @@ export default function Settings() {
             <Field label="Apollo.io" hint="Email and phone enrichment. Note: free plan has limited API access.">
               <KeyInput value={apolloKey} onChange={setApolloKey} placeholder="Apollo API key…" set={!!apolloKey} />
             </Field>
+          </section>
+
+          {/* 04 — Maps */}
+          <section ref={sectionRefs.maps} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
+            <SectionHeader num="04" title="Maps" />
+            <p style={s.sectionHint}>Google Maps Places API enriches company HQ address, website, and phone number. Costs ~$0.03 per company lookup. Free tier: $200/month credit (~6,600 lookups).</p>
+
+            <Field label="Google Maps API Key" badge="Places API" badgeColor="green"
+              hint={<>Enable "Places API (New)" in <ExtLink href="https://console.cloud.google.com/apis">Google Cloud Console</ExtLink>, then create an API key.</>}>
+              <KeyInput value={mapsKey} onChange={setMapsKey} placeholder="AIzaSy…" set={!!mapsKey} />
+            </Field>
+
+            <div style={{ marginTop: '16px' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What Maps fills</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+                {[
+                  { label: 'HQ Address', text: 'Full street address from Google Maps listings.' },
+                  { label: 'Website',    text: 'Confirms or fills website URL from Maps listing.' },
+                  { label: 'Phone',      text: 'Business phone number stored in the company notes.' },
+                ].map(({ label, text }) => (
+                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
+                    <span style={badge.green}>{label}</span>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '8px' }}>{text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* 05 — LinkedIn */}
+          <section ref={sectionRefs.linkedin} style={s.section}>
+            <SectionHeader num="05" title="LinkedIn" />
+            <p style={s.sectionHint}>
+              LinkedIn now blocks unauthenticated access to company pages. Providing your session cookie lets the scraper fetch phone, founded year, specialties, company size, and tagline directly from LinkedIn About pages.
+            </p>
+
+            <Field label="LinkedIn Session Cookie" badge="li_at" badgeColor="blue"
+              hint={
+                <span>
+                  1. Open LinkedIn in your browser while logged in.<br />
+                  2. DevTools → Application → Cookies → www.linkedin.com → find <code style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', background: 'var(--surface)', padding: '1px 4px', borderRadius: '3px' }}>li_at</code> → copy its Value.<br />
+                  3. Paste below and Save. The cookie is only sent to your own backend.
+                </span>
+              }>
+              <KeyInput value={liCookie} onChange={setLiCookie} placeholder="AQEDAx…" set={!!liCookie} />
+            </Field>
+
+            <div style={{ marginTop: '16px' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What this unlocks</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+                {[
+                  { label: 'Phone',       text: 'Business phone number listed on LinkedIn About.' },
+                  { label: 'Founded',     text: 'Company founding year.' },
+                  { label: 'Specialties', text: 'LinkedIn-listed expertise areas.' },
+                  { label: 'Company size',text: 'Exact employee band (e.g. 2-10, 51-200).' },
+                ].map(({ label, text }) => (
+                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
+                    <span style={badge.blue}>{label}</span>
+                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '8px' }}>{text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
 
           {/* Save */}
