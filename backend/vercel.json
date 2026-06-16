@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "alias": ["leadgenengineplatform-api.vercel.app"],
   "builds": [
     {
       "src": "api/index.py",
