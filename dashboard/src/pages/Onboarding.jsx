@@ -188,7 +188,7 @@ export default function Onboarding() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <button
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => { window.location.href = '/dashboard' }}
                   style={{
                     fontFamily: SANS, fontSize: 14, fontWeight: 500,
                     color: INK, background: '#ffffff',
