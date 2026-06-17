@@ -170,6 +170,7 @@ function scrapeProfilePage() {
   const data = {
     type: 'profile', name: '', title: '', company: '', location: '',
     profileUrl: cleanUrl(window.location.href), followers: '', connections: '',
+    about: '', experiences: [],
     appointment: 'No', scrapedAt: new Date().toISOString()
   }
 
@@ -188,6 +189,13 @@ function scrapeProfilePage() {
     ]
     return patterns.some(p => p.test(line))
   }
+
+  const isDuration = (line) =>
+    (/\d{4}/.test(line) && /present|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) ||
+    /\d+\s*(yr|mo|year|month)/i.test(line)
+
+  const isEmploymentType = (line) =>
+    /^(full-time|part-time|contract|freelance|internship|self-employed|apprenticeship|seasonal|on-site|remote|hybrid)$/i.test(line)
 
   const isLocation = (line) => line.length < 60 && (
     /,/.test(line) ||
@@ -240,6 +248,54 @@ function scrapeProfilePage() {
     }
   }
 
+  // ── About section ────────────────────────────────────────────
+  const aboutIdx = lines.findIndex(l => /^about$/i.test(l))
+  if (aboutIdx !== -1) {
+    const sectionBoundaries = /^(experience|education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages|honors|awards|publications|volunteering|contact info)$/i
+    const aboutLines = []
+    for (let i = aboutIdx + 1; i < Math.min(aboutIdx + 30, lines.length); i++) {
+      const line = lines[i]
+      if (sectionBoundaries.test(line)) break
+      if (skipLine(line)) continue
+      if (line.length > 5) aboutLines.push(line)
+    }
+    data.about = aboutLines.join(' ').trim().substring(0, 1200)
+  }
+
+  // ── Experience section ───────────────────────────────────────
+  const expIdx = lines.findIndex(l => /^experience$/i.test(l))
+  if (expIdx !== -1) {
+    const expBoundary = /^(education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages|honors|awards|publications|volunteering|contact info|courses)$/i
+    const experiences = []
+    let i = expIdx + 1
+    while (i < Math.min(expIdx + 80, lines.length) && experiences.length < 8) {
+      const line = lines[i]
+      if (expBoundary.test(line)) break
+      if (!line || line.length < 2 || skipLine(line) || isDuration(line) || isEmploymentType(line) || isLocation(line)) {
+        i++; continue
+      }
+      // A title line is typically followed by company info or duration within a few lines
+      if (line.length > 3 && line.length < 120) {
+        const exp = { title: line, company: '', duration: '' }
+        // Look ahead for company name and duration
+        for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+          const next = lines[j]
+          if (expBoundary.test(next)) break
+          if (isDuration(next) && !exp.duration) { exp.duration = next; continue }
+          if (!isEmploymentType(next) && !isDuration(next) && !skipLine(next) && !exp.company && next.length > 1 && next.length < 80) {
+            exp.company = next.split(' · ')[0].trim()
+          }
+        }
+        // Only push if it looks like a real job entry (has a company or followed by duration)
+        if (exp.company || exp.duration) experiences.push(exp)
+        i += 3
+        continue
+      }
+      i++
+    }
+    data.experiences = experiences
+  }
+
   if (!data.company) {
     const expIndex = lines.findIndex(l => l === 'Experience')
     if (expIndex !== -1) {
@@ -259,6 +315,11 @@ function scrapeProfilePage() {
         }
       }
     }
+  }
+
+  // Pull company from first experience if still missing
+  if (!data.company && data.experiences.length > 0 && data.experiences[0].company) {
+    data.company = data.experiences[0].company
   }
 
   data.appointment = detectAppointment()

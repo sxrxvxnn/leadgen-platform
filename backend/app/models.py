@@ -16,6 +16,8 @@ class LeadCreate(BaseModel):
     status: Optional[str] = "new"
     notes: Optional[str] = None
     scraped_at: Optional[datetime] = None
+    about: Optional[str] = None
+    experience: Optional[list] = None
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -26,6 +28,8 @@ class LeadUpdate(BaseModel):
     phone: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    about: Optional[str] = None
+    experience: Optional[list] = None
 
 class CompanyCreate(BaseModel):
     name: str

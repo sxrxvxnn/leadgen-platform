@@ -145,7 +145,22 @@ function ConnectionStatusDropdown({ status, onChange }) {
 }
 
 function ViewLink({ url }) {
-  return React.createElement('a', { href: url, style: sub.link, onClick: (e) => e.stopPropagation() }, 'VIEW →')
+  return React.createElement('a', { href: url, target: '_blank', rel: 'noopener noreferrer', style: sub.link, onClick: (e) => e.stopPropagation() }, 'VIEW →')
+}
+
+function EnrichProfileLink({ url }) {
+  return React.createElement(
+    'a',
+    {
+      href: url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: 'Open in LinkedIn — then click "Update this lead" in the SonarLeads extension',
+      style: { ...sub.link, color: 'var(--accent)', borderColor: 'var(--accent-dim)' },
+      onClick: (e) => e.stopPropagation()
+    },
+    'ENRICH ↗'
+  )
 }
 
 function StatusBadge({ status }) {
@@ -197,15 +212,17 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       <div style={{ width: '170px', flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: '8px' }}>
         <ConnectionStatusDropdown status={lead.connection_status || 'Not Requested'} onChange={(val) => onConnectionStatus(lead.id, val)} />
       </div>
-      <div style={{ width: '100px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {lead.profile_url && <ViewLink url={lead.profile_url} />}
+      <div style={{ width: '130px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {lead.profile_url && !lead.about && <EnrichProfileLink url={lead.profile_url} />}
+        {lead.profile_url && lead.about && <ViewLink url={lead.profile_url} />}
+        {!lead.profile_url && null}
         {!lead.email && (
           <button style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: isEnriching ? 'var(--text-muted)' : 'var(--accent)', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnrich(lead.id) }}>
-            {isEnriching ? '...' : 'Enrich'}
+            {isEnriching ? '...' : 'Email'}
           </button>
         )}
-        {lead.email && <span style={{ fontSize: '10px', color: '#4a7c59', fontWeight: '600' }}>✓</span>}
+        {lead.email && <span style={{ fontSize: '10px', color: '#4a7c59', fontWeight: '600' }}>✓ email</span>}
         <button style={sub.deleteBtn} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(lead.id) }}>✕</button>
       </div>
     </div>

@@ -83,6 +83,25 @@
     .btn-extract:hover { background: #fff; }
     .btn-extract:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    .btn-enrich-profile {
+      display: none;
+      width: 100%;
+      padding: 10px 14px;
+      background: transparent;
+      border: 1px solid #6f63b7;
+      border-radius: 4px;
+      color: #9e91d6;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 8px;
+      font-family: inherit;
+      letter-spacing: 0.3px;
+      text-align: left;
+    }
+    .btn-enrich-profile:hover { border-color: #9e91d6; color: #c4baee; }
+    .btn-enrich-profile:disabled { opacity: 0.5; cursor: not-allowed; }
+
     .btn-dashboard { width: 100%; padding: 10px 14px; background: transparent; border: 1px solid #222; border-radius: 4px; font-size: 11px; font-weight: 600; color: #555; cursor: pointer; font-family: inherit; text-align: left; margin-bottom: 8px; }
     .btn-dashboard:hover { border-color: #444; color: #888; }
 
@@ -141,6 +160,10 @@
 
     <button class="btn-autoscroll" id="autoScrollBtn">
       ↓ Auto-scroll to load all profiles
+    </button>
+
+    <button class="btn-enrich-profile" id="enrichProfileBtn">
+      ↑ Update this lead with full profile
     </button>
 
     <button class="btn-extract" id="extractBtn" disabled>

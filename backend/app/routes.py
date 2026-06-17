@@ -175,6 +175,34 @@ async def get_leads(authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/leads/by-profile-url")
+async def get_lead_by_profile_url(url: str, authorization: str = Header(...)):
+    """Used by the Chrome extension to check if a LinkedIn profile is already a lead."""
+    user_id = get_user_id(authorization)
+    try:
+        clean = url.split('?')[0].split('#')[0].rstrip('/')
+        res = supabase.table("leads")\
+            .select("id, name, title, company")\
+            .eq("user_id", user_id)\
+            .eq("profile_url", clean)\
+            .limit(1)\
+            .execute()
+        if res.data:
+            return {"lead": res.data[0]}
+        # Also try with trailing slash variant
+        res2 = supabase.table("leads")\
+            .select("id, name, title, company")\
+            .eq("user_id", user_id)\
+            .eq("profile_url", clean + "/")\
+            .limit(1)\
+            .execute()
+        if res2.data:
+            return {"lead": res2.data[0]}
+        return {"lead": None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/leads")
 async def create_lead(lead: LeadCreate, authorization: str = Header(...)):
     user_id = get_user_id(authorization)

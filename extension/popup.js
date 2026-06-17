@@ -129,12 +129,14 @@ function initMainScreen(token, email) {
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const url = tabs[0] ? tabs[0].url : ''
+    const cleanedUrl = url.split('?')[0].split('#')[0]
     const type = detectPageType(url)
     const badge = document.getElementById('pageBadge')
     const label = document.getElementById('pageTypeLabel')
     const extractBtn = document.getElementById('extractBtn')
     const autoScrollBtn = document.getElementById('autoScrollBtn')
     const peopleTip = document.getElementById('peopleTip')
+    const enrichBtn = document.getElementById('enrichProfileBtn')
 
     const typeLabels = {
       'salenav-companies': 'SALES NAV ACCOUNTS',
@@ -147,6 +149,8 @@ function initMainScreen(token, email) {
       'profile': 'PROFILE PAGE',
       'search': 'PEOPLE SEARCH'
     }
+
+    if (enrichBtn) enrichBtn.style.display = 'none'
 
     if (type === 'unknown') {
       label.textContent = 'NOT A LINKEDIN PAGE'
@@ -161,6 +165,23 @@ function initMainScreen(token, email) {
       extractBtn.style.opacity = '1'
       autoScrollBtn.style.display = type === 'company-people' ? 'block' : 'none'
       peopleTip.style.display = type === 'company-people' ? 'block' : 'none'
+
+      // On a profile page — check if this person is already in leads
+      if (type === 'profile' && enrichBtn) {
+        fetch(API_BASE_URL + '/leads/by-profile-url?url=' + encodeURIComponent(cleanedUrl), {
+          headers: { Authorization: 'Bearer ' + token }
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data && data.lead) {
+              // Already a lead — show Update button
+              enrichBtn.style.display = 'block'
+              enrichBtn.dataset.leadId = data.lead.id
+              label.textContent = 'EXISTING LEAD — UPDATE'
+            }
+          })
+          .catch(() => {})
+      }
     }
   })
 
@@ -195,6 +216,61 @@ document.getElementById('autoScrollBtn').addEventListener('click', () => {
         }
       }
     )
+  })
+})
+
+// ─── ENRICH EXISTING LEAD ────────────────────────────────────
+
+document.getElementById('enrichProfileBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('enrichProfileBtn')
+  const leadId = btn.dataset.leadId
+  if (!leadId) return
+  btn.disabled = true
+  btn.textContent = 'Scraping...'
+  clearStatus()
+
+  let token
+  try { token = await getValidToken() } catch (e) {
+    setStatus('Session expired. Please sign in again.', 'error')
+    show('loginScreen')
+    btn.disabled = false
+    btn.textContent = '↑ Update this lead with full profile'
+    return
+  }
+
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.runtime.sendMessage({ action: 'injectAndScrape', tabId: tabs[0].id }, (bgResponse) => {
+      btn.disabled = false
+      btn.textContent = '↑ Update this lead with full profile'
+      if (chrome.runtime.lastError || !bgResponse?.success) {
+        setStatus('Scrape failed. Refresh LinkedIn and try again.', 'error')
+        return
+      }
+      const d = bgResponse.data
+      if (!d || d.error || d.type !== 'profile') { setStatus('Could not read profile.', 'error'); return }
+
+      const patch = {
+        name: d.name || undefined,
+        title: d.title || undefined,
+        company: d.company || undefined,
+        location: d.location || undefined,
+        about: d.about || undefined,
+        experience: d.experiences && d.experiences.length > 0 ? d.experiences : undefined,
+      }
+      // remove undefined keys
+      Object.keys(patch).forEach(k => patch[k] === undefined && delete patch[k])
+
+      fetch(API_BASE_URL + '/leads/' + leadId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(patch)
+      })
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+        .then(() => {
+          setStatus('✓ Lead updated with full profile data.', 'success')
+        })
+        .catch(err => { setStatus('Update failed: ' + err.message, 'error') })
+    })
   })
 })
 
