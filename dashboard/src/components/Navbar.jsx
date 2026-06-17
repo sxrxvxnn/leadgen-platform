@@ -13,28 +13,14 @@ const NAV_LINKS = [
 
 function RadarIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="10" cy="10" r="9" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.5" />
-      <circle cx="10" cy="10" r="6" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.7" />
-      <circle cx="10" cy="10" r="3" stroke="#a86448" strokeWidth="1.2" />
-      <line x1="10" y1="10" x2="18" y2="10" stroke="#a86448" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="10" cy="10" r="1.5" fill="#a86448" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="8" cy="8" r="7" stroke="#1d1b1b" strokeWidth="1" strokeOpacity="0.25" />
+      <circle cx="8" cy="8" r="4" stroke="#1d1b1b" strokeWidth="1" strokeOpacity="0.5" />
+      <circle cx="8" cy="8" r="1.5" fill="#1d1b1b" />
     </svg>
   )
 }
 
-function DotGrid() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-      {[0, 4, 8, 12].map(y =>
-        [0, 4, 8, 12].map(x => (
-          <rect key={`${x}-${y}`} x={x} y={y} width="2" height="2" rx="0.4"
-            fill="rgba(231,231,231,0.55)" />
-        ))
-      )}
-    </svg>
-  )
-}
 
 export default function Navbar() {
   const { user, profile, logout } = useAuth()
@@ -174,7 +160,6 @@ export default function Navbar() {
             onMouseLeave={e => { e.currentTarget.style.background = '#1d1b1b' }}
           >
             Sign out
-            <DotGrid />
           </button>
         </div>
       </div>

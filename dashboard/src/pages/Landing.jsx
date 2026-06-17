@@ -1,354 +1,314 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
 
-// ── Radar animation ────────────────────────────────────────────
-function RadarCanvas() {
-  const canvasRef = useRef(null)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    let angle = 0
-    let raf
-
-    const dots = Array.from({ length: 12 }, () => ({
-      r: Math.random() * 110 + 20,
-      a: Math.random() * Math.PI * 2,
-      size: Math.random() * 2 + 1,
-      alpha: 0,
-    }))
-
-    function draw() {
-      const W = canvas.width, H = canvas.height
-      const cx = W / 2, cy = H / 2
-      ctx.clearRect(0, 0, W, H)
-
-      // Rings
-      ;[0.25, 0.5, 0.75, 1].forEach(f => {
-        ctx.beginPath()
-        ctx.arc(cx, cy, f * 140, 0, Math.PI * 2)
-        ctx.strokeStyle = 'rgba(168,100,72,0.12)'
-        ctx.lineWidth = 1
-        ctx.stroke()
-      })
-
-      // Cross hairs
-      ctx.strokeStyle = 'rgba(168,100,72,0.08)'
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(cx, cy - 145); ctx.lineTo(cx, cy + 145); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(cx - 145, cy); ctx.lineTo(cx + 145, cy); ctx.stroke()
-
-      // Sweep gradient
-      const grad = ctx.createConicalGradient ? null : null
-      // Sweep using arc fill
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(angle)
-      const sweep = ctx.createLinearGradient(0, 0, 140, 0)
-      sweep.addColorStop(0, 'rgba(168,100,72,0.0)')
-      sweep.addColorStop(1, 'rgba(168,100,72,0.18)')
-      ctx.beginPath()
-      ctx.moveTo(0, 0)
-      ctx.arc(0, 0, 140, -0.6, 0)
-      ctx.closePath()
-      ctx.fillStyle = sweep
-      ctx.fill()
-      ctx.restore()
-
-      // Sweep line
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(angle)
-      ctx.beginPath()
-      ctx.moveTo(0, 0)
-      ctx.lineTo(140, 0)
-      ctx.strokeStyle = 'rgba(168,100,72,0.6)'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-      ctx.restore()
-
-      // Dots — light up when sweep passes
-      dots.forEach(dot => {
-        const dotAngle = dot.a % (Math.PI * 2)
-        const sweepAngle = angle % (Math.PI * 2)
-        const diff = (sweepAngle - dotAngle + Math.PI * 2) % (Math.PI * 2)
-        if (diff < 0.15) dot.alpha = 1
-        else dot.alpha = Math.max(0, dot.alpha - 0.012)
-
-        if (dot.alpha > 0) {
-          const x = cx + Math.cos(dot.a) * dot.r
-          const y = cy + Math.sin(dot.a) * dot.r
-          ctx.beginPath()
-          ctx.arc(x, y, dot.size, 0, Math.PI * 2)
-          ctx.fillStyle = `rgba(168,100,72,${dot.alpha})`
-          ctx.fill()
-        }
-      })
-
-      // Center dot
-      ctx.beginPath()
-      ctx.arc(cx, cy, 3, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(168,100,72,0.8)'
-      ctx.fill()
-
-      angle += 0.018
-      raf = requestAnimationFrame(draw)
-    }
-    draw()
-    return () => cancelAnimationFrame(raf)
-  }, [])
-  return (
-    <canvas ref={canvasRef} width={300} height={300}
-      style={{ opacity: 0.85 }} />
-  )
+// ── design tokens ──────────────────────────────────────────────────────────
+const T = {
+  bg:      '#0b0b0b',
+  surface: '#111111',
+  border:  'rgba(255,255,255,0.08)',
+  text:    '#f0f0f0',
+  muted:   '#7a7a7a',
+  dim:     '#444444',
+  accent:  '#c8784a',
+  font:    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  mono:    "'SFMono-Regular', 'Consolas', 'Menlo', monospace",
 }
 
-// ── Feature card ───────────────────────────────────────────────
-function FeatureCard({ icon, title, desc }) {
+function Logo() {
   return (
-    <div style={{
-      padding: '28px', borderRadius: '12px',
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      backdropFilter: 'blur(8px)',
-      transition: 'border-color 0.2s, background 0.2s',
-    }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'rgba(168,100,72,0.3)'
-        e.currentTarget.style.background = 'rgba(168,100,72,0.04)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
-        e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-      }}
-    >
-      <div style={{ fontSize: '22px', marginBottom: '14px' }}>{icon}</div>
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600', color: '#e7e7e7', marginBottom: '8px', letterSpacing: '0.02em' }}>{title}</p>
-      <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'rgba(255,255,255,0.45)', lineHeight: 1.7 }}>{desc}</p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke={T.text} strokeWidth="1" strokeOpacity="0.25" />
+        <circle cx="8" cy="8" r="4" stroke={T.text} strokeWidth="1" strokeOpacity="0.5" />
+        <circle cx="8" cy="8" r="1.5" fill={T.text} />
+      </svg>
+      <span style={{ fontFamily: T.font, fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: '-0.01em' }}>
+        sonar
+      </span>
     </div>
   )
 }
 
-// ── Plan card ──────────────────────────────────────────────────
-function PlanCard({ label, badge, price, features, cta, accent }) {
-  return (
-    <div style={{
-      flex: 1, padding: '36px 32px', borderRadius: '16px',
-      background: accent ? 'rgba(168,100,72,0.08)' : 'rgba(255,255,255,0.03)',
-      border: `1px solid ${accent ? 'rgba(168,100,72,0.35)' : 'rgba(255,255,255,0.08)'}`,
-      display: 'flex', flexDirection: 'column', gap: '24px',
-    }}>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '600', color: '#e7e7e7' }}>{label}</span>
-          {badge && <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: '#a86448', background: 'rgba(168,100,72,0.12)', padding: '2px 8px', borderRadius: '3px', border: '1px solid rgba(168,100,72,0.25)' }}>{badge}</span>}
-        </div>
-        <p style={{ fontFamily: 'var(--font-display)', fontSize: '32px', color: '#fdfdfd', letterSpacing: '-0.04em' }}>{price}</p>
-      </div>
-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {features.map(f => (
-          <li key={f} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-            <span style={{ color: '#a86448', fontSize: '12px', flexShrink: 0, marginTop: '1px' }}>—</span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>{f}</span>
-          </li>
-        ))}
-      </ul>
-      <Link to="/signup" style={{
-        display: 'block', textAlign: 'center',
-        padding: '12px', borderRadius: '8px',
-        background: accent ? '#a86448' : 'rgba(255,255,255,0.06)',
-        border: `1px solid ${accent ? '#a86448' : 'rgba(255,255,255,0.12)'}`,
-        fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600',
-        color: accent ? '#fdfdfd' : 'rgba(255,255,255,0.7)',
-        textDecoration: 'none', transition: 'opacity 0.15s',
-      }}
-        onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-      >
-        {cta}
-      </Link>
-    </div>
-  )
-}
+const FEATURES = [
+  {
+    n: '01',
+    title: 'Company Discovery',
+    body: 'Search 50M+ companies by industry, location, size, and tech stack. Surface targets that match your ICP in seconds.',
+  },
+  {
+    n: '02',
+    title: 'AI Enrichment',
+    body: 'Fill gaps in company and contact data automatically. AI reads websites, LinkedIn, and Maps to complete every field.',
+  },
+  {
+    n: '03',
+    title: 'Lead Intelligence',
+    body: 'Track decision-makers, scrape contact details, and build outreach-ready lead lists without switching tools.',
+  },
+  {
+    n: '04',
+    title: 'ICP Targeting',
+    body: 'Define your ideal customer profile, score every company against it, and let Sonar surface the best fits first.',
+  },
+]
 
 export default function Landing() {
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', h, { passive: true })
-    return () => window.removeEventListener('scroll', h)
-  }, [])
-
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', color: '#fdfdfd' }}>
+    <div style={{ background: T.bg, minHeight: '100vh', color: T.text, fontFamily: T.font }}>
 
       {/* Nav */}
-      <header style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: scrolled ? 'rgba(8,8,8,0.92)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(16px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
-        transition: 'all 0.2s',
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 32px', height: 52,
+        borderBottom: `1px solid ${T.border}`,
+        background: 'rgba(11,11,11,0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
       }}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 32px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <RadarIcon />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', fontWeight: '600', color: '#fdfdfd', letterSpacing: '-0.02em' }}>sonar</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Link to="/login" style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'rgba(255,255,255,0.55)', textDecoration: 'none', padding: '8px 14px', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#fdfdfd'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.55)'}
-            >Sign in</Link>
-            <Link to="/signup" style={{
-              fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600',
-              color: '#fdfdfd', textDecoration: 'none',
-              padding: '8px 18px', borderRadius: '8px',
-              background: '#a86448', border: '1px solid #a86448',
-              transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >Get started</Link>
-          </div>
+        <Logo />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Link to="/login" style={{
+            fontFamily: T.font, fontSize: 13, fontWeight: 500,
+            color: T.muted, textDecoration: 'none',
+            padding: '7px 14px', borderRadius: 8,
+            transition: 'color 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.color = T.text}
+            onMouseLeave={e => e.currentTarget.style.color = T.muted}
+          >
+            Sign in
+          </Link>
+          <Link to="/signup" style={{
+            fontFamily: T.font, fontSize: 13, fontWeight: 600,
+            color: '#0b0b0b', background: T.text,
+            textDecoration: 'none', padding: '7px 16px',
+            borderRadius: 8, transition: 'opacity 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Get started
+          </Link>
         </div>
-      </header>
+      </nav>
 
       {/* Hero */}
-      <section style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden', paddingTop: '60px' }}>
-        {/* Dot grid background */}
+      <section style={{
+        paddingTop: 160, paddingBottom: 96,
+        paddingLeft: 32, paddingRight: 32,
+        maxWidth: 960, margin: '0 auto',
+      }}>
         <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-          maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
-          WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
-        }} />
-        {/* Glow */}
-        <div style={{ position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: '600px', height: '600px', background: 'radial-gradient(circle, rgba(168,100,72,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '5px 12px', borderRadius: 100,
+          border: `1px solid ${T.border}`,
+          marginBottom: 40,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.accent, display: 'inline-block' }} />
+          <span style={{ fontFamily: T.mono, fontSize: 11, color: T.muted, letterSpacing: '0.06em' }}>
+            B2B SIGNAL INTELLIGENCE
+          </span>
+        </div>
 
-        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '0 32px', gap: '48px', maxWidth: '900px' }}>
-          <div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 14px', borderRadius: '20px', border: '1px solid rgba(168,100,72,0.3)', background: 'rgba(168,100,72,0.06)', marginBottom: '32px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#a86448', display: 'inline-block' }} />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#a86448', letterSpacing: '0.08em' }}>B2B INTELLIGENCE PLATFORM</span>
-            </div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 8vw, 96px)', fontWeight: '400', letterSpacing: '-0.05em', lineHeight: 1, color: '#fdfdfd', marginBottom: '24px' }}>
-              Find the signal<br />
-              <span style={{ color: 'rgba(255,255,255,0.3)' }}>in your market.</span>
-            </h1>
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'rgba(255,255,255,0.45)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.8, letterSpacing: '0.01em' }}>
-              Sonar maps your market, enriches company data, and surfaces the prospects most likely to convert — automatically.
-            </p>
-          </div>
+        <h1 style={{
+          fontSize: 'clamp(40px, 6.5vw, 80px)',
+          fontWeight: 600,
+          letterSpacing: '-0.04em',
+          lineHeight: 1.05,
+          color: T.text,
+          margin: '0 0 24px',
+          maxWidth: 760,
+        }}>
+          Find the signal<br />in your market.
+        </h1>
 
-          <RadarCanvas />
+        <p style={{
+          fontSize: 18, color: T.muted, lineHeight: 1.65,
+          maxWidth: 480, margin: '0 0 48px',
+          fontWeight: 400,
+        }}>
+          Discover companies, enrich leads, and identify your ideal customers — automatically.
+        </p>
 
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Link to="/signup" style={{
-              fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '600',
-              padding: '14px 32px', borderRadius: '10px',
-              background: '#a86448', color: '#fdfdfd',
-              textDecoration: 'none', border: '1px solid #a86448',
-              transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >Start for free →</Link>
-            <Link to="/login" style={{
-              fontFamily: 'var(--font-mono)', fontSize: '13px',
-              padding: '14px 32px', borderRadius: '10px',
-              background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)',
-              textDecoration: 'none', border: '1px solid rgba(255,255,255,0.1)',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#fdfdfd'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
-            >Sign in</Link>
-          </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Link to="/signup" style={{
+            fontFamily: T.font, fontSize: 14, fontWeight: 600,
+            color: '#0b0b0b', background: T.text,
+            textDecoration: 'none', padding: '12px 24px',
+            borderRadius: 10, transition: 'opacity 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Get started free
+          </Link>
+          <Link to="/login" style={{
+            fontFamily: T.font, fontSize: 14, fontWeight: 500,
+            color: T.muted,
+            textDecoration: 'none', padding: '12px 24px',
+            border: `1px solid ${T.border}`,
+            borderRadius: 10, transition: 'color 0.15s, border-color 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.color = T.text; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+            onMouseLeave={e => { e.currentTarget.style.color = T.muted; e.currentTarget.style.borderColor = T.border }}
+          >
+            Sign in
+          </Link>
         </div>
       </section>
 
+      {/* Divider */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 32px' }}>
+        <div style={{ height: 1, background: T.border }} />
+      </div>
+
       {/* Features */}
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '120px 32px' }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', textAlign: 'center', marginBottom: '64px' }}>What Sonar does</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', overflow: 'hidden' }}>
-          {[
-            { icon: '◎', title: 'Company Discovery', desc: 'Find companies in your target market using Google Maps, Technopark directories, and LinkedIn.' },
-            { icon: '⬡', title: 'AI Enrichment', desc: 'Auto-fill websites, HQ, size, industry, compliance signals, and company type with one click.' },
-            { icon: '◈', title: 'Lead Intelligence', desc: 'Identify decision makers, scrape LinkedIn contacts, and track outreach status per lead.' },
-            { icon: '◐', title: 'ICP Targeting', desc: 'Define your ideal customer profile and score companies automatically against your criteria.' },
-          ].map(f => (
-            <div key={f.title} style={{ padding: '32px 28px', background: '#080808' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(168,100,72,0.04)'}
-              onMouseLeave={e => e.currentTarget.style.background = '#080808'}
-            >
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', color: '#a86448', marginBottom: '16px' }}>{f.icon}</div>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600', color: '#e7e7e7', marginBottom: '8px' }}>{f.title}</p>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.7 }}>{f.desc}</p>
+      <section style={{ maxWidth: 960, margin: '0 auto', padding: '80px 32px' }}>
+        <p style={{ fontFamily: T.mono, fontSize: 11, color: T.dim, letterSpacing: '0.08em', marginBottom: 48, textTransform: 'uppercase' }}>
+          What Sonar does
+        </p>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 1,
+          border: `1px solid ${T.border}`,
+          borderRadius: 12,
+          overflow: 'hidden',
+          background: T.border,
+        }}>
+          {FEATURES.map((f) => (
+            <div key={f.n} style={{
+              padding: '32px 28px',
+              background: T.surface,
+            }}>
+              <span style={{ fontFamily: T.mono, fontSize: 10, color: T.dim, letterSpacing: '0.1em', display: 'block', marginBottom: 20 }}>
+                {f.n}
+              </span>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.text, marginBottom: 10, letterSpacing: '-0.02em' }}>
+                {f.title}
+              </h3>
+              <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.7, margin: 0 }}>
+                {f.body}
+              </p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Plans */}
-      <section style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 32px 120px' }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>Plans</p>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: '400', letterSpacing: '-0.04em', color: '#fdfdfd', textAlign: 'center', marginBottom: '64px' }}>Built for solo and team.</h2>
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-          <PlanCard
-            label="Solo"
-            price="Free"
-            features={[
-              'Full company enrichment',
-              'LinkedIn scraping',
-              'AI website analysis',
-              'Google Maps enrichment',
-              'ICP targeting',
-              'Lead management',
-            ]}
-            cta="Start solo →"
-          />
-          <PlanCard
-            label="Team"
-            badge="Coming soon"
-            price="Custom"
-            accent
-            features={[
-              'Everything in Solo',
-              'Invite team members',
-              'Admin controls',
-              'Role-based access',
-              'Shared pipeline',
-              'Priority support',
-            ]}
-            cta="Get started →"
-          />
+      <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 32px 96px' }}>
+        <div style={{ height: 1, background: T.border, marginBottom: 80 }} />
+        <p style={{ fontFamily: T.mono, fontSize: 11, color: T.dim, letterSpacing: '0.08em', marginBottom: 48, textTransform: 'uppercase' }}>
+          Plans
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+
+          {/* Solo */}
+          <div style={{
+            padding: '36px 32px',
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            background: T.surface,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 22, fontWeight: 600, color: T.text, letterSpacing: '-0.03em' }}>Solo</span>
+              <span style={{ fontFamily: T.mono, fontSize: 11, color: T.dim }}>FREE</span>
+            </div>
+            <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.65, marginBottom: 28 }}>
+              Everything you need to build your own pipeline independently.
+            </p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32, padding: 0 }}>
+              {['Company discovery', 'AI enrichment', 'Lead management', 'ICP targeting'].map(item => (
+                <li key={item} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: T.muted }}>
+                  <span style={{ color: T.dim }}>—</span> {item}
+                </li>
+              ))}
+            </ul>
+            <Link to="/signup" style={{
+              display: 'block', textAlign: 'center',
+              fontFamily: T.font, fontSize: 13, fontWeight: 600,
+              color: T.text, textDecoration: 'none',
+              padding: '11px 0',
+              border: `1px solid rgba(255,255,255,0.15)`,
+              borderRadius: 8, transition: 'border-color 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+            >
+              Get started
+            </Link>
+          </div>
+
+          {/* Team */}
+          <div style={{
+            padding: '36px 32px',
+            border: `1px solid rgba(200,120,74,0.3)`,
+            borderRadius: 12,
+            background: 'rgba(200,120,74,0.04)',
+            position: 'relative',
+          }}>
+            <div style={{
+              position: 'absolute', top: 20, right: 20,
+              padding: '3px 10px', borderRadius: 100,
+              border: `1px solid rgba(200,120,74,0.4)`,
+              fontFamily: T.mono, fontSize: 10, color: T.accent, letterSpacing: '0.06em',
+            }}>
+              POPULAR
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 22, fontWeight: 600, color: T.text, letterSpacing: '-0.03em' }}>Team</span>
+              <span style={{ fontFamily: T.mono, fontSize: 11, color: T.dim }}>CUSTOM</span>
+            </div>
+            <p style={{ fontSize: 13, color: T.muted, lineHeight: 1.65, marginBottom: 28 }}>
+              Collaborate, manage access, and scale your outreach as a team.
+            </p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32, padding: 0 }}>
+              {['Everything in Solo', 'Invite members', 'Role-based access', 'Admin controls'].map(item => (
+                <li key={item} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: T.muted }}>
+                  <span style={{ color: T.accent }}>—</span> {item}
+                </li>
+              ))}
+            </ul>
+            <Link to="/signup" style={{
+              display: 'block', textAlign: 'center',
+              fontFamily: T.font, fontSize: 13, fontWeight: 600,
+              color: '#0b0b0b', background: T.accent,
+              textDecoration: 'none', padding: '11px 0',
+              borderRadius: 8, transition: 'opacity 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              Get started
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '32px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
-          <RadarIcon />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>sonar</span>
+      <footer style={{
+        borderTop: `1px solid ${T.border}`,
+        padding: '24px 32px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 16,
+      }}>
+        <Logo />
+        <div style={{ display: 'flex', gap: 24 }}>
+          {[['Privacy', '/privacy'], ['Terms', '/terms']].map(([label, href]) => (
+            <Link key={label} to={href} style={{
+              fontFamily: T.font, fontSize: 12, color: T.dim,
+              textDecoration: 'none', transition: 'color 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = T.muted}
+              onMouseLeave={e => e.currentTarget.style.color = T.dim}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>
-          © 2026 Sonar · <a href="/privacy" style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}>Privacy</a> · <a href="/terms" style={{ color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}>Terms</a>
-        </p>
+        <span style={{ fontFamily: T.mono, fontSize: 11, color: T.dim }}>© 2026 Sonar</span>
       </footer>
-    </div>
-  )
-}
 
-function RadarIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <circle cx="10" cy="10" r="9" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.4" />
-      <circle cx="10" cy="10" r="6" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.6" />
-      <circle cx="10" cy="10" r="3" stroke="#a86448" strokeWidth="1.2" />
-      <line x1="10" y1="10" x2="18" y2="10" stroke="#a86448" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="10" cy="10" r="1.5" fill="#a86448" />
-    </svg>
+    </div>
   )
 }
