@@ -608,20 +608,47 @@
 }
 .lp-ext-dash { color: var(--color-wisteria); flex-shrink: 0; }
 .lp-ext-actions { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.lp-ext-install-note {
-  font-size: 11px;
-  color: var(--color-ash-lavender);
-  line-height: 1.6;
-  max-width: 340px;
+.lp-ext-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
 }
-.lp-ext-install-note code {
+.lp-ext-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--color-plum-charcoal);
+  line-height: 1.55;
+}
+.lp-ext-step-num {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 10px;
+  color: var(--color-amethyst);
+  background: rgba(111,99,183,0.08);
+  border: 1px solid rgba(111,99,183,0.20);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.lp-ext-steps code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
   background: var(--color-bone-mist);
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 3px;
   color: var(--color-amethyst);
 }
+.lp-ext-steps strong { font-weight: 600; color: var(--color-ink-violet); }
 
 /* Extension popup mock */
 .lp-ext-preview {

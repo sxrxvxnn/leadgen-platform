@@ -141,7 +141,7 @@ export default function Onboarding() {
                 ))}
               </ul>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                 <a
                   href="/sonar-extension.zip"
                   download
@@ -156,9 +156,20 @@ export default function Onboarding() {
                 >
                   Download extension ↓
                 </a>
-                <p style={{ fontSize: 11, color: MID, lineHeight: 1.6, maxWidth: 340 }}>
-                  After downloading: unzip → open <code style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, background: '#ecedf2', padding: '1px 5px', borderRadius: 3 }}>chrome://extensions</code> → enable Developer mode → Load unpacked
-                </p>
+                <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    ['1', 'Download and unzip the file'],
+                    ['2', <>Open <code style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, background: SURF, padding: '1px 6px', borderRadius: 3, color: ACC }}>chrome://extensions</code> in Chrome</>],
+                    ['3', 'Toggle on Developer mode (top-right corner)'],
+                    ['4', 'Click Load unpacked → select the unzipped folder'],
+                    ['5', 'Pin Sonar to your toolbar and sign in'],
+                  ].map(([num, text]) => (
+                    <li key={num} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 13, color: MID, lineHeight: 1.55 }}>
+                      <span style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, fontWeight: 400, color: ACC, background: 'rgba(111,99,183,0.08)', border: `1px solid rgba(111,99,183,0.2)`, borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{num}</span>
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ol>
               </div>
             </div>
 

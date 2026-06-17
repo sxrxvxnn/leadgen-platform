@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [recentLeads, setRecentLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [showExtBanner, setShowExtBanner] = useState(() => localStorage.getItem('extBannerDismissed') !== '1')
+  const [extStepsOpen, setExtStepsOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -46,23 +47,48 @@ export default function Dashboard() {
 
       {/* Extension banner */}
       {showExtBanner && (
-        <div style={{ borderBottom: '1px solid var(--border)', padding: '14px 48px', display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--accent-dimmer)' }}>
-          <div style={{ width: 28, height: 28, background: 'var(--text)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="7" stroke="#fffcfc" strokeWidth="1.2" opacity="0.3"/>
-              <circle cx="8" cy="8" r="4" stroke="#fffcfc" strokeWidth="1.2" opacity="0.65"/>
-              <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
-              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" strokeWidth="1.1" strokeLinecap="round"/>
-            </svg>
+        <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent-dimmer)' }}>
+          {/* Top row */}
+          <div style={{ padding: '14px 48px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: 28, height: 28, background: 'var(--text)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="7" stroke="#fffcfc" strokeWidth="1.2" opacity="0.3"/>
+                <circle cx="8" cy="8" r="4" stroke="#fffcfc" strokeWidth="1.2" opacity="0.65"/>
+                <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
+                <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" strokeWidth="1.1" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Install the Sonar Chrome extension</span>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>— extract leads from LinkedIn with one click.</span>
+            </div>
+            <a
+              href="/sonar-extension.zip"
+              download
+              onClick={() => setExtStepsOpen(true)}
+              style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--text)', background: '#ffffff', border: '1px solid var(--border-strong)', borderRadius: 3, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}
+            >
+              Download ↓
+            </a>
+            <button onClick={() => { setShowExtBanner(false); localStorage.setItem('extBannerDismissed', '1') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, padding: '0 4px', lineHeight: 1, flexShrink: 0 }} aria-label="Dismiss">✕</button>
           </div>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Install the Sonar Chrome extension</span>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>— extract leads directly from LinkedIn with one click.</span>
-          </div>
-          <a href="/sonar-extension.zip" download style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--text)', background: '#ffffff', border: '1px solid var(--border-strong)', borderRadius: 3, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
-            Download ↓
-          </a>
-          <button onClick={() => { setShowExtBanner(false); localStorage.setItem('extBannerDismissed', '1') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, padding: '0 4px', lineHeight: 1, flexShrink: 0 }} aria-label="Dismiss">✕</button>
+          {/* Install steps — shown after download click */}
+          {extStepsOpen && (
+            <div style={{ padding: '0 48px 20px', display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
+              {[
+                ['1', 'Unzip the downloaded file'],
+                ['2', 'Open chrome://extensions in Chrome'],
+                ['3', 'Toggle on Developer mode (top right)'],
+                ['4', 'Click Load unpacked → select the folder'],
+                ['5', 'Pin Sonar to toolbar and sign in'],
+              ].map(([n, t]) => (
+                <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid var(--accent-light)', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</span>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--text-secondary)' }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

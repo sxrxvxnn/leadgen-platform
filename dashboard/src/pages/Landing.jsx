@@ -220,7 +220,13 @@ export default function Landing() {
                     <path d="M1 11h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                 </a>
-                <p className="lp-ext-install-note">After download: unzip → open <code>chrome://extensions</code> → enable Developer mode → Load unpacked</p>
+                <ol className="lp-ext-steps">
+                  <li><span className="lp-ext-step-num">1</span>Download and <strong>unzip</strong> the file</li>
+                  <li><span className="lp-ext-step-num">2</span>Open <code>chrome://extensions</code> in Chrome</li>
+                  <li><span className="lp-ext-step-num">3</span>Toggle on <strong>Developer mode</strong> (top right)</li>
+                  <li><span className="lp-ext-step-num">4</span>Click <strong>Load unpacked</strong> → select the unzipped folder</li>
+                  <li><span className="lp-ext-step-num">5</span>Pin Sonar to your toolbar and sign in</li>
+                </ol>
               </div>
             </div>
             <div className="lp-ext-preview">
