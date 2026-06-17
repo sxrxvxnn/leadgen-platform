@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leadgen-worker
+  namespace: leadgen
+  labels:
+    app: leadgen-worker
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: leadgen-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: leadgen-worker
+        component: worker
+    spec:
+      nodeSelector:
+        role: worker
+      terminationGracePeriodSeconds: 120   # give in-flight jobs time to finish
+      containers:
+        - name: worker
+          image: YOUR_ECR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/leadgen-backend:latest
+          # Override CMD to run the SQS worker instead of the API server
+          command: ["python", "-m", "app.worker"]
+          envFrom:
+            - configMapRef:
+                name: leadgen-backend-config
+            - secretRef:
+                name: leadgen-backend-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

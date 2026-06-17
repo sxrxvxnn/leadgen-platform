@@ -1,0 +1,94 @@
+# Zalando ACID Postgres Operator — HA PostgreSQL cluster
+# Install operator first:
+#   helm repo add postgres-operator-charts https://opensource.zalando.com/postgres-operator/charts/postgres-operator
+#   helm install postgres-operator postgres-operator-charts/postgres-operator -n postgres-operator --create-namespace
+#
+# Then apply this file:
+#   kubectl apply -f infra/k8s/acid/postgres-cluster.yaml
+
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: leadgen-db
+  namespace: leadgen
+  labels:
+    app: leadgen-db
+    team: leadgen
+spec:
+  teamId: "leadgen"
+
+  # Storage
+  volume:
+    size: 50Gi
+    storageClass: gp3  # AWS EBS gp3 — faster IOPS than gp2 at same cost
+
+  # HA: 1 primary + 2 replicas
+  numberOfInstances: 3
+
+  # Postgres version
+  postgresql:
+    version: "16"
+    parameters:
+      shared_buffers: "512MB"
+      max_connections: "200"
+      work_mem: "16MB"
+      wal_level: "replica"
+      hot_standby: "on"
+      max_wal_senders: "10"
+
+  # Patroni HA settings
+  patroni:
+    initdb:
+      encoding: "UTF8"
+      locale: "en_US.UTF-8"
+      data-checksums: "true"
+    loop_wait: 10
+    retry_timeout: 10
+    ttl: 30
+    synchronous_mode: false  # set true for zero-data-loss at cost of write latency
+
+  # Users — secrets auto-created as {user}.{cluster}.credentials.postgresql.acid.zalan.do
+  users:
+    leadgen_app:
+      - login
+    leadgen_readonly:
+      - login
+
+  # Databases — {db}: {owner}
+  databases:
+    leadgen: leadgen_app
+
+  # Built-in PgBouncer connection pooler (transaction mode)
+  enableConnectionPooler: true
+  connectionPooler:
+    numberOfInstances: 2
+    mode: transaction
+    schema: pooler
+    user: pooler
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+
+  # Resources per Postgres pod
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
+  # Only pods inside the cluster can connect (backend connects via pooler Service)
+  allowedSourceRanges:
+    - "10.0.0.0/8"
+
+  enableShmVolume: true
+
+  # Backups via WAL-G to S3 — set AWS_ACCESS_KEY_ID etc in operator config
+  # Uncomment and configure to enable PITR backups:
+  # clone:
+  #   s3_wal_path: "s3://leadgen-pg-backups/wal/leadgen-db/"

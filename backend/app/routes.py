@@ -6,77 +6,154 @@ logger = logging.getLogger(__name__)
 
 # Cap concurrent DDGS calls to 3 — prevents DuckDuckGo rate-limiting during bulk autofill
 _DDGS_SEM = _threading_mod.Semaphore(3)
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from typing import Optional
 import os
 import posthog
-from .models import LeadCreate, LeadUpdate, CompanyCreate, CompanyUpdate, UserSignup, UserLogin, ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate, LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate
-from .database import supabase
+from .models import (
+    LeadCreate, LeadUpdate, CompanyCreate, CompanyUpdate,
+    UserSignup, UserLogin, PasswordResetRequest, PasswordResetConfirm,
+    ICPCreate, ICPUpdate, PersonaCreate, PersonaUpdate,
+    LeadStarUpdate, LeadConnectionStatusUpdate, LeadSpreadsheetUpdate,
+)
+from .database import supabase, supabase_auth
+from .rate_limit import limiter
+from .security import (
+    validate_uuid,
+    log_auth_success, log_auth_failure, log_signup,
+    log_password_reset_request, log_password_reset_success,
+    log_token_refresh, log_bulk_op, log_suspicious,
+)
 
 router = APIRouter()
+
+
+def _ip(request: Request) -> str:
+    """Extract the real client IP, respecting X-Forwarded-For from ALB/Nginx."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
 
 # ─── AUTH ROUTES ────────────────────────────────────────────
 
 @router.post("/auth/signup")
-async def signup(user: UserSignup):
+@limiter.limit("3/minute")
+async def signup(request: Request, user: UserSignup):
     try:
-        response = supabase.auth.sign_up({
+        response = supabase_auth.auth.sign_up({
             "email": user.email,
-            "password": user.password
+            "password": user.password,
         })
         if response.user:
-            # Create profile record
-            supabase.table("profiles").insert({
-                "id": response.user.id,
-                "email": user.email,
-                "full_name": user.full_name or ""
-            }).execute()
+            try:
+                supabase.table("profiles").insert({
+                    "id": response.user.id,
+                    "email": user.email,
+                    "full_name": user.full_name or "",
+                }).execute()
+            except Exception:
+                pass  # profile creation is non-fatal; auth record already exists
+            log_signup(user_id=response.user.id, ip=_ip(request))
             posthog.identify(response.user.id, {"has_full_name": bool(user.full_name)})
             posthog.capture(response.user.id, "user_signed_up", {"signup_method": "email"})
-        return {"message": "Signup successful. Check your email to confirm."}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Always return the same message to prevent email enumeration
+        return {"message": "If this email is not already registered, you will receive a confirmation link shortly."}
+    except Exception:
+        # Never expose internal Supabase errors to the client
+        raise HTTPException(status_code=400, detail="Registration failed. Please check your details and try again.")
 
 
 @router.post("/auth/login")
-async def login(user: UserLogin):
+@limiter.limit("5/minute")
+async def login(request: Request, user: UserLogin):
     try:
-        response = supabase.auth.sign_in_with_password({
+        response = supabase_auth.auth.sign_in_with_password({
             "email": user.email,
-            "password": user.password
+            "password": user.password,
         })
-        posthog.identify(response.user.id, {})
-        posthog.capture(response.user.id, "user_logged_in", {"login_method": "password"})
-        return {
-            "access_token": response.session.access_token,
-            "refresh_token": response.session.refresh_token,
-            "user": {
-                "id": response.user.id,
-                "email": response.user.email
-            }
-        }
-    except Exception as e:
+    except Exception:
+        log_auth_failure(email=user.email, ip=_ip(request), reason="invalid_credentials")
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    # Enforce email verification — unconfirmed users cannot access the platform
+    if not response.user.email_confirmed_at:
+        log_auth_failure(email=user.email, ip=_ip(request), reason="email_not_verified")
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified. Please check your inbox and click the confirmation link before logging in.",
+        )
+
+    log_auth_success(user_id=response.user.id, ip=_ip(request))
+    posthog.identify(response.user.id, {})
+    posthog.capture(response.user.id, "user_logged_in", {"login_method": "password"})
+
+    return {
+        "access_token":  response.session.access_token,
+        "refresh_token": response.session.refresh_token,
+        "user": {
+            "id":    response.user.id,
+            "email": response.user.email,
+        },
+    }
 
 
 @router.post("/auth/refresh")
-async def refresh_token(payload: dict):
+@limiter.limit("30/minute")
+async def refresh_token(request: Request, payload: dict):
     try:
-        response = supabase.auth.refresh_session(payload.get("refresh_token", ""))
+        response = supabase_auth.auth.refresh_session(payload.get("refresh_token", ""))
         return {
-            "access_token": response.session.access_token,
+            "access_token":  response.session.access_token,
             "refresh_token": response.session.refresh_token,
         }
     except Exception:
         raise HTTPException(status_code=401, detail="Session expired — please log in again")
 
 
+@router.post("/auth/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, payload: PasswordResetRequest):
+    redirect_url = os.getenv("PASSWORD_RESET_REDIRECT_URL", "https://leadgenengineplatform.vercel.app/reset-password")
+    log_password_reset_request(email=payload.email, ip=_ip(request))
+    try:
+        supabase_auth.auth.reset_password_for_email(
+            payload.email,
+            {"redirect_to": redirect_url},
+        )
+    except Exception:
+        pass  # always succeed to prevent email enumeration
+    return {"message": "If that email is registered, a password reset link has been sent."}
+
+
+@router.post("/auth/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, payload: PasswordResetConfirm):
+    # Verify the recovery token by fetching the user it belongs to
+    try:
+        user_resp = supabase_auth.auth.get_user(payload.recovery_token)
+        user_id   = user_resp.user.id
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link. Please request a new one.")
+
+    # Update password using the service-role admin client (bypasses session requirement)
+    try:
+        supabase.auth.admin.update_user_by_id(user_id, {"password": payload.new_password})
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to update password. Please try again.")
+
+    log_password_reset_success(user_id=user_id, ip=_ip(request))
+    return {"message": "Password updated successfully. You can now log in."}
+
+
 # ─── HELPER: get user id from token ─────────────────────────
 
 def get_user_id(authorization: str) -> str:
     try:
-        token = authorization.replace("Bearer ", "")
-        user = supabase.auth.get_user(token)
+        token = authorization.replace("Bearer ", "").strip()
+        if not token:
+            raise ValueError("Missing token")
+        user = supabase_auth.auth.get_user(token)
         return user.user.id
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -138,6 +215,7 @@ async def update_lead(
     lead: LeadUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         data = {k: v for k, v in lead.dict().items() if v is not None}
@@ -153,6 +231,7 @@ async def update_lead(
 
 @router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, authorization: str = Header(...)):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         supabase.table("leads")\
@@ -239,6 +318,7 @@ async def update_icp_profile(
     profile: ICPUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(profile_id, "profile_id")
     user_id = get_user_id(authorization)
     try:
         data = {k: v for k, v in profile.dict().items() if v is not None}
@@ -257,6 +337,7 @@ async def delete_icp_profile(
     profile_id: str,
     authorization: str = Header(...)
 ):
+    validate_uuid(profile_id, "profile_id")
     user_id = get_user_id(authorization)
     try:
         supabase.table("icp_profiles")\
@@ -305,6 +386,7 @@ async def delete_persona(
     persona_id: str,
     authorization: str = Header(...)
 ):
+    validate_uuid(persona_id, "persona_id")
     user_id = get_user_id(authorization)
     try:
         supabase.table("personas")\
@@ -325,6 +407,7 @@ async def enrich_lead_route(
     payload: dict = {},
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         lead_res = supabase.table("leads")\
@@ -375,7 +458,7 @@ async def enrich_lead_route(
 
         if result.get("email"):
             update_data = {"email": result["email"]}
-            supabase.table("leads").update(update_data).eq("id", lead_id).execute()
+            supabase.table("leads").update(update_data).eq("id", lead_id).eq("user_id", user_id).execute()
             updated_lead = {**lead, **update_data}
             posthog.capture(user_id, "lead_enriched", {"source": "hunter", "success": True})
             return {"lead": updated_lead, "enriched": True, "message": "Email found via Hunter"}
@@ -463,6 +546,7 @@ async def star_lead(
     data: LeadStarUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         response = supabase.table("leads")\
@@ -483,6 +567,7 @@ async def update_connection_status(
     data: LeadConnectionStatusUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         response = supabase.table("leads")\
@@ -502,6 +587,7 @@ async def spreadsheet_update_lead(
     data: LeadSpreadsheetUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
     try:
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -787,7 +873,7 @@ async def update_company_size_by_name(
         if not res.data:
             return {"updated": False, "message": "Company not found"}
         company_id = res.data[0]["id"]
-        supabase.table("companies").update({"size": size}).eq("id", company_id).execute()
+        supabase.table("companies").update({"size": size}).eq("id", company_id).eq("user_id", user_id).execute()
         return {"updated": True, "company_id": company_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -801,6 +887,7 @@ async def update_company(
     data: CompanyUpdate,
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     try:
         update_data = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -822,6 +909,7 @@ async def delete_company(
     company_id: str,
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     try:
         supabase.table("companies")\
@@ -861,6 +949,7 @@ async def get_company_leads(
     company_id: str,
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     try:
         company = supabase.table("companies")\
@@ -1050,7 +1139,7 @@ async def bulk_create_companies(
                     patch["followers"] = company["followers"]
 
                 if patch:
-                    supabase.table("companies").update(patch).eq("id", existing_id).execute()
+                    supabase.table("companies").update(patch).eq("id", existing_id).eq("user_id", user_id).execute()
                     updated.append(existing_id)
                 else:
                     skipped += 1
@@ -1102,6 +1191,7 @@ async def check_compliance(
     payload: dict = {},
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     try:
         co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
@@ -1212,7 +1302,7 @@ IMPORTANT: Return empty additional_compliance array if not sure. Do not guess.""
 
         # Save to database
         if compliance_found:
-            supabase.table("companies").update({"compliance": compliance_str}).eq("id", company_id).execute()
+            supabase.table("companies").update({"compliance": compliance_str}).eq("id", company_id).eq("user_id", user_id).execute()
 
         posthog.capture(user_id, "company_compliance_checked", {
             "compliance_found": len(compliance_found),
@@ -1444,6 +1534,7 @@ Be conservative and accurate. No explanation."""
                 supabase.table("leads")\
                     .update(update_data)\
                     .eq("id", lead_id)\
+                    .eq("user_id", user_id)\
                     .execute()
 
                 results.append({
@@ -1484,6 +1575,7 @@ async def analyze_company_website(
     payload: dict = {},
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     try:
         co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
@@ -1568,7 +1660,7 @@ async def analyze_company_website(
         if result.get("website_summary") and not company.get("description"):
             update_data["description"] = result["website_summary"]
         if update_data:
-            supabase.table("companies").update(update_data).eq("id", company_id).execute()
+            supabase.table("companies").update(update_data).eq("id", company_id).eq("user_id", user_id).execute()
 
         ai_provider = "gemini" if gemini_key else "openai" if openai_key else "groq" if groq_key else "rules-only"
         posthog.capture(user_id, "company_website_analyzed", {
@@ -1593,6 +1685,7 @@ async def autofill_company_from_linkedin(
     payload: dict = {},
     authorization: str = Header(...)
 ):
+    validate_uuid(company_id, "company_id")
     user_id = get_user_id(authorization)
     import re as _re
     try:
@@ -1742,7 +1835,7 @@ async def autofill_company_from_linkedin(
                 update_data["classification"] = mapped
 
         if update_data:
-            supabase.table("companies").update(update_data).eq("id", company_id).execute()
+            supabase.table("companies").update(update_data).eq("id", company_id).eq("user_id", user_id).execute()
 
         posthog.capture(user_id, "company_autofilled_linkedin", {
             "fields_filled": list(update_data.keys()),
@@ -2294,7 +2387,7 @@ async def bulk_autofill_companies(
                         update_data["headquarters"] = m.group(1).strip()
 
             if update_data:
-                supabase.table("companies").update(update_data).eq("id", company["id"]).execute()
+                supabase.table("companies").update(update_data).eq("id", company["id"]).eq("user_id", user_id).execute()
 
             return {"id": company["id"], "name": company_name, "success": True,
                     "filled": list(update_data.keys()), "update": update_data}
@@ -2454,7 +2547,7 @@ async def bulk_analyze_companies(
                 update_data["classification"] = ai_class
 
             if update_data:
-                supabase.table("companies").update(update_data).eq("id", cid).execute()
+                supabase.table("companies").update(update_data).eq("id", cid).eq("user_id", user_id).execute()
 
             return {"id": cid, "name": name, "success": True, "filled": list(update_data.keys()), "update": update_data}
 
@@ -2615,7 +2708,7 @@ async def bulk_maps_enrich(
                 update_data["revenue"] = f"⭐ {rating} ({rating_count} reviews)"
 
             if update_data:
-                supabase.table("companies").update(update_data).eq("id", cid).execute()
+                supabase.table("companies").update(update_data).eq("id", cid).eq("user_id", user_id).execute()
 
             return {"id": cid, "name": name, "success": True,
                     "filled": list(update_data.keys()), "update": update_data,
@@ -2889,6 +2982,7 @@ async def autofill_lead(
     payload: dict,
     authorization: str = Header(...)
 ):
+    validate_uuid(lead_id, "lead_id")
     user_id = get_user_id(authorization)
 
     try:
@@ -2995,6 +3089,7 @@ Respond in JSON only:
             supabase.table("leads")\
                 .update(update_data)\
                 .eq("id", lead_id)\
+                .eq("user_id", user_id)\
                 .execute()
 
         return {
@@ -3017,3 +3112,74 @@ Respond in JSON only:
 @router.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+# ─── ASYNC JOB API (SQS-backed) ──────────────────────────────────────────────
+
+from .queue import dispatch_job, get_job
+
+
+@router.get("/jobs")
+async def list_jobs(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("jobs").select(
+        "id,type,status,total,completed,errors,created_at,updated_at"
+    ).eq("user_id", user_id).order("created_at", desc=True).limit(50).execute()
+    return res.data or []
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(job_id: str, authorization: str = Header(...)):
+    validate_uuid(job_id, "job_id")
+    user_id = get_user_id(authorization)
+    job = get_job(job_id, user_id, supabase)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+@router.post("/companies/bulk-autofill/async")
+async def bulk_autofill_companies_async(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Dispatch bulk company enrichment to SQS worker. Returns job_id to poll."""
+    user_id = get_user_id(authorization)
+    job_id = dispatch_job("bulk_enrichment", user_id, {
+        "company_ids":    payload.get("company_ids", []),
+        "openrouter_key": payload.get("openrouter_key", ""),
+        "li_cookie":      payload.get("li_cookie", ""),
+    }, supabase)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/companies/bulk-analyze/async")
+async def bulk_analyze_companies_async(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Dispatch bulk website analysis to SQS worker. Returns job_id to poll."""
+    user_id = get_user_id(authorization)
+    job_id = dispatch_job("bulk_analyze", user_id, {
+        "company_ids":     payload.get("company_ids", []),
+        "gemini_key":      payload.get("gemini_key", ""),
+        "openai_key":      payload.get("openai_key", ""),
+        "groq_key":        payload.get("groq_key", ""),
+        "openrouter_key":  payload.get("openrouter_key", ""),
+        "openrouter_model": payload.get("openrouter_model", ""),
+    }, supabase)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/companies/bulk-maps-enrich/async")
+async def bulk_maps_enrich_async(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Dispatch bulk Maps enrichment to SQS worker. Returns job_id to poll."""
+    user_id = get_user_id(authorization)
+    job_id = dispatch_job("bulk_maps_enrich", user_id, {
+        "company_ids": payload.get("company_ids", []),
+        "maps_key":    payload.get("maps_key", ""),
+    }, supabase)
+    return {"job_id": job_id, "status": "queued"}

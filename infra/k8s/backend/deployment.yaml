@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leadgen-backend
+  namespace: leadgen
+  labels:
+    app: leadgen-backend
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: leadgen-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: leadgen-backend
+        component: api
+    spec:
+      nodeSelector:
+        role: api
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: api
+          image: YOUR_ECR_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com/leadgen-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: leadgen-backend-config
+            - secretRef:
+                name: leadgen-backend-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]  # drain in-flight requests before SIGTERM

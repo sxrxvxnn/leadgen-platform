@@ -333,6 +333,36 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
     return None
 
 
+def _fetch_via_wayback(url: str, timeout: int = 10) -> str | None:
+    """Fetch the most recent Wayback Machine snapshot of a LinkedIn page.
+    Returns raw HTML that contains the same Voyager JSON blobs as a live request.
+    No auth required — falls back gracefully if archive.org is unreachable.
+    """
+    try:
+        cdx_url = (
+            'https://web.archive.org/cdx/search/cdx'
+            f'?url={url}&output=json&limit=5&fl=timestamp,statuscode'
+            '&filter=statuscode:200&collapse=timestamp:8'
+        )
+        cdx_r = requests.get(cdx_url, timeout=timeout)
+        if cdx_r.status_code != 200:
+            return None
+        rows = cdx_r.json()
+        # rows[0] is the header row ["timestamp","statuscode"]
+        if len(rows) < 2:
+            return None
+        timestamp = rows[1][0]  # most recent snapshot timestamp
+        archived_url = f'https://web.archive.org/web/{timestamp}/{url}'
+        page_r = requests.get(archived_url, timeout=timeout, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; LeadGenEngine/1.0)',
+        })
+        if page_r.status_code == 200 and len(page_r.text) > 3000:
+            return page_r.text
+    except Exception:
+        pass
+    return None
+
+
 def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str = '') -> dict:
     """Scrape public LinkedIn company About page for all visible fields."""
     result = {
@@ -354,6 +384,11 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
         html = _fetch_linkedin_html(base + '/about/', fast=fast, li_cookie=li_cookie)
         if not html:
             html = _fetch_linkedin_html(base + '/', fast=fast, li_cookie=li_cookie)
+        if not html and not fast:
+            # Wayback Machine fallback — no auth needed, archived pages contain Voyager JSON
+            html = _fetch_via_wayback(base + '/about/')
+            if not html:
+                html = _fetch_via_wayback(base + '/')
         if not html:
             return result
         soup = BeautifulSoup(html, 'html.parser')

@@ -13,12 +13,35 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Lock prevents multiple simultaneous refresh calls when several requests 401 at once
+let _refreshPromise = null
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
+  async (error) => {
+    const original = error.config
+    if (error.response?.status === 401 && !original._retried) {
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (refreshToken) {
+        original._retried = true
+        try {
+          if (!_refreshPromise) {
+            _refreshPromise = api.post('/auth/refresh', { refresh_token: refreshToken })
+              .finally(() => { _refreshPromise = null })
+          }
+          const res = await _refreshPromise
+          const newToken = res.data.access_token
+          localStorage.setItem('token', newToken)
+          if (res.data.refresh_token) localStorage.setItem('refreshToken', res.data.refresh_token)
+          original.headers = { ...original.headers, Authorization: `Bearer ${newToken}` }
+          return api(original)
+        } catch {
+          // Refresh failed — fall through to clear session
+        }
+      }
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user')
       localStorage.removeItem('userEmail')
       window.location.href = '/login'
     }
@@ -95,8 +118,11 @@ async function _streamingFetch(url, body, onProgress) {
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────
-export const login = (data) => api.post('/auth/login', data)
-export const signup = (data) => api.post('/auth/signup', data)
+export const login         = (data) => api.post('/auth/login', data)
+export const signup        = (data) => api.post('/auth/signup', data)
+export const forgotPassword = (email) => api.post('/auth/forgot-password', { email })
+export const resetPassword  = (recovery_token, new_password) =>
+  api.post('/auth/reset-password', { recovery_token, new_password })
 
 // ─── LEADS ────────────────────────────────────────────────────
 export const getLeads = () => api.get('/leads')
@@ -183,5 +209,32 @@ export const getPersonas = () => api.get('/personas')
 export const createPersona = (data) => api.post('/personas', data)
 export const updatePersona = (id, data) => api.patch(`/personas/${id}`, data)
 export const deletePersona = (id) => api.delete(`/personas/${id}`)
+
+// ─── ASYNC JOBS (SQS-backed) ──────────────────────────────────────────────────
+export const getJob          = (jobId) => api.get(`/jobs/${jobId}`)
+export const listJobs        = ()       => api.get('/jobs')
+
+export const bulkAutofillCompaniesAsync = (companyIds, openrouterKey = '', liCookie = '') =>
+  api.post('/companies/bulk-autofill/async', {
+    company_ids:    companyIds,
+    openrouter_key: openrouterKey,
+    li_cookie:      liCookie,
+  })
+
+export const bulkAnalyzeCompaniesAsync = (companyIds, onProgress) =>
+  api.post('/companies/bulk-analyze/async', {
+    company_ids:     companyIds,
+    gemini_key:      localStorage.getItem('geminiKey')       || '',
+    openai_key:      localStorage.getItem('openaiKey')       || '',
+    groq_key:        localStorage.getItem('groqKey')         || '',
+    openrouter_key:  localStorage.getItem('openrouterKey')   || '',
+    openrouter_model: localStorage.getItem('openrouterModel') || '',
+  })
+
+export const bulkMapsEnrichAsync = (companyIds, mapsKey = '') =>
+  api.post('/companies/bulk-maps-enrich/async', {
+    company_ids: companyIds,
+    maps_key:    mapsKey,
+  })
 
 export default api

@@ -99,10 +99,12 @@ export default function Login() {
             </button>
           </form>
 
-          <p style={{ marginTop: '24px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-            No account?{' '}
-            <Link to="/signup" style={{ color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' }}>Create one</Link>
-          </p>
+          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+            <span>No account?{' '}
+              <Link to="/signup" style={{ color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' }}>Create one</Link>
+            </span>
+            <Link to="/forgot-password" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>Forgot password?</Link>
+          </div>
         </div>
       </div>
     </div>

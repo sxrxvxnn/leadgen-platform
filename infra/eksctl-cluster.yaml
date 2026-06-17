@@ -1,0 +1,56 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: leadgen-cluster
+  region: us-east-1
+  version: "1.29"
+  tags:
+    project: leadgen-engine
+    env: production
+
+iam:
+  withOIDC: true  # required for IRSA (IAM roles for service accounts → SQS access)
+
+managedNodeGroups:
+  - name: api-ng
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 8
+    desiredCapacity: 2
+    labels:
+      role: api
+    amiFamily: AmazonLinux2
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+      k8s.io/cluster-autoscaler/leadgen-cluster: "owned"
+
+  - name: worker-ng
+    instanceType: t3.large   # workers run heavier concurrent scraping tasks
+    minSize: 1
+    maxSize: 4
+    desiredCapacity: 1
+    labels:
+      role: worker
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSQSFullAccess
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver  # needed for ACID Postgres PersistentVolumes
+
+# Usage:
+#   eksctl create cluster -f infra/eksctl-cluster.yaml
+#   eksctl delete cluster -f infra/eksctl-cluster.yaml

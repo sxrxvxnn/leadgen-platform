@@ -66,3 +66,5 @@ opentelemetry-proto==1.42.1
 opentelemetry-sdk==1.42.1
 opentelemetry-semantic-conventions==0.63b1
 ddgs>=9.0.0
+boto3>=1.34.0
+slowapi>=0.1.9

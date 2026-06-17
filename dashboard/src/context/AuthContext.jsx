@@ -1,12 +1,44 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-import { login as loginApi, signup as signupApi } from '../services/api'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { login as loginApi, signup as signupApi, forgotPassword as forgotPasswordApi, resetPassword as resetPasswordApi } from '../services/api'
+import api from '../services/api'
 
 const AuthContext = createContext(null)
+
+function _tokenExpiresAt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return (payload.exp || 0) * 1000
+  } catch { return 0 }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
+  const refreshTimer = useRef(null)
+
+  const _scheduleRefresh = (accessToken) => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    const expiresAt = _tokenExpiresAt(accessToken)
+    if (!expiresAt) return
+    // Refresh 5 minutes before expiry
+    const delay = expiresAt - Date.now() - 5 * 60 * 1000
+    if (delay <= 0) return
+    refreshTimer.current = setTimeout(async () => {
+      const rt = localStorage.getItem('refreshToken')
+      if (!rt) return
+      try {
+        const res = await api.post('/auth/refresh', { refresh_token: rt })
+        const newAccess = res.data.access_token
+        localStorage.setItem('token', newAccess)
+        if (res.data.refresh_token) localStorage.setItem('refreshToken', res.data.refresh_token)
+        setToken(newAccess)
+        _scheduleRefresh(newAccess)
+      } catch {
+        // Silent fail — the 401 interceptor will handle it on the next request
+      }
+    }, delay)
+  }
 
   useEffect(() => {
     const savedToken = localStorage.getItem('token')
@@ -14,8 +46,10 @@ export function AuthProvider({ children }) {
     if (savedToken && savedUser) {
       setToken(savedToken)
       setUser(JSON.parse(savedUser))
+      _scheduleRefresh(savedToken)
     }
     setLoading(false)
+    return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current) }
   }, [])
 
   const login = async (email, password) => {
@@ -27,6 +61,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('userEmail', email)
     setToken(access_token)
     setUser(user)
+    _scheduleRefresh(access_token)
     return response
   }
 
@@ -35,7 +70,18 @@ export function AuthProvider({ children }) {
     return response
   }
 
+  const forgotPassword = async (email) => {
+    const response = await forgotPasswordApi(email)
+    return response
+  }
+
+  const resetPassword = async (recoveryToken, newPassword) => {
+    const response = await resetPasswordApi(recoveryToken, newPassword)
+    return response
+  }
+
   const logout = () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current)
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
@@ -45,7 +91,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )

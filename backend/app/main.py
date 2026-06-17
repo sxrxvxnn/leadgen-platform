@@ -2,14 +2,22 @@ from .instrumentation import setup_logging
 from contextlib import asynccontextmanager
 
 import posthog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from dotenv import load_dotenv
 import os
+
 from .routes import router
+from .rate_limit import limiter
+from .security import path_rate_limit_middleware, log_api_error
 
 load_dotenv()
+
+_IS_PROD = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
 
 @asynccontextmanager
@@ -24,31 +32,77 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="LeadGen Engine API",
-    description="Backend API for LeadGen Engine",
     version="1.0.0",
-    swagger_ui_parameters={"persistAuthorization": True},
     lifespan=lifespan,
+    # Disable interactive docs in production — avoids exposing API surface
+    docs_url=None if _IS_PROD else "/docs",
+    redoc_url=None if _IS_PROD else "/redoc",
+    openapi_url=None if _IS_PROD else "/openapi.json",
 )
 
-# Security scheme — adds Authorize button to docs
 security = HTTPBearer()
 
-# CORS
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+# ── Rate limiting ──────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Too many requests. Please wait before trying again."},
+        headers={"Retry-After": str(exc.retry_after) if hasattr(exc, "retry_after") else "60"},
+    )
+
+
+app.add_middleware(SlowAPIMiddleware)
+
+# ── Body size limit — reject payloads over 2 MB (prevents resource exhaustion) ─
+_MAX_BODY = 2 * 1024 * 1024  # 2 MB
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_BODY:
+        return JSONResponse(status_code=413, content={"detail": "Request body too large (max 2 MB)"})
+    return await call_next(request)
+
+
+# ── Path-based sliding-window rate limiter ─────────────────────────────────────
+app.middleware("http")(path_rate_limit_middleware)
+
+# ── Security headers ───────────────────────────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if _IS_PROD:
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
+
+# ── CORS ───────────────────────────────────────────────────────────────────────
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(router, prefix="/api")
 
+
 @app.get("/")
 async def root():
-    return {"message": "LeadGen Engine API is running"}
+    return {"message": "LeadGen Engine API"}
+
 
 @app.get("/health")
 async def health():

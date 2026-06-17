@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+*.egg-info/
+dist/
+build/
+.git/
+.vercel/
+railway.json
+Procfile
+runtime.txt
+vercel.json
+_technopark_cache.json

@@ -7,6 +7,8 @@ const SECTIONS = [
   { id: 'enrichment',num: '03', label: 'Enrichment' },
   { id: 'maps',      num: '04', label: 'Maps' },
   { id: 'linkedin',  num: '05', label: 'LinkedIn' },
+  { id: 'privacy',   num: '06', label: 'Privacy' },
+  { id: 'terms',     num: '07', label: 'Terms' },
 ]
 
 export default function Settings() {
@@ -29,6 +31,8 @@ export default function Settings() {
     enrichment: useRef(null),
     maps:       useRef(null),
     linkedin:   useRef(null),
+    privacy:    useRef(null),
+    terms:      useRef(null),
   }
 
   function handleSave() {
@@ -224,7 +228,7 @@ export default function Settings() {
           </section>
 
           {/* 05 — LinkedIn */}
-          <section ref={sectionRefs.linkedin} style={s.section}>
+          <section ref={sectionRefs.linkedin} style={{ ...s.section, borderBottom: '1px dashed var(--border-dash)' }}>
             <SectionHeader num="05" title="LinkedIn" />
             <p style={s.sectionHint}>
               LinkedIn now blocks unauthenticated access to company pages. Providing your session cookie lets the scraper fetch phone, founded year, specialties, company size, and tagline directly from LinkedIn About pages.
@@ -257,6 +261,104 @@ export default function Settings() {
                 ))}
               </div>
             </div>
+          </section>
+
+          {/* 06 — Privacy */}
+          <section ref={sectionRefs.privacy} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
+            <SectionHeader num="06" title="Privacy" />
+            <p style={s.sectionHint}>
+              How LeadGen Engine collects, uses, and protects your data. Effective June 16, 2026.
+            </p>
+
+            {[
+              {
+                title: 'Data Collected',
+                body: "We collect your name and email for authentication, B2B company/contact data you add or import, anonymised usage analytics via PostHog, and LinkedIn company profile data where you authorise API access. API keys you enter in Settings are stored only in your browser’s localStorage — never on our servers.",
+              },
+              {
+                title: 'How We Use It',
+                body: 'Your data is used solely to operate the platform: authenticate your account, enrich company records via third-party APIs, sync LinkedIn leads into your pipeline, and improve the product via anonymised analytics. We do not sell or share your data with third parties for advertising.',
+              },
+              {
+                title: 'Storage & Security',
+                body: 'All data is stored in Supabase (PostgreSQL) with Row Level Security enforced — you can only access your own records. All communication is encrypted over HTTPS. Data is retained while your account is active and deleted on request.',
+              },
+              {
+                title: 'LinkedIn API Data',
+                body: 'LinkedIn data is only accessed with your explicit authorisation. Lead Gen Form data is used solely to populate your pipeline and is never redistributed. You can revoke LinkedIn access at any time via your LinkedIn account settings.',
+              },
+              {
+                title: 'Third-Party Services',
+                body: 'Supabase (database), Google Maps (location enrichment), Hunter.io (email verification), Apollo.io (contact enrichment), PostHog (analytics), Vercel (hosting). Each service is governed by its own privacy policy.',
+              },
+              {
+                title: 'Your Rights (DPDP Act 2023)',
+                body: 'You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact leadgenengineplatform@proton.me. We will respond within 30 days.',
+              },
+            ].map(({ title, body }) => (
+              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
+              </div>
+            ))}
+
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
+              Full policy available at{' '}
+              <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                leadgenengineplatform.vercel.app/privacy
+              </a>
+            </p>
+          </section>
+
+          {/* 07 — Terms */}
+          <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
+            <SectionHeader num="07" title="Terms" />
+            <p style={s.sectionHint}>
+              The rules governing your use of LeadGen Engine. Effective June 16, 2026.
+            </p>
+
+            {[
+              {
+                title: 'Acceptance',
+                body: 'By using LeadGen Engine you agree to these Terms. If you do not agree, do not use the platform. These Terms form a binding agreement between you and Shravan Omanakuttan, operator of LeadGen Engine.',
+              },
+              {
+                title: 'Acceptable Use',
+                body: 'Use the platform only for lawful B2B sales and marketing purposes. You must not scrape third-party platforms in violation of their terms, send unsolicited bulk communications, resell platform access, or use the platform to store sensitive personal data such as health or financial information.',
+              },
+              {
+                title: 'Your Data',
+                body: 'You own all company, contact, and lead data you create in the platform. You grant us a limited licence to store and process it solely to provide the Service. You are responsible for ensuring you have the right to upload any data you add.',
+              },
+              {
+                title: 'LinkedIn API',
+                body: 'By connecting LinkedIn, you authorise LeadGen Engine to access LinkedIn data on your behalf within the approved scope. LinkedIn data may only be used for your own sales activities and is subject to LinkedIn\'s own terms in addition to ours.',
+              },
+              {
+                title: 'Disclaimers',
+                body: 'The platform is provided "as is" without warranties of any kind. We do not guarantee that enrichment data from third-party APIs will be accurate, complete, or current. The platform may be unavailable during maintenance windows.',
+              },
+              {
+                title: 'Liability',
+                body: 'Our total liability for any claims is limited to the amount you paid us in the prior 12 months or ₹5,000, whichever is greater. We are not liable for indirect, incidental, or consequential damages including loss of business or data.',
+              },
+            ].map(({ title, body }) => (
+              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
+              </div>
+            ))}
+
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
+              Full terms at{' '}
+              <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                leadgenengineplatform.vercel.app/terms
+              </a>
+              {' '}·{' '}
+              <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+                Privacy Policy
+              </a>
+            </p>
           </section>
 
           {/* Save */}
