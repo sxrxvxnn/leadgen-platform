@@ -11,23 +11,18 @@ const NAV_LINKS = [
   { label: 'Settings',  path: '/settings' },
 ]
 
-function RadarIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="8" cy="8" r="7" stroke="#1d1b1b" strokeWidth="1" strokeOpacity="0.25" />
-      <circle cx="8" cy="8" r="4" stroke="#1d1b1b" strokeWidth="1" strokeOpacity="0.5" />
-      <circle cx="8" cy="8" r="1.5" fill="#1d1b1b" />
-    </svg>
-  )
-}
-
+const SANS = "'IBM Plex Sans', 'DM Sans', sans-serif"
+const INK  = '#01011b'
+const PLUM = '#31263b'
+const MID  = '#717a94'
+const LINE = '#dbd7da'
+const BG   = '#fffcfc'
 
 export default function Navbar() {
   const { user, profile, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState('')
-  const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
     function updateName() {
@@ -39,12 +34,6 @@ export default function Navbar() {
     return () => window.removeEventListener('nameUpdated', updateName)
   }, [user])
 
-  useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 16)
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
-  }, [])
-
   const isActive = (path) => location.pathname === path
   const handleLogout = () => { logout(); navigate('/') }
   const isAdmin = profile?.role === 'admin'
@@ -52,45 +41,45 @@ export default function Navbar() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 100,
-      background: 'var(--bg)',
-      borderBottom: '1px solid var(--border)',
+      background: BG,
+      borderBottom: `1px solid ${LINE}`,
     }}>
       <div style={{
-        padding: '0 24px',
-        height: '48px',
+        padding: '0 32px',
+        height: '56px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
       }}>
 
         {/* Logo */}
         <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span style={{
-            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-            fontSize: '12px', fontWeight: '700',
-            color: '#1d1b1b', letterSpacing: '0.04em',
+            fontFamily: SANS,
+            fontSize: '16px', fontWeight: '700',
+            color: INK, letterSpacing: '-0.02em',
           }}>
-            SONAR©
+            Sonar
           </span>
         </Link>
 
         {/* Center nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {NAV_LINKS.map(({ label, path }) => (
             <Link
               key={path}
               to={path}
               style={{
-                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-                fontSize: '11px',
-                fontWeight: isActive(path) ? '700' : '500',
-                letterSpacing: '0.07em',
-                textTransform: 'uppercase',
-                color: isActive(path) ? '#111' : '#888',
-                padding: '4px 10px',
+                fontFamily: SANS,
+                fontSize: '14px',
+                fontWeight: isActive(path) ? '600' : '500',
+                color: isActive(path) ? INK : MID,
+                padding: '5px 12px',
                 textDecoration: 'none',
-                transition: 'color 0.15s',
+                borderRadius: 3,
+                background: isActive(path) ? '#ecedf2' : 'transparent',
+                transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive(path)) e.currentTarget.style.color = '#111' }}
-              onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = '#888' }}
+              onMouseEnter={e => { if (!isActive(path)) { e.currentTarget.style.color = PLUM; e.currentTarget.style.background = '#f4f3f6' } }}
+              onMouseLeave={e => { if (!isActive(path)) { e.currentTarget.style.color = MID; e.currentTarget.style.background = 'transparent' } }}
             >
               {label}
             </Link>
@@ -99,18 +88,18 @@ export default function Navbar() {
             <Link
               to="/admin"
               style={{
-                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-                fontSize: '11px',
-                fontWeight: isActive('/admin') ? '700' : '500',
-                letterSpacing: '0.07em',
-                textTransform: 'uppercase',
-                color: isActive('/admin') ? '#111' : '#888',
-                padding: '4px 10px',
+                fontFamily: SANS,
+                fontSize: '14px',
+                fontWeight: isActive('/admin') ? '600' : '500',
+                color: isActive('/admin') ? INK : MID,
+                padding: '5px 12px',
                 textDecoration: 'none',
-                transition: 'color 0.15s',
+                borderRadius: 3,
+                background: isActive('/admin') ? '#ecedf2' : 'transparent',
+                transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#111' }}
-              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#888' }}
+              onMouseEnter={e => { if (!isActive('/admin')) { e.currentTarget.style.color = PLUM; e.currentTarget.style.background = '#f4f3f6' } }}
+              onMouseLeave={e => { if (!isActive('/admin')) { e.currentTarget.style.color = MID; e.currentTarget.style.background = 'transparent' } }}
             >
               Admin
             </Link>
@@ -120,23 +109,25 @@ export default function Navbar() {
         {/* Right: user + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           {displayName && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#999', letterSpacing: '0.04em' }}>
+            <span style={{ fontFamily: SANS, fontSize: '13px', color: MID }}>
               {displayName}
             </span>
           )}
           <button
             onClick={handleLogout}
             style={{
-              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-              fontSize: '11px', fontWeight: '700',
-              letterSpacing: '0.07em', textTransform: 'uppercase',
+              fontFamily: SANS,
+              fontSize: '14px', fontWeight: '500',
               padding: '7px 16px',
-              background: '#111', color: '#f0eeea',
-              border: 'none', borderRadius: 4, cursor: 'pointer',
-              transition: 'opacity 0.15s',
+              background: '#ffffff',
+              color: INK,
+              border: `1px solid ${PLUM}`,
+              borderRadius: 3,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
-            onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+            onMouseEnter={e => { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
           >
             Sign out
           </button>

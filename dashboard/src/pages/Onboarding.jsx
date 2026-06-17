@@ -2,12 +2,15 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 
-const BG   = '#f0eeea'
-const INK  = '#111111'
-const MID  = '#888888'
-const LINE = '#d0cdc8'
-const YLW  = '#e8f400'
-const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif"
+const BG   = '#fffcfc'
+const INK  = '#01011b'
+const PLUM = '#31263b'
+const MID  = '#717a94'
+const LINE = '#dbd7da'
+const SURF = '#ecedf2'
+const ACC  = '#6f63b7'
+const SANS = "'IBM Plex Sans', 'DM Sans', sans-serif"
+const SERIF = "'Cormorant Garamond', Georgia, serif"
 
 export default function Onboarding() {
   const navigate = useNavigate()
@@ -42,49 +45,37 @@ export default function Onboarding() {
   }
 
   return (
-    <div style={{ background: BG, minHeight: '100vh', fontFamily: FONT, color: INK }}>
+    <div style={{ background: BG, minHeight: '100vh', fontFamily: SANS, color: INK }}>
 
       {/* Nav */}
-      <nav style={{
-        borderBottom: `1px solid ${LINE}`,
-        padding: '0 24px', height: 48,
-        display: 'flex', alignItems: 'center',
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>SONAR©</span>
+      <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center' }}>
+        <span style={{ fontFamily: SANS, fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: INK }}>Sonar</span>
       </nav>
 
       {step === 1 && (
         <>
-          {/* Section label */}
-          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${LINE}` }}>
-            <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              ① Setup
-            </span>
+          <div style={{ padding: '16px 40px', borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, color: MID, textTransform: 'uppercase', letterSpacing: '0.08em' }}>① Setup</span>
           </div>
 
-          {/* Big question */}
-          <div style={{ padding: '40px 24px 48px', borderBottom: `1px solid ${LINE}` }}>
-            <h1 style={{
-              fontFamily: FONT,
-              fontSize: 'clamp(40px, 7.5vw, 100px)',
-              fontWeight: 900,
-              letterSpacing: '-0.03em',
-              lineHeight: 0.95,
-              margin: 0,
-              color: INK,
-            }}>
-              How will you<br />use Sonar?
+          <div style={{ padding: '56px 40px 64px', borderBottom: `1px solid ${LINE}` }}>
+            <h1 style={{ margin: '0 0 16px', lineHeight: 1.05 }}>
+              <span style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 7vw, 96px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.03em', color: INK }}>
+                How will you
+              </span>
+              <span style={{ display: 'block', fontFamily: SANS, fontSize: 'clamp(32px, 5.5vw, 72px)', fontWeight: 700, letterSpacing: '-0.03em', color: PLUM }}>
+                use Sonar?
+              </span>
             </h1>
             <p style={{ fontSize: 14, color: MID, marginTop: 20, lineHeight: 1.65 }}>
               You can upgrade from Solo to Team at any time.
             </p>
           </div>
 
-          {/* Mode cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 280 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 300 }}>
             <ModeCard
               label="A"
-              title="SOLO"
+              title="Solo"
               desc="Just me — building my own pipeline and prospecting independently."
               items={['Company discovery', 'AI enrichment', 'Lead management']}
               onClick={() => !loading && handleModeSelect('solo')}
@@ -94,7 +85,7 @@ export default function Onboarding() {
             />
             <ModeCard
               label="B"
-              title="TEAM"
+              title="Team"
               desc="I'm building a team — I want to invite members and manage access."
               items={['Everything in Solo', 'Invite members', 'Admin controls']}
               onClick={() => !loading && handleModeSelect('team')}
@@ -105,8 +96,8 @@ export default function Onboarding() {
           </div>
 
           {error && (
-            <div style={{ padding: '16px 24px', borderTop: `1px solid ${LINE}` }}>
-              <p style={{ fontSize: 12, color: '#c00', margin: 0, fontFamily: FONT }}>{error}</p>
+            <div style={{ padding: '16px 40px', borderTop: `1px solid ${LINE}` }}>
+              <p style={{ fontSize: 13, color: '#b83232', margin: 0 }}>{error}</p>
             </div>
           )}
         </>
@@ -114,29 +105,21 @@ export default function Onboarding() {
 
       {step === 2 && (
         <>
-          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${LINE}` }}>
-            <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              ② Team name
-            </span>
+          <div style={{ padding: '16px 40px', borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, color: MID, textTransform: 'uppercase', letterSpacing: '0.08em' }}>② Team name</span>
           </div>
 
-          <div style={{ padding: '40px 24px 48px', borderBottom: `1px solid ${LINE}` }}>
-            <h1 style={{
-              fontFamily: FONT,
-              fontSize: 'clamp(40px, 7.5vw, 100px)',
-              fontWeight: 900,
-              letterSpacing: '-0.03em',
-              lineHeight: 0.95,
-              margin: '0 0 20px',
-              color: INK,
-            }}>
-              Name your team.
+          <div style={{ padding: '56px 40px 64px', borderBottom: `1px solid ${LINE}` }}>
+            <h1 style={{ margin: '0 0 16px', lineHeight: 1.05 }}>
+              <span style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 7vw, 96px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.03em', color: INK }}>
+                Name your team.
+              </span>
             </h1>
-            <p style={{ fontSize: 14, color: MID, margin: '0 0 40px', lineHeight: 1.65 }}>
+            <p style={{ fontSize: 14, color: MID, margin: '16px 0 48px', lineHeight: 1.65 }}>
               You can invite members right after setup.
             </p>
 
-            <div style={{ maxWidth: 480 }}>
+            <div style={{ maxWidth: 560 }}>
               <input
                 type="text"
                 value={teamName}
@@ -146,42 +129,43 @@ export default function Onboarding() {
                 onKeyDown={e => e.key === 'Enter' && teamName.trim() && finish('team', teamName.trim())}
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  padding: '14px 0',
+                  padding: '12px 0',
                   background: 'transparent',
                   border: 'none',
-                  borderBottom: `2px solid ${INK}`,
-                  fontFamily: FONT, fontSize: 28, fontWeight: 700,
+                  borderBottom: `2px solid ${PLUM}`,
+                  fontFamily: SANS, fontSize: 24, fontWeight: 600,
                   color: INK, outline: 'none',
                   letterSpacing: '-0.02em',
                   marginBottom: 40,
                 }}
               />
 
-              {error && <p style={{ fontSize: 12, color: '#c00', marginBottom: 16 }}>{error}</p>}
+              {error && <p style={{ fontSize: 13, color: '#b83232', marginBottom: 16 }}>{error}</p>}
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button
                   onClick={() => finish('team', teamName.trim())}
                   disabled={!teamName.trim() || loading}
                   style={{
-                    fontFamily: FONT, fontSize: 11, fontWeight: 700,
-                    letterSpacing: '0.08em', textTransform: 'uppercase',
-                    background: teamName.trim() && !loading ? INK : LINE,
-                    color: teamName.trim() && !loading ? BG : MID,
-                    border: 'none', padding: '11px 24px', borderRadius: 4,
+                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
+                    background: '#ffffff', color: INK,
+                    border: `1px solid ${teamName.trim() && !loading ? PLUM : LINE}`,
+                    padding: '10px 20px', borderRadius: 3,
                     cursor: teamName.trim() && !loading ? 'pointer' : 'not-allowed',
                     transition: 'all 0.15s',
+                    opacity: !teamName.trim() || loading ? 0.5 : 1,
                   }}
+                  onMouseEnter={e => { if (teamName.trim() && !loading) { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG } }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
                 >
                   {loading ? 'Setting up…' : 'Create team →'}
                 </button>
                 <button
                   onClick={() => setStep(1)}
                   style={{
-                    fontFamily: FONT, fontSize: 11, fontWeight: 500,
+                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
                     color: MID, background: 'none', border: 'none',
-                    cursor: 'pointer', letterSpacing: '0.06em',
-                    textTransform: 'uppercase', padding: '11px 0',
+                    cursor: 'pointer', padding: '10px 4px',
                     transition: 'color 0.15s',
                   }}
                   onMouseEnter={e => e.currentTarget.style.color = INK}
@@ -207,41 +191,49 @@ function ModeCard({ label, title, desc, items, accent, onClick, loading, disable
       onMouseEnter={() => !disabled && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '32px 24px',
+        padding: '40px 40px',
         borderBottom: `1px solid ${LINE}`,
         borderRight: borderRight ? `1px solid ${LINE}` : 'none',
-        background: accent
-          ? hovered ? YLW : 'transparent'
-          : hovered ? '#e8e6e2' : 'transparent',
+        background: hovered ? SURF : 'transparent',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled && !loading ? 0.5 : 1,
         transition: 'background 0.2s',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em' }}>{label})</span>
+      <div style={{ marginBottom: 12 }}>
+        <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, color: ACC, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label})</span>
       </div>
-      <p style={{
-        fontFamily: FONT,
+      <h3 style={{
+        fontFamily: SERIF,
         fontSize: 'clamp(32px, 5vw, 64px)',
-        fontWeight: 900,
-        letterSpacing: '-0.03em',
+        fontWeight: 300,
+        fontStyle: 'italic',
+        letterSpacing: '-0.02em',
         lineHeight: 1,
         color: INK,
         marginBottom: 16,
       }}>
         {loading ? 'Setting up…' : title}
-      </p>
-      <p style={{ fontSize: 13, color: MID, lineHeight: 1.65, marginBottom: 20, maxWidth: 280 }}>
+      </h3>
+      <p style={{ fontFamily: SANS, fontSize: 14, color: MID, lineHeight: 1.65, marginBottom: 24, maxWidth: 280 }}>
         {desc}
       </p>
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {items.map(item => (
-          <li key={item} style={{ fontSize: 12, color: MID, display: 'flex', gap: 8 }}>
-            <span style={{ color: LINE }}>—</span>{item}
+          <li key={item} style={{ fontFamily: SANS, fontSize: 14, color: MID, display: 'flex', gap: 10 }}>
+            <span style={{ color: ACC }}>—</span>{item}
           </li>
         ))}
       </ul>
+      {hovered && !loading && (
+        <div style={{ marginTop: 32 }}>
+          <span style={{
+            fontFamily: SANS, fontSize: 14, fontWeight: 500,
+            color: INK, border: `1px solid ${PLUM}`, borderRadius: 3,
+            padding: '8px 16px', display: 'inline-block',
+          }}>Select {title} →</span>
+        </div>
+      )}
     </div>
   )
 }
