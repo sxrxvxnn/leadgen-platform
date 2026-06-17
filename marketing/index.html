@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SonarLeads — Find the deal before it's a deal</title>
+  <meta name="description" content="SonarLeads surfaces buying signals across the web, turns them into prioritized leads, and guides your team from first intent to closed revenue — without an agency in the middle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@700&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@500&family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;500;600;700;800&family=Lato:wght@400&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── DESIGN TOKENS ───────────────────────────────────────────────────── */
+    :root {
+      --color-ink-violet:    #01011b;
+      --color-plum-charcoal: #31263b;
+      --color-storm-mauve:   #43394c;
+      --color-slate-iris:    #717a94;
+      --color-ash-lavender:  #89828d;
+      --color-parchment:     #fffcfc;
+      --color-bone-mist:     #ecedf2;
+      --color-fog-border:    #dbd7da;
+      --color-twilight-plum: #473982;
+      --color-amethyst:      #6f63b7;
+      --color-wisteria:      #9e91d6;
+      --gradient-indigo-plum: linear-gradient(90deg, #31263b 0%, #01011b 100%);
+
+      --radius-buttons: 3px;
+      --radius-cards:   6px;
+      --radius-inputs:  6px;
+      --radius-pills:   9999px;
+
+      --shadow-subtle:   rgba(71,57,130,0.1) 0px 0px 0px 1px inset;
+      --shadow-subtle-2: rgba(49,38,59,0.22) 0px 0px 0px 1px,
+                         rgba(49,38,59,0.09) 0px 103px 103px 0px,
+                         rgba(49,38,59,0.1)  0px 26px 57px 0px;
+      --shadow-subtle-4: rgba(71,57,130,0.15) 0px 0px 0px 4px;
+      --shadow-md:       rgba(0,0,0,0.05) 0px 0px 11px 0px inset,
+                         rgba(0,0,0,0.06) 0px 0px 0px 1px,
+                         rgba(0,0,0,0.05) 0px 16px 24px -8px;
+
+      --page-max-width: 1200px;
+      --section-gap:    80px;
+      --card-padding:   20px;
+      --spacing-6:  6px;
+      --spacing-12: 12px;
+      --spacing-18: 18px;
+      --spacing-24: 24px;
+      --spacing-30: 30px;
+    }
+
+    /* ── RESET ───────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 400;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--color-ink-violet);
+      background: var(--color-parchment);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+    img { display: block; max-width: 100%; }
+
+    /* ── LAYOUT ──────────────────────────────────────────────────────────── */
+    .container {
+      max-width: var(--page-max-width);
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+    section { padding: 96px 0; }
+
+    /* ── TYPOGRAPHY ──────────────────────────────────────────────────────── */
+    h1 {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-weight: 300;
+      font-style: italic;
+      font-size: 78px;
+      line-height: 1.3;
+      letter-spacing: -1.87px;
+      color: var(--color-ink-violet);
+    }
+    h2 {
+      font-family: 'Archivo Narrow', 'Arial Narrow', Arial, sans-serif;
+      font-weight: 700;
+      font-size: 60px;
+      line-height: 1.3;
+      letter-spacing: -1.86px;
+      color: var(--color-ink-violet);
+    }
+    h3 {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 800;
+      font-size: 28px;
+      line-height: 1.3;
+      letter-spacing: -0.7px;
+      color: var(--color-ink-violet);
+    }
+
+    /* ── PILL BADGE ──────────────────────────────────────────────────────── */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: var(--radius-pills);
+      padding: 4px 12px;
+      border: 1px solid var(--color-fog-border);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--color-storm-mauve);
+      background: transparent;
+    }
+
+    /* ── BUTTONS ─────────────────────────────────────────────────────────── */
+    .btn-outlined {
+      display: inline-block;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--color-ink-violet);
+      background: #ffffff;
+      border: 1px solid var(--color-plum-charcoal);
+      border-radius: var(--radius-buttons);
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: border-color 150ms ease, border-width 150ms ease, padding 150ms ease;
+      text-align: center;
+    }
+    .btn-outlined:hover {
+      border: 2px solid var(--color-ink-violet);
+      padding: 9px 19px;
+    }
+    :focus-visible { outline: none; box-shadow: var(--shadow-subtle-4); }
+
+    .btn-ghost {
+      display: inline-block;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--color-ink-violet);
+      background: none;
+      border: none;
+      padding: 10px 0;
+      cursor: pointer;
+      transition: text-decoration 150ms ease;
+    }
+    .btn-ghost:hover { text-decoration: underline; }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    NAV                                                                  */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--color-parchment);
+      border-bottom: 1px solid var(--color-fog-border);
+    }
+    .nav-inner {
+      max-width: var(--page-max-width);
+      margin: 0 auto;
+      padding: 0 40px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .nav-logo {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      color: var(--color-ink-violet);
+      flex-shrink: 0;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+    .nav-links a {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--color-plum-charcoal);
+      transition: color 150ms ease;
+    }
+    .nav-links a:hover { color: var(--color-ink-violet); }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    HERO                                                                 */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .hero { background: var(--color-parchment); padding: 96px 0; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 72px;
+      align-items: center;
+    }
+    .hero-eyebrow { margin-bottom: 28px; }
+    h1.hero-h1 { margin-bottom: 28px; }
+    .hero-sub {
+      font-size: 20px;
+      line-height: 1.6;
+      color: var(--color-slate-iris);
+      max-width: 520px;
+      margin-bottom: 40px;
+    }
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* Signal feed mock panel */
+    .signal-feed {
+      background: #ffffff;
+      border-radius: var(--radius-cards);
+      box-shadow: var(--shadow-subtle-2);
+      overflow: hidden;
+    }
+    .signal-feed-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--color-fog-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .signal-feed-title {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--color-plum-charcoal);
+    }
+    .signal-feed-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--color-ash-lavender);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2e7d4f;
+      flex-shrink: 0;
+    }
+    .signal-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--color-bone-mist);
+    }
+    .signal-row:last-of-type { border-bottom: none; }
+    .signal-accent-bar {
+      width: 3px;
+      height: 36px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .signal-main { flex: 1; min-width: 0; }
+    .signal-company {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--color-ink-violet);
+      display: block;
+      margin-bottom: 5px;
+    }
+    .signal-badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: var(--radius-pills);
+      padding: 2px 8px;
+      border: 1px solid var(--color-fog-border);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--color-amethyst);
+      background: rgba(111,99,183,0.07);
+    }
+    .signal-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .signal-strength-track {
+      width: 72px;
+      height: 4px;
+      background: var(--color-bone-mist);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .signal-strength-fill {
+      height: 100%;
+      background: var(--color-wisteria);
+      border-radius: 2px;
+    }
+    .signal-time {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--color-ash-lavender);
+    }
+    .signal-feed-footer {
+      padding: 11px 20px;
+      background: var(--color-bone-mist);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--color-fog-border);
+    }
+    .signal-feed-foot-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--color-slate-iris);
+    }
+    .signal-feed-foot-cta {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-amethyst);
+      cursor: pointer;
+      transition: opacity 150ms ease;
+    }
+    .signal-feed-foot-cta:hover { opacity: 0.7; }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    LOGO STRIP                                                           */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .logo-strip {
+      background: var(--color-bone-mist);
+      border-top: 1px solid var(--color-fog-border);
+      border-bottom: 1px solid var(--color-fog-border);
+      padding: 24px 0;
+    }
+    .logo-strip-inner {
+      max-width: var(--page-max-width);
+      margin: 0 auto;
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+    .logo-strip-label {
+      font-family: 'Lato', sans-serif;
+      font-weight: 400;
+      font-size: 12px;
+      color: var(--color-ash-lavender);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .logo-strip-divider {
+      width: 1px;
+      height: 16px;
+      background: var(--color-fog-border);
+      flex-shrink: 0;
+    }
+    .logo-names {
+      display: flex;
+      align-items: center;
+      gap: 48px;
+      flex: 1;
+      justify-content: space-between;
+    }
+    .logo-name {
+      font-family: 'Lato', sans-serif;
+      font-weight: 400;
+      font-size: 12px;
+      color: var(--color-ash-lavender);
+      white-space: nowrap;
+    }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    FEATURES                                                             */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+    .section-header .pill { margin-bottom: 20px; }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .feature-card {
+      background: #ffffff;
+      border-radius: var(--radius-cards);
+      box-shadow: var(--shadow-subtle-2);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      color: var(--color-amethyst);
+      margin-bottom: 20px;
+      flex-shrink: 0;
+    }
+    .feature-card h3 { margin-bottom: 12px; }
+    .feature-body {
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--color-slate-iris);
+      flex: 1;
+      margin-bottom: 24px;
+    }
+    .feature-link {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-amethyst);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: gap 150ms ease;
+    }
+    .feature-link:hover { gap: 8px; }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    HOW IT WORKS                                                         */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .steps-outer { position: relative; }
+    .steps-track {
+      display: grid;
+      grid-template-columns: 1fr 64px 1fr 64px 1fr;
+      align-items: start;
+      gap: 0;
+    }
+    .step { display: flex; flex-direction: column; }
+    .step-num-wrap {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 20px;
+      display: flex;
+    }
+    .step-number {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--color-fog-border);
+      background: var(--color-bone-mist);
+      box-shadow: var(--shadow-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      color: var(--color-amethyst);
+      flex-shrink: 0;
+    }
+    .step-connector-col {
+      display: flex;
+      align-items: flex-start;
+      padding-top: 24px; /* vertically center with the 48px circles */
+    }
+    .step-connector-line {
+      flex: 1;
+      height: 0;
+      border-top: 1px dashed var(--color-fog-border);
+    }
+    .step-title {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--color-ink-violet);
+      margin-bottom: 10px;
+      letter-spacing: -0.3px;
+    }
+    .step-body {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--color-slate-iris);
+    }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    SIGNAL TYPES                                                         */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .signals-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .signal-tile {
+      background: #ffffff;
+      border-radius: var(--radius-cards);
+      box-shadow: var(--shadow-subtle);
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      transition: box-shadow 150ms ease;
+    }
+    .signal-tile:hover { box-shadow: var(--shadow-subtle-2); }
+    .signal-tile-emoji {
+      font-size: 24px;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .signal-tile-label {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--color-ink-violet);
+      margin-bottom: 4px;
+    }
+    .signal-tile-desc {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--color-slate-iris);
+      line-height: 1.5;
+    }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    PRICING                                                              */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      align-items: start;
+    }
+    .pricing-card {
+      background: #ffffff;
+      border-radius: var(--radius-cards);
+      box-shadow: var(--shadow-subtle);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+    }
+    .pricing-card-featured {
+      box-shadow: var(--shadow-subtle-2);
+      border: 1px solid var(--color-twilight-plum);
+      box-shadow: var(--shadow-subtle-2), 0 0 0 1px var(--color-twilight-plum) inset;
+    }
+    .recommended-badge {
+      display: inline-block;
+      border-radius: var(--radius-pills);
+      padding: 3px 10px;
+      background: rgba(111,99,183,0.1);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--color-amethyst);
+      margin-bottom: 16px;
+    }
+    .pricing-tier {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--color-amethyst);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .pricing-price {
+      font-family: 'Archivo Narrow', 'Arial Narrow', Arial, sans-serif;
+      font-weight: 700;
+      font-size: 52px;
+      line-height: 1;
+      color: var(--color-ink-violet);
+      letter-spacing: -1px;
+    }
+    .pricing-price sup {
+      font-size: 24px;
+      vertical-align: super;
+      letter-spacing: 0;
+    }
+    .pricing-period {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      color: var(--color-slate-iris);
+      margin-top: 4px;
+      margin-bottom: 24px;
+    }
+    .pricing-divider {
+      height: 1px;
+      background: var(--color-fog-border);
+      margin-bottom: 24px;
+    }
+    .pricing-features {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .pricing-features li {
+      font-size: 14px;
+      color: var(--color-plum-charcoal);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+    }
+    .pricing-features li::before {
+      content: '—';
+      color: var(--color-wisteria);
+      flex-shrink: 0;
+    }
+
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    /*    FOOTER                                                               */
+    /* ── ─────────────────────────────────────────────────────────────────── */
+    footer {
+      background: var(--gradient-indigo-plum);
+      padding: 48px 0 40px;
+    }
+    .footer-inner {
+      max-width: var(--page-max-width);
+      margin: 0 auto;
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .footer-logo {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      color: var(--color-parchment);
+    }
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .footer-links a {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: rgba(255,252,252,0.65);
+      transition: color 150ms ease;
+    }
+    .footer-links a:hover { color: var(--color-parchment); }
+    .footer-fine {
+      width: 100%;
+      font-family: 'Lato', sans-serif;
+      font-weight: 400;
+      font-size: 12px;
+      color: rgba(255,252,252,0.6);
+      margin-top: 24px;
+    }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 56px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 0 24px; }
+      .nav-inner { padding: 0 24px; }
+      .logo-strip-inner { padding: 0 24px; }
+      .footer-inner { padding: 0 24px; }
+
+      .nav-links { display: none; }
+      section { padding: 64px 0; }
+
+      h1 { font-size: 42px; letter-spacing: -0.5px; }
+      h2 { font-size: 32px; letter-spacing: -0.5px; }
+      h3 { font-size: 22px; }
+
+      .hero-sub { font-size: 17px; }
+
+      .logo-strip-inner { flex-wrap: wrap; gap: 20px; }
+      .logo-names { gap: 20px; flex-wrap: wrap; justify-content: flex-start; }
+
+      .steps-track {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+      .step-connector-col { display: none; }
+
+      .signals-grid { grid-template-columns: 1fr; }
+
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ NAV ══════════════════════════════════════════════════════════════════ -->
+<nav>
+  <div class="nav-inner">
+    <span class="nav-logo">SonarLeads</span>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How it works</a></li>
+      <li><a href="#signals">Signals</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+    </ul>
+    <a href="#pricing" class="btn-outlined">Get early access</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══════════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+
+      <!-- Left: copy -->
+      <div>
+        <div class="hero-eyebrow">
+          <span class="pill">B2B Signal Intelligence</span>
+        </div>
+        <h1 class="hero-h1">Find the deal<br>before it's<br>a deal.</h1>
+        <p class="hero-sub">SonarLeads surfaces buying signals across the web, turns them into prioritized leads, and guides your team from first intent to closed revenue — without an agency in the middle.</p>
+        <div class="hero-ctas">
+          <a href="#pricing" class="btn-outlined">Start for free</a>
+          <a href="#how-it-works" class="btn-ghost">See how it works</a>
+        </div>
+      </div>
+
+      <!-- Right: mock signal feed -->
+      <div class="signal-feed" role="img" aria-label="Signal feed preview">
+        <div class="signal-feed-header">
+          <span class="signal-feed-title">Live signal feed</span>
+          <span class="signal-feed-status">
+            <span class="status-dot"></span>
+            monitoring
+          </span>
+        </div>
+
+        <div class="signal-row">
+          <div class="signal-accent-bar" style="background: var(--color-amethyst);"></div>
+          <div class="signal-main">
+            <span class="signal-company">Vercel Inc.</span>
+            <span class="signal-badge">Funding Round · Series D</span>
+          </div>
+          <div class="signal-right">
+            <div class="signal-strength-track">
+              <div class="signal-strength-fill" style="width: 92%;"></div>
+            </div>
+            <span class="signal-time">2m ago</span>
+          </div>
+        </div>
+
+        <div class="signal-row">
+          <div class="signal-accent-bar" style="background: var(--color-wisteria);"></div>
+          <div class="signal-main">
+            <span class="signal-company">Linear App</span>
+            <span class="signal-badge">Tech Stack Switch</span>
+          </div>
+          <div class="signal-right">
+            <div class="signal-strength-track">
+              <div class="signal-strength-fill" style="width: 76%;"></div>
+            </div>
+            <span class="signal-time">14m ago</span>
+          </div>
+        </div>
+
+        <div class="signal-row">
+          <div class="signal-accent-bar" style="background: var(--color-twilight-plum);"></div>
+          <div class="signal-main">
+            <span class="signal-company">Notion Labs</span>
+            <span class="signal-badge">Growth Hiring · 12 roles</span>
+          </div>
+          <div class="signal-right">
+            <div class="signal-strength-track">
+              <div class="signal-strength-fill" style="width: 84%;"></div>
+            </div>
+            <span class="signal-time">31m ago</span>
+          </div>
+        </div>
+
+        <div class="signal-feed-footer">
+          <span class="signal-feed-foot-label">3 new signals · 24h window</span>
+          <span class="signal-feed-foot-cta">View all →</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ LOGO STRIP ═════════════════════════════════════════════════════════════ -->
+<div class="logo-strip">
+  <div class="logo-strip-inner">
+    <span class="logo-strip-label">Trusted by teams at</span>
+    <div class="logo-strip-divider"></div>
+    <div class="logo-names">
+      <span class="logo-name">Intercom</span>
+      <span class="logo-name">Lattice</span>
+      <span class="logo-name">Deel</span>
+      <span class="logo-name">Rippling</span>
+      <span class="logo-name">Brex</span>
+      <span class="logo-name">Watershed</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FEATURES ══════════════════════════════════════════════════════════════ -->
+<section id="features" style="background: var(--color-parchment);">
+  <div class="container">
+    <div class="section-header">
+      <div><span class="pill">Features</span></div>
+      <h2 style="margin-top: 20px;">From signal<br>to signed.</h2>
+    </div>
+
+    <div class="features-grid">
+
+      <!-- Signal Detection -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.5" opacity="0.2"/>
+          <circle cx="20" cy="20" r="10" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+          <circle cx="20" cy="20" r="3.5" fill="currentColor"/>
+          <line x1="22.5" y1="17.5" x2="31" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h3>Signal Detection</h3>
+        <p class="feature-body">Track job changes, funding rounds, tech stack switches, and 40+ intent signals across LinkedIn, G2, Crunchbase, and the open web.</p>
+        <a href="#" class="feature-link">Learn more <span>→</span></a>
+      </div>
+
+      <!-- Lead Prioritization -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <rect x="4"  y="24" width="8"  height="12" rx="1.5" fill="currentColor" opacity="0.25"/>
+          <rect x="16" y="14" width="8"  height="22" rx="1.5" fill="currentColor" opacity="0.55"/>
+          <rect x="28" y="4"  width="8"  height="32" rx="1.5" fill="currentColor"/>
+          <path d="M8 20 L20 10 L32 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+        </svg>
+        <h3>Lead Prioritization</h3>
+        <p class="feature-body">Every signal is scored and ranked by deal-fit. Your team works the hottest accounts first — automatically, not manually.</p>
+        <a href="#" class="feature-link">Learn more <span>→</span></a>
+      </div>
+
+      <!-- Outreach Sequencing -->
+      <div class="feature-card">
+        <svg class="feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <path d="M6 7h28a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H13l-7 7V9a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <line x1="13" y1="17" x2="27" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="13" y1="22" x2="21" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h3>Outreach Sequencing</h3>
+        <p class="feature-body">Turn signals into personalized first lines and multi-step sequences. Send from your own inbox, not a shared pool.</p>
+        <a href="#" class="feature-link">Learn more <span>→</span></a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ HOW IT WORKS ═══════════════════════════════════════════════════════════ -->
+<section id="how-it-works" style="background: var(--color-bone-mist);">
+  <div class="container">
+    <div class="section-header">
+      <div><span class="pill">How it works</span></div>
+      <h2 style="margin-top: 20px;">Set up in a morning.<br>Pipeline by afternoon.</h2>
+    </div>
+
+    <div class="steps-track">
+
+      <div class="step">
+        <div class="step-num-wrap">
+          <div class="step-number">01</div>
+        </div>
+        <div class="step-title">Connect your ICP</div>
+        <p class="step-body">Define your ideal customer profile: industry, size, tech stack, growth signals. SonarLeads builds the target universe.</p>
+      </div>
+
+      <div class="step-connector-col">
+        <div class="step-connector-line"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-num-wrap">
+          <div class="step-number">02</div>
+        </div>
+        <div class="step-title">Signals come to you</div>
+        <p class="step-body">Our engine monitors 40+ data sources continuously. When an account shows intent, you're the first to know.</p>
+      </div>
+
+      <div class="step-connector-col">
+        <div class="step-connector-line"></div>
+      </div>
+
+      <div class="step">
+        <div class="step-num-wrap">
+          <div class="step-number">03</div>
+        </div>
+        <div class="step-title">Close the deal</div>
+        <p class="step-body">Reach out with context-rich, personalized messaging. Track replies, book meetings, and move pipeline — all in one place.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ SIGNAL TYPES ═══════════════════════════════════════════════════════════ -->
+<section id="signals" style="background: var(--color-parchment);">
+  <div class="container">
+    <div class="section-header">
+      <div><span class="pill">Signal intelligence</span></div>
+      <h2 style="margin-top: 20px;">Every buying trigger,<br>captured.</h2>
+    </div>
+
+    <div class="signals-grid">
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">🔔</span>
+        <div>
+          <div class="signal-tile-label">Job Changes</div>
+          <div class="signal-tile-desc">New decision-makers joining target accounts — the highest-intent moment to reach out.</div>
+        </div>
+      </div>
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">💰</span>
+        <div>
+          <div class="signal-tile-label">Funding Rounds</div>
+          <div class="signal-tile-desc">Companies with fresh capital are actively building — and buying. Get there first.</div>
+        </div>
+      </div>
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">🛠</span>
+        <div>
+          <div class="signal-tile-label">Tech Stack Switches</div>
+          <div class="signal-tile-desc">When a team evaluates or adopts new tools, they're open to changing their entire stack.</div>
+        </div>
+      </div>
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">📈</span>
+        <div>
+          <div class="signal-tile-label">Growth Hiring</div>
+          <div class="signal-tile-desc">Rapid headcount growth signals expansion, new budgets, and new use cases to solve.</div>
+        </div>
+      </div>
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">🌐</span>
+        <div>
+          <div class="signal-tile-label">Web Intent</div>
+          <div class="signal-tile-desc">Track visits to competitor sites, pricing pages, and review sites like G2 and Capterra.</div>
+        </div>
+      </div>
+      <div class="signal-tile">
+        <span class="signal-tile-emoji">⭐</span>
+        <div>
+          <div class="signal-tile-label">Review Activity</div>
+          <div class="signal-tile-desc">Companies posting or reading reviews are actively in an evaluation cycle — timing is everything.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ PRICING ════════════════════════════════════════════════════════════════ -->
+<section id="pricing" style="background: var(--color-bone-mist);">
+  <div class="container">
+    <div class="section-header">
+      <div><span class="pill">Pricing</span></div>
+      <h2 style="margin-top: 20px;">Simple pricing for<br>serious pipelines.</h2>
+    </div>
+
+    <div class="pricing-grid">
+
+      <!-- Starter -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Starter</div>
+        <div class="pricing-price"><sup>$</sup>49</div>
+        <div class="pricing-period">per month</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>500 signals per month</li>
+          <li>1 seat included</li>
+          <li>CSV export</li>
+          <li>Email support</li>
+        </ul>
+        <a href="#" class="btn-outlined">Get started</a>
+      </div>
+
+      <!-- Growth (featured) -->
+      <div class="pricing-card pricing-card-featured">
+        <span class="recommended-badge">Recommended</span>
+        <div class="pricing-tier">Growth</div>
+        <div class="pricing-price"><sup>$</sup>149</div>
+        <div class="pricing-period">per month</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>2,500 signals per month</li>
+          <li>5 seats included</li>
+          <li>CRM sync</li>
+          <li>Outreach sequences</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#" class="btn-outlined">Get started</a>
+      </div>
+
+      <!-- Scale -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Scale</div>
+        <div class="pricing-price"><sup>$</sup>399</div>
+        <div class="pricing-period">per month</div>
+        <div class="pricing-divider"></div>
+        <ul class="pricing-features">
+          <li>Unlimited signals</li>
+          <li>Unlimited seats</li>
+          <li>Custom ICP builder</li>
+          <li>Dedicated CSM</li>
+          <li>API access</li>
+        </ul>
+        <a href="#" class="btn-outlined">Get started</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOOTER ═════════════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <span class="footer-logo">SonarLeads</span>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </div>
+    <p class="footer-fine">© 2025 SonarLeads. Built for founders who close.</p>
+  </div>
+</footer>
+
+</body>
+</html>
