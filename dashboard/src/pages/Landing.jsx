@@ -15,7 +15,10 @@ export default function Landing() {
             <li><a href="#extension">Extension</a></li>
             <li><a href="#pricing">Pricing</a></li>
           </ul>
-          <Link to="/signup" className="lp-btn">Get started free</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link to="/login" className="lp-btn-ghost">Sign in</Link>
+            <Link to="/signup" className="lp-btn">Get started free</Link>
+          </div>
         </div>
       </nav>
 

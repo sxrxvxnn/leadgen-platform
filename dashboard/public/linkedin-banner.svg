@@ -1,0 +1,55 @@
+<svg width="1584" height="396" viewBox="0 0 1584 396" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1584" height="396" fill="#fffcfc"/>
+
+  <!-- Subtle grid lines -->
+  <line x1="0" y1="132" x2="1584" y2="132" stroke="#01011b" stroke-width="0.4" opacity="0.07"/>
+  <line x1="0" y1="264" x2="1584" y2="264" stroke="#01011b" stroke-width="0.4" opacity="0.07"/>
+  <line x1="396" y1="0" x2="396" y2="396" stroke="#01011b" stroke-width="0.4" opacity="0.07"/>
+  <line x1="792" y1="0" x2="792" y2="396" stroke="#01011b" stroke-width="0.4" opacity="0.07"/>
+  <line x1="1188" y1="0" x2="1188" y2="396" stroke="#01011b" stroke-width="0.4" opacity="0.07"/>
+
+  <!-- Large background radar rings (decorative, right side) -->
+  <circle cx="1380" cy="198" r="340" stroke="#6f63b7" stroke-width="1" fill="none" opacity="0.08"/>
+  <circle cx="1380" cy="198" r="240" stroke="#6f63b7" stroke-width="1" fill="none" opacity="0.12"/>
+  <circle cx="1380" cy="198" r="140" stroke="#6f63b7" stroke-width="1" fill="none" opacity="0.18"/>
+  <circle cx="1380" cy="198" r="60" stroke="#6f63b7" stroke-width="1.5" fill="none" opacity="0.28"/>
+  <!-- Sweep line -->
+  <line x1="1380" y1="198" x2="1540" y2="30" stroke="#6f63b7" stroke-width="1.5" stroke-linecap="round" opacity="0.35"/>
+
+  <!-- Logo icon (left anchor) -->
+  <rect x="72" y="148" width="52" height="52" rx="11" fill="#6f63b7"/>
+  <circle cx="98" cy="183" r="6.5" fill="#fffcfc"/>
+  <circle cx="98" cy="183" r="17" stroke="#fffcfc" stroke-width="2" fill="none" opacity="0.55"/>
+  <circle cx="98" cy="183" r="28" stroke="#fffcfc" stroke-width="1.5" fill="none" opacity="0.28"/>
+  <line x1="98" y1="183" x2="116" y2="161" stroke="#fffcfc" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Wordmark -->
+  <text x="144" y="192" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="44" font-weight="700" letter-spacing="-1.5" fill="#01011b">Sonar</text>
+
+  <!-- Divider -->
+  <line x1="72" y1="228" x2="440" y2="228" stroke="#01011b" stroke-width="0.6" opacity="0.15"/>
+
+  <!-- Tagline -->
+  <text x="72" y="258" font-family="'IBM Plex Mono', 'Courier New', monospace" font-size="13" font-weight="400" letter-spacing="2.5" fill="#01011b" opacity="0.45">FIND. TARGET. CLOSE.</text>
+
+  <!-- Right side — three value props -->
+  <text x="560" y="162" font-family="'IBM Plex Mono', 'Courier New', monospace" font-size="10" font-weight="600" letter-spacing="2" fill="#6f63b7" opacity="0.8">01</text>
+  <text x="560" y="186" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="18" font-weight="600" letter-spacing="-0.3" fill="#01011b">Company Discovery</text>
+  <text x="560" y="208" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="13" fill="#01011b" opacity="0.45">Maps, LinkedIn &amp; web signals</text>
+
+  <line x1="730" y1="145" x2="730" y2="235" stroke="#01011b" stroke-width="0.5" opacity="0.12"/>
+
+  <text x="758" y="162" font-family="'IBM Plex Mono', 'Courier New', monospace" font-size="10" font-weight="600" letter-spacing="2" fill="#6f63b7" opacity="0.8">02</text>
+  <text x="758" y="186" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="18" font-weight="600" letter-spacing="-0.3" fill="#01011b">AI Enrichment</text>
+  <text x="758" y="208" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="13" fill="#01011b" opacity="0.45">Verified emails &amp; ICP scoring</text>
+
+  <line x1="928" y1="145" x2="928" y2="235" stroke="#01011b" stroke-width="0.5" opacity="0.12"/>
+
+  <text x="956" y="162" font-family="'IBM Plex Mono', 'Courier New', monospace" font-size="10" font-weight="600" letter-spacing="2" fill="#6f63b7" opacity="0.8">03</text>
+  <text x="956" y="186" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="18" font-weight="600" letter-spacing="-0.3" fill="#01011b">Lead Pipeline</text>
+  <text x="956" y="208" font-family="'IBM Plex Sans', 'DM Sans', system-ui, sans-serif" font-size="13" fill="#01011b" opacity="0.45">From signal to signed deal</text>
+
+  <!-- Bottom border -->
+  <line x1="0" y1="395" x2="1584" y2="395" stroke="#01011b" stroke-width="1" opacity="0.1"/>
+</svg>
