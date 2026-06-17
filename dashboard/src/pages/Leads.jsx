@@ -363,7 +363,6 @@ export default function Leads() {
       <Navbar />
 
       <div style={s.hero}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Lead Intelligence</p>
           <h1 style={s.heroTitle}>
@@ -491,15 +490,15 @@ export default function Leads() {
 
 const s = {
   page: { minHeight: '100vh', background: 'var(--bg)' },
-  hero: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '64px 48px 40px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' },
+  hero: { position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '64px 48px 40px', borderBottom: '1px solid var(--border)', overflow: 'hidden' },
   eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
-  heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 },
-  heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
+    heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '900', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 },, letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1 },
+  heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
   starFilterBtn: { padding: '8px 14px', border: '1px solid', borderRadius: '7px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
   spreadsheetBtn: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
   exportBtn: { padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
   container: { padding: '20px 48px' },
-  viewTabs: { display: 'flex', gap: '2px', marginBottom: '16px', borderBottom: '1px dashed var(--border-dash)', paddingBottom: '16px' },
+  viewTabs: { display: 'flex', gap: '2px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' },
   viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'transparent', border: 'none', fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'color 0.15s', borderRadius: '5px' },
   viewTabActive: { background: '#1d1b1b', color: '#fdfdfd' },
   viewTabCount: { padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: '600' },

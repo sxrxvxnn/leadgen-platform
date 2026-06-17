@@ -544,7 +544,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
       {/* Specialties */}
       {company.specialties && (
-        <div style={{ padding: '8px 16px', borderTop: '1px dashed var(--border-dash)' }}>
+        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)' }}>
           <p style={{ ...card.infoLabel, marginBottom: '5px' }}>SPECIALTIES</p>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: 1.6, letterSpacing: '0.01em' }}>{company.specialties}</p>
         </div>
@@ -746,7 +746,7 @@ function AnalysisModal({ result, onClose }) {
       <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '520px', maxHeight: '88vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 64px rgba(29,27,27,0.14)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px dashed var(--border-dash)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '5px' }}>Website Analysis</p>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1 }}>{company.name}</h2>
@@ -810,7 +810,7 @@ function AnalysisModal({ result, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '14px 24px', borderTop: '1px dashed var(--border-dash)', flexShrink: 0 }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
           <button onClick={onClose} style={{ width: '100%', padding: '10px', background: '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', cursor: 'pointer' }}>
             Close
           </button>
@@ -965,7 +965,6 @@ export default function Companies() {
       <Navbar />
 
       <div style={{ ...s.hero, position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Company Intelligence</p>
           <h1 style={s.heroTitle}>
@@ -1162,10 +1161,10 @@ export default function Companies() {
 
 const s = {
   page: { minHeight: '100vh', background: 'var(--bg)' },
-  hero: { padding: '64px 48px 40px', borderBottom: '1px dashed var(--border-dash)' },
+  hero: { padding: '64px 48px 40px', borderBottom: '1px solid var(--border)' },
   eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
-  heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: '0' },
-  heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '400', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
+    heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '900', color: 'var(--text)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: '0' },, color: 'var(--text)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: '0' },
+  heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
   heroStats: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' },
   heroBtn: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   container: { padding: '20px 48px' },
@@ -1196,7 +1195,7 @@ const card = {
   select: { fontFamily: 'var(--font-mono)', padding: '3px 7px', background: 'var(--surface)', border: '1px solid', borderRadius: '4px', fontSize: '9px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
   editCardBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer', padding: '3px 6px', lineHeight: 1 },
   deleteBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', padding: '4px', opacity: 0.5 },
-  editPanel: { padding: '14px 16px', borderTop: '1px dashed var(--border-dash)', background: 'var(--surface)' },
+  editPanel: { padding: '14px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface)' },
   editGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' },
   editLabel: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' },
   editInput: { width: '100%', padding: '7px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },

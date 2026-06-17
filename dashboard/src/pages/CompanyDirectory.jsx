@@ -298,7 +298,6 @@ export default function CompanyDiscovery() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
-        background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)' }} />
       <Navbar />
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: mode === 'discover' ? '860px' : '720px', margin: '0 auto', padding: '72px 32px 80px', transition: 'max-width 0.3s' }}>
@@ -416,7 +415,7 @@ export default function CompanyDiscovery() {
                     {li.description && <p style={s.description}>{li.description}</p>}
 
                     {!li.followers && !li.employee_count && !li.location && !enriched.linkedin_url && !li.description && (
-                      <div style={{ padding: '16px 0', borderTop: '1px dashed var(--border-dash)' }}>
+                      <div style={{ padding: '16px 0', borderTop: '1px solid var(--border)' }}>
                         <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>
                           No LinkedIn data found — you can still add this company and fill details manually.
                         </p>
@@ -575,7 +574,7 @@ export default function CompanyDiscovery() {
 
 const s = {
   eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--accent)', textTransform: 'uppercase', marginBottom: '14px' },
-  heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, 7vw, 72px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1.05, marginBottom: '16px' },
+    heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(44px, 7vw, 72px)', fontWeight: '900', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1.05, marginBottom: '16px' },, letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1.05, marginBottom: '16px' },
   heroSub: { fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.8, maxWidth: '520px', letterSpacing: '0.02em' },
 
   modeBtn: { padding: '7px 18px', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', border: 'none', cursor: 'pointer', transition: 'all 0.15s' },
@@ -604,7 +603,7 @@ const s = {
   statCell: { background: 'var(--bg)', padding: '14px 16px' },
   statValue: { fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1, marginBottom: '4px' },
   statLabel: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' },
-  description: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.8, letterSpacing: '0.01em', paddingTop: '14px', borderTop: '1px dashed var(--border-dash)' },
+  description: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.8, letterSpacing: '0.01em', paddingTop: '14px', borderTop: '1px solid var(--border)' },
 
   discLabel: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' },
   discInput: { width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', outline: 'none', boxSizing: 'border-box', letterSpacing: '0.01em' },

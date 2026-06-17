@@ -52,17 +52,12 @@ export default function Navbar() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 100,
-      background: scrolled ? 'rgba(253,253,253,0.92)' : 'rgba(253,253,253,0.75)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      borderBottom: `1px solid ${scrolled ? 'rgba(29,27,27,0.10)' : 'rgba(29,27,27,0.06)'}`,
-      boxShadow: scrolled ? '0 1px 12px rgba(29,27,27,0.05)' : 'none',
-      transition: 'background 0.2s, border-color 0.2s, box-shadow 0.2s',
+      background: 'var(--bg)',
+      borderBottom: '1px solid var(--border)',
     }}>
       <div style={{
-        maxWidth: '1400px', margin: '0 auto',
-        padding: '0 28px',
-        height: '54px',
+        padding: '0 24px',
+        height: '48px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
       }}>
 
@@ -84,80 +79,64 @@ export default function Navbar() {
               key={path}
               to={path}
               style={{
-                position: 'relative',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                fontWeight: isActive(path) ? '500' : '400',
-                color: isActive(path) ? '#1d1b1b' : '#6e6e6e',
-                padding: '5px 12px',
-                borderRadius: '6px',
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                fontSize: '11px',
+                fontWeight: isActive(path) ? '700' : '500',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                color: isActive(path) ? '#111' : '#888',
+                padding: '4px 10px',
                 textDecoration: 'none',
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive(path)) e.currentTarget.style.color = '#1d1b1b' }}
-              onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = '#6e6e6e' }}
+              onMouseEnter={e => { if (!isActive(path)) e.currentTarget.style.color = '#111' }}
+              onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = '#888' }}
             >
               {label}
-              {isActive(path) && (
-                <span style={{
-                  position: 'absolute', bottom: '-1px', left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: '3px', height: '3px', borderRadius: '50%',
-                  background: '#a86448',
-                }} />
-              )}
             </Link>
           ))}
-          {/* Admin link — team admins only */}
           {isAdmin && profile?.mode === 'team' && (
             <Link
               to="/admin"
               style={{
-                position: 'relative',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                fontWeight: isActive('/admin') ? '500' : '400',
-                color: isActive('/admin') ? '#1d1b1b' : '#6e6e6e',
-                padding: '5px 12px',
-                borderRadius: '6px',
+                fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                fontSize: '11px',
+                fontWeight: isActive('/admin') ? '700' : '500',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                color: isActive('/admin') ? '#111' : '#888',
+                padding: '4px 10px',
                 textDecoration: 'none',
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#1d1b1b' }}
-              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#6e6e6e' }}
+              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#111' }}
+              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#888' }}
             >
               Admin
-              {isActive('/admin') && (
-                <span style={{
-                  position: 'absolute', bottom: '-1px', left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: '3px', height: '3px', borderRadius: '50%',
-                  background: '#a86448',
-                }} />
-              )}
             </Link>
           )}
         </nav>
 
         {/* Right: user + sign out */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           {displayName && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#a1a1a1' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#999', letterSpacing: '0.04em' }}>
               {displayName}
             </span>
           )}
           <button
             onClick={handleLogout}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '500',
-              padding: '8px 14px',
-              background: '#1d1b1b', color: '#e7e7e7',
-              border: 'none', borderRadius: '8px', cursor: 'pointer',
-              transition: 'background 0.15s',
+              fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+              fontSize: '11px', fontWeight: '700',
+              letterSpacing: '0.07em', textTransform: 'uppercase',
+              padding: '7px 16px',
+              background: '#111', color: '#f0eeea',
+              border: 'none', borderRadius: 4, cursor: 'pointer',
+              transition: 'opacity 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#2d2b2b' }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#1d1b1b' }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
           >
             Sign out
           </button>

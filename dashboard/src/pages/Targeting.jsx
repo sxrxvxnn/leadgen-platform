@@ -251,8 +251,7 @@ export default function Targeting() {
       <Navbar />
 
       {/* Hero */}
-      <div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
         <div style={{ position: 'relative' }}>
           <p style={lbl}>Targeting Engine</p>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px,7vw,80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '8px' }}>
@@ -267,14 +266,14 @@ export default function Targeting() {
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 208px)' }}>
 
         {/* ── Sidebar ─────────────────────────────────────────── */}
-        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px dashed var(--border-dash)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', background: 'var(--bg)' }}>
+        <div style={{ width: '280px', flexShrink: 0, borderRight: '1px solid var(--border)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', background: 'var(--bg)' }}>
 
           {/* Step 1 */}
           <div>
             <p style={stepLbl}><span style={stepNum}>1</span>Select Company</p>
             <div style={{ marginTop: '10px' }}>
               {isEmpty ? (
-                <div style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px dashed var(--border-dash)', borderRadius: '7px' }}>
+                <div style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px' }}>
                   <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '8px' }}>No companies in pipeline.</p>
                   <button onClick={() => navigate('/directory')} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: '600', letterSpacing: '0.04em' }}>Go to Discovery →</button>
                 </div>
@@ -284,7 +283,7 @@ export default function Targeting() {
             </div>
           </div>
 
-          <div style={{ borderTop: '1px dashed var(--border-dash)' }} />
+          <div style={{ borderTop: '1px solid var(--border)' }} />
 
           {/* Step 2 */}
           <div>
@@ -300,7 +299,7 @@ export default function Targeting() {
             )}
           </div>
 
-          <div style={{ borderTop: '1px dashed var(--border-dash)' }} />
+          <div style={{ borderTop: '1px solid var(--border)' }} />
 
           {/* Step 3 — search button */}
           <div>
@@ -342,7 +341,7 @@ export default function Targeting() {
           ) : (
             <div>
               {/* Company header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', paddingBottom: '20px', borderBottom: '1px dashed var(--border-dash)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', paddingBottom: '20px', borderBottom: '1px solid var(--border)' }}>
                 {selectedCompany.logo ? (
                   <img src={selectedCompany.logo} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', padding: '4px' }} onError={e => { e.target.style.display = 'none' }} />
                 ) : (
@@ -390,7 +389,7 @@ export default function Targeting() {
 
               {/* Search results */}
               {searchResults === null && !searching ? (
-                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px dashed var(--border-dash)', borderRadius: '10px' }}>
+                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px solid var(--border)', borderRadius: '10px' }}>
                   <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                     Ready to search
                   </p>
@@ -405,7 +404,7 @@ export default function Targeting() {
                   <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.04em' }}>Searching Hunter + LinkedIn for people at {selectedCompany.name}…</p>
                 </div>
               ) : searchResults.length === 0 ? (
-                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px dashed var(--border-dash)', borderRadius: '10px' }}>
+                <div style={{ padding: '48px 0', textAlign: 'center', border: '1px solid var(--border)', borderRadius: '10px' }}>
                   <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', letterSpacing: '-0.03em', color: 'var(--text-secondary)', marginBottom: '6px' }}>No contacts found</p>
                   <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Try removing role filters or searching by a different company name.</p>
                 </div>

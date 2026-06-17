@@ -1,65 +1,63 @@
-/* ── Fonts are loaded in index.html via Google Fonts ────────────────── */
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-/* ── Design tokens — exact runner.now system ─────────────────────────── */
+/* ── Design tokens — traffic.productions system ───────────────────────── */
 :root {
   /* Backgrounds */
-  --bg:               #fdfdfd;
-  --surface:          #f5f5f2;
-  --surface-raised:   #eeecea;
+  --bg:               #f0eeea;
+  --surface:          #e8e5e0;
+  --surface-raised:   #e0ddd8;
 
   /* Text */
-  --text:             #1d1b1b;
-  --text-soft:        #464242;
-  --text-secondary:   #6e6e6e;
-  --text-muted:       #a1a1a1;
+  --text:             #111111;
+  --text-soft:        #333333;
+  --text-secondary:   #666666;
+  --text-muted:       #999999;
 
   /* Borders */
-  --border:           rgba(196, 193, 189, 0.65);
-  --border-strong:    rgba(29, 27, 27, 0.14);
-  --border-subtle:    rgba(196, 193, 189, 0.35);
-  --border-dash:      #c4c1bd;   /* for border-style: dashed */
+  --border:           #d0cdc8;
+  --border-strong:    #aaa9a7;
+  --border-subtle:    #dedad5;
+  --border-dash:      #d0cdc8;
 
-  /* Accent — terracotta */
-  --accent:           #a86448;
-  --accent-warm:      #cd704c;
-  --accent-brown:     #824b2f;
-  --accent-dim:       rgba(168, 100, 72, 0.10);
-  --accent-dimmer:    rgba(168, 100, 72, 0.06);
-  --ambient-primary:  rgba(168, 100, 72, 0.15);
+  /* Accent */
+  --accent:           #c8784a;
+  --accent-warm:      #d98a5a;
+  --accent-brown:     #a05a30;
+  --accent-dim:       rgba(200, 120, 74, 0.10);
+  --accent-dimmer:    rgba(200, 120, 74, 0.06);
+  --ambient-primary:  rgba(200, 120, 74, 0.12);
 
   /* Status */
-  --green:            #4a7c59;
-  --green-dim:        rgba(74, 124, 89, 0.10);
-  --blue:             #5b8db8;
-  --blue-dim:         rgba(91, 141, 184, 0.10);
-  --amber:            #a86448;
-  --amber-dim:        rgba(168, 100, 72, 0.10);
+  --green:            #2e7d4f;
+  --green-dim:        rgba(46, 125, 79, 0.10);
+  --blue:             #2a6496;
+  --blue-dim:         rgba(42, 100, 150, 0.10);
+  --amber:            #c8784a;
+  --amber-dim:        rgba(200, 120, 74, 0.10);
   --red:              #b83232;
   --red-dim:          rgba(184, 50, 50, 0.08);
 
-  /* Fonts */
-  --font-display:     'Fraunces', Georgia, serif;
-  --font-mono:        'Geist Mono', 'JetBrains Mono', monospace;
-  --font-body:        'Inter', system-ui, -apple-system, sans-serif;
+  /* Fonts — system grotesque */
+  --font-display:     'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono:        'SFMono-Regular', 'Consolas', 'Menlo', monospace;
+  --font-body:        'Helvetica Neue', Helvetica, Arial, sans-serif;
 
   /* Nav */
-  --nav-bg:           rgba(253, 253, 253, 0.75);
-  --nav-bg-scrolled:  rgba(253, 253, 253, 0.92);
-  --nav-border:       rgba(29, 27, 27, 0.08);
-  --nav-height:       54px;
+  --nav-bg:           #f0eeea;
+  --nav-bg-scrolled:  #f0eeea;
+  --nav-border:       #d0cdc8;
+  --nav-height:       48px;
 
   /* Backwards-compat aliases */
   --black:            var(--bg);
   --white:            var(--text);
   --gray-1:           var(--surface);
-  --gray-2:           #e8e5e1;
-  --gray-3:           #c4c1bd;
+  --gray-2:           #dedad5;
+  --gray-3:           #d0cdc8;
   --gray-4:           var(--text-secondary);
   --gray-5:           var(--text-muted);
 }
@@ -87,7 +85,7 @@ input, select, textarea { font-family: inherit; }
 /* ── Scrollbar ───────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--gray-3); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
 /* ── Animations ──────────────────────────────────────────────────────── */
 @keyframes fadeUp {
@@ -117,79 +115,75 @@ input, select, textarea { font-family: inherit; }
 
 /* ── Shared UI primitives ────────────────────────────────────────────── */
 
-/* Eyebrow label — Geist Mono, all-caps, wide tracking */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
-/* Page hero heading — Fraunces serif */
 .hero-heading {
   font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.05em;
+  font-weight: 900;
+  letter-spacing: -0.03em;
   color: var(--text);
   line-height: 1;
 }
 
-/* Primary button — dark pill, Geist Mono */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 9px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 9px 18px;
   background: var(--text);
   color: var(--bg);
   border: none;
-  border-radius: 8px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
 }
-.btn-primary:hover { background: #2d2b2b; }
+.btn-primary:hover { opacity: 0.75; }
 
-/* Ghost button */
 .btn-ghost {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   padding: 7px 14px;
   background: transparent;
   color: var(--text-secondary);
-  border: 1px solid var(--border-dash);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s;
 }
 .btn-ghost:hover { background: var(--surface); color: var(--text); }
 
-/* Dashed structural divider — matches runner.now section borders */
-.dash-border-t { border-top: 1px dashed var(--border-dash); }
-.dash-border-b { border-bottom: 1px dashed var(--border-dash); }
-.dash-border   { border: 1px dashed var(--border-dash); }
+.dash-border-t { border-top: 1px solid var(--border); }
+.dash-border-b { border-bottom: 1px solid var(--border); }
+.dash-border   { border: 1px solid var(--border); }
 
-/* Card — cream surface, dashed border */
 .runner-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 4px;
 }
 
-/* Mono label used on stat numbers, data values */
 .mono-label {
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
 }

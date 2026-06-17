@@ -2,91 +2,119 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+const BG   = '#f0eeea'
+const INK  = '#111111'
+const MID  = '#888888'
+const LINE = '#d0cdc8'
+const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif"
+
+const inp = {
+  padding: '11px 14px',
+  background: '#e8e5e0',
+  border: `1px solid ${LINE}`,
+  borderRadius: 4,
+  fontSize: 13,
+  color: INK,
+  outline: 'none',
+  fontFamily: FONT,
+  width: '100%',
+  boxSizing: 'border-box',
+}
+
 export default function ForgotPassword() {
   const [email,   setEmail]   = useState('')
   const [sent,    setSent]    = useState(false)
-  const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
   const { forgotPassword } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       await forgotPassword(email)
-      setSent(true)
     } catch {
       // Always show success to prevent email enumeration
-      setSent(true)
     } finally {
+      setSent(true)
       setLoading(false)
     }
   }
 
-  return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div style={{ marginBottom: '28px' }}>
-          <p style={s.eyebrow}>Password reset</p>
-          <h2 style={s.title}>{sent ? 'Check your email.' : 'Forgot your password?'}</h2>
+  if (sent) {
+    return (
+      <div style={{ minHeight: '100vh', background: BG, fontFamily: FONT, color: INK, display: 'flex', flexDirection: 'column' }}>
+        <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 24px', height: 48, display: 'flex', alignItems: 'center' }}>
+          <Link to="/" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: INK, textDecoration: 'none' }}>SONAR©</Link>
+        </nav>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <div style={{ maxWidth: 480, textAlign: 'center' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', color: MID, textTransform: 'uppercase', marginBottom: 24 }}>✓ Link sent</p>
+            <h2 style={{ fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1, color: INK, marginBottom: 16 }}>Check your inbox.</h2>
+            <p style={{ fontSize: 14, color: MID, lineHeight: 1.7, marginBottom: 32 }}>
+              If <strong style={{ color: INK }}>{email}</strong> is registered, we've sent a reset link.<br />
+              Check your inbox and spam folder — the link expires in 1 hour.
+            </p>
+            <Link to="/login" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK, borderBottom: `1px solid ${LINE}` }}>
+              Back to sign in →
+            </Link>
+          </div>
         </div>
+      </div>
+    )
+  }
 
-        {sent ? (
-          <>
-            <p style={s.body}>
-              If <strong>{email}</strong> is registered, we've sent a reset link. Check your inbox (and spam folder).
-            </p>
-            <p style={{ ...s.body, marginTop: '16px' }}>
-              The link expires in <strong>1 hour</strong>.
-            </p>
-            <Link to="/login" style={s.backLink}>← Back to sign in</Link>
-          </>
-        ) : (
-          <>
-            <p style={s.body}>Enter your email and we'll send a reset link if an account exists.</p>
-            {error && (
-              <div style={s.errorBox}>
-                <span style={s.errorDot} />
-                {error}
-              </div>
-            )}
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '20px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <label style={s.label}>Email address</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  style={s.input}
-                  placeholder="you@company.com"
-                  required
-                  autoFocus
-                />
-              </div>
-              <button type="submit" style={{ ...s.btn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
-                <span>{loading ? 'Sending…' : 'Send reset link'}</span>
-                <span>→</span>
-              </button>
-            </form>
-            <Link to="/login" style={s.backLink}>← Back to sign in</Link>
-          </>
-        )}
+  return (
+    <div style={{ minHeight: '100vh', background: BG, fontFamily: FONT, color: INK, display: 'flex', flexDirection: 'column' }}>
+
+      <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 24px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link to="/" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: INK, textDecoration: 'none' }}>SONAR©</Link>
+        <Link to="/login" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: MID, textDecoration: 'none' }}
+          onMouseEnter={e => e.currentTarget.style.color = INK}
+          onMouseLeave={e => e.currentTarget.style.color = MID}
+        >Sign in</Link>
+      </nav>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', color: MID, textTransform: 'uppercase', marginBottom: 20 }}>① Password reset</p>
+          <h2 style={{ fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1, color: INK, marginBottom: 12 }}>Forgot your<br />password?</h2>
+          <p style={{ fontSize: 14, color: MID, lineHeight: 1.65, marginBottom: 32 }}>
+            Enter your email and we'll send a reset link if an account exists.
+          </p>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: MID }}>Email address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                autoFocus
+                style={inp}
+              />
+            </div>
+            <button type="submit" disabled={loading} style={{
+              fontFamily: FONT, fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase',
+              padding: '13px 24px', background: INK, color: BG,
+              border: 'none', borderRadius: 4, cursor: 'pointer',
+              opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginTop: 4,
+            }}>
+              <span>{loading ? 'Sending…' : 'Send reset link'}</span>
+              <span>→</span>
+            </button>
+          </form>
+
+          <p style={{ marginTop: 24, fontSize: 12, color: MID }}>
+            Remember it?{' '}
+            <Link to="/login" style={{ color: INK, fontWeight: 700, borderBottom: `1px solid ${LINE}` }}>Sign in</Link>
+          </p>
+        </div>
       </div>
     </div>
   )
-}
-
-const s = {
-  page:     { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '24px' },
-  card:     { width: '100%', maxWidth: '400px', padding: '48px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', boxShadow: '0 4px 24px rgba(29,27,27,0.06)' },
-  eyebrow:  { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', margin: '0 0 8px' },
-  title:    { fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', margin: 0 },
-  body:     { fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 },
-  label:    { fontSize: '11px', fontWeight: '500', color: 'var(--text-secondary)' },
-  input:    { padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s' },
-  btn:      { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#1d1b1b', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)' },
-  backLink: { display: 'inline-block', marginTop: '24px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', textDecoration: 'none', borderBottom: '1px solid var(--border-subtle)' },
-  errorBox: { display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: 'var(--red)', marginTop: '12px', lineHeight: 1.5 },
-  errorDot: { width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' },
 }

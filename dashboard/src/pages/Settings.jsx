@@ -39,8 +39,7 @@ export default function Settings() {
       <Navbar />
 
       {/* Hero */}
-      <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px dashed var(--border-dash)', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 90% at 5% 50%, rgba(168,100,72,0.07) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Configuration</p>
           <h1 style={s.heroTitle}>Settings.</h1>
@@ -93,7 +92,7 @@ export default function Settings() {
           </section>
 
           {/* 02 — LinkedIn */}
-          <section ref={sectionRefs.linkedin} style={{ ...s.section, borderBottom: '1px dashed var(--border-dash)' }}>
+          <section ref={sectionRefs.linkedin} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
             <SectionHeader num="02" title="LinkedIn" />
             <p style={s.sectionHint}>
               LinkedIn now blocks unauthenticated access to company pages. Providing your session cookie lets the scraper fetch phone, founded year, specialties, company size, and tagline directly from LinkedIn About pages.
@@ -227,7 +226,7 @@ export default function Settings() {
           </section>
 
           {/* Save */}
-          <div style={{ paddingTop: '32px', borderTop: '1px dashed var(--border-dash)' }}>
+          <div style={{ paddingTop: '32px', borderTop: '1px solid var(--border)' }}>
             <button onClick={handleSave} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '14px 20px',
@@ -304,9 +303,9 @@ const badge = {
 
 const s = {
   eyebrow:     { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
-  heroTitle:   { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
+    heroTitle:   { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '900', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },, letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
   heroSub:     { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
-  section:     { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px dashed var(--border-dash)' },
+  section:     { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px solid var(--border)' },
   sectionHint: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
   input:       { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
 }

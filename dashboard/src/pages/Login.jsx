@@ -2,16 +2,11 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-function LogoMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 18 18" fill="none">
-      <rect x="0"  y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
-      <rect x="10" y="0"  width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
-      <rect x="0"  y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
-      <rect x="10" y="10" width="8" height="8" rx="1.5" fill="rgba(253,253,253,0.9)" />
-    </svg>
-  )
-}
+const BG   = '#f0eeea'
+const INK  = '#111111'
+const MID  = '#888888'
+const LINE = '#d0cdc8'
+const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif"
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -35,75 +30,74 @@ export default function Login() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', background: BG, fontFamily: FONT, color: INK, display: 'flex', flexDirection: 'column' }}>
 
-      {/* Left — dark brand panel */}
-      <div style={{ position: 'relative', width: '45%', minWidth: '360px', background: '#1d1b1b', display: 'flex', flexDirection: 'column', padding: '48px', overflow: 'hidden' }}>
-        {/* Ambient glow */}
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 60% at 20% 80%, rgba(168,100,72,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+      {/* Nav */}
+      <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 24px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link to="/" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', color: INK, textDecoration: 'none' }}>SONAR©</Link>
+        <Link to="/signup" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: MID, textDecoration: 'none', transition: 'color 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.color = INK}
+          onMouseLeave={e => e.currentTarget.style.color = MID}
+        >Create account</Link>
+      </nav>
 
-        {/* Logo */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'auto' }}>
-          <LogoMark />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'rgba(253,253,253,0.6)', letterSpacing: '-0.02em' }}>leadgen engine</span>
-        </div>
+      {/* Body */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 0 }}>
 
-        {/* Headline */}
-        <div style={{ position: 'relative', marginTop: 'auto' }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(52px, 5.5vw, 80px)', fontWeight: '400', lineHeight: 0.95, letterSpacing: '-0.05em', color: 'rgba(253,253,253,0.95)', marginBottom: '24px' }}>
+        {/* Left — editorial headline */}
+        <div style={{ padding: '64px 48px', borderRight: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', color: MID, textTransform: 'uppercase', marginBottom: 32 }}>① Sign in</p>
+          <h1 style={{
+            fontSize: 'clamp(48px, 6.5vw, 88px)',
+            fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 0.95,
+            color: INK, marginBottom: 24,
+          }}>
             Find.<br />Target.<br />Close.
           </h1>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.4)', lineHeight: 1.8, maxWidth: '300px', marginBottom: '36px' }}>
-            The intelligence platform for modern sales teams. Extract, enrich and track leads.
+          <p style={{ fontSize: 14, color: MID, lineHeight: 1.65, maxWidth: 300 }}>
+            The signal intelligence platform for modern B2B sales teams.
           </p>
-
-          {/* Feature dots */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '28px', borderTop: '1px solid rgba(253,253,253,0.08)' }}>
-            {['LinkedIn scraping', 'Lead enrichment', 'ICP targeting', 'Persona engine'].map(f => (
-              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ width: '3px', height: '3px', borderRadius: '50%', background: '#a86448', flexShrink: 0 }} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.45)' }}>{f}</span>
-              </div>
-            ))}
-          </div>
         </div>
-      </div>
 
-      {/* Right — form panel */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px', borderLeft: '1px solid var(--border)' }}>
-        <div style={{ width: '100%', maxWidth: '360px' }}>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '12px', textTransform: 'uppercase' }}>Sign in</p>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '36px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', lineHeight: 1, marginBottom: '36px' }}>Welcome back.</h2>
+        {/* Right — form */}
+        <div style={{ padding: '64px 48px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ maxWidth: 360 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.03em', color: INK, marginBottom: 32 }}>Welcome back.</h2>
 
-          {error && (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', background: 'var(--red-dim)', border: '1px solid rgba(184,50,50,0.3)', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)', marginBottom: '20px', lineHeight: 1.5 }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0, marginTop: '4px' }} />
-              {error}
+            {error && (
+              <div style={{ padding: '10px 14px', border: `1px solid rgba(184,50,50,0.3)`, background: 'rgba(184,50,50,0.06)', borderRadius: 4, fontSize: 12, color: '#b83232', marginBottom: 20, lineHeight: 1.5 }}>
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <Field label="Email">
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="you@company.com" required style={input} />
+              </Field>
+              <Field label="Password">
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••" required style={input} />
+              </Field>
+              <button type="submit" disabled={loading} style={{
+                fontFamily: FONT, fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+                padding: '13px 24px', background: INK, color: BG,
+                border: 'none', borderRadius: 4, cursor: 'pointer',
+                opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <span>{loading ? 'Signing in…' : 'Sign in'}</span>
+                <span>→</span>
+              </button>
+            </form>
+
+            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: MID }}>
+              <span>No account?{' '}
+                <Link to="/signup" style={{ color: INK, fontWeight: 700, borderBottom: `1px solid ${LINE}` }}>Create one</Link>
+              </span>
+              <Link to="/forgot-password" style={{ color: MID, borderBottom: `1px solid ${LINE}` }}>Forgot password?</Link>
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                style={inputStyle} placeholder="you@company.com" required />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                style={inputStyle} placeholder="••••••••" required />
-            </div>
-            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', background: '#1d1b1b', border: 'none', borderRadius: '8px', fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '500', color: '#fdfdfd', cursor: 'pointer', opacity: loading ? 0.6 : 1, marginTop: '4px', transition: 'background 0.15s' }} disabled={loading}>
-              <span>{loading ? 'Signing in…' : 'Sign in'}</span>
-              <span>→</span>
-            </button>
-          </form>
-
-          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
-            <span>No account?{' '}
-              <Link to="/signup" style={{ color: 'var(--text)', fontWeight: '500', borderBottom: '1px solid var(--border)' }}>Create one</Link>
-            </span>
-            <Link to="/forgot-password" style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>Forgot password?</Link>
           </div>
         </div>
       </div>
@@ -111,16 +105,24 @@ export default function Login() {
   )
 }
 
-const inputStyle = {
+function Field({ label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#888' }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+const input = {
   padding: '11px 14px',
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: '8px',
-  fontSize: '13px',
-  color: 'var(--text)',
+  background: '#e8e5e0',
+  border: `1px solid #d0cdc8`,
+  borderRadius: 4,
+  fontSize: 13,
+  color: '#111',
   outline: 'none',
-  fontFamily: 'inherit',
-  transition: 'border-color 0.15s',
+  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
   width: '100%',
   boxSizing: 'border-box',
 }
