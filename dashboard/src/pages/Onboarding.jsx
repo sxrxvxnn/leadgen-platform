@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'motion/react'
 import api from '../services/api'
 
 const BG   = '#fffcfc'
@@ -50,7 +51,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div style={{ background: BG, minHeight: '100vh', fontFamily: SANS, color: INK }}>
+    <motion.div style={{ background: BG, minHeight: '100vh', fontFamily: SANS, color: INK }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
 
       {/* Nav */}
       <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center' }}>
@@ -78,26 +79,30 @@ export default function Onboarding() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 300 }}>
-            <ModeCard
-              label="A"
-              title="Solo"
-              desc="Just me — building my own pipeline and prospecting independently."
-              items={['Company discovery', 'AI enrichment', 'Lead management']}
-              onClick={() => !loading && handleModeSelect('solo')}
-              loading={loading && mode === 'solo'}
-              disabled={loading}
-              borderRight
-            />
-            <ModeCard
-              label="B"
-              title="Team"
-              desc="I'm building a team — I want to invite members and manage access."
-              items={['Everything in Solo', 'Invite members', 'Admin controls']}
-              onClick={() => !loading && handleModeSelect('team')}
-              loading={loading && mode === 'team'}
-              disabled={loading}
-              accent
-            />
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}>
+              <ModeCard
+                label="A"
+                title="Solo"
+                desc="Just me — building my own pipeline and prospecting independently."
+                items={['Company discovery', 'AI enrichment', 'Lead management']}
+                onClick={() => !loading && handleModeSelect('solo')}
+                loading={loading && mode === 'solo'}
+                disabled={loading}
+                borderRight
+              />
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}>
+              <ModeCard
+                label="B"
+                title="Team"
+                desc="I'm building a team — I want to invite members and manage access."
+                items={['Everything in Solo', 'Invite members', 'Admin controls']}
+                onClick={() => !loading && handleModeSelect('team')}
+                loading={loading && mode === 'team'}
+                disabled={loading}
+                accent
+              />
+            </motion.div>
           </div>
 
           {error && (
@@ -288,7 +293,7 @@ export default function Onboarding() {
           </div>
         </>
       )}
-    </div>
+    </motion.div>
   )
 }
 

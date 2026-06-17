@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { motion } from 'motion/react'
 import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus } from '../services/api'
 import Navbar from '../components/Navbar'
 import SpreadsheetView from '../components/SpreadsheetView'
@@ -387,7 +388,7 @@ export default function Leads() {
     <div style={s.page}>
       <Navbar />
 
-      <div style={s.hero}>
+      <motion.div style={s.hero} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Lead Intelligence</p>
           <h1 style={s.heroTitle}>
@@ -406,7 +407,7 @@ export default function Leads() {
           <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>⊞ Spreadsheet</button>
           <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
         </div>
-      </div>
+      </motion.div>
 
       <div style={s.container}>
 
@@ -484,15 +485,22 @@ export default function Leads() {
               </p>
             </div>
           )}
-          {!loading && filtered.map((lead) => (
-            <LeadRow
-              key={lead.id} lead={lead} columns={columns}
-              editingCell={editingCell} editValue={editValue} setEditValue={setEditValue}
-              onStartEdit={startEdit} onSaveEdit={saveEdit} onCancelEdit={() => setEditingCell(null)}
-              onDelete={handleDelete} onStar={handleStar} onConnectionStatus={handleConnectionStatus}
-              onEnrich={handleEnrich} enrichingId={enrichingId}
-              isSelected={selected.includes(lead.id)} onToggleSelect={() => toggleSelect(lead.id)}
-            />
+          {!loading && filtered.map((lead, i) => (
+            <motion.div
+              key={lead.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: Math.min(i * 0.035, 0.5), ease: 'easeOut' }}
+            >
+              <LeadRow
+                lead={lead} columns={columns}
+                editingCell={editingCell} editValue={editValue} setEditValue={setEditValue}
+                onStartEdit={startEdit} onSaveEdit={saveEdit} onCancelEdit={() => setEditingCell(null)}
+                onDelete={handleDelete} onStar={handleStar} onConnectionStatus={handleConnectionStatus}
+                onEnrich={handleEnrich} enrichingId={enrichingId}
+                isSelected={selected.includes(lead.id)} onToggleSelect={() => toggleSelect(lead.id)}
+              />
+            </motion.div>
           ))}
         </div>
       </div>

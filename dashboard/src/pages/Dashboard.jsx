@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { getLeads, getCompanies } from '../services/api'
 import Navbar from '../components/Navbar'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
+import { CountUp } from '../components/ui/CountUp'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -114,7 +115,7 @@ export default function Dashboard() {
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 + i * 0.07 }}
           >
             <p style={s.statLabel}>{label}</p>
-            <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : value}</p>
+            <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : <CountUp to={value} delay={0.1 + i * 0.08} />}</p>
             <p style={s.statNote}>{note}</p>
           </motion.div>
         ))}

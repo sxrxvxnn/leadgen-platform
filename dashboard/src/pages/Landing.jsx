@@ -7,6 +7,10 @@ import { FlipWords } from '../components/ui/FlipWords'
 import { BackgroundBeams } from '../components/ui/BackgroundBeams'
 import { TracingBeam } from '../components/ui/TracingBeam'
 import { MovingBorderButton } from '../components/ui/MovingBorder'
+import { useSpotlight } from '../components/ui/Spotlight'
+import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
+import { CardSpotlight } from '../components/ui/CardSpotlight'
+import { TextGenerateEffect } from '../components/ui/TextGenerateEffect'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -17,6 +21,7 @@ const fadeUp = (delay = 0) => ({
 
 export default function Landing() {
   const [legal, setLegal] = useState(null)
+  const { onMouseMove, spotlightEl } = useSpotlight()
 
   return (
     <div className="lp">
@@ -39,8 +44,9 @@ export default function Landing() {
       </nav>
 
       {/* ── HERO ──────────────────────────────────────────────────────────── */}
-      <section className="lp-hero" style={{ position: 'relative', overflow: 'hidden' }}>
+      <section className="lp-hero" style={{ position: 'relative', overflow: 'hidden' }} onMouseMove={onMouseMove}>
         <BackgroundBeams style={{ zIndex: 0 }} />
+        {spotlightEl}
         <div className="lp-container" style={{ position: 'relative', zIndex: 1 }}>
           <div className="lp-hero-grid">
 
@@ -54,7 +60,7 @@ export default function Landing() {
                 <br />before your<br />competitor does.
               </motion.h1>
               <motion.p className="lp-hero-sub" {...fadeUp(0.12)}>
-                Sonar discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform.
+                <TextGenerateEffect text="Sonar discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform." delay={0.3} duration={0.35} staggerDelay={0.04} />
               </motion.p>
               <motion.div className="lp-hero-ctas" {...fadeUp(0.22)}>
                 <MovingBorderButton
@@ -139,18 +145,11 @@ export default function Landing() {
         <div className="lp-logo-strip-inner">
           <span className="lp-strip-label">Built for</span>
           <div className="lp-strip-divider"></div>
-          <div className="lp-logo-names">
-            {['Founders', 'Sales teams', 'Growth operators', 'Solo closers', 'B2B agencies', 'SDR teams'].map((n, i) => (
-              <motion.span
-                key={n}
-                className="lp-logo-name"
-                initial={{ opacity: 0, y: 8 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.07 }}
-              >{n}</motion.span>
-            ))}
-          </div>
+          <InfiniteMarquee
+            items={['Founders', 'Sales teams', 'Growth operators', 'Solo closers', 'B2B agencies', 'SDR teams']}
+            speed={25}
+            itemStyle={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 15, fontWeight: 500, color: 'var(--color-storm-mauve)', letterSpacing: '-0.01em' }}
+          />
         </div>
       </div>
 
@@ -204,20 +203,21 @@ export default function Landing() {
                 link: 'Build your ICP',
               },
             ].map(({ icon, title, body, link }, i) => (
-              <motion.div
-                key={title}
-                className="lp-feature-card"
-                initial={{ opacity: 0, y: 32 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              >
-                {icon}
-                <h3>{title}</h3>
-                <p className="lp-feature-body">{body}</p>
-                <Link to="/signup" className="lp-feature-link">{link} <span>→</span></Link>
-              </motion.div>
+              <CardSpotlight key={title} style={{ borderRadius: 12 }}>
+                <motion.div
+                  className="lp-feature-card"
+                  initial={{ opacity: 0, y: 32 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
+                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                >
+                  {icon}
+                  <h3>{title}</h3>
+                  <p className="lp-feature-body">{body}</p>
+                  <Link to="/signup" className="lp-feature-link">{link} <span>→</span></Link>
+                </motion.div>
+              </CardSpotlight>
             ))}
 
           </div>
@@ -418,25 +418,26 @@ export default function Landing() {
                 featured: false,
               },
             ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <motion.div
-                key={tier}
-                className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
-                initial={{ opacity: 0, y: 32 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
-              >
-                {featured && <span className="lp-recommended-badge">Most popular</span>}
-                <div className="lp-pricing-tier">{tier}</div>
-                <div className="lp-pricing-price">{price}</div>
-                <div className="lp-pricing-period">{period}</div>
-                <div className="lp-pricing-divider"></div>
-                <ul className="lp-pricing-features">
-                  {features.map(f => <li key={f}>{f}</li>)}
-                </ul>
-                {cta}
-              </motion.div>
+              <CardSpotlight key={tier} style={{ borderRadius: 12 }}>
+                <motion.div
+                  className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
+                  initial={{ opacity: 0, y: 32 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-40px' }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
+                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                >
+                  {featured && <span className="lp-recommended-badge">Most popular</span>}
+                  <div className="lp-pricing-tier">{tier}</div>
+                  <div className="lp-pricing-price">{price}</div>
+                  <div className="lp-pricing-period">{period}</div>
+                  <div className="lp-pricing-divider"></div>
+                  <ul className="lp-pricing-features">
+                    {features.map(f => <li key={f}>{f}</li>)}
+                  </ul>
+                  {cta}
+                </motion.div>
+              </CardSpotlight>
             ))}
 
           </div>

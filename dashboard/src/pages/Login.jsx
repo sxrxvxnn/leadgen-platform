@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 
 const BG   = '#fffcfc'
@@ -74,15 +75,15 @@ export default function Login() {
         <div style={{ padding: '64px 56px', borderRight: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: SURF }}>
           <p style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: MID, textTransform: 'uppercase', marginBottom: 32 }}>① Sign in</p>
           <h1 style={{ margin: 0, lineHeight: 1.05, marginBottom: 24 }}>
-            <span style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK }}>
+            <motion.span initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0 }} style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK }}>
               Find.
-            </span>
-            <span style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK }}>
+            </motion.span>
+            <motion.span initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.15 }} style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK }}>
               Target.
-            </span>
-            <span style={{ display: 'block', fontFamily: SANS, fontSize: 'clamp(32px, 4.5vw, 60px)', fontWeight: 700, letterSpacing: '-0.03em', color: PLUM }}>
+            </motion.span>
+            <motion.span initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.3 }} style={{ display: 'block', fontFamily: SANS, fontSize: 'clamp(32px, 4.5vw, 60px)', fontWeight: 700, letterSpacing: '-0.03em', color: PLUM }}>
               Close.
-            </span>
+            </motion.span>
           </h1>
           <p style={{ fontFamily: SANS, fontSize: 14, color: MID, lineHeight: 1.7, maxWidth: 300 }}>
             The signal intelligence platform for modern B2B sales teams.
@@ -91,7 +92,12 @@ export default function Login() {
 
         {/* Right — form */}
         <div style={{ padding: '64px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ maxWidth: 380 }}>
+          <motion.div
+            style={{ maxWidth: 380 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+          >
             <h2 style={{ fontFamily: SANS, fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', color: INK, marginBottom: 8 }}>Welcome back.</h2>
             <p style={{ fontFamily: SANS, fontSize: 14, color: MID, marginBottom: 32 }}>Sign in to your Sonar account.</p>
 
@@ -138,7 +144,7 @@ export default function Login() {
               </span>
               <Link to="/forgot-password" style={{ color: MID, borderBottom: `1px solid ${LINE}` }}>Forgot password?</Link>
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
     </div>

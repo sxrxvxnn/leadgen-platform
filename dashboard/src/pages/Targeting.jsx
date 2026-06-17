@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'motion/react'
 import Navbar from '../components/Navbar'
 import { getLeads, getCompanies, createLead, searchCompanyPeople } from '../services/api'
 
@@ -251,7 +252,7 @@ export default function Targeting() {
       <Navbar />
 
       {/* Hero */}
-      <div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
+      <motion.div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={lbl}>Targeting Engine</p>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px,7vw,80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '8px' }}>
@@ -261,9 +262,9 @@ export default function Targeting() {
             Pick a company from your pipeline, filter by role, then find and add decision makers directly to your leads list.
           </p>
         </div>
-      </div>
+      </motion.div>
 
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 208px)' }}>
+      <motion.div style={{ display: 'flex', minHeight: 'calc(100vh - 208px)' }} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}>
 
         {/* ── Sidebar ─────────────────────────────────────────── */}
         <div style={{ width: '280px', flexShrink: 0, borderRight: '1px solid var(--border)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto', background: 'var(--bg)' }}>
@@ -434,7 +435,7 @@ export default function Targeting() {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

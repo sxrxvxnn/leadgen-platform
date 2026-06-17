@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 
 const BG   = '#fffcfc'
@@ -73,7 +74,7 @@ export default function ForgotPassword() {
 
   return (
     <Shell>
-      <div style={{ width: '100%', maxWidth: 420 }}>
+      <motion.div style={{ width: '100%', maxWidth: 420 }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
         <p style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: MID, textTransform: 'uppercase', marginBottom: 16 }}>① Password reset</p>
         <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK, marginBottom: 12, lineHeight: 1.1 }}>
           Forgot your password?
@@ -111,7 +112,7 @@ export default function ForgotPassword() {
           Remember it?{' '}
           <Link to="/login" style={{ color: PLUM, fontWeight: 600, borderBottom: `1px solid ${LINE}` }}>Sign in</Link>
         </p>
-      </div>
+      </motion.div>
     </Shell>
   )
 }

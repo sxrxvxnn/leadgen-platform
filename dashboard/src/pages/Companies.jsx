@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { motion } from 'motion/react'
 import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany } from '../services/api'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { syncToDirectory } from '../services/companyDirectory'
@@ -965,7 +966,7 @@ export default function Companies() {
     <div style={s.page}>
       <Navbar />
 
-      <div style={{ ...s.hero, position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', overflow: 'hidden' }}>
+      <motion.div style={{ ...s.hero, position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Company Intelligence</p>
           <h1 style={s.heroTitle}>
@@ -989,7 +990,7 @@ export default function Companies() {
           <button onClick={() => setShowSpreadsheet(true)} style={s.heroBtn}>Spreadsheet</button>
           <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: '#1d1b1b', color: '#fdfdfd', border: 'none' }}>Export →</button>
         </div>
-      </div>
+      </motion.div>
 
       <div style={s.container}>
         {/* Action toolbar — left-aligned chips */}
@@ -1130,17 +1131,23 @@ export default function Companies() {
           </div>
         ) : (
           <div style={s.grid}>
-            {filtered.map(company => (
-              <CompanyCard
+            {filtered.map((company, i) => (
+              <motion.div
                 key={company.id}
-                company={company}
-                onUpdate={handleUpdate}
-                onDelete={handleDelete}
-                onViewLeads={setSelectedCompany}
-                selected={selectedIds.includes(company.id)}
-                onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
-                accuracy={accuracyMap[company.id]}
-              />
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.6), ease: [0.22, 1, 0.36, 1] }}
+              >
+                <CompanyCard
+                  company={company}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                  onViewLeads={setSelectedCompany}
+                  selected={selectedIds.includes(company.id)}
+                  onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+                  accuracy={accuracyMap[company.id]}
+                />
+              </motion.div>
             ))}
           </div>
         )}

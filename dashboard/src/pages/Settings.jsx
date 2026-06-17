@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+import { motion } from 'motion/react'
 import Navbar from '../components/Navbar'
 
 const SECTIONS = [
@@ -39,16 +40,16 @@ export default function Settings() {
       <Navbar />
 
       {/* Hero */}
-      <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
+      <motion.div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Configuration</p>
           <h1 style={s.heroTitle}>Settings.</h1>
           <p style={s.heroSub}>Profile and enrichment configuration.</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* Two-column layout */}
-      <div style={{ display: 'flex', maxWidth: '1100px', margin: '0 auto', padding: '0 48px 80px' }}>
+      <motion.div style={{ display: 'flex', maxWidth: '1100px', margin: '0 auto', padding: '0 48px 80px' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.1 }}>
 
         {/* Sticky sidebar */}
         <aside style={{ width: '200px', flexShrink: 0, paddingTop: '48px', paddingRight: '40px' }}>
@@ -241,7 +242,7 @@ export default function Settings() {
           </div>
 
         </main>
-      </div>
+      </motion.div>
     </div>
   )
 }
