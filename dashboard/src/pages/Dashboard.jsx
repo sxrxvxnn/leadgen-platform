@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 import { getLeads, getCompanies } from '../services/api'
 import Navbar from '../components/Navbar'
@@ -35,15 +36,19 @@ export default function Dashboard() {
 
       {/* Hero */}
       <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
-        {/* Ambient glow */}
-        <div style={{ position: 'relative' }}>
+        <motion.div
+          style={{ position: 'relative' }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
           <p style={s.eyebrow}>Overview</p>
           <h1 style={s.heroTitle}>
             {loading ? '—' : stats.totalLeads}
             <span style={s.heroUnit}> leads</span>
           </h1>
           <p style={s.heroSub}>welcome back, {displayName}</p>
-        </div>
+        </motion.div>
       </div>
 
       {/* Extension banner */}
@@ -100,12 +105,18 @@ export default function Dashboard() {
           { label: 'Contacted', value: stats.contacted,  note: 'in progress' },
           { label: 'Companies', value: stats.companies,  note: 'tracked' },
           { label: 'Total',     value: stats.totalLeads, note: 'all leads' },
-        ].map(({ label, value, note }) => (
-          <div key={label} style={{ background: 'var(--bg)', padding: '28px 32px' }}>
+        ].map(({ label, value, note }, i) => (
+          <motion.div
+            key={label}
+            style={{ background: 'var(--bg)', padding: '28px 32px' }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 + i * 0.07 }}
+          >
             <p style={s.statLabel}>{label}</p>
             <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : value}</p>
             <p style={s.statNote}>{note}</p>
-          </div>
+          </motion.div>
         ))}
       </div>
 
