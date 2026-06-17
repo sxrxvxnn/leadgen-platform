@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
@@ -14,6 +14,15 @@ import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+import Landing from './pages/Landing'
+import Onboarding from './pages/Onboarding'
+import Admin from './pages/Admin'
+
+function RootRedirect() {
+  const { token, loading } = useAuth()
+  if (loading) return null
+  return <Navigate to={token ? '/dashboard' : '/'} replace />
+}
 
 export default function App() {
   return (
@@ -21,8 +30,11 @@ export default function App() {
       <AuthProvider>
         <BulkOpsProvider>
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
           <Route path="/targeting" element={<ProtectedRoute><Targeting /></ProtectedRoute>} />
@@ -35,8 +47,7 @@ export default function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<RootRedirect />} />
         </Routes>
         </BulkOpsProvider>
       </AuthProvider>

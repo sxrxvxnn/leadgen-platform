@@ -3183,3 +3183,131 @@ async def bulk_maps_enrich_async(
         "maps_key":    payload.get("maps_key", ""),
     }, supabase)
     return {"job_id": job_id, "status": "queued"}
+
+
+# ─── PROFILE ROUTES ─────────────────────────────────────────
+
+@router.get("/profile")
+async def get_profile(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("profiles").select(
+        "id,email,full_name,mode,role,team_id,onboarding_complete"
+    ).eq("id", user_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return res.data
+
+
+@router.post("/profile/setup")
+async def setup_profile(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    mode = payload.get("mode")
+    if mode not in ("solo", "team"):
+        raise HTTPException(status_code=422, detail="mode must be 'solo' or 'team'")
+
+    update: dict = {"mode": mode, "onboarding_complete": True}
+
+    if mode == "team":
+        team_name = (payload.get("team_name") or "").strip()
+        if not team_name:
+            raise HTTPException(status_code=422, detail="team_name is required for team mode")
+        team_res = supabase.table("teams").insert({
+            "name": team_name,
+            "created_by": user_id,
+        }).execute()
+        if not team_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create team")
+        update["team_id"] = team_res.data[0]["id"]
+        update["role"] = "admin"
+
+    supabase.table("profiles").update(update).eq("id", user_id).execute()
+    return {"ok": True, "mode": mode}
+
+
+# ─── ADMIN ROUTES ───────────────────────────────────────────
+
+def _require_admin(user_id: str):
+    res = supabase.table("profiles").select("role,team_id").eq("id", user_id).single().execute()
+    if not res.data or res.data.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    team_id = res.data.get("team_id")
+    if not team_id:
+        raise HTTPException(status_code=403, detail="Not part of a team")
+    return team_id
+
+
+@router.get("/admin/members")
+async def list_members(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    res = supabase.table("profiles").select(
+        "id,email,full_name,role"
+    ).eq("team_id", team_id).execute()
+    return res.data or []
+
+
+@router.get("/admin/invites")
+async def list_invites(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    res = supabase.table("team_invites").select(
+        "id,email,role,status,created_at"
+    ).eq("team_id", team_id).eq("status", "pending").execute()
+    return res.data or []
+
+
+@router.post("/admin/invite")
+async def invite_member(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    email = (payload.get("email") or "").strip().lower()
+    role = payload.get("role", "member")
+    if not email:
+        raise HTTPException(status_code=422, detail="email required")
+    if role not in ("admin", "member"):
+        raise HTTPException(status_code=422, detail="role must be 'admin' or 'member'")
+    existing = supabase.table("team_invites").select("id").eq("team_id", team_id).eq("email", email).eq("status", "pending").execute()
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Invite already pending for this email")
+    supabase.table("team_invites").insert({
+        "team_id": team_id,
+        "email": email,
+        "role": role,
+        "status": "pending",
+        "invited_by": user_id,
+    }).execute()
+    return {"ok": True}
+
+
+@router.patch("/admin/members/{member_id}")
+async def update_member_role(member_id: str, payload: dict, authorization: str = Header(...)):
+    validate_uuid(member_id, "member_id")
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    if member_id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    role = payload.get("role")
+    if role not in ("admin", "member"):
+        raise HTTPException(status_code=422, detail="role must be 'admin' or 'member'")
+    supabase.table("profiles").update({"role": role}).eq("id", member_id).eq("team_id", team_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/admin/members/{member_id}")
+async def remove_member(member_id: str, authorization: str = Header(...)):
+    validate_uuid(member_id, "member_id")
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    if member_id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+    supabase.table("profiles").update({"team_id": None, "role": "admin"}).eq("id", member_id).eq("team_id", team_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/admin/invites/{invite_id}")
+async def revoke_invite(invite_id: str, authorization: str = Header(...)):
+    validate_uuid(invite_id, "invite_id")
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+    supabase.table("team_invites").update({"status": "revoked"}).eq("id", invite_id).eq("team_id", team_id).execute()
+    return {"ok": True}

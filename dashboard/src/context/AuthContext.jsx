@@ -4,6 +4,13 @@ import api from '../services/api'
 
 const AuthContext = createContext(null)
 
+async function _loadProfile() {
+  try {
+    const res = await api.get('/profile')
+    return res.data
+  } catch { return null }
+}
+
 function _tokenExpiresAt(token) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
@@ -14,6 +21,8 @@ function _tokenExpiresAt(token) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const refreshTimer = useRef(null)
 
@@ -47,6 +56,8 @@ export function AuthProvider({ children }) {
       setToken(savedToken)
       setUser(JSON.parse(savedUser))
       _scheduleRefresh(savedToken)
+      setProfileLoading(true)
+      _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
     }
     setLoading(false)
     return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current) }
@@ -62,6 +73,8 @@ export function AuthProvider({ children }) {
     setToken(access_token)
     setUser(user)
     _scheduleRefresh(access_token)
+    setProfileLoading(true)
+    _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
     return response
   }
 
@@ -88,10 +101,12 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('userEmail')
     setToken(null)
     setUser(null)
+    setProfile(null)
+    setProfileLoading(false)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, signup, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider value={{ user, token, profile, profileLoading, loading, login, signup, logout, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )

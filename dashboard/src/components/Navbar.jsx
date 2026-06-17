@@ -1,9 +1,3 @@
-/**
- * Navbar — runner.now style.
- * 2×2 square logomark + "Leadgen Engine" in Geist Mono.
- * Centered links in Geist Mono. Dark "Get Started" pill with dot-grid icon.
- * Frosted glass effect. Shadow/border intensifies on scroll.
- */
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState, useEffect } from 'react'
@@ -17,13 +11,14 @@ const NAV_LINKS = [
   { label: 'Settings',  path: '/settings' },
 ]
 
-function LogoMark() {
+function RadarIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
-      <rect x="0"  y="0"  width="8" height="8" rx="1.5" fill="#1d1b1b" />
-      <rect x="10" y="0"  width="8" height="8" rx="1.5" fill="#1d1b1b" />
-      <rect x="0"  y="10" width="8" height="8" rx="1.5" fill="#1d1b1b" />
-      <rect x="10" y="10" width="8" height="8" rx="1.5" fill="#1d1b1b" />
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
+      <circle cx="10" cy="10" r="9" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.5" />
+      <circle cx="10" cy="10" r="6" stroke="#a86448" strokeWidth="1.2" strokeOpacity="0.7" />
+      <circle cx="10" cy="10" r="3" stroke="#a86448" strokeWidth="1.2" />
+      <line x1="10" y1="10" x2="18" y2="10" stroke="#a86448" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="10" cy="10" r="1.5" fill="#a86448" />
     </svg>
   )
 }
@@ -42,12 +37,11 @@ function DotGrid() {
 }
 
 export default function Navbar() {
-  const { user, logout } = useAuth()
+  const { user, profile, logout } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState('')
   const [scrolled, setScrolled] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     function updateName() {
@@ -66,7 +60,8 @@ export default function Navbar() {
   }, [])
 
   const isActive = (path) => location.pathname === path
-  const handleLogout = () => { logout(); navigate('/login') }
+  const handleLogout = () => { logout(); navigate('/') }
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <header style={{
@@ -87,12 +82,12 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', flexShrink: 0 }}>
-          <LogoMark />
+          <RadarIcon />
           <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '500',
+            fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '600',
             color: '#1d1b1b', letterSpacing: '-0.02em',
           }}>
-            leadgen engine
+            sonar
           </span>
         </Link>
 
@@ -117,7 +112,6 @@ export default function Navbar() {
               onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = '#6e6e6e' }}
             >
               {label}
-              {/* Active dot */}
               {isActive(path) && (
                 <span style={{
                   position: 'absolute', bottom: '-1px', left: '50%',
@@ -128,15 +122,41 @@ export default function Navbar() {
               )}
             </Link>
           ))}
+          {/* Admin link — team admins only */}
+          {isAdmin && profile?.mode === 'team' && (
+            <Link
+              to="/admin"
+              style={{
+                position: 'relative',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: isActive('/admin') ? '500' : '400',
+                color: isActive('/admin') ? '#1d1b1b' : '#6e6e6e',
+                padding: '5px 12px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#1d1b1b' }}
+              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = '#6e6e6e' }}
+            >
+              Admin
+              {isActive('/admin') && (
+                <span style={{
+                  position: 'absolute', bottom: '-1px', left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '3px', height: '3px', borderRadius: '50%',
+                  background: '#a86448',
+                }} />
+              )}
+            </Link>
+          )}
         </nav>
 
         {/* Right: user + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           {displayName && (
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: '11px',
-              color: '#a1a1a1',
-            }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#a1a1a1' }}>
               {displayName}
             </span>
           )}
