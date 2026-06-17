@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getLeads, getCompanies } from '../services/api'
 import Navbar from '../components/Navbar'
+import { Skeleton, SkeletonRow } from '../components/Skeleton'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -102,7 +103,7 @@ export default function Dashboard() {
         ].map(({ label, value, note }) => (
           <div key={label} style={{ background: 'var(--bg)', padding: '28px 32px' }}>
             <p style={s.statLabel}>{label}</p>
-            <p style={s.statValue}>{loading ? '—' : value}</p>
+            <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : value}</p>
             <p style={s.statNote}>{note}</p>
           </div>
         ))}
@@ -117,7 +118,14 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <p style={s.empty}>Loading…</p>
+          <div>
+            <div style={{ display: 'flex', padding: '10px 0', borderBottom: '1px solid rgba(196,193,189,0.5)' }}>
+              {['Name', 'Role', 'Company', 'Status'].map(h => (
+                <span key={h} style={{ ...s.th, flex: h === 'Status' ? 1 : 2 }}>{h}</span>
+              ))}
+            </div>
+            {[...Array(5)].map((_, i) => <SkeletonRow key={i} cols={[2, 2, 2, 1]} />)}
+          </div>
         ) : recentLeads.length === 0 ? (
           <div style={s.emptyState}>
             <p style={s.emptyTitle}>No leads yet</p>

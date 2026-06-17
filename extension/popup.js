@@ -35,15 +35,40 @@ function detectPageType(url) {
   return 'unknown'
 }
 
+// Decode JWT expiry locally — no network round-trip needed
+function _jwtExpiresAt(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return (payload.exp || 0) * 1000
+  } catch { return 0 }
+}
+
+// Lead count cache: { count, ts } stored in chrome.storage.session (cleared on browser restart)
+const LEAD_COUNT_TTL = 60_000
+
 function updateLeadCount(token) {
-  fetch(API_BASE_URL + '/leads', { headers: { Authorization: 'Bearer ' + token } })
-    .then((r) => r.json())
-    .then((data) => {
-      const count = data.leads ? data.leads.length : 0
+  chrome.storage.session.get(['leadCountCache'], (stored) => {
+    const cache = stored.leadCountCache
+    if (cache && Date.now() - cache.ts < LEAD_COUNT_TTL) {
       const el = document.getElementById('leadCount')
-      if (el) el.textContent = count
-    })
-    .catch(() => {})
+      if (el) el.textContent = cache.count
+      return
+    }
+    fetch(API_BASE_URL + '/leads', { headers: { Authorization: 'Bearer ' + token } })
+      .then((r) => r.json())
+      .then((data) => {
+        const count = data.leads ? data.leads.length : 0
+        const el = document.getElementById('leadCount')
+        if (el) el.textContent = count
+        chrome.storage.session.set({ leadCountCache: { count, ts: Date.now() } })
+      })
+      .catch(() => {})
+  })
+}
+
+// Call this after extracting leads so the count cache is invalidated
+function invalidateLeadCountCache() {
+  chrome.storage.session.remove('leadCountCache')
 }
 
 async function loginApi(email, password) {
@@ -56,27 +81,18 @@ async function loginApi(email, password) {
   return res.json()
 }
 
+// Validate token locally via JWT expiry — avoids a network call on every popup open
 async function getValidToken() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(['token', 'userEmail'], async (stored) => {
+    chrome.storage.local.get(['token'], (stored) => {
       const token = stored.token
       if (!token) { reject(new Error('No token')); return }
-
-      try {
-        const testRes = await fetch(API_BASE_URL + '/leads', {
-          headers: { 'Authorization': 'Bearer ' + token }
-        })
-
-        if (testRes.status !== 401) {
-          resolve(token)
-          return
-        }
-
-        // Token expired - user needs to re-login
+      const expiresAt = _jwtExpiresAt(token)
+      // Allow up to 60s clock skew; if expiry unknown (0) assume valid
+      if (expiresAt > 0 && Date.now() > expiresAt - 60_000) {
         reject(new Error('Token expired - please sign in again'))
-
-      } catch (e) {
-        reject(e)
+      } else {
+        resolve(token)
       }
     })
   })
@@ -164,20 +180,34 @@ function initMainScreen(token, email) {
       autoScrollBtn.style.display = type === 'company-people' ? 'flex' : 'none'
       peopleTip.style.display = type === 'company-people' ? 'block' : 'none'
 
-      // On a profile page — check if this person is already in leads
+      // On a profile page — check if this person is already in leads (cached per URL)
       if (type === 'profile' && enrichBtn) {
-        fetch(API_BASE_URL + '/leads/by-profile-url?url=' + encodeURIComponent(cleanedUrl), {
-          headers: { Authorization: 'Bearer ' + token }
-        })
-          .then(r => r.ok ? r.json() : null)
-          .then(data => {
-            if (data && data.lead) {
+        const cacheKey = 'profileUrlCache_' + btoa(cleanedUrl).slice(0, 40)
+        chrome.storage.session.get([cacheKey], (stored) => {
+          const cached = stored[cacheKey]
+          if (cached && Date.now() - cached.ts < 120_000) {
+            if (cached.leadId) {
               enrichBtn.style.display = 'flex'
-              enrichBtn.dataset.leadId = data.lead.id
+              enrichBtn.dataset.leadId = cached.leadId
               label.textContent = 'EXISTING LEAD'
             }
+            return
+          }
+          fetch(API_BASE_URL + '/leads/by-profile-url?url=' + encodeURIComponent(cleanedUrl), {
+            headers: { Authorization: 'Bearer ' + token }
           })
-          .catch(() => {})
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              const leadId = data?.lead?.id || null
+              chrome.storage.session.set({ [cacheKey]: { leadId, ts: Date.now() } })
+              if (leadId) {
+                enrichBtn.style.display = 'flex'
+                enrichBtn.dataset.leadId = leadId
+                label.textContent = 'EXISTING LEAD'
+              }
+            })
+            .catch(() => {})
+        })
       }
     }
   })
@@ -397,7 +427,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
           } else {
             setStatus('No leads were saved. Try again.', 'error')
           }
-          updateLeadCount(token)
+          invalidateLeadCountCache(); updateLeadCount(token)
         })
         .catch((err) => { setStatus('Sync failed: ' + err.message, 'error') })
     })

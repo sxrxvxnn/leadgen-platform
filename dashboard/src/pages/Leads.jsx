@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus } from '../services/api'
 import Navbar from '../components/Navbar'
 import SpreadsheetView from '../components/SpreadsheetView'
+import { SkeletonRow } from '../components/Skeleton'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'disqualified']
 
@@ -302,17 +303,24 @@ export default function Leads() {
   }
 
   async function handleStar(leadId, starred) {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, starred } : l))
     try {
       await starLead(leadId, starred)
-      setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, starred } : l))
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, starred: !starred } : l))
+    }
   }
 
   async function handleConnectionStatus(leadId, connection_status) {
+    const prev_status = leads.find(l => l.id === leadId)?.connection_status
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, connection_status } : l))
     try {
       await updateConnectionStatus(leadId, connection_status)
-      setLeads((prev) => prev.map((l) => l.id === leadId ? { ...l, connection_status } : l))
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, connection_status: prev_status } : l))
+    }
   }
 
   async function handleEnrich(leadId) {
@@ -461,7 +469,7 @@ export default function Leads() {
             <span style={{ ...s.th, width: '100px', flexShrink: 0 }}>ACTIONS</span>
           </div>
 
-          {loading && <p style={s.empty}>Loading...</p>}
+          {loading && [...Array(8)].map((_, i) => <SkeletonRow key={i} cols={[0.3, 0.5, 2, 2, 2, 1.5, 1.5, 1]} />)}
           {!loading && filtered.length === 0 && (
             <div style={{ padding: '72px 20px', textAlign: 'center' }}>
               <p style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text-secondary)', marginBottom: '8px' }}>

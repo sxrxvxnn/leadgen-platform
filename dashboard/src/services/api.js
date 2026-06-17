@@ -2,6 +2,22 @@ import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
+// ─── Simple TTL cache for GET requests ───────────────────────
+const _cache = new Map()
+const CACHE_TTL = 30_000
+
+function _cacheGet(key) {
+  const entry = _cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > CACHE_TTL) { _cache.delete(key); return null }
+  return entry.data
+}
+function _cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
+export function invalidateCache(...keys) {
+  if (keys.length === 0) { _cache.clear(); return }
+  for (const k of keys) _cache.delete(k)
+}
+
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' }
@@ -125,14 +141,20 @@ export const resetPassword  = (recovery_token, new_password) =>
   api.post('/auth/reset-password', { recovery_token, new_password })
 
 // ─── LEADS ────────────────────────────────────────────────────
-export const getLeads = () => api.get('/leads')
-export const createLead = (data) => api.post('/leads', data)
-export const updateLead = (id, data) => api.patch(`/leads/${id}`, data)
-export const deleteLead = (id) => api.delete(`/leads/${id}`)
-export const bulkCreateLeads = (data) => api.post('/leads/bulk', data)
-export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
-export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
-export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
+export const getLeads = async () => {
+  const cached = _cacheGet('/leads')
+  if (cached) return cached
+  const res = await api.get('/leads')
+  _cacheSet('/leads', res)
+  return res
+}
+export const createLead = (data) => { invalidateCache('/leads'); return api.post('/leads', data) }
+export const updateLead = (id, data) => { invalidateCache('/leads'); return api.patch(`/leads/${id}`, data) }
+export const deleteLead = (id) => { invalidateCache('/leads'); return api.delete(`/leads/${id}`) }
+export const bulkCreateLeads = (data) => { invalidateCache('/leads'); return api.post('/leads/bulk', data) }
+export const starLead = (id, starred) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/star`, { starred }) }
+export const updateConnectionStatus = (id, connection_status) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/connection-status`, { connection_status }) }
+export const spreadsheetUpdateLead = (id, data) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/spreadsheet`, data) }
 export const autofillBulk = (leadIds, batchStart = 0) =>
   api.post('/leads/autofill-bulk', {
     lead_ids: leadIds,
@@ -141,11 +163,17 @@ export const autofillBulk = (leadIds, batchStart = 0) =>
 export const enrichLead = (id, payload) => api.post(`/leads/${id}/enrich`, payload)
 
 // ─── COMPANIES ────────────────────────────────────────────────
-export const getCompanies = () => api.get('/companies')
-export const createCompany = (data) => api.post('/companies', data)
-export const updateCompany = (id, data) => api.patch(`/companies/${id}`, data)
-export const deleteCompany = (id) => api.delete(`/companies/${id}`)
-export const bulkDeleteCompanies = (ids) => api.delete('/companies', { data: { ids } })
+export const getCompanies = async () => {
+  const cached = _cacheGet('/companies')
+  if (cached) return cached
+  const res = await api.get('/companies')
+  _cacheSet('/companies', res)
+  return res
+}
+export const createCompany = (data) => { invalidateCache('/companies'); return api.post('/companies', data) }
+export const updateCompany = (id, data) => { invalidateCache('/companies'); return api.patch(`/companies/${id}`, data) }
+export const deleteCompany = (id) => { invalidateCache('/companies'); return api.delete(`/companies/${id}`) }
+export const bulkDeleteCompanies = (ids) => { invalidateCache('/companies'); return api.delete('/companies', { data: { ids } }) }
 export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyze-website`, payload)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId) =>

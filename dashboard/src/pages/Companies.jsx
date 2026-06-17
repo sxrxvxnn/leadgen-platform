@@ -7,6 +7,7 @@ import AddCompanyModal from '../components/AddCompanyModal'
 import BulkAddModal from '../components/BulkAddModal'
 import CompaniesSpreadsheet from '../components/CompaniesSpreadsheet'
 import Navbar from '../components/Navbar'
+import { SkeletonCard } from '../components/Skeleton'
 
 const CLASSIFICATIONS = [
   'Unclassified', 'Fintech', 'Healthtech', 'SaaS', 'Cybersecurity',
@@ -1119,7 +1120,9 @@ export default function Companies() {
         )}
 
         {loading ? (
-          <p style={s.empty}>Loading…</p>
+          <div style={s.grid}>
+            {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
+          </div>
         ) : filtered.length === 0 ? (
           <div style={s.emptyState}>
             <p style={s.emptyTitle}>No companies yet</p>
