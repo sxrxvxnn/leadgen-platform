@@ -1,4 +1,4 @@
 {
-  "alias": ["leadgenengineplatform.vercel.app"],
+  "alias": ["sonarleads.vercel.app"],
   "rewrites": [{ "source": "/(.*)", "destination": "/" }]
 }

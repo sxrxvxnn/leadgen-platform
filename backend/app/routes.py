@@ -114,7 +114,7 @@ async def refresh_token(request: Request, payload: dict):
 @router.post("/auth/forgot-password")
 @limiter.limit("3/minute")
 async def forgot_password(request: Request, payload: PasswordResetRequest):
-    redirect_url = os.getenv("PASSWORD_RESET_REDIRECT_URL", "https://leadgenengineplatform.vercel.app/reset-password")
+    redirect_url = os.getenv("PASSWORD_RESET_REDIRECT_URL", "https://sonarleads.vercel.app/reset-password")
     log_password_reset_request(email=payload.email, ip=_ip(request))
     try:
         supabase_auth.auth.reset_password_for_email(

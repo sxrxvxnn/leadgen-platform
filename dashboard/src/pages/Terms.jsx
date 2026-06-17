@@ -55,12 +55,12 @@ export default function Terms() {
         <main style={{ flex: 1, paddingTop: '48px', maxWidth: '680px' }}>
 
           <Section id="acceptance" title="Acceptance of Terms">
-            <p>By accessing or using LeadGen Engine ("the Service", "the Platform") at <strong>leadgenengineplatform.vercel.app</strong>, you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.</p>
-            <p>These Terms constitute a legally binding agreement between you ("User", "you") and Shravan Omanakuttan ("we", "us", "our"), the operator of LeadGen Engine.</p>
+            <p>By accessing or using Sonar ("the Service", "the Platform") at <strong>sonarleads.vercel.app</strong>, you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.</p>
+            <p>These Terms constitute a legally binding agreement between you ("User", "you") and Shravan Omanakuttan ("we", "us", "our"), the operator of Sonar.</p>
           </Section>
 
           <Section id="description" title="The Service">
-            <p>LeadGen Engine is a B2B sales intelligence and lead management platform that enables users to:</p>
+            <p>Sonar is a B2B sales intelligence and lead management platform that enables users to:</p>
             <ul style={s.list}>
               <li>Discover, import, and manage B2B company and contact records</li>
               <li>Enrich lead data via third-party integrations (LinkedIn, Google Maps, Hunter.io, Apollo.io)</li>
@@ -72,7 +72,7 @@ export default function Terms() {
           </Section>
 
           <Section id="accounts" title="Accounts & Registration">
-            <p>You must create an account to use LeadGen Engine. You agree to:</p>
+            <p>You must create an account to use Sonar. You agree to:</p>
             <ul style={s.list}>
               <li>Provide accurate, current, and complete information during registration</li>
               <li>Maintain the security of your password and account credentials</li>
@@ -97,15 +97,15 @@ export default function Terms() {
           </Section>
 
           <Section id="data" title="Your Data">
-            <p>You retain ownership of all company, contact, and lead data you upload or create within LeadGen Engine ("User Data"). By using the Service, you grant us a limited licence to store, process, and display your User Data solely for the purpose of providing the Service.</p>
+            <p>You retain ownership of all company, contact, and lead data you upload or create within Sonar ("User Data"). By using the Service, you grant us a limited licence to store, process, and display your User Data solely for the purpose of providing the Service.</p>
             <p>You are responsible for ensuring you have the right to upload and process any data you add to the platform, including compliance with applicable data protection laws (including India's DPDP Act 2023 and GDPR where applicable).</p>
             <p>We will not sell, share, or use your User Data for purposes beyond operating and improving the Service. On account termination, your data will be deleted within 30 days upon request.</p>
           </Section>
 
           <Section id="linkedin" title="LinkedIn API Data">
-            <p>LeadGen Engine integrates with LinkedIn's APIs subject to the <a href="https://www.linkedin.com/legal/l/api-terms-of-use" target="_blank" rel="noreferrer" style={s.link}>LinkedIn API Terms of Use</a>. By connecting LinkedIn to your account, you agree that:</p>
+            <p>Sonar integrates with LinkedIn's APIs subject to the <a href="https://www.linkedin.com/legal/l/api-terms-of-use" target="_blank" rel="noreferrer" style={s.link}>LinkedIn API Terms of Use</a>. By connecting LinkedIn to your account, you agree that:</p>
             <ul style={s.list}>
-              <li>You authorise LeadGen Engine to access LinkedIn data on your behalf within the scope you approve</li>
+              <li>You authorise Sonar to access LinkedIn data on your behalf within the scope you approve</li>
               <li>LinkedIn data retrieved through our integration may only be used for your own sales and marketing activities</li>
               <li>You will not use LinkedIn data obtained through the Service to build competing products or data sets</li>
               <li>LinkedIn data is subject to LinkedIn's own terms and privacy policies in addition to ours</li>
@@ -114,7 +114,7 @@ export default function Terms() {
           </Section>
 
           <Section id="ip" title="Intellectual Property">
-            <p>The LeadGen Engine platform, including its design, code, branding, and content (excluding User Data), is owned by Shravan Omanakuttan and protected by applicable intellectual property laws.</p>
+            <p>The Sonar platform, including its design, code, branding, and content (excluding User Data), is owned by Shravan Omanakuttan and protected by applicable intellectual property laws.</p>
             <p>You are granted a limited, non-exclusive, non-transferable licence to use the Service for its intended purpose during your subscription or access period. This licence does not include the right to copy, modify, or create derivative works of the Service.</p>
             <p>Feedback, suggestions, or ideas you submit regarding the Service may be used by us without any obligation or compensation to you.</p>
           </Section>
@@ -131,7 +131,7 @@ export default function Terms() {
           </Section>
 
           <Section id="liability" title="Limitation of Liability">
-            <p>To the maximum extent permitted by applicable law, Shravan Omanakuttan and LeadGen Engine shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or business opportunities, arising from your use of the Service.</p>
+            <p>To the maximum extent permitted by applicable law, Shravan Omanakuttan and Sonar shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of profits, data, or business opportunities, arising from your use of the Service.</p>
             <p>Our total liability to you for any claims arising from these Terms or your use of the Service shall not exceed the amount you paid us in the twelve months preceding the claim, or ₹5,000 (Indian Rupees five thousand), whichever is greater.</p>
           </Section>
 
@@ -149,8 +149,8 @@ export default function Terms() {
             <p>For questions about these Terms, contact us at:</p>
             <div style={{ marginTop: '16px', padding: '20px 24px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px' }}>Shravan Omanakuttan</span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>LeadGen Engine</span>
-              <a href="mailto:leadgenengineplatform@proton.me" style={{ ...s.link, fontSize: '13px', marginTop: '4px' }}>leadgenengineplatform@proton.me</a>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Sonar</span>
+              <a href="mailto:sonarleads@proton.me" style={{ ...s.link, fontSize: '13px', marginTop: '4px' }}>sonarleads@proton.me</a>
               <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Kerala, India</span>
             </div>
             <p style={{ marginTop: '16px' }}>

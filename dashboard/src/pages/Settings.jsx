@@ -158,7 +158,7 @@ export default function Settings() {
               },
               {
                 title: 'Your Rights (DPDP Act 2023)',
-                body: 'You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact leadgenengineplatform@proton.me. We will respond within 30 days.',
+                body: 'You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact sonarleads@proton.me. We will respond within 30 days.',
               },
             ].map(({ title, body }) => (
               <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px' }}>
@@ -170,7 +170,7 @@ export default function Settings() {
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
               Full policy available at{' '}
               <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                leadgenengineplatform.vercel.app/privacy
+                sonarleads.vercel.app/privacy
               </a>
             </p>
           </section>
@@ -217,7 +217,7 @@ export default function Settings() {
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
               Full terms at{' '}
               <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                leadgenengineplatform.vercel.app/terms
+                sonarleads.vercel.app/terms
               </a>
               {' '}·{' '}
               <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>

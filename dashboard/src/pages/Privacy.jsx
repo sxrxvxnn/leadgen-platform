@@ -58,8 +58,8 @@ export default function Privacy() {
         <main style={{ flex: 1, paddingTop: '48px', maxWidth: '680px' }}>
 
           <Section id="introduction" title="Introduction">
-            <p>LeadGen Engine is a B2B sales intelligence and lead management platform operated by Shravan Omanakuttan. This Privacy Policy explains how we collect, use, store, and protect information when you use our platform at <strong>leadgenengineplatform.vercel.app</strong>.</p>
-            <p>By using LeadGen Engine, you agree to the collection and use of information in accordance with this policy. We are committed to compliance with the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and applicable international privacy standards including the LinkedIn API Terms of Service.</p>
+            <p>Sonar is a B2B sales intelligence and lead management platform operated by Shravan Omanakuttan. This Privacy Policy explains how we collect, use, store, and protect information when you use our platform at <strong>sonarleads.vercel.app</strong>.</p>
+            <p>By using Sonar, you agree to the collection and use of information in accordance with this policy. We are committed to compliance with the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and applicable international privacy standards including the LinkedIn API Terms of Service.</p>
           </Section>
 
           <Section id="data-collected" title="Data Collected">
@@ -81,7 +81,7 @@ export default function Privacy() {
 
           <Section id="data-use" title="How We Use Your Information">
             <ul style={s.list}>
-              <li>To provide, operate, and improve the LeadGen Engine platform</li>
+              <li>To provide, operate, and improve the Sonar platform</li>
               <li>To authenticate your account and maintain session security</li>
               <li>To sync and display lead data from your LinkedIn Lead Gen Form campaigns</li>
               <li>To enrich company and contact records via authorised third-party APIs</li>
@@ -97,7 +97,7 @@ export default function Privacy() {
           </Section>
 
           <Section id="third-parties" title="Third-Party Services">
-            <p style={{ marginBottom: '16px' }}>LeadGen Engine integrates with the following services, each governed by their own privacy policies:</p>
+            <p style={{ marginBottom: '16px' }}>Sonar integrates with the following services, each governed by their own privacy policies:</p>
             <div style={s.table}>
               <div style={s.tableHead}>
                 <span>Service</span><span>Purpose</span><span>Data Shared</span>
@@ -121,10 +121,10 @@ export default function Privacy() {
           </Section>
 
           <Section id="linkedin" title="LinkedIn API Data Policy">
-            <p>LeadGen Engine's use of LinkedIn API data complies with the <a href="https://www.linkedin.com/legal/l/api-terms-of-use" target="_blank" rel="noreferrer" style={s.link}>LinkedIn API Terms of Use</a>. Specifically:</p>
+            <p>Sonar's use of LinkedIn API data complies with the <a href="https://www.linkedin.com/legal/l/api-terms-of-use" target="_blank" rel="noreferrer" style={s.link}>LinkedIn API Terms of Use</a>. Specifically:</p>
             <ul style={s.list}>
               <li>LinkedIn lead data is only accessed with the explicit authorisation of the account owner</li>
-              <li>Lead data is used solely to populate the authorising user's pipeline within LeadGen Engine</li>
+              <li>Lead data is used solely to populate the authorising user's pipeline within Sonar</li>
               <li>LinkedIn data is not sold, redistributed, or used beyond the authorised integration</li>
               <li>Users can revoke LinkedIn API access at any time via their LinkedIn account settings</li>
               <li>We do not store LinkedIn member passwords or access tokens beyond the active session</li>
@@ -163,8 +163,8 @@ export default function Privacy() {
               gap: '4px',
             }}>
               <span style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px' }}>Shravan Omanakuttan</span>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Data Protection Officer, LeadGen Engine</span>
-              <a href="mailto:leadgenengineplatform@proton.me" style={{ ...s.link, fontSize: '13px', marginTop: '4px' }}>leadgenengineplatform@proton.me</a>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Data Protection Officer, Sonar</span>
+              <a href="mailto:sonarleads@proton.me" style={{ ...s.link, fontSize: '13px', marginTop: '4px' }}>sonarleads@proton.me</a>
               <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Kerala, India</span>
             </div>
             <p style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-muted)' }}>

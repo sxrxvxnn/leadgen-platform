@@ -17,7 +17,7 @@ def setup_logging():
         logging.getLogger().setLevel(logging.INFO)
         return
 
-    resource = Resource(attributes={"service.name": "leadgen-engine-backend"})
+    resource = Resource(attributes={"service.name": "sonar-backend"})
     logger_provider = LoggerProvider(resource=resource)
     set_logger_provider(logger_provider)
 
