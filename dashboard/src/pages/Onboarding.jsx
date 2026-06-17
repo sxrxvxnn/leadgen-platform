@@ -2,32 +2,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 
-const T = {
-  bg:     '#0b0b0b',
-  surface:'#111111',
-  border: 'rgba(255,255,255,0.08)',
-  text:   '#f0f0f0',
-  muted:  '#7a7a7a',
-  dim:    '#444444',
-  accent: '#c8784a',
-  font:   "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  mono:   "'SFMono-Regular', 'Consolas', 'Menlo', monospace",
-}
-
-function Logo() {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="7" stroke={T.text} strokeWidth="1" strokeOpacity="0.25" />
-        <circle cx="8" cy="8" r="4" stroke={T.text} strokeWidth="1" strokeOpacity="0.5" />
-        <circle cx="8" cy="8" r="1.5" fill={T.text} />
-      </svg>
-      <span style={{ fontFamily: T.font, fontSize: 14, fontWeight: 600, color: T.text, letterSpacing: '-0.01em' }}>
-        sonar
-      </span>
-    </div>
-  )
-}
+const BG   = '#f0eeea'
+const INK  = '#111111'
+const MID  = '#888888'
+const LINE = '#d0cdc8'
+const YLW  = '#e8f400'
+const FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif"
 
 export default function Onboarding() {
   const navigate = useNavigate()
@@ -62,186 +42,206 @@ export default function Onboarding() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh', background: T.bg, fontFamily: T.font,
-      display: 'flex', flexDirection: 'column',
-    }}>
-      {/* Top bar */}
-      <div style={{
-        padding: '0 32px', height: 52,
+    <div style={{ background: BG, minHeight: '100vh', fontFamily: FONT, color: INK }}>
+
+      {/* Nav */}
+      <nav style={{
+        borderBottom: `1px solid ${LINE}`,
+        padding: '0 24px', height: 48,
         display: 'flex', alignItems: 'center',
-        borderBottom: `1px solid ${T.border}`,
       }}>
-        <Logo />
-      </div>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>SONAR©</span>
+      </nav>
 
-      {/* Content */}
-      <div style={{
-        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '48px 32px',
-      }}>
+      {step === 1 && (
+        <>
+          {/* Section label */}
+          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              ① Setup
+            </span>
+          </div>
 
-        {step === 1 && (
-          <div style={{ width: '100%', maxWidth: 560 }}>
-            <p style={{ fontFamily: T.mono, fontSize: 11, color: T.dim, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 24 }}>
-              Step 1 of 1
-            </p>
+          {/* Big question */}
+          <div style={{ padding: '40px 24px 48px', borderBottom: `1px solid ${LINE}` }}>
             <h1 style={{
-              fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 600,
-              letterSpacing: '-0.04em', lineHeight: 1.1,
-              color: T.text, marginBottom: 12,
+              fontFamily: FONT,
+              fontSize: 'clamp(40px, 7.5vw, 100px)',
+              fontWeight: 900,
+              letterSpacing: '-0.03em',
+              lineHeight: 0.95,
+              margin: 0,
+              color: INK,
             }}>
-              How will you use Sonar?
+              How will you<br />use Sonar?
             </h1>
-            <p style={{ fontSize: 14, color: T.muted, marginBottom: 40, lineHeight: 1.65 }}>
+            <p style={{ fontSize: 14, color: MID, marginTop: 20, lineHeight: 1.65 }}>
               You can upgrade from Solo to Team at any time.
             </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <ModeCard
-                title="Solo"
-                desc="Just me, building my own pipeline and prospecting independently."
-                items={['Company discovery', 'AI enrichment', 'Lead management']}
-                onClick={() => handleModeSelect('solo')}
-                loading={loading && mode === 'solo'}
-                disabled={loading}
-              />
-              <ModeCard
-                title="Team"
-                desc="I'm building a team — invite members and manage access."
-                items={['Everything in Solo', 'Invite members', 'Admin controls']}
-                accent
-                onClick={() => handleModeSelect('team')}
-                loading={loading && mode === 'team'}
-                disabled={loading}
-              />
-            </div>
-
-            {error && (
-              <p style={{ fontFamily: T.mono, fontSize: 11, color: '#e07070', marginTop: 16 }}>{error}</p>
-            )}
           </div>
-        )}
 
-        {step === 2 && (
-          <div style={{ width: '100%', maxWidth: 400 }}>
-            <p style={{ fontFamily: T.mono, fontSize: 11, color: T.dim, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 24 }}>
-              Step 2 of 2
-            </p>
+          {/* Mode cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 280 }}>
+            <ModeCard
+              label="A"
+              title="SOLO"
+              desc="Just me — building my own pipeline and prospecting independently."
+              items={['Company discovery', 'AI enrichment', 'Lead management']}
+              onClick={() => !loading && handleModeSelect('solo')}
+              loading={loading && mode === 'solo'}
+              disabled={loading}
+              borderRight
+            />
+            <ModeCard
+              label="B"
+              title="TEAM"
+              desc="I'm building a team — I want to invite members and manage access."
+              items={['Everything in Solo', 'Invite members', 'Admin controls']}
+              onClick={() => !loading && handleModeSelect('team')}
+              loading={loading && mode === 'team'}
+              disabled={loading}
+              accent
+            />
+          </div>
+
+          {error && (
+            <div style={{ padding: '16px 24px', borderTop: `1px solid ${LINE}` }}>
+              <p style={{ fontSize: 12, color: '#c00', margin: 0, fontFamily: FONT }}>{error}</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <div style={{ padding: '20px 24px', borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              ② Team name
+            </span>
+          </div>
+
+          <div style={{ padding: '40px 24px 48px', borderBottom: `1px solid ${LINE}` }}>
             <h1 style={{
-              fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 600,
-              letterSpacing: '-0.04em', lineHeight: 1.1,
-              color: T.text, marginBottom: 12,
+              fontFamily: FONT,
+              fontSize: 'clamp(40px, 7.5vw, 100px)',
+              fontWeight: 900,
+              letterSpacing: '-0.03em',
+              lineHeight: 0.95,
+              margin: '0 0 20px',
+              color: INK,
             }}>
               Name your team.
             </h1>
-            <p style={{ fontSize: 14, color: T.muted, marginBottom: 32, lineHeight: 1.65 }}>
-              You can invite members after setup.
+            <p style={{ fontSize: 14, color: MID, margin: '0 0 40px', lineHeight: 1.65 }}>
+              You can invite members right after setup.
             </p>
 
-            <input
-              type="text"
-              value={teamName}
-              onChange={e => setTeamName(e.target.value)}
-              placeholder="e.g. Beagle Security"
-              autoFocus
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                padding: '13px 16px',
-                background: T.surface,
-                border: `1px solid ${T.border}`,
-                borderRadius: 10,
-                fontFamily: T.font, fontSize: 14,
-                color: T.text, outline: 'none',
-                marginBottom: 12,
-                transition: 'border-color 0.15s',
-              }}
-              onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.25)'}
-              onBlur={e => e.target.style.borderColor = T.border}
-              onKeyDown={e => e.key === 'Enter' && teamName.trim() && finish('team', teamName.trim())}
-            />
+            <div style={{ maxWidth: 480 }}>
+              <input
+                type="text"
+                value={teamName}
+                onChange={e => setTeamName(e.target.value)}
+                placeholder="e.g. Beagle Security"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && teamName.trim() && finish('team', teamName.trim())}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '14px 0',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: `2px solid ${INK}`,
+                  fontFamily: FONT, fontSize: 28, fontWeight: 700,
+                  color: INK, outline: 'none',
+                  letterSpacing: '-0.02em',
+                  marginBottom: 40,
+                }}
+              />
 
-            {error && (
-              <p style={{ fontFamily: T.mono, fontSize: 11, color: '#e07070', marginBottom: 12 }}>{error}</p>
-            )}
+              {error && <p style={{ fontSize: 12, color: '#c00', marginBottom: 16 }}>{error}</p>}
 
-            <button
-              onClick={() => finish('team', teamName.trim())}
-              disabled={!teamName.trim() || loading}
-              style={{
-                width: '100%', padding: '13px',
-                background: teamName.trim() && !loading ? T.text : T.surface,
-                border: `1px solid ${teamName.trim() && !loading ? T.text : T.border}`,
-                borderRadius: 10,
-                fontFamily: T.font, fontSize: 14, fontWeight: 600,
-                color: teamName.trim() && !loading ? '#0b0b0b' : T.dim,
-                cursor: teamName.trim() && !loading ? 'pointer' : 'not-allowed',
-                transition: 'all 0.15s',
-              }}
-            >
-              {loading ? 'Setting up…' : 'Create team'}
-            </button>
-
-            <button
-              onClick={() => setStep(1)}
-              style={{
-                background: 'none', border: 'none', marginTop: 16,
-                fontFamily: T.mono, fontSize: 11, color: T.dim,
-                cursor: 'pointer', padding: '4px 0', display: 'block',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = T.muted}
-              onMouseLeave={e => e.currentTarget.style.color = T.dim}
-            >
-              ← Back
-            </button>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <button
+                  onClick={() => finish('team', teamName.trim())}
+                  disabled={!teamName.trim() || loading}
+                  style={{
+                    fontFamily: FONT, fontSize: 11, fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase',
+                    background: teamName.trim() && !loading ? INK : LINE,
+                    color: teamName.trim() && !loading ? BG : MID,
+                    border: 'none', padding: '11px 24px', borderRadius: 4,
+                    cursor: teamName.trim() && !loading ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {loading ? 'Setting up…' : 'Create team →'}
+                </button>
+                <button
+                  onClick={() => setStep(1)}
+                  style={{
+                    fontFamily: FONT, fontSize: 11, fontWeight: 500,
+                    color: MID, background: 'none', border: 'none',
+                    cursor: 'pointer', letterSpacing: '0.06em',
+                    textTransform: 'uppercase', padding: '11px 0',
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = INK}
+                  onMouseLeave={e => e.currentTarget.style.color = MID}
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
 
-function ModeCard({ title, desc, items, accent, onClick, loading, disabled }) {
+function ModeCard({ label, title, desc, items, accent, onClick, loading, disabled, borderRight }) {
   const [hovered, setHovered] = useState(false)
 
-  const borderColor = accent
-    ? hovered ? 'rgba(200,120,74,0.6)' : 'rgba(200,120,74,0.25)'
-    : hovered ? 'rgba(255,255,255,0.2)' : T.border
-
   return (
-    <button
+    <div
       onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={() => !disabled && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        padding: '28px 24px', borderRadius: 12,
-        background: accent ? 'rgba(200,120,74,0.04)' : T.surface,
-        border: `1px solid ${borderColor}`,
-        textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'border-color 0.15s',
+        padding: '32px 24px',
+        borderBottom: `1px solid ${LINE}`,
+        borderRight: borderRight ? `1px solid ${LINE}` : 'none',
+        background: accent
+          ? hovered ? YLW : 'transparent'
+          : hovered ? '#e8e6e2' : 'transparent',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled && !loading ? 0.5 : 1,
+        transition: 'background 0.2s',
       }}
     >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <span style={{ fontSize: 11, color: MID, fontWeight: 500, letterSpacing: '0.1em' }}>{label})</span>
+      </div>
       <p style={{
-        fontFamily: T.font, fontSize: 15, fontWeight: 600,
-        color: loading ? T.muted : T.text,
-        marginBottom: 8, letterSpacing: '-0.02em',
+        fontFamily: FONT,
+        fontSize: 'clamp(32px, 5vw, 64px)',
+        fontWeight: 900,
+        letterSpacing: '-0.03em',
+        lineHeight: 1,
+        color: INK,
+        marginBottom: 16,
       }}>
         {loading ? 'Setting up…' : title}
       </p>
-      <p style={{ fontSize: 12, color: T.muted, lineHeight: 1.65, marginBottom: 20 }}>
+      <p style={{ fontSize: 13, color: MID, lineHeight: 1.65, marginBottom: 20, maxWidth: 280 }}>
         {desc}
       </p>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {items.map(item => (
-          <li key={item} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: T.dim }}>
-            <span style={{ color: accent ? T.accent : T.dim }}>—</span>
-            {item}
+          <li key={item} style={{ fontSize: 12, color: MID, display: 'flex', gap: 8 }}>
+            <span style={{ color: LINE }}>—</span>{item}
           </li>
         ))}
       </ul>
-    </button>
+    </div>
   )
 }

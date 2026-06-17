@@ -67,13 +67,13 @@ export default function Navbar() {
       }}>
 
         {/* Logo */}
-        <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', flexShrink: 0 }}>
-          <RadarIcon />
+        <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: '600',
-            color: '#1d1b1b', letterSpacing: '-0.02em',
+            fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+            fontSize: '12px', fontWeight: '700',
+            color: '#1d1b1b', letterSpacing: '0.04em',
           }}>
-            sonar
+            SONAR©
           </span>
         </Link>
 
