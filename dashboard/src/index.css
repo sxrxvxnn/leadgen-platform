@@ -60,6 +60,30 @@
   --shadow-subtle:    rgba(71, 57, 130, 0.08) 0px 0px 0px 1px inset;
   --shadow-focus:     0 0 0 3px rgba(71, 57, 130, 0.15);
 
+  /* Shadows — full marketing three-layer stack */
+  --shadow-subtle-2:
+    rgba(49,38,59,0.22) 0px 0px 0px 1px,
+    rgba(49,38,59,0.09) 0px 103px 103px 0px,
+    rgba(49,38,59,0.10) 0px 26px 57px 0px;
+  --shadow-subtle-4: rgba(71,57,130,0.15) 0px 0px 0px 4px;
+
+  /* Marketing-page named aliases (same values, explicit names) */
+  --color-ink-violet:    #01011b;
+  --color-plum-charcoal: #31263b;
+  --color-storm-mauve:   #43394c;
+  --color-slate-iris:    #717a94;
+  --color-ash-lavender:  #89828d;
+  --color-parchment:     #fffcfc;
+  --color-bone-mist:     #ecedf2;
+  --color-fog-border:    #dbd7da;
+  --color-twilight-plum: #473982;
+  --color-amethyst:      #6f63b7;
+  --color-wisteria:      #9e91d6;
+  --gradient-indigo-plum: linear-gradient(90deg, #31263b 0%, #01011b 100%);
+  --radius-buttons: 3px;
+  --radius-cards:   6px;
+  --radius-pills:   9999px;
+
   /* Backwards-compat aliases */
   --black:            var(--text);
   --white:            var(--bg);
