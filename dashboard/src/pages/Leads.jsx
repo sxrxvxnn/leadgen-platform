@@ -303,12 +303,10 @@ export default function Leads() {
     setEnrichMsg('')
     try {
       const token = localStorage.getItem('token')
-      const hunterKey = localStorage.getItem('hunterKey') || ''
-      const apolloKey = localStorage.getItem('apolloKey') || ''
       const res = await fetch('http://localhost:8000/api/leads/' + leadId + '/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ hunter_key: hunterKey, apollo_key: apolloKey })
+        body: JSON.stringify({})
       })
       const data = await res.json()
       if (data.lead) {

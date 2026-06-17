@@ -2,50 +2,28 @@ import React, { useState, useRef } from 'react'
 import Navbar from '../components/Navbar'
 
 const SECTIONS = [
-  { id: 'profile',    num: '01', label: 'Profile' },
-  { id: 'ai-keys',   num: '02', label: 'AI Keys' },
-  { id: 'enrichment',num: '03', label: 'Enrichment' },
-  { id: 'maps',      num: '04', label: 'Maps' },
-  { id: 'linkedin',  num: '05', label: 'LinkedIn' },
-  { id: 'privacy',   num: '06', label: 'Privacy' },
-  { id: 'terms',     num: '07', label: 'Terms' },
+  { id: 'profile',  num: '01', label: 'Profile' },
+  { id: 'linkedin', num: '02', label: 'LinkedIn' },
+  { id: 'privacy',  num: '03', label: 'Privacy' },
+  { id: 'terms',    num: '04', label: 'Terms' },
 ]
 
 export default function Settings() {
-  const [fullName,      setFullName]      = useState(localStorage.getItem('fullName') || '')
-  const [geminiKey,     setGeminiKey]     = useState(localStorage.getItem('geminiKey') || '')
-  const [openaiKey,     setOpenaiKey]     = useState(localStorage.getItem('openaiKey') || '')
-  const [groqKey,       setGroqKey]       = useState(localStorage.getItem('groqKey') || '')
-  const [openrouterKey,   setOpenrouterKey]   = useState(localStorage.getItem('openrouterKey') || '')
-  const [openrouterModel, setOpenrouterModel] = useState(localStorage.getItem('openrouterModel') || '')
-  const [hunterKey,     setHunterKey]     = useState(localStorage.getItem('hunterKey') || '')
-  const [apolloKey,     setApolloKey]     = useState(localStorage.getItem('apolloKey') || '')
-  const [mapsKey,       setMapsKey]       = useState(localStorage.getItem('mapsKey') || '')
-  const [liCookie,      setLiCookie]      = useState(localStorage.getItem('liCookie') || '')
+  const [fullName, setFullName] = useState(localStorage.getItem('fullName') || '')
+  const [liCookie, setLiCookie] = useState(localStorage.getItem('liCookie') || '')
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
 
   const sectionRefs = {
-    profile:    useRef(null),
-    'ai-keys':  useRef(null),
-    enrichment: useRef(null),
-    maps:       useRef(null),
-    linkedin:   useRef(null),
-    privacy:    useRef(null),
-    terms:      useRef(null),
+    profile:  useRef(null),
+    linkedin: useRef(null),
+    privacy:  useRef(null),
+    terms:    useRef(null),
   }
 
   function handleSave() {
-    localStorage.setItem('fullName',      fullName)
-    localStorage.setItem('geminiKey',     geminiKey)
-    localStorage.setItem('openaiKey',     openaiKey)
-    localStorage.setItem('groqKey',       groqKey)
-    localStorage.setItem('openrouterKey',   openrouterKey)
-    localStorage.setItem('openrouterModel', openrouterModel)
-    localStorage.setItem('hunterKey',     hunterKey)
-    localStorage.setItem('apolloKey',     apolloKey)
-    localStorage.setItem('mapsKey',       mapsKey)
-    localStorage.setItem('liCookie',      liCookie)
+    localStorage.setItem('fullName', fullName)
+    localStorage.setItem('liCookie', liCookie)
     window.dispatchEvent(new Event('nameUpdated'))
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -66,7 +44,7 @@ export default function Settings() {
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Configuration</p>
           <h1 style={s.heroTitle}>Settings.</h1>
-          <p style={s.heroSub}>API keys, profile, and enrichment configuration.</p>
+          <p style={s.heroSub}>Profile and enrichment configuration.</p>
         </div>
       </div>
 
@@ -114,122 +92,9 @@ export default function Settings() {
             </Field>
           </section>
 
-          {/* 02 — AI Keys */}
-          <section ref={sectionRefs['ai-keys']} style={s.section}>
-            <SectionHeader num="02" title="AI Keys" />
-            <p style={s.sectionHint}>Priority: Gemini → OpenAI → Groq. Add at least one to enable AI features.</p>
-
-            <Field label="Google Gemini" badge="Free · Best choice" badgeColor="green"
-              hint={<>Most accurate. Get a free key at <ExtLink href="https://aistudio.google.com">aistudio.google.com</ExtLink></>}>
-              <KeyInput value={geminiKey} onChange={setGeminiKey} placeholder="AIza…" set={!!geminiKey} />
-            </Field>
-
-            <Field label="OpenAI" badge="GPT-4o · Paid" badgeColor="blue"
-              hint={<>Requires billing. Get from <ExtLink href="https://platform.openai.com/api-keys">platform.openai.com</ExtLink></>}>
-              <KeyInput value={openaiKey} onChange={setOpenaiKey} placeholder="sk-…" set={!!openaiKey} />
-            </Field>
-
-            <Field label="Groq" badge="Llama · Free · Fast" badgeColor="amber"
-              hint={<>Always free. Get key at <ExtLink href="https://console.groq.com">console.groq.com</ExtLink></>}>
-              <KeyInput value={groqKey} onChange={setGroqKey} placeholder="gsk_…" set={!!groqKey} />
-            </Field>
-
-            <Field label="OpenRouter" badge="400+ models" badgeColor="amber"
-              hint="Fallback for all AI tasks — website analysis, classification, compliance. Access 400+ models with one key.">
-              <KeyInput value={openrouterKey} onChange={setOpenrouterKey} placeholder="sk-or-…" set={!!openrouterKey} />
-              {openrouterKey && (
-                <div style={{ marginTop: '10px' }}>
-                  <label style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block', marginBottom: '5px' }}>
-                    Model <span style={{ color: 'var(--text-muted)', fontWeight: '400' }}>(leave blank for default: gemini-2.0-flash free)</span>
-                  </label>
-                  <select
-                    value={openrouterModel}
-                    onChange={e => setOpenrouterModel(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}
-                  >
-                    <option value="">google/gemini-2.0-flash-exp:free (default)</option>
-                    <optgroup label="Free Models">
-                      <option value="meta-llama/llama-3.3-70b-instruct:free">meta-llama/llama-3.3-70b-instruct:free</option>
-                      <option value="mistralai/mistral-7b-instruct:free">mistralai/mistral-7b-instruct:free</option>
-                      <option value="deepseek/deepseek-r1:free">deepseek/deepseek-r1:free</option>
-                      <option value="qwen/qwq-32b:free">qwen/qwq-32b:free</option>
-                    </optgroup>
-                    <optgroup label="Paid — Best Quality">
-                      <option value="anthropic/claude-3-5-sonnet">anthropic/claude-3-5-sonnet</option>
-                      <option value="anthropic/claude-3-haiku">anthropic/claude-3-haiku</option>
-                      <option value="google/gemini-2.0-flash-001">google/gemini-2.0-flash-001</option>
-                      <option value="openai/gpt-4o-mini">openai/gpt-4o-mini</option>
-                      <option value="meta-llama/llama-3.3-70b-instruct">meta-llama/llama-3.3-70b-instruct</option>
-                      <option value="mistralai/mistral-nemo">mistralai/mistral-nemo</option>
-                    </optgroup>
-                  </select>
-                </div>
-              )}
-            </Field>
-
-            {/* How AI keys are used — gap-px grid */}
-            <div style={{ marginTop: '24px' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>How keys are used</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
-                {[
-                  { label: 'Gemini',      color: 'green', text: 'Primary — website analysis, compliance, classification. Free at aistudio.google.com.' },
-                  { label: 'OpenRouter',  color: 'amber', text: 'Secondary fallback — 400+ models. Use free tier (gemini-2.0-flash) or any paid model.' },
-                  { label: 'Groq',        color: 'amber', text: 'Third fallback — Llama 70B. Fast and free.' },
-                  { label: 'OpenAI',      color: 'blue',  text: 'Last resort — GPT-4o. Only used if Gemini, OpenRouter, and Groq all fail.' },
-                ].map(({ label, color, text }) => (
-                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
-                    <span style={badge[color]}>{label}</span>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '8px' }}>{text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 03 — Enrichment */}
-          <section ref={sectionRefs.enrichment} style={s.section}>
-            <SectionHeader num="03" title="Enrichment" />
-            <p style={s.sectionHint}>Used to find email addresses for leads.</p>
-
-            <Field label="Hunter.io" hint="Email enrichment. Free at hunter.io">
-              <KeyInput value={hunterKey} onChange={setHunterKey} placeholder="Hunter API key…" set={!!hunterKey} />
-            </Field>
-
-            <Field label="Apollo.io" hint="Email and phone enrichment. Note: free plan has limited API access.">
-              <KeyInput value={apolloKey} onChange={setApolloKey} placeholder="Apollo API key…" set={!!apolloKey} />
-            </Field>
-          </section>
-
-          {/* 04 — Maps */}
-          <section ref={sectionRefs.maps} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="04" title="Maps" />
-            <p style={s.sectionHint}>Google Maps Places API enriches company HQ address, website, and phone number. Costs ~$0.03 per company lookup. Free tier: $200/month credit (~6,600 lookups).</p>
-
-            <Field label="Google Maps API Key" badge="Places API" badgeColor="green"
-              hint={<>Enable "Places API (New)" in <ExtLink href="https://console.cloud.google.com/apis">Google Cloud Console</ExtLink>, then create an API key.</>}>
-              <KeyInput value={mapsKey} onChange={setMapsKey} placeholder="AIzaSy…" set={!!mapsKey} />
-            </Field>
-
-            <div style={{ marginTop: '16px' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What Maps fills</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
-                {[
-                  { label: 'HQ Address', text: 'Full street address from Google Maps listings.' },
-                  { label: 'Website',    text: 'Confirms or fills website URL from Maps listing.' },
-                  { label: 'Phone',      text: 'Business phone number stored in the company notes.' },
-                ].map(({ label, text }) => (
-                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
-                    <span style={badge.green}>{label}</span>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '8px' }}>{text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 05 — LinkedIn */}
+          {/* 02 — LinkedIn */}
           <section ref={sectionRefs.linkedin} style={{ ...s.section, borderBottom: '1px dashed var(--border-dash)' }}>
-            <SectionHeader num="05" title="LinkedIn" />
+            <SectionHeader num="02" title="LinkedIn" />
             <p style={s.sectionHint}>
               LinkedIn now blocks unauthenticated access to company pages. Providing your session cookie lets the scraper fetch phone, founded year, specialties, company size, and tagline directly from LinkedIn About pages.
             </p>
@@ -249,10 +114,10 @@ export default function Settings() {
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What this unlocks</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
                 {[
-                  { label: 'Phone',       text: 'Business phone number listed on LinkedIn About.' },
-                  { label: 'Founded',     text: 'Company founding year.' },
-                  { label: 'Specialties', text: 'LinkedIn-listed expertise areas.' },
-                  { label: 'Company size',text: 'Exact employee band (e.g. 2-10, 51-200).' },
+                  { label: 'Phone',        text: 'Business phone number listed on LinkedIn About.' },
+                  { label: 'Founded',      text: 'Company founding year.' },
+                  { label: 'Specialties',  text: 'LinkedIn-listed expertise areas.' },
+                  { label: 'Company size', text: 'Exact employee band (e.g. 2-10, 51-200).' },
                 ].map(({ label, text }) => (
                   <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
                     <span style={badge.blue}>{label}</span>
@@ -263,9 +128,9 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 06 — Privacy */}
+          {/* 03 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="06" title="Privacy" />
+            <SectionHeader num="03" title="Privacy" />
             <p style={s.sectionHint}>
               How LeadGen Engine collects, uses, and protects your data. Effective June 16, 2026.
             </p>
@@ -273,7 +138,7 @@ export default function Settings() {
             {[
               {
                 title: 'Data Collected',
-                body: "We collect your name and email for authentication, B2B company/contact data you add or import, anonymised usage analytics via PostHog, and LinkedIn company profile data where you authorise API access. API keys you enter in Settings are stored only in your browser’s localStorage — never on our servers.",
+                body: "We collect your name and email for authentication, B2B company/contact data you add or import, anonymised usage analytics via PostHog, and LinkedIn company profile data where you authorise API access.",
               },
               {
                 title: 'How We Use It',
@@ -289,7 +154,7 @@ export default function Settings() {
               },
               {
                 title: 'Third-Party Services',
-                body: 'Supabase (database), Google Maps (location enrichment), Hunter.io (email verification), Apollo.io (contact enrichment), PostHog (analytics), Vercel (hosting). Each service is governed by its own privacy policy.',
+                body: 'Supabase (database), Google Maps (location enrichment), PostHog (analytics), Vercel (hosting). Each service is governed by its own privacy policy.',
               },
               {
                 title: 'Your Rights (DPDP Act 2023)',
@@ -310,9 +175,9 @@ export default function Settings() {
             </p>
           </section>
 
-          {/* 07 — Terms */}
+          {/* 04 — Terms */}
           <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="07" title="Terms" />
+            <SectionHeader num="04" title="Terms" />
             <p style={s.sectionHint}>
               The rules governing your use of LeadGen Engine. Effective June 16, 2026.
             </p>
@@ -332,7 +197,7 @@ export default function Settings() {
               },
               {
                 title: 'LinkedIn API',
-                body: 'By connecting LinkedIn, you authorise LeadGen Engine to access LinkedIn data on your behalf within the approved scope. LinkedIn data may only be used for your own sales activities and is subject to LinkedIn\'s own terms in addition to ours.',
+                body: "By connecting LinkedIn, you authorise LeadGen Engine to access LinkedIn data on your behalf within the approved scope. LinkedIn data may only be used for your own sales activities and is subject to LinkedIn's own terms in addition to ours.",
               },
               {
                 title: 'Disclaimers',
@@ -438,10 +303,10 @@ const badge = {
 }
 
 const s = {
-  eyebrow:    { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
-  heroTitle:  { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
-  heroSub:    { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
-  section:    { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px dashed var(--border-dash)' },
-  sectionHint:{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
-  input:      { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  eyebrow:     { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
+  heroTitle:   { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '400', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
+  heroSub:     { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
+  section:     { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px dashed var(--border-dash)' },
+  sectionHint: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
+  input:       { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
 }

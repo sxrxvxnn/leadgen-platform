@@ -297,12 +297,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     setAnalyzeResult(null)
     try {
       const res = await analyzeCompany(company.id, {
-        gemini_key:       localStorage.getItem('geminiKey')       || '',
-        openai_key:       localStorage.getItem('openaiKey')       || '',
-        groq_key:         localStorage.getItem('groqKey')         || '',
-        openrouter_key:   localStorage.getItem('openrouterKey')   || '',
-        openrouter_model: localStorage.getItem('openrouterModel') || '',
-        website:          company.website,
+        website: company.website,
       })
       const data = res.data
       if (data.success && data.analysis) {
@@ -947,11 +942,9 @@ export default function Companies() {
   }
 
   function handleBulkMapsEnrich() {
-    const mapsKey = localStorage.getItem('mapsKey') || ''
-    if (!mapsKey) { alert('Add your Google Maps API key in Settings first.'); return }
     const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
     if (!targetIds.length) return
-    runMapsEnrich(targetIds, mapsKey)
+    runMapsEnrich(targetIds)
   }
 
   async function handleBulkDelete() {

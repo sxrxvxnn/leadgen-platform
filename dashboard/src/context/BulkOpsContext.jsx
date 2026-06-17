@@ -76,12 +76,12 @@ export function BulkOpsProvider({ children }) {
     }
   }
 
-  async function runMapsEnrich(companyIds, mapsKey) {
+  async function runMapsEnrich(companyIds) {
     if (maps.running) return
     setMaps({ running: true, msg: `Enriching ${companyIds.length} companies from Maps…`, filledCount: 0, total: companyIds.length })
     let filled = 0
     try {
-      await bulkMapsEnrich(companyIds, mapsKey, (completed, total, result) => {
+      await bulkMapsEnrich(companyIds, (completed, total, result) => {
         setMaps(p => ({ ...p, msg: `Maps enriching… ${completed ?? '?'}/${total ?? p.total}`, total: total ?? p.total }))
         if (result?.success && result.update && Object.keys(result.update).length) {
           filled++

@@ -133,12 +133,9 @@ export const bulkCreateLeads = (data) => api.post('/leads/bulk', data)
 export const starLead = (id, starred) => api.patch(`/leads/${id}/star`, { starred })
 export const updateConnectionStatus = (id, connection_status) => api.patch(`/leads/${id}/connection-status`, { connection_status })
 export const spreadsheetUpdateLead = (id, data) => api.patch(`/leads/${id}/spreadsheet`, data)
-export const autofillBulk = (leadIds, groqKey, batchStart = 0, openaiKey = '') =>
+export const autofillBulk = (leadIds, batchStart = 0) =>
   api.post('/leads/autofill-bulk', {
     lead_ids: leadIds,
-    groq_api_key: groqKey,
-    openai_api_key: openaiKey,
-    gemini_api_key: localStorage.getItem('geminiKey') || '',
     batch_start: batchStart,
   })
 export const enrichLead = (id, payload) => api.post(`/leads/${id}/enrich`, payload)
@@ -151,45 +148,30 @@ export const deleteCompany = (id) => api.delete(`/companies/${id}`)
 export const bulkDeleteCompanies = (ids) => api.delete('/companies', { data: { ids } })
 export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyze-website`, payload)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
-export const checkCompliance = (companyId, groqKey) =>
-  api.post(`/companies/${companyId}/check-compliance`, {
-    groq_key: groqKey,
-    gemini_key: localStorage.getItem('geminiKey') || '',
-  })
+export const checkCompliance = (companyId) =>
+  api.post(`/companies/${companyId}/check-compliance`, {})
 export const autofillCompanyLinkedIn = (id) =>
   api.post(`/companies/${id}/autofill-linkedin`, {
-    openrouter_key: localStorage.getItem('openrouterKey') || '',
-    li_cookie:      localStorage.getItem('liCookie') || '',
+    li_cookie: localStorage.getItem('liCookie') || '',
   })
 export const prefillCompany = (name, websiteUrl) =>
   api.post('/companies/prefill', {
     name,
     website_url: websiteUrl || '',
-    openrouter_key: localStorage.getItem('openrouterKey') || '',
   })
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
 export const bulkCreateCompanies = (companies) => api.post('/companies/bulk', { companies })
 export const getTechnoparkDirectory = (params = {}) => api.get('/companies/technopark-directory', { params })
 export const mapsDiscover = (payload) => api.post('/companies/maps-discover', payload)
-export const bulkMapsEnrich = (companyIds = [], mapsKey = '', onProgress) =>
-  _streamingFetch('/companies/bulk-maps-enrich', { company_ids: companyIds, maps_key: mapsKey }, onProgress)
+export const bulkMapsEnrich = (companyIds = [], onProgress) =>
+  _streamingFetch('/companies/bulk-maps-enrich', { company_ids: companyIds }, onProgress)
 
 export const bulkAnalyzeCompanies = (companyIds = [], onProgress) =>
-  _streamingFetch('/companies/bulk-analyze', {
-    company_ids:      companyIds,
-    gemini_key:       localStorage.getItem('geminiKey')       || '',
-    openai_key:       localStorage.getItem('openaiKey')       || '',
-    groq_key:         localStorage.getItem('groqKey')         || '',
-    openrouter_key:   localStorage.getItem('openrouterKey')   || '',
-    openrouter_model: localStorage.getItem('openrouterModel') || '',
-  }, onProgress)
+  _streamingFetch('/companies/bulk-analyze', { company_ids: companyIds }, onProgress)
 
 export const bulkAutofillCompanies = (companyIds = [], onProgress) =>
-  _streamingFetch('/companies/bulk-autofill', {
-    company_ids:    companyIds,
-    openrouter_key: localStorage.getItem('openrouterKey') || '',
-  }, onProgress)
+  _streamingFetch('/companies/bulk-autofill', { company_ids: companyIds }, onProgress)
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')
@@ -214,27 +196,16 @@ export const deletePersona = (id) => api.delete(`/personas/${id}`)
 export const getJob          = (jobId) => api.get(`/jobs/${jobId}`)
 export const listJobs        = ()       => api.get('/jobs')
 
-export const bulkAutofillCompaniesAsync = (companyIds, openrouterKey = '', liCookie = '') =>
+export const bulkAutofillCompaniesAsync = (companyIds, liCookie = '') =>
   api.post('/companies/bulk-autofill/async', {
-    company_ids:    companyIds,
-    openrouter_key: openrouterKey,
-    li_cookie:      liCookie,
-  })
-
-export const bulkAnalyzeCompaniesAsync = (companyIds, onProgress) =>
-  api.post('/companies/bulk-analyze/async', {
-    company_ids:     companyIds,
-    gemini_key:      localStorage.getItem('geminiKey')       || '',
-    openai_key:      localStorage.getItem('openaiKey')       || '',
-    groq_key:        localStorage.getItem('groqKey')         || '',
-    openrouter_key:  localStorage.getItem('openrouterKey')   || '',
-    openrouter_model: localStorage.getItem('openrouterModel') || '',
-  })
-
-export const bulkMapsEnrichAsync = (companyIds, mapsKey = '') =>
-  api.post('/companies/bulk-maps-enrich/async', {
     company_ids: companyIds,
-    maps_key:    mapsKey,
+    li_cookie:   liCookie,
   })
+
+export const bulkAnalyzeCompaniesAsync = (companyIds) =>
+  api.post('/companies/bulk-analyze/async', { company_ids: companyIds })
+
+export const bulkMapsEnrichAsync = (companyIds) =>
+  api.post('/companies/bulk-maps-enrich/async', { company_ids: companyIds })
 
 export default api

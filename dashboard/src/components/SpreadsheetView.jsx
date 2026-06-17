@@ -221,13 +221,6 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
   }
 
   async function handleAutofill() {
-    const groqKey = localStorage.getItem('groqKey') || ''
-    const geminiKey = localStorage.getItem('geminiKey') || ''
-    const openaiKey = localStorage.getItem('openaiKey') || ''
-    if (!groqKey && !geminiKey && !openaiKey) {
-      alert('Please add your Gemini, OpenAI or Groq API key in Settings first.')
-      return
-    }
     const toFill = selected.length > 0
       ? filtered.filter(l => selected.includes(l.id)).map(l => l.id)
       : filtered.map(l => l.id)
@@ -246,9 +239,6 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({
             lead_ids: toFill,
-            gemini_api_key: geminiKey,
-            openai_api_key: openaiKey,
-            groq_api_key: groqKey,
             batch_start: batchStart
           })
         })

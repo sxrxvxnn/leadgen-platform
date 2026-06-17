@@ -240,13 +240,10 @@ export default function CompanyDiscovery() {
 
   // ── Discover ───────────────────────────────────────────────────
   async function handleDiscover() {
-    const mapsKey = localStorage.getItem('mapsKey') || ''
-    if (!mapsKey) { setDiscError('No Maps API key — add it in Settings → Maps.'); return }
     if (!discQuery.trim()) { setDiscError('Enter a search query.'); return }
     setDiscLoading(true); setDiscError(''); setDiscResults([]); setDiscSelected(new Set())
     try {
       const res = await mapsDiscover({
-        maps_key: mapsKey,
         query: discQuery.trim(),
         location: discLocation.trim(),
         radius_km: discRadius,
@@ -476,11 +473,6 @@ export default function CompanyDiscovery() {
               </button>
             </div>
 
-            {!localStorage.getItem('mapsKey') && (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--accent)', marginBottom: '14px', padding: '10px 14px', background: 'rgba(168,100,72,0.06)', borderRadius: '7px', border: '1px solid rgba(168,100,72,0.2)' }}>
-                Maps API key required — add it in Settings → Maps API.
-              </div>
-            )}
 
             {discError && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)', marginBottom: '14px', padding: '10px 14px', background: 'rgba(184,50,50,0.06)', borderRadius: '7px', border: '1px solid rgba(184,50,50,0.15)' }}>
