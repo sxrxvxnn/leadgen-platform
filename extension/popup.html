@@ -3,178 +3,431 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LeadGen Engine</title>
+  <title>SonarLeads</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@500&family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #fffcfc;
+      --surface:      #ecedf2;
+      --text:         #01011b;
+      --text-soft:    #31263b;
+      --text-muted:   #717a94;
+      --border:       #dbd7da;
+      --border-strong:#31263b;
+      --accent:       #6f63b7;
+      --accent-dark:  #473982;
+      --accent-light: #9e91d6;
+      --accent-dim:   rgba(111,99,183,0.10);
+      --green:        #2e7d4f;
+      --red:          #b83232;
+      --shadow:
+        rgba(49,38,59,0.18) 0px 0px 0px 1px,
+        rgba(49,38,59,0.08) 0px 8px 24px 0px;
+    }
+
     body {
-      width: 320px;
-      min-height: 420px;
-      background: #0a0a0a;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      color: #f0ede8;
-      overflow: hidden;
+      width: 340px;
+      min-height: 460px;
+      background: var(--bg);
+      font-family: 'IBM Plex Sans', sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
     }
-    .screen { display: none; padding: 24px; }
-    .screen.active { display: block; }
 
-    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
-    .logo { width: 28px; height: 28px; background: #f0ede8; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; color: #0a0a0a; flex-shrink: 0; }
-    .brand { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #f0ede8; }
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #333; margin-left: auto; flex-shrink: 0; }
-    .status-dot.online { background: #00e676; }
+    a { text-decoration: none; color: inherit; }
 
-    .login-title { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 6px; }
-    .login-sub { font-size: 11px; color: #666; margin-bottom: 20px; }
-    .field { margin-bottom: 12px; }
-    .field label { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: #555; display: block; margin-bottom: 6px; }
-    .field input { width: 100%; padding: 10px 12px; background: #111; border: 1px solid #222; border-radius: 4px; font-size: 13px; color: #f0ede8; outline: none; font-family: inherit; }
-    .field input:focus { border-color: #444; }
-    .error-msg { font-size: 11px; color: #ff2d2d; margin-bottom: 12px; display: none; }
-    .error-msg.show { display: block; }
-    .btn-primary { width: 100%; padding: 12px; background: #f0ede8; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0a0a0a; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-family: inherit; }
-    .btn-primary:hover { background: #fff; }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    /* ── Screens ───────────────────────────────────────────── */
+    .screen { display: none; padding: 0; }
+    .screen.active { display: flex; flex-direction: column; min-height: 460px; }
 
-    .lead-count { font-size: 11px; color: #555; margin-bottom: 20px; letter-spacing: 0.5px; }
-    .lead-count span { color: #f0ede8; font-weight: 700; }
-    .page-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #111; border: 1px solid #222; border-radius: 3px; margin-bottom: 16px; }
-    .page-badge.linkedin { border-color: #0077b5; }
-    .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #555; }
-    .page-badge.linkedin .badge-dot { background: #0077b5; }
-    #pageTypeLabel { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: #666; }
-    .page-badge.linkedin #pageTypeLabel { color: #0077b5; }
+    /* ── Header ────────────────────────────────────────────── */
+    .sl-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .sl-logo {
+      width: 28px;
+      height: 28px;
+      background: var(--text);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .sl-logo svg { width: 16px; height: 16px; }
+    .sl-brand {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+      letter-spacing: -0.2px;
+    }
+    .sl-status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--border);
+      margin-left: auto;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .sl-status-dot.online { background: var(--green); }
 
-    .status-msg { font-size: 11px; padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; display: none; }
-    .status-msg.show { display: block; }
-    .status-msg.success { background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); color: #00e676; }
-    .status-msg.error { background: rgba(255,45,45,0.08); border: 1px solid rgba(255,45,45,0.2); color: #ff2d2d; }
+    /* ── Body ──────────────────────────────────────────────── */
+    .sl-body { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 16px; }
 
-    .tip-msg {
-      display: none;
+    /* Lead count strip */
+    .sl-lead-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--surface);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .sl-lead-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+    .sl-lead-count {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text);
+    }
+
+    /* Page badge */
+    .sl-page-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      background: transparent;
+      width: fit-content;
+    }
+    .sl-page-badge.linkedin { border-color: #0077b5; }
+    .sl-badge-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .sl-page-badge.linkedin .sl-badge-dot { background: #0077b5; }
+    #pageTypeLabel {
+      font-family: 'IBM Plex Mono', monospace;
       font-size: 9px;
-      color: #555;
-      margin-bottom: 8px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+    .sl-page-badge.linkedin #pageTypeLabel { color: #0077b5; }
+
+    /* Status message */
+    .sl-status-msg {
+      font-size: 12px;
       line-height: 1.5;
-      padding: 6px 8px;
-      background: #111;
+      padding: 9px 12px;
+      border-radius: 5px;
+      display: none;
+      border: 1px solid transparent;
+    }
+    .sl-status-msg.show { display: block; }
+    .sl-status-msg.success {
+      background: rgba(46,125,79,0.07);
+      border-color: rgba(46,125,79,0.20);
+      color: var(--green);
+    }
+    .sl-status-msg.error {
+      background: rgba(184,50,50,0.07);
+      border-color: rgba(184,50,50,0.18);
+      color: var(--red);
+    }
+
+    /* Tip */
+    .sl-tip {
+      display: none;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      padding: 8px 10px;
+      background: var(--surface);
+      border-radius: 5px;
+      border-left: 2px solid var(--accent-light);
+    }
+
+    /* ── Buttons ───────────────────────────────────────────── */
+
+    /* Primary outlined (never filled — brand rule) */
+    .sl-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--text);
+      background: #ffffff;
+      border: 1px solid var(--border-strong);
       border-radius: 3px;
-      border-left: 2px solid #ffab00;
-    }
-
-    .btn-autoscroll {
-      display: none;
-      width: 100%;
       padding: 10px 14px;
-      background: transparent;
-      border: 1px solid #ffab00;
-      border-radius: 4px;
-      color: #ffab00;
-      font-size: 11px;
-      font-weight: 700;
       cursor: pointer;
-      margin-bottom: 8px;
-      font-family: inherit;
-      letter-spacing: 0.5px;
+      transition: border-width 120ms ease, padding 120ms ease;
       text-align: left;
     }
-    .btn-autoscroll:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sl-btn:hover:not(:disabled) {
+      border: 2px solid var(--text);
+      padding: 9px 13px;
+    }
+    .sl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .btn-extract { width: 100%; padding: 12px 14px; background: #f0ede8; border: none; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0a0a0a; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-family: inherit; margin-bottom: 8px; }
-    .btn-extract:hover { background: #fff; }
-    .btn-extract:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .btn-enrich-profile {
-      display: none;
+    /* Accent outlined (for enrich/update) */
+    .sl-btn-accent {
       width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-light);
+      border-radius: 3px;
       padding: 10px 14px;
-      background: transparent;
-      border: 1px solid #6f63b7;
-      border-radius: 4px;
-      color: #9e91d6;
-      font-size: 11px;
-      font-weight: 700;
       cursor: pointer;
-      margin-bottom: 8px;
-      font-family: inherit;
-      letter-spacing: 0.3px;
+      transition: border-width 120ms ease, padding 120ms ease;
       text-align: left;
     }
-    .btn-enrich-profile:hover { border-color: #9e91d6; color: #c4baee; }
-    .btn-enrich-profile:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sl-btn-accent:hover:not(:disabled) {
+      border: 2px solid var(--accent);
+      padding: 9px 13px;
+    }
+    .sl-btn-accent:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .btn-dashboard { width: 100%; padding: 10px 14px; background: transparent; border: 1px solid #222; border-radius: 4px; font-size: 11px; font-weight: 600; color: #555; cursor: pointer; font-family: inherit; text-align: left; margin-bottom: 8px; }
-    .btn-dashboard:hover { border-color: #444; color: #888; }
+    /* Ghost (auto-scroll, secondary actions) */
+    .sl-btn-ghost {
+      width: 100%;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 9px 14px;
+      cursor: pointer;
+      transition: border-color 120ms ease, color 120ms ease;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sl-btn-ghost:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text); }
+    .sl-btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
 
-    .btn-logout { width: 100%; padding: 8px 14px; background: transparent; border: none; font-size: 10px; color: #333; cursor: pointer; font-family: inherit; text-align: left; letter-spacing: 0.5px; }
-    .btn-logout:hover { color: #555; }
+    /* Text link button */
+    .sl-btn-link {
+      background: none;
+      border: none;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0;
+      letter-spacing: 0.02em;
+      transition: color 120ms ease;
+      text-align: left;
+    }
+    .sl-btn-link:hover { color: var(--text); }
 
-    .divider { height: 1px; background: #111; margin: 16px 0; }
+    /* ── Divider ───────────────────────────────────────────── */
+    .sl-divider { height: 1px; background: var(--border); }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    .sl-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Login form ────────────────────────────────────────── */
+    .sl-login-body { padding: 24px 20px; flex: 1; display: flex; flex-direction: column; }
+    .sl-login-headline {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-weight: 300;
+      font-style: italic;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .sl-login-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+    .sl-field { margin-bottom: 14px; }
+    .sl-label {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .sl-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .sl-input:focus {
+      border-color: var(--accent-light);
+      box-shadow: 0 0 0 3px rgba(71,57,130,0.10);
+    }
+    .sl-error-msg {
+      font-size: 11px;
+      color: var(--red);
+      margin-bottom: 12px;
+      display: none;
+      padding: 7px 10px;
+      background: rgba(184,50,50,0.06);
+      border: 1px solid rgba(184,50,50,0.16);
+      border-radius: 4px;
+    }
+    .sl-error-msg.show { display: block; }
+
+    /* hide by default, shown via JS */
+    #enrichProfileBtn { display: none; }
+    #autoScrollBtn    { display: none; }
+    #peopleTip        { display: none; }
   </style>
 </head>
 <body>
 
-  <!-- Login Screen -->
+  <!-- ── LOGIN SCREEN ──────────────────────────────────────── -->
   <div class="screen active" id="loginScreen">
-    <div class="header">
-      <div class="logo">LE</div>
-      <span class="brand">LEADGEN ENGINE</span>
-      <div class="status-dot" id="statusDot"></div>
+    <div class="sl-header">
+      <div class="sl-logo">
+        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="7" stroke="#fffcfc" stroke-width="1.2" opacity="0.3"/>
+          <circle cx="8" cy="8" r="4" stroke="#fffcfc" stroke-width="1.2" opacity="0.65"/>
+          <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
+          <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="sl-brand">SonarLeads</span>
+      <div class="sl-status-dot" id="statusDotLogin"></div>
     </div>
-    <h2 class="login-title">Sign in</h2>
-    <p class="login-sub">Connect to your dashboard</p>
-    <div class="error-msg" id="loginError"></div>
-    <div class="field">
-      <label>EMAIL</label>
-      <input type="email" id="loginEmail" placeholder="you@company.com" />
+
+    <div class="sl-login-body">
+      <h1 class="sl-login-headline">Sign in.</h1>
+      <p class="sl-login-sub">Connect to your SonarLeads dashboard</p>
+
+      <div class="sl-error-msg" id="loginError"></div>
+
+      <div class="sl-field">
+        <label class="sl-label" for="loginEmail">Email</label>
+        <input class="sl-input" type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email" />
+      </div>
+      <div class="sl-field">
+        <label class="sl-label" for="loginPassword">Password</label>
+        <input class="sl-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="sl-btn" id="loginBtn" style="margin-top: 8px;">
+        <span>Sign in</span>
+        <span>→</span>
+      </button>
     </div>
-    <div class="field">
-      <label>PASSWORD</label>
-      <input type="password" id="loginPassword" placeholder="••••••••" />
-    </div>
-    <button class="btn-primary" id="loginBtn">
-      <span>Sign in</span>
-      <span>→</span>
-    </button>
   </div>
 
-  <!-- Main Screen -->
+  <!-- ── MAIN SCREEN ───────────────────────────────────────── -->
   <div class="screen" id="mainScreen">
-    <div class="header">
-      <div class="logo">LE</div>
-      <span class="brand">LEADGEN ENGINE</span>
-      <div class="status-dot" id="statusDot"></div>
+    <div class="sl-header">
+      <div class="sl-logo">
+        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="7" stroke="#fffcfc" stroke-width="1.2" opacity="0.3"/>
+          <circle cx="8" cy="8" r="4" stroke="#fffcfc" stroke-width="1.2" opacity="0.65"/>
+          <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
+          <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <span class="sl-brand">SonarLeads</span>
+      <div class="sl-status-dot" id="statusDot"></div>
     </div>
 
-    <div class="lead-count" id="leadCount"><span>—</span> leads synced</div>
+    <div class="sl-body">
 
-    <div class="page-badge" id="pageBadge">
-      <div class="badge-dot"></div>
-      <span id="pageTypeLabel">DETECTING PAGE...</span>
+      <!-- Lead count -->
+      <div class="sl-lead-strip">
+        <span class="sl-lead-label">Leads synced</span>
+        <span class="sl-lead-count" id="leadCount">—</span>
+      </div>
+
+      <!-- Page detection badge -->
+      <div class="sl-page-badge" id="pageBadge">
+        <div class="sl-badge-dot"></div>
+        <span id="pageTypeLabel">DETECTING PAGE…</span>
+      </div>
+
+      <!-- Status messages -->
+      <div class="sl-status-msg" id="statusMsg"></div>
+
+      <!-- People page tip -->
+      <p class="sl-tip" id="peopleTip">
+        Visit the company page first to capture size &amp; followers, then return here to extract people.
+      </p>
+
+      <!-- Update existing lead (shown only on a profile that's already a lead) -->
+      <button class="sl-btn-accent" id="enrichProfileBtn">
+        <span>Update this lead with full profile</span>
+        <span>↑</span>
+      </button>
+
+      <!-- Auto-scroll (company people pages only) -->
+      <button class="sl-btn-ghost" id="autoScrollBtn">
+        <span>Auto-scroll to load all profiles</span>
+        <span>↓</span>
+      </button>
+
+      <!-- Main extract -->
+      <button class="sl-btn" id="extractBtn" disabled>
+        <span>Extract leads from page</span>
+        <span>→</span>
+      </button>
+
     </div>
 
-    <div class="status-msg" id="statusMsg"></div>
-
-    <p class="tip-msg" id="peopleTip">
-      💡 Tip: Visit the company page first to capture size &amp; followers, then return here to extract people.
-    </p>
-
-    <button class="btn-autoscroll" id="autoScrollBtn">
-      ↓ Auto-scroll to load all profiles
-    </button>
-
-    <button class="btn-enrich-profile" id="enrichProfileBtn">
-      ↑ Update this lead with full profile
-    </button>
-
-    <button class="btn-extract" id="extractBtn" disabled>
-      <span>Extract leads from page</span>
-      <span>→</span>
-    </button>
-
-    <div class="divider"></div>
-
-    <button class="btn-dashboard" id="dashboardBtn">Open dashboard →</button>
-    <button class="btn-logout" id="logoutBtn">SIGN OUT</button>
+    <div class="sl-footer">
+      <button class="sl-btn-link" id="dashboardBtn">Open dashboard →</button>
+      <button class="sl-btn-link" id="logoutBtn">Sign out</button>
+    </div>
   </div>
 
   <script src="config.js"></script>

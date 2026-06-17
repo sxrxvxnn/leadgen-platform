@@ -8,17 +8,17 @@ function show(id) {
 function setStatus(msg, type) {
   const el = document.getElementById('statusMsg')
   el.textContent = msg
-  el.className = 'status-msg show ' + type
+  el.className = 'sl-status-msg show ' + type
 }
 
 function clearStatus() {
-  document.getElementById('statusMsg').className = 'status-msg'
+  document.getElementById('statusMsg').className = 'sl-status-msg'
 }
 
 function showLoginError(msg) {
   const el = document.getElementById('loginError')
   el.textContent = msg
-  el.className = 'error-msg show'
+  el.className = 'sl-error-msg show'
 }
 
 function detectPageType(url) {
@@ -41,7 +41,7 @@ function updateLeadCount(token) {
     .then((data) => {
       const count = data.leads ? data.leads.length : 0
       const el = document.getElementById('leadCount')
-      el.innerHTML = '<span>' + count + '</span> leads synced'
+      if (el) el.textContent = count
     })
     .catch(() => {})
 }
@@ -88,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
       initMainScreen(data.token, data.userEmail)
     } else {
       show('loginScreen')
-      document.getElementById('statusDot').className = 'status-dot'
     }
   })
 })
@@ -125,7 +124,8 @@ document.getElementById('loginPassword').addEventListener('keydown', (e) => {
 
 function initMainScreen(token, email) {
   show('mainScreen')
-  document.getElementById('statusDot').className = 'status-dot online'
+  const dot = document.getElementById('statusDot')
+  if (dot) dot.className = 'sl-status-dot online'
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const url = tabs[0] ? tabs[0].url : ''
@@ -140,14 +140,14 @@ function initMainScreen(token, email) {
 
     const typeLabels = {
       'salenav-companies': 'SALES NAV ACCOUNTS',
-      'salenav-people': 'SALES NAV PEOPLE',
-      'salenav-company': 'SALES NAV COMPANY',
-      'linkedin-companies': 'COMPANY SEARCH',
-      'linkedin-all-search': 'LINKEDIN SEARCH',
-      'company-people': 'PEOPLE PAGE — READY',
-      'company': 'COMPANY PAGE',
-      'profile': 'PROFILE PAGE',
-      'search': 'PEOPLE SEARCH'
+      'salenav-people':    'SALES NAV PEOPLE',
+      'salenav-company':   'SALES NAV COMPANY',
+      'linkedin-companies':'COMPANY SEARCH',
+      'linkedin-all-search':'LINKEDIN SEARCH',
+      'company-people':    'PEOPLE PAGE — READY',
+      'company':           'COMPANY PAGE',
+      'profile':           'PROFILE PAGE',
+      'search':            'PEOPLE SEARCH'
     }
 
     if (enrichBtn) enrichBtn.style.display = 'none'
@@ -155,15 +155,13 @@ function initMainScreen(token, email) {
     if (type === 'unknown') {
       label.textContent = 'NOT A LINKEDIN PAGE'
       extractBtn.disabled = true
-      extractBtn.style.opacity = '0.3'
       autoScrollBtn.style.display = 'none'
       peopleTip.style.display = 'none'
     } else {
       label.textContent = typeLabels[type] || type.toUpperCase()
-      badge.className = 'page-badge linkedin'
+      if (badge) badge.className = 'sl-page-badge linkedin'
       extractBtn.disabled = false
-      extractBtn.style.opacity = '1'
-      autoScrollBtn.style.display = type === 'company-people' ? 'block' : 'none'
+      autoScrollBtn.style.display = type === 'company-people' ? 'flex' : 'none'
       peopleTip.style.display = type === 'company-people' ? 'block' : 'none'
 
       // On a profile page — check if this person is already in leads
@@ -174,10 +172,9 @@ function initMainScreen(token, email) {
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             if (data && data.lead) {
-              // Already a lead — show Update button
-              enrichBtn.style.display = 'block'
+              enrichBtn.style.display = 'flex'
               enrichBtn.dataset.leadId = data.lead.id
-              label.textContent = 'EXISTING LEAD — UPDATE'
+              label.textContent = 'EXISTING LEAD'
             }
           })
           .catch(() => {})
@@ -192,7 +189,7 @@ function initMainScreen(token, email) {
 
 document.getElementById('autoScrollBtn').addEventListener('click', () => {
   const btn = document.getElementById('autoScrollBtn')
-  btn.textContent = '↓ Scrolling... please wait'
+  btn.querySelector('span').textContent = 'Scrolling…'
   btn.disabled = true
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -200,17 +197,13 @@ document.getElementById('autoScrollBtn').addEventListener('click', () => {
       { action: 'injectAndAutoScroll', tabId: tabs[0].id },
       (response) => {
         if (response?.success) {
-          btn.textContent = '✓ Loaded ' + response.count + ' profiles — now Extract'
-          btn.style.color = '#00e676'
-          btn.style.borderColor = '#00e676'
+          btn.querySelector('span').textContent = '✓ Loaded ' + response.count + ' profiles'
           setTimeout(() => {
-            btn.textContent = '↓ Auto-scroll to load all profiles'
-            btn.style.color = '#ffab00'
-            btn.style.borderColor = '#ffab00'
+            btn.querySelector('span').textContent = 'Auto-scroll to load all profiles'
             btn.disabled = false
-          }, 4000)
+          }, 3500)
         } else {
-          btn.textContent = '↓ Auto-scroll to load all profiles'
+          btn.querySelector('span').textContent = 'Auto-scroll to load all profiles'
           btn.disabled = false
           setStatus('Auto-scroll failed. Refresh and try again.', 'error')
         }
@@ -226,7 +219,7 @@ document.getElementById('enrichProfileBtn')?.addEventListener('click', async () 
   const leadId = btn.dataset.leadId
   if (!leadId) return
   btn.disabled = true
-  btn.textContent = 'Scraping...'
+  btn.querySelector('span').textContent = 'Scraping…'
   clearStatus()
 
   let token
@@ -234,14 +227,14 @@ document.getElementById('enrichProfileBtn')?.addEventListener('click', async () 
     setStatus('Session expired. Please sign in again.', 'error')
     show('loginScreen')
     btn.disabled = false
-    btn.textContent = '↑ Update this lead with full profile'
+    btn.querySelector('span').textContent = 'Update this lead with full profile'
     return
   }
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     chrome.runtime.sendMessage({ action: 'injectAndScrape', tabId: tabs[0].id }, (bgResponse) => {
       btn.disabled = false
-      btn.textContent = '↑ Update this lead with full profile'
+      btn.querySelector('span').textContent = 'Update this lead with full profile'
       if (chrome.runtime.lastError || !bgResponse?.success) {
         setStatus('Scrape failed. Refresh LinkedIn and try again.', 'error')
         return
@@ -417,33 +410,33 @@ function showCompanySelectionScreen(companies, token) {
   const overlay = document.createElement('div')
   overlay.id = 'companySelectOverlay'
   overlay.style.cssText = `
-    position: fixed; inset: 0; background: #0a0a0a; z-index: 100;
-    display: flex; flex-direction: column; padding: 16px;
-    font-family: inherit; overflow: hidden;
+    position: fixed; inset: 0; background: #fffcfc; z-index: 100;
+    display: flex; flex-direction: column; padding: 0;
+    font-family: 'IBM Plex Sans', sans-serif; overflow: hidden;
   `
 
   overlay.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px 14px; border-bottom:1px solid #dbd7da;">
       <div>
-        <p style="font-size:9px; font-weight:700; letter-spacing:2px; color:#555; margin-bottom:4px;">SELECT COMPANIES</p>
-        <p style="font-size:16px; font-weight:900; color:#f0ede8;">${companies.length} found</p>
+        <p style="font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#717a94; margin-bottom:4px; text-transform:uppercase;">Select companies</p>
+        <p style="font-size:18px; font-weight:700; color:#01011b; letter-spacing:-0.3px;">${companies.length} found</p>
       </div>
-      <button id="selectAllBtn" style="font-size:9px; font-weight:700; letter-spacing:1px; color:#ffab00; background:none; border:1px solid #ffab00; border-radius:3px; padding:4px 8px; cursor:pointer; font-family:inherit;">SELECT ALL</button>
+      <button id="selectAllBtn" style="font-family:'DM Sans',sans-serif; font-size:11px; font-weight:500; color:#6f63b7; background:rgba(111,99,183,0.08); border:1px solid #9e91d6; border-radius:3px; padding:5px 10px; cursor:pointer;">Select all</button>
     </div>
-    <div id="companyList" style="flex:1; overflow-y:auto; margin-bottom:12px; display:flex; flex-direction:column; gap:6px;">
+    <div id="companyList" style="flex:1; overflow-y:auto; padding:12px 20px; display:flex; flex-direction:column; gap:6px;">
       ${companies.map((c, i) => `
-        <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#111; border-radius:4px; cursor:pointer; border:1px solid #1a1a1a;">
-          <input type="checkbox" value="${i}" checked style="accent-color:#ffab00; cursor:pointer; flex-shrink:0;" />
-          <div style="overflow:hidden; flex:1;">
-            <p style="font-size:12px; font-weight:600; color:#f0ede8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name}</p>
-            <p style="font-size:10px; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.industry || c.headquarters || '—'}</p>
+        <label style="display:flex; align-items:center; gap:10px; padding:9px 12px; background:#ffffff; border-radius:5px; cursor:pointer; border:1px solid #dbd7da;">
+          <input type="checkbox" value="${i}" checked style="accent-color:#6f63b7; cursor:pointer; flex-shrink:0; width:14px; height:14px;" />
+          <div style="overflow:hidden; flex:1; min-width:0;">
+            <p style="font-size:12px; font-weight:600; color:#01011b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${c.name}</p>
+            <p style="font-size:10px; color:#717a94; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">${c.industry || c.headquarters || '—'}</p>
           </div>
         </label>
       `).join('')}
     </div>
-    <div style="display:flex; gap:8px; flex-shrink:0;">
-      <button id="cancelSelectBtn" style="flex:1; padding:10px; background:transparent; border:1px solid #222; border-radius:4px; font-size:11px; color:#555; cursor:pointer; font-family:inherit;">Cancel</button>
-      <button id="saveSelectedBtn" style="flex:2; padding:10px; background:#f0ede8; border:none; border-radius:4px; font-size:12px; font-weight:700; color:#0a0a0a; cursor:pointer; font-family:inherit;">Save Selected →</button>
+    <div style="display:flex; gap:8px; padding:12px 20px 16px; border-top:1px solid #dbd7da; flex-shrink:0;">
+      <button id="cancelSelectBtn" style="flex:1; padding:9px; background:transparent; border:1px solid #dbd7da; border-radius:3px; font-size:12px; font-weight:500; color:#717a94; cursor:pointer; font-family:'DM Sans',sans-serif;">Cancel</button>
+      <button id="saveSelectedBtn" style="flex:2; padding:9px; background:#ffffff; border:1px solid #31263b; border-radius:3px; font-size:12px; font-weight:600; color:#01011b; cursor:pointer; font-family:'DM Sans',sans-serif;">Save selected →</button>
     </div>
   `
 
@@ -515,13 +508,12 @@ function saveCompany(data, token) {
 // ─── NAV BUTTONS ──────────────────────────────────────────────
 
 document.getElementById('dashboardBtn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'http://localhost:5173' })
+  chrome.tabs.create({ url: 'https://sonarleads.vercel.app' })
 })
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
   chrome.storage.local.remove(['token', 'userEmail'], () => {
     show('loginScreen')
-    document.getElementById('statusDot').className = 'status-dot'
     document.getElementById('loginEmail').value = ''
     document.getElementById('loginPassword').value = ''
   })
