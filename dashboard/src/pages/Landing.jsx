@@ -26,9 +26,6 @@ export default function Landing() {
 
             {/* Left: copy */}
             <div>
-              <div className="lp-hero-eyebrow">
-                <span className="lp-pill">B2B Lead Intelligence</span>
-              </div>
               <h1>Find the lead<br />before your<br />competitor does.</h1>
               <p className="lp-hero-sub">
                 Sonar discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform.
@@ -43,10 +40,6 @@ export default function Landing() {
             <div className="lp-signal-feed" role="img" aria-label="Lead enrichment pipeline preview">
               <div className="lp-sf-header">
                 <span className="lp-sf-title">Enrichment pipeline</span>
-                <span className="lp-sf-status">
-                  <span className="lp-status-dot"></span>
-                  live
-                </span>
               </div>
 
               <div className="lp-signal-row">
