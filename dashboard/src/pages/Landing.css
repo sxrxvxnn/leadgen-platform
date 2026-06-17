@@ -272,6 +272,7 @@
   font-weight: 500;
   color: var(--color-amethyst);
   cursor: pointer;
+  text-decoration: none;
   transition: opacity 150ms ease;
 }
 .lp-sf-foot-cta:hover { opacity: 0.7; }

@@ -83,7 +83,7 @@ export default function Landing() {
 
               <div className="lp-sf-footer">
                 <span className="lp-sf-foot-label">3 companies enriched · auto pipeline</span>
-                <span className="lp-sf-foot-cta">View pipeline →</span>
+                <Link to="/companies" className="lp-sf-foot-cta">View pipeline →</Link>
               </div>
             </div>
 
