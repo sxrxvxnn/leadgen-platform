@@ -23,13 +23,13 @@ export default function Onboarding() {
   async function handleModeSelect(selected) {
     setMode(selected)
     if (selected === 'solo') {
-      await finish('solo')
+      await finish('solo', '', false)
     } else {
       setStep(2)
     }
   }
 
-  async function finish(selectedMode, tName = '') {
+  async function finish(selectedMode, tName = '', goToDash = true) {
     setLoading(true)
     setError('')
     try {
@@ -37,7 +37,12 @@ export default function Onboarding() {
         mode: selectedMode,
         team_name: tName || undefined,
       })
-      navigate('/dashboard')
+      if (goToDash) {
+        navigate('/dashboard')
+      } else {
+        setStep(3)
+        setLoading(false)
+      }
     } catch (e) {
       setError(e?.response?.data?.detail || 'Something went wrong.')
       setLoading(false)
@@ -103,6 +108,100 @@ export default function Onboarding() {
         </>
       )}
 
+      {step === 3 && (
+        <>
+          <div style={{ padding: '16px 40px', borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, color: ACC, textTransform: 'uppercase', letterSpacing: '0.08em' }}>③ Chrome extension</span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 'calc(100vh - 112px)' }}>
+            {/* Left — copy */}
+            <div style={{ padding: '56px 40px 64px', borderRight: `1px solid ${LINE}` }}>
+              <h1 style={{ margin: '0 0 16px', lineHeight: 1.05 }}>
+                <span style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(36px, 5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.03em', color: INK }}>
+                  Extract leads
+                </span>
+                <span style={{ display: 'block', fontFamily: SANS, fontSize: 'clamp(24px, 3.5vw, 48px)', fontWeight: 700, letterSpacing: '-0.03em', color: PLUM }}>
+                  from LinkedIn.
+                </span>
+              </h1>
+              <p style={{ fontSize: 14, color: MID, margin: '20px 0 32px', lineHeight: 1.7, maxWidth: 420 }}>
+                The Sonar Chrome extension lets you pull people and companies from any LinkedIn page — profiles, people pages, search results — directly into your pipeline with one click.
+              </p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[
+                  'Extract from LinkedIn people search & Sales Nav',
+                  'Scrape full profiles: bio, experience, job title',
+                  'Auto-scroll to load all results before extracting',
+                  'Leads appear in your dashboard instantly',
+                ].map(item => (
+                  <li key={item} style={{ fontFamily: SANS, fontSize: 14, color: MID, display: 'flex', gap: 10 }}>
+                    <span style={{ color: ACC, flexShrink: 0 }}>—</span>{item}
+                  </li>
+                ))}
+              </ul>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <a
+                  href="/sonar-extension.zip"
+                  download
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
+                    color: INK, background: '#ffffff',
+                    border: `1px solid ${PLUM}`, borderRadius: 3,
+                    padding: '10px 20px', textDecoration: 'none',
+                    width: 'fit-content',
+                  }}
+                >
+                  Download extension ↓
+                </a>
+                <p style={{ fontSize: 11, color: MID, lineHeight: 1.6, maxWidth: 340 }}>
+                  After downloading: unzip → open <code style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10, background: '#ecedf2', padding: '1px 5px', borderRadius: 3 }}>chrome://extensions</code> → enable Developer mode → Load unpacked
+                </p>
+              </div>
+            </div>
+
+            {/* Right — go to dashboard */}
+            <div
+              style={{
+                padding: '56px 40px 64px',
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <p style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, color: MID, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>Ready to go</p>
+                <p style={{ fontFamily: SANS, fontSize: 14, color: MID, lineHeight: 1.7, maxWidth: 320 }}>
+                  You can install the extension any time from Settings → Extension inside your dashboard. Skip for now and start exploring Sonar.
+                </p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  style={{
+                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
+                    color: INK, background: '#ffffff',
+                    border: `1px solid ${PLUM}`, borderRadius: 3,
+                    padding: '10px 20px', cursor: 'pointer',
+                    width: 'fit-content', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
+                >
+                  Go to dashboard →
+                </button>
+                <button
+                  onClick={() => setStep(mode === 'team' ? 2 : 1)}
+                  style={{ fontFamily: SANS, fontSize: 13, color: MID, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', width: 'fit-content' }}
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {step === 2 && (
         <>
           <div style={{ padding: '16px 40px', borderBottom: `1px solid ${LINE}` }}>
@@ -144,7 +243,7 @@ export default function Onboarding() {
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 <button
-                  onClick={() => finish('team', teamName.trim())}
+                  onClick={() => finish('team', teamName.trim(), false)}
                   disabled={!teamName.trim() || loading}
                   style={{
                     fontFamily: SANS, fontSize: 14, fontWeight: 500,
@@ -158,7 +257,7 @@ export default function Onboarding() {
                   onMouseEnter={e => { if (teamName.trim() && !loading) { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG } }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
                 >
-                  {loading ? 'Setting up…' : 'Create team →'}
+                  {loading ? 'Setting up…' : 'Continue →'}
                 </button>
                 <button
                   onClick={() => setStep(1)}

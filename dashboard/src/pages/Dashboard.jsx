@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ totalLeads: 0, newLeads: 0, contacted: 0, companies: 0 })
   const [recentLeads, setRecentLeads] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showExtBanner, setShowExtBanner] = useState(() => localStorage.getItem('extBannerDismissed') !== '1')
 
   useEffect(() => {
     async function load() {
@@ -42,6 +43,28 @@ export default function Dashboard() {
           <p style={s.heroSub}>welcome back, {displayName}</p>
         </div>
       </div>
+
+      {/* Extension banner */}
+      {showExtBanner && (
+        <div style={{ borderBottom: '1px solid var(--border)', padding: '14px 48px', display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--accent-dimmer)' }}>
+          <div style={{ width: 28, height: 28, background: 'var(--text)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#fffcfc" strokeWidth="1.2" opacity="0.3"/>
+              <circle cx="8" cy="8" r="4" stroke="#fffcfc" strokeWidth="1.2" opacity="0.65"/>
+              <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
+              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" strokeWidth="1.1" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Install the Sonar Chrome extension</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>— extract leads directly from LinkedIn with one click.</span>
+          </div>
+          <a href="/sonar-extension.zip" download style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--text)', background: '#ffffff', border: '1px solid var(--border-strong)', borderRadius: 3, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
+            Download ↓
+          </a>
+          <button onClick={() => { setShowExtBanner(false); localStorage.setItem('extBannerDismissed', '1') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, padding: '0 4px', lineHeight: 1, flexShrink: 0 }} aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       {/* Stats — gap-px grid, no rounded cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', borderBottom: '1px solid var(--border)' }}>

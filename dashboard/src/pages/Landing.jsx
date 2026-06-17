@@ -12,7 +12,7 @@ export default function Landing() {
           <ul className="lp-nav-links">
             <li><a href="#features">Features</a></li>
             <li><a href="#how-it-works">How it works</a></li>
-            <li><a href="#what-we-find">What we find</a></li>
+            <li><a href="#extension">Extension</a></li>
             <li><a href="#pricing">Pricing</a></li>
           </ul>
           <Link to="/signup" className="lp-btn">Get started free</Link>
@@ -191,6 +191,76 @@ export default function Landing() {
               <p className="lp-step-body">Your leads arrive with verified emails, LinkedIn profiles, job titles, and ICP scores. Export a clean list or open LinkedIn profiles in batch — ready to reach out immediately.</p>
             </div>
 
+          </div>
+        </div>
+      </section>
+
+      {/* ── CHROME EXTENSION ──────────────────────────────────────────────── */}
+      <section id="extension" style={{ background: 'var(--color-parchment)', borderTop: '1px solid var(--color-fog-border)' }}>
+        <div className="lp-container">
+          <div className="lp-ext-grid">
+            <div className="lp-ext-copy">
+              <span className="lp-pill" style={{ marginBottom: '20px', display: 'inline-flex' }}>Chrome extension</span>
+              <h2 style={{ marginTop: '20px' }}>Extract leads<br />straight from<br />LinkedIn.</h2>
+              <p className="lp-hero-sub" style={{ fontSize: '17px', marginTop: '24px', marginBottom: '36px' }}>
+                Install the Sonar extension and pull people and companies from any LinkedIn page — profiles, company pages, search results, Sales Navigator — directly into your pipeline. No copy-paste, no CSV.
+              </p>
+              <ul className="lp-ext-features">
+                <li><span className="lp-ext-dash">—</span>Extract from LinkedIn people search &amp; Sales Nav</li>
+                <li><span className="lp-ext-dash">—</span>Scrape full profiles: bio, experience, job title</li>
+                <li><span className="lp-ext-dash">—</span>Auto-scroll to load all results before extracting</li>
+                <li><span className="lp-ext-dash">—</span>Works on company pages, people pages &amp; search</li>
+                <li><span className="lp-ext-dash">—</span>One click — leads appear in your dashboard instantly</li>
+              </ul>
+              <div className="lp-ext-actions">
+                <a href="/sonar-extension.zip" download className="lp-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  Download extension
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M7 1v8M3.5 6l3.5 3.5L10.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M1 11h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </a>
+                <p className="lp-ext-install-note">After download: unzip → open <code>chrome://extensions</code> → enable Developer mode → Load unpacked</p>
+              </div>
+            </div>
+            <div className="lp-ext-preview">
+              <div className="lp-ext-mock">
+                <div className="lp-ext-mock-bar">
+                  <div className="lp-ext-mock-logo">
+                    <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                      <circle cx="8" cy="8" r="7" stroke="#fffcfc" strokeWidth="1.2" opacity="0.3"/>
+                      <circle cx="8" cy="8" r="4" stroke="#fffcfc" strokeWidth="1.2" opacity="0.65"/>
+                      <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
+                      <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" strokeWidth="1.1" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <span className="lp-ext-mock-brand">Sonar</span>
+                  <span className="lp-ext-mock-dot"></span>
+                </div>
+                <div className="lp-ext-mock-body">
+                  <div className="lp-ext-mock-strip">
+                    <span className="lp-ext-mock-label">Leads synced</span>
+                    <span className="lp-ext-mock-count">47</span>
+                  </div>
+                  <div className="lp-ext-mock-badge">
+                    <span className="lp-ext-mock-badge-dot"></span>
+                    <span className="lp-ext-mock-badge-text">PEOPLE PAGE — READY</span>
+                  </div>
+                  <button className="lp-ext-mock-btn-ghost">
+                    <span>Auto-scroll to load all profiles</span>
+                    <span>↓</span>
+                  </button>
+                  <button className="lp-ext-mock-btn">
+                    <span>Extract leads from page</span>
+                    <span>→</span>
+                  </button>
+                </div>
+                <div className="lp-ext-mock-footer">
+                  <span className="lp-ext-mock-link">Open dashboard →</span>
+                  <span className="lp-ext-mock-link">Sign out</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
