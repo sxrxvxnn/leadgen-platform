@@ -8,7 +8,7 @@ export default function Landing() {
       {/* ── NAV ───────────────────────────────────────────────────────────── */}
       <nav className="lp-nav">
         <div className="lp-nav-inner">
-          <Link to="/" className="lp-logo">SonarLeads</Link>
+          <Link to="/" className="lp-logo">Sonar</Link>
           <ul className="lp-nav-links">
             <li><a href="#features">Features</a></li>
             <li><a href="#how-it-works">How it works</a></li>
@@ -31,7 +31,7 @@ export default function Landing() {
               </div>
               <h1>Find the lead<br />before your<br />competitor does.</h1>
               <p className="lp-hero-sub">
-                SonarLeads discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform.
+                Sonar discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform.
               </p>
               <div className="lp-hero-ctas">
                 <Link to="/signup" className="lp-btn">Start for free</Link>
@@ -152,7 +152,7 @@ export default function Landing() {
                 <line x1="22.5" y1="17.5" x2="30" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
               <h3>ICP Scoring</h3>
-              <p className="lp-feature-body">Define your ideal customer profile once — industry, company size, location, and custom criteria. SonarLeads automatically scores every company in your pipeline so you always work the highest-fit accounts first.</p>
+              <p className="lp-feature-body">Define your ideal customer profile once — industry, company size, location, and custom criteria. Sonar automatically scores every company in your pipeline so you always work the highest-fit accounts first.</p>
               <Link to="/signup" className="lp-feature-link">Build your ICP <span>→</span></Link>
             </div>
 
@@ -172,7 +172,7 @@ export default function Landing() {
             <div className="lp-step">
               <div className="lp-step-num-wrap"><div className="lp-step-number">01</div></div>
               <div className="lp-step-title">Build your ICP</div>
-              <p className="lp-step-body">Define your ideal customer — industry, company size, location, and role keywords. SonarLeads uses this to score every company it finds.</p>
+              <p className="lp-step-body">Define your ideal customer — industry, company size, location, and role keywords. Sonar uses this to score every company it finds.</p>
             </div>
 
             <div className="lp-connector-col"><div className="lp-connector-line"></div></div>
@@ -289,13 +289,13 @@ export default function Landing() {
       {/* ── FOOTER ────────────────────────────────────────────────────────── */}
       <footer className="lp-footer">
         <div className="lp-footer-inner">
-          <span className="lp-footer-logo">SonarLeads</span>
+          <span className="lp-footer-logo">Sonar</span>
           <div className="lp-footer-links">
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>
             <a href="mailto:sonarleads@proton.me">Contact</a>
           </div>
-          <p className="lp-footer-fine">© 2026 SonarLeads. Built for founders who close.</p>
+          <p className="lp-footer-fine">© 2026 Sonar. Built for founders who close.</p>
         </div>
       </footer>
 

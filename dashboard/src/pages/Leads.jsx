@@ -155,7 +155,7 @@ function EnrichProfileLink({ url }) {
       href: url,
       target: '_blank',
       rel: 'noopener noreferrer',
-      title: 'Open in LinkedIn — then click "Update this lead" in the SonarLeads extension',
+      title: 'Open in LinkedIn — then click "Update this lead" in the Sonar extension',
       style: { ...sub.link, color: 'var(--accent)', borderColor: 'var(--accent-dim)' },
       onClick: (e) => e.stopPropagation()
     },
