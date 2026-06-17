@@ -367,8 +367,8 @@ export default function Landing() {
         <div className="lp-footer-inner">
           <span className="lp-footer-logo">Sonar</span>
           <div className="lp-footer-links">
-            <button onClick={() => setLegal('privacy')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit', color: 'inherit' }}>Privacy</button>
-            <button onClick={() => setLegal('terms')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit', color: 'inherit' }}>Terms</button>
+            <button onClick={() => setLegal('privacy')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Privacy</button>
+            <button onClick={() => setLegal('terms')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Terms</button>
             <a href="mailto:sonarleads@proton.me">Contact</a>
           </div>
           <p className="lp-footer-fine">© 2026 Sonar. Built for founders who close.</p>
