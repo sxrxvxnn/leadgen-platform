@@ -569,14 +569,17 @@
   align-items: center;
   gap: 28px;
 }
-.lp-footer-links a {
+.lp-footer-links a,
+.lp-footer-links button {
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   font-weight: 500;
   color: rgba(255,252,252,0.65);
   transition: color 150ms ease;
+  text-decoration: none;
 }
-.lp-footer-links a:hover { color: var(--color-parchment); }
+.lp-footer-links a:hover,
+.lp-footer-links button:hover { color: var(--color-parchment); }
 .lp-footer-fine {
   width: 100%;
   font-family: 'Lato', sans-serif;
