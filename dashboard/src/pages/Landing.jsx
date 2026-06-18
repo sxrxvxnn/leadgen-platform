@@ -208,8 +208,8 @@ export default function Landing() {
                   link: 'Build your ICP',
                 },
               ].map(({ icon, title, body, link }, i) => (
-                <DirectionAwareHover key={title} style={{ borderRadius: 12 }}>
-                  <CardSpotlight style={{ borderRadius: 12 }}>
+                <DirectionAwareHover key={title} style={{ borderRadius: 0 }}>
+                  <CardSpotlight style={{ borderRadius: 0 }}>
                     <motion.div
                       className="lp-feature-card"
                       initial={{ opacity: 0, y: 32 }}
@@ -405,8 +405,8 @@ export default function Landing() {
                 featured: false,
               },
             ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <DirectionAwareHover key={tier} style={{ borderRadius: 12 }}>
-                <CardSpotlight style={{ borderRadius: 12 }}>
+              <DirectionAwareHover key={tier} style={{ borderRadius: 0 }}>
+                <CardSpotlight style={{ borderRadius: 0 }}>
                   <motion.div
                     className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
                     initial={{ opacity: 0, y: 32 }}

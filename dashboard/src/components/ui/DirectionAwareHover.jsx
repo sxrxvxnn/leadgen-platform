@@ -60,7 +60,7 @@ export function DirectionAwareHover({ children, overlay, style }) {
               position: 'absolute',
               inset: 0,
               pointerEvents: 'none',
-              background: 'linear-gradient(135deg, rgba(111,99,183,0.12) 0%, rgba(49,38,59,0.08) 100%)',
+              background: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.03) 100%)',
               zIndex: 10,
             }}
           />

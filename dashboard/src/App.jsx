@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import { PostHogProvider } from './components/PostHogProvider'
+import { PageLoader } from './components/ui/PageLoader'
 
 // Eagerly load auth-critical pages (shown immediately on cold visit)
 import Login from './pages/Login'
@@ -26,8 +27,8 @@ const Terms           = lazy(() => import('./pages/Terms'))
 
 function PageFallback() {
   return (
-    <div style={{ minHeight: '100vh', background: '#fffcfc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 24, height: 24, border: '2px solid rgba(111,99,183,0.15)', borderTop: '2px solid #6f63b7', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <div style={{ minHeight: '100vh', background: '#121212', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,0,0.15)', borderTop: '2px solid #FFFF00', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
@@ -40,11 +41,20 @@ function RootRedirect() {
 }
 
 export default function App() {
+  const alreadySeen = sessionStorage.getItem('loaderSeen') === '1'
+  const [loaderDone, setLoaderDone] = useState(alreadySeen)
+
+  const handleLoaderDone = useCallback(() => {
+    sessionStorage.setItem('loaderSeen', '1')
+    setLoaderDone(true)
+  }, [])
+
   return (
     <BrowserRouter>
       <PostHogProvider>
       <AuthProvider>
         <BulkOpsProvider>
+          {!loaderDone && <PageLoader onDone={handleLoaderDone} />}
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />

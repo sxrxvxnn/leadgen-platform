@@ -11,12 +11,13 @@ const NAV_LINKS = [
   { label: 'Settings',  path: '/settings' },
 ]
 
-const SANS = "'IBM Plex Sans', 'DM Sans', sans-serif"
-const INK  = '#01011b'
-const PLUM = '#31263b'
-const MID  = '#717a94'
-const LINE = '#dbd7da'
-const BG   = '#fffcfc'
+const DARK    = '#121212'
+const BORDER  = '#2A2A2A'
+const INK     = '#F5F5F5'
+const STEEL   = '#5B6670'
+const ACCENT  = '#FFFF00'
+const SANS    = "'Host Grotesk', 'Roboto', sans-serif"
+const DISPLAY = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 
 export default function Navbar() {
   const { user, profile, logout } = useAuth()
@@ -41,8 +42,8 @@ export default function Navbar() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 100,
-      background: BG,
-      borderBottom: `1px solid ${LINE}`,
+      background: DARK,
+      borderBottom: `1px solid ${BORDER}`,
     }}>
       <div style={{
         padding: '0 32px',
@@ -53,33 +54,37 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span style={{
-            fontFamily: SANS,
-            fontSize: '16px', fontWeight: '700',
-            color: INK, letterSpacing: '-0.02em',
+            fontFamily: DISPLAY,
+            fontSize: '18px', fontWeight: '700',
+            color: INK, letterSpacing: '0.06em',
+            textTransform: 'uppercase',
           }}>
             Sonar
           </span>
         </Link>
 
         {/* Center nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
           {NAV_LINKS.map(({ label, path }) => (
             <Link
               key={path}
               to={path}
               style={{
                 fontFamily: SANS,
-                fontSize: '14px',
-                fontWeight: isActive(path) ? '600' : '500',
-                color: isActive(path) ? INK : MID,
+                fontSize: '11px',
+                fontWeight: '500',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                color: isActive(path) ? INK : STEEL,
                 padding: '5px 12px',
                 textDecoration: 'none',
-                borderRadius: 3,
-                background: isActive(path) ? '#ecedf2' : 'transparent',
+                borderRadius: 0,
+                background: isActive(path) ? 'rgba(255,255,255,0.07)' : 'transparent',
+                borderBottom: isActive(path) ? `1px solid ${ACCENT}` : '1px solid transparent',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive(path)) { e.currentTarget.style.color = PLUM; e.currentTarget.style.background = '#f4f3f6' } }}
-              onMouseLeave={e => { if (!isActive(path)) { e.currentTarget.style.color = MID; e.currentTarget.style.background = 'transparent' } }}
+              onMouseEnter={e => { if (!isActive(path)) e.currentTarget.style.color = INK }}
+              onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = STEEL }}
             >
               {label}
             </Link>
@@ -89,17 +94,17 @@ export default function Navbar() {
               to="/admin"
               style={{
                 fontFamily: SANS,
-                fontSize: '14px',
-                fontWeight: isActive('/admin') ? '600' : '500',
-                color: isActive('/admin') ? INK : MID,
+                fontSize: '11px', fontWeight: '500',
+                letterSpacing: '0.07em', textTransform: 'uppercase',
+                color: isActive('/admin') ? INK : STEEL,
                 padding: '5px 12px',
                 textDecoration: 'none',
-                borderRadius: 3,
-                background: isActive('/admin') ? '#ecedf2' : 'transparent',
+                background: isActive('/admin') ? 'rgba(255,255,255,0.07)' : 'transparent',
+                borderBottom: isActive('/admin') ? `1px solid ${ACCENT}` : '1px solid transparent',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive('/admin')) { e.currentTarget.style.color = PLUM; e.currentTarget.style.background = '#f4f3f6' } }}
-              onMouseLeave={e => { if (!isActive('/admin')) { e.currentTarget.style.color = MID; e.currentTarget.style.background = 'transparent' } }}
+              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = INK }}
+              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = STEEL }}
             >
               Admin
             </Link>
@@ -109,7 +114,7 @@ export default function Navbar() {
         {/* Right: user + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
           {displayName && (
-            <span style={{ fontFamily: SANS, fontSize: '13px', color: MID }}>
+            <span style={{ fontFamily: SANS, fontSize: '12px', color: STEEL, letterSpacing: '0.04em' }}>
               {displayName}
             </span>
           )}
@@ -117,17 +122,18 @@ export default function Navbar() {
             onClick={handleLogout}
             style={{
               fontFamily: SANS,
-              fontSize: '14px', fontWeight: '500',
-              padding: '7px 16px',
-              background: '#ffffff',
+              fontSize: '11px', fontWeight: '500',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              padding: '6px 14px',
+              background: 'transparent',
               color: INK,
-              border: `1px solid ${PLUM}`,
-              borderRadius: 3,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 0,
               cursor: 'pointer',
-              transition: 'all 0.15s',
+              transition: 'border-color 0.15s, box-shadow 0.2s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.boxShadow = `0 0 10px rgba(255,255,0,0.12)` }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = 'none' }}
           >
             Sign out
           </button>

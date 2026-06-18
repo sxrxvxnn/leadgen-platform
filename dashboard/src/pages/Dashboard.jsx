@@ -90,7 +90,7 @@ export default function Dashboard() {
               <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>— extract leads from LinkedIn with one click.</span>
             </div>
             <a href="/sonar-extension.zip" download onClick={() => setExtStepsOpen(true)}
-              style={{ fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 500, color: 'var(--text)', background: '#ffffff', border: '1px solid var(--border-strong)', borderRadius: 3, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
+              style={{ fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#121212', background: '#FFFF00', border: 'none', borderRadius: 0, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
               Download ↓
             </a>
             <button onClick={() => { setShowExtBanner(false); localStorage.setItem('extBannerDismissed', '1') }}
