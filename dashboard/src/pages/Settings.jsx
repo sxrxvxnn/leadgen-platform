@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { motion } from 'motion/react'
 import Navbar from '../components/Navbar'
 
@@ -14,6 +14,8 @@ export default function Settings() {
   const [liCookie, setLiCookie] = useState(localStorage.getItem('liCookie') || '')
   const [saved, setSaved] = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
+  const [agreedTerms, setAgreedTerms] = useState(localStorage.getItem('agreedTerms') === '1')
+  const [wantsUpdates, setWantsUpdates] = useState(localStorage.getItem('wantsUpdates') !== '0')
 
   const sectionRefs = {
     profile:  useRef(null),
@@ -25,6 +27,8 @@ export default function Settings() {
   function handleSave() {
     localStorage.setItem('fullName', fullName)
     localStorage.setItem('liCookie', liCookie)
+    localStorage.setItem('agreedTerms', agreedTerms ? '1' : '0')
+    localStorage.setItem('wantsUpdates', wantsUpdates ? '1' : '0')
     window.dispatchEvent(new Event('nameUpdated'))
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -130,101 +134,91 @@ export default function Settings() {
           </section>
 
           {/* 03 — Privacy */}
-          <section ref={sectionRefs.privacy} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="03" title="Privacy" />
-            <p style={s.sectionHint}>
-              How LeadGen Engine collects, uses, and protects your data. Effective June 16, 2026.
-            </p>
+          <section ref={sectionRefs.privacy} style={{ ...s.section }}>
+            <SectionHeader num="03" title="Privacy Policy" />
+            <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>
 
-            {[
-              {
-                title: 'Data Collected',
-                body: "We collect your name and email for authentication, B2B company/contact data you add or import, anonymised usage analytics via PostHog, and LinkedIn company profile data where you authorise API access.",
-              },
-              {
-                title: 'How We Use It',
-                body: 'Your data is used solely to operate the platform: authenticate your account, enrich company records via third-party APIs, sync LinkedIn leads into your pipeline, and improve the product via anonymised analytics. We do not sell or share your data with third parties for advertising.',
-              },
-              {
-                title: 'Storage & Security',
-                body: 'All data is stored in Supabase (PostgreSQL) with Row Level Security enforced — you can only access your own records. All communication is encrypted over HTTPS. Data is retained while your account is active and deleted on request.',
-              },
-              {
-                title: 'LinkedIn API Data',
-                body: 'LinkedIn data is only accessed with your explicit authorisation. Lead Gen Form data is used solely to populate your pipeline and is never redistributed. You can revoke LinkedIn access at any time via your LinkedIn account settings.',
-              },
-              {
-                title: 'Third-Party Services',
-                body: 'Supabase (database), Google Maps (location enrichment), PostHog (analytics), Vercel (hosting). Each service is governed by its own privacy policy.',
-              },
-              {
-                title: 'Your Rights (DPDP Act 2023)',
-                body: 'You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact sonarleads@proton.me. We will respond within 30 days.',
-              },
-            ].map(({ title, body }) => (
-              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, marginTop: '8px' }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
-              </div>
-            ))}
+            <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
+              <p style={s.legalHeading}>PRIVACY POLICY</p>
+              <p style={s.legalMeta}>Date of last revision: June 16, 2026</p>
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
-              Full policy available at{' '}
-              <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                sonarleads.vercel.app/privacy
-              </a>
-            </p>
+              <p style={s.legalBody}>This Privacy Policy describes how Sonar ("Company," "we," "us," or "our") collects, uses, and shares information about you when you use our B2B lead intelligence platform and Chrome extension (collectively, the "Services").</p>
+
+              <p style={s.legalSubhead}>1. Data Collected</p>
+              <p style={s.legalBody}>We collect your name and email for authentication, B2B company and contact data you add or import, anonymised usage analytics via PostHog, and LinkedIn company profile data where you authorise API access. We do not collect sensitive personal data such as health, financial, or government-issued identification information.</p>
+
+              <p style={s.legalSubhead}>2. How We Use It</p>
+              <p style={s.legalBody}>Your data is used solely to operate the platform: authenticate your account, enrich company records via third-party APIs (Hunter, Apollo, Google Maps), sync LinkedIn leads into your pipeline, and improve the product via anonymised analytics. We do not sell or share your personal data with third parties for advertising purposes.</p>
+
+              <p style={s.legalSubhead}>3. Storage & Security</p>
+              <p style={s.legalBody}>All data is stored in Supabase (PostgreSQL) hosted on AWS with Row Level Security enforced — you can only access your own records. All communication is encrypted over HTTPS/TLS. Data is retained while your account is active and deleted on request within 30 days.</p>
+
+              <p style={s.legalSubhead}>4. LinkedIn API Data</p>
+              <p style={s.legalBody}>LinkedIn data is only accessed with your explicit authorisation via your session cookie. Lead data is used solely to populate your pipeline and is never redistributed. You can revoke LinkedIn access at any time by removing your cookie from Settings.</p>
+
+              <p style={s.legalSubhead}>5. Third-Party Services</p>
+              <p style={s.legalBody}>Supabase (database), Google Maps (location enrichment), PostHog (analytics), Vercel (hosting), Hunter.io and Apollo.io (email enrichment). Each service is governed by its own privacy policy.</p>
+
+              <p style={s.legalSubhead}>6. Your Rights (DPDP Act 2023)</p>
+              <p style={s.legalBody}>You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact sonarleads@proton.me. We will respond within 30 days.</p>
+
+              <p style={s.legalSubhead}>7. Cookies</p>
+              <p style={s.legalBody}>We use session storage and local storage to maintain your authentication state and preferences. No third-party advertising cookies are set.</p>
+            </div>
+
+            <ToggleRow
+              label={<>I have read and agree to Sonar's <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Privacy Policy</a>.</>}
+              checked={agreedTerms}
+              onChange={() => setAgreedTerms(v => !v)}
+            />
           </section>
 
           {/* 04 — Terms */}
           <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="04" title="Terms" />
-            <p style={s.sectionHint}>
-              The rules governing your use of LeadGen Engine. Effective June 16, 2026.
-            </p>
+            <SectionHeader num="04" title="Terms of Service" />
+            <p style={s.sectionHint}>The rules governing your use of Sonar. Effective June 16, 2026.</p>
 
-            {[
-              {
-                title: 'Acceptance',
-                body: 'By using LeadGen Engine you agree to these Terms. If you do not agree, do not use the platform. These Terms form a binding agreement between you and Shravan Omanakuttan, operator of LeadGen Engine.',
-              },
-              {
-                title: 'Acceptable Use',
-                body: 'Use the platform only for lawful B2B sales and marketing purposes. You must not scrape third-party platforms in violation of their terms, send unsolicited bulk communications, resell platform access, or use the platform to store sensitive personal data such as health or financial information.',
-              },
-              {
-                title: 'Your Data',
-                body: 'You own all company, contact, and lead data you create in the platform. You grant us a limited licence to store and process it solely to provide the Service. You are responsible for ensuring you have the right to upload any data you add.',
-              },
-              {
-                title: 'LinkedIn API',
-                body: "By connecting LinkedIn, you authorise LeadGen Engine to access LinkedIn data on your behalf within the approved scope. LinkedIn data may only be used for your own sales activities and is subject to LinkedIn's own terms in addition to ours.",
-              },
-              {
-                title: 'Disclaimers',
-                body: 'The platform is provided "as is" without warranties of any kind. We do not guarantee that enrichment data from third-party APIs will be accurate, complete, or current. The platform may be unavailable during maintenance windows.',
-              },
-              {
-                title: 'Liability',
-                body: 'Our total liability for any claims is limited to the amount you paid us in the prior 12 months or ₹5,000, whichever is greater. We are not liable for indirect, incidental, or consequential damages including loss of business or data.',
-              },
-            ].map(({ title, body }) => (
-              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, marginTop: '8px' }}>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
-              </div>
-            ))}
+            <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
+              <p style={s.legalHeading}>TERMS OF USE / SERVICE AGREEMENT</p>
+              <p style={s.legalMeta}>Date of last revision: June 16, 2026</p>
 
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '16px', lineHeight: 1.6 }}>
-              Full terms at{' '}
-              <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                sonarleads.vercel.app/terms
-              </a>
-              {' '}·{' '}
-              <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
-                Privacy Policy
-              </a>
-            </p>
+              <p style={s.legalBody}>This Terms of Use or Service Agreement ("Agreement") is between Shravan Omanakuttan, operating Sonar ("Company," "we," "us," or "our") and the person or entity ("you" or "your") that has decided to use our services; any of our websites or apps; or any features, products, text, images, data, computer code, and all other forms of data and communications (collectively, "Services").</p>
+
+              <p style={s.legalBody}>YOU MUST CONSENT TO THIS AGREEMENT TO USE OUR SERVICES. If you do not accept and agree to be bound by all of the terms of this Agreement, you cannot use Services.</p>
+
+              <p style={s.legalBody}>If we update this Agreement, we will provide you notice and an opportunity to review and decide whether you would like to continue to use the Services.</p>
+
+              <p style={s.legalSubhead}>1. Description of the Services</p>
+              <p style={s.legalBody}>Sonar is a B2B lead intelligence platform that provides tools to discover, enrich, and manage company and contact records for sales and marketing purposes.</p>
+
+              <p style={s.legalSubhead}>2. Acceptable Use</p>
+              <p style={s.legalBody}>Use the platform only for lawful B2B sales and marketing purposes. You must not scrape third-party platforms in violation of their terms, send unsolicited bulk communications, resell platform access, or use the platform to store sensitive personal data such as health or financial information.</p>
+
+              <p style={s.legalSubhead}>3. Your Data</p>
+              <p style={s.legalBody}>You own all company, contact, and lead data you create in the platform. You grant us a limited licence to store and process it solely to provide the Service. You are responsible for ensuring you have the right to upload any data you add.</p>
+
+              <p style={s.legalSubhead}>4. LinkedIn API</p>
+              <p style={s.legalBody}>By connecting LinkedIn, you authorise Sonar to access LinkedIn data on your behalf within the approved scope. LinkedIn data may only be used for your own sales activities and is subject to LinkedIn's own terms in addition to ours.</p>
+
+              <p style={s.legalSubhead}>5. Disclaimers</p>
+              <p style={s.legalBody}>The platform is provided "as is" without warranties of any kind. We do not guarantee that enrichment data from third-party APIs will be accurate, complete, or current. The platform may be unavailable during maintenance windows.</p>
+
+              <p style={s.legalSubhead}>6. Limitation of Liability</p>
+              <p style={s.legalBody}>Our total liability for any claims is limited to the amount you paid us in the prior 12 months or ₹5,000, whichever is greater. We are not liable for indirect, incidental, or consequential damages including loss of business or data.</p>
+            </div>
+
+            <ToggleRow
+              label={<>I agree to Sonar's <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Privacy Policy</a>.</>}
+              checked={agreedTerms}
+              onChange={() => setAgreedTerms(v => !v)}
+            />
+            <div style={{ marginTop: '10px' }}>
+              <ToggleRow
+                label="I want to receive product updates and launch emails. You can unsubscribe at any time."
+                checked={wantsUpdates}
+                onChange={() => setWantsUpdates(v => !v)}
+              />
+            </div>
           </section>
 
           {/* Save */}
@@ -297,6 +291,39 @@ function ExtLink({ href, children }) {
   )
 }
 
+function ToggleRow({ label, checked, onChange }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '14px 0', borderTop: '1px solid var(--border)' }}>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, flex: 1 }}>{label}</span>
+      <button
+        onClick={onChange}
+        style={{
+          position: 'relative', flexShrink: 0,
+          width: '44px', height: '24px',
+          background: checked ? '#FFFF00' : 'var(--surface2, #222)',
+          border: checked ? '1px solid #FFFF00' : '1px solid var(--border)',
+          borderRadius: '12px',
+          cursor: 'pointer',
+          transition: 'background 0.2s, border-color 0.2s',
+          padding: 0,
+        }}
+        aria-pressed={checked}
+      >
+        <span style={{
+          position: 'absolute',
+          top: '3px',
+          left: checked ? '22px' : '3px',
+          width: '16px', height: '16px',
+          borderRadius: '50%',
+          background: checked ? '#121212' : '#5B6670',
+          transition: 'left 0.2s',
+          display: 'block',
+        }} />
+      </button>
+    </div>
+  )
+}
+
 const badge = {
   green: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
   blue:  { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
@@ -304,10 +331,14 @@ const badge = {
 }
 
 const s = {
-  eyebrow:     { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
-    heroTitle:   { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '900', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
-  heroSub:     { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
-  section:     { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px solid var(--border)' },
-  sectionHint: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
-  input:       { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  eyebrow:      { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
+  heroTitle:    { fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: '900', letterSpacing: '-0.05em', color: 'var(--text)', lineHeight: 1, marginBottom: '10px' },
+  heroSub:      { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
+  section:      { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px solid var(--border)' },
+  sectionHint:  { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
+  input:        { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  legalHeading: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.12em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '4px' },
+  legalMeta:    { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '18px', letterSpacing: '0.02em' },
+  legalSubhead: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginTop: '18px', marginBottom: '6px' },
+  legalBody:    { fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: '0px' },
 }

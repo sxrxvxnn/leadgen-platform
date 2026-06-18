@@ -18,10 +18,10 @@ export default function Globe({ size = 160 }) {
       dark:   1,
       diffuse: 1.2,
       mapSamples:    14000,
-      mapBrightness: 1.8,
-      baseColor:   [0.15, 0.15, 0.15],
+      mapBrightness: 6,
+      baseColor:   [0.22, 0.22, 0.22],
       markerColor: [1, 1, 0],
-      glowColor:   [0.2, 0.2, 0.2],
+      glowColor:   [0.15, 0.15, 0.15],
       markers: [
         { location: [8.5241, 76.9366], size: 0.07 }, // Technopark, Kerala
       ],
