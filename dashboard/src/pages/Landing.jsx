@@ -11,6 +11,10 @@ import { useSpotlight } from '../components/ui/Spotlight'
 import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
 import { CardSpotlight } from '../components/ui/CardSpotlight'
 import { TextGenerateEffect } from '../components/ui/TextGenerateEffect'
+import { FloatingNavbar } from '../components/ui/FloatingNavbar'
+import { DirectionAwareHover } from '../components/ui/DirectionAwareHover'
+import { AnimatedButton } from '../components/ui/AnimatedButton'
+import { FollowingPointer } from '../components/FollowingPointer'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -25,6 +29,17 @@ export default function Landing() {
 
   return (
     <div className="lp">
+
+      {/* ── FLOATING NAV (scroll-triggered) ──────────────────────────────── */}
+      <FloatingNavbar
+        logo="Sonar"
+        items={[
+          { label: 'Features',     href: '#features' },
+          { label: 'How it works', href: '#how-it-works' },
+          { label: 'Pricing',      href: '#pricing' },
+        ]}
+        cta={{ label: 'Get started →', href: '/signup' }}
+      />
 
       {/* ── NAV ───────────────────────────────────────────────────────────── */}
       <nav className="lp-nav">
@@ -63,23 +78,12 @@ export default function Landing() {
                 <TextGenerateEffect text="Sonar discovers B2B companies, enriches every data point with AI — website, LinkedIn, headcount, contacts — and scores them against your ICP. From first search to outreach-ready lead, in one platform." delay={0.3} duration={0.35} staggerDelay={0.04} />
               </motion.p>
               <motion.div className="lp-hero-ctas" {...fadeUp(0.22)}>
-                <MovingBorderButton
-                  as={Link}
-                  to="/signup"
-                  borderRadius="3px"
-                  style={{ display: 'inline-block' }}
-                  innerStyle={{
-                    padding: '10px 20px',
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontWeight: 500,
-                    fontSize: '14px',
-                    color: 'var(--color-ink-violet)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Start for free
-                </MovingBorderButton>
-                <a href="#how-it-works" className="lp-btn-ghost">See how it works</a>
+                <AnimatedButton variant="shimmer" href="/signup" as="a">
+                  Start for free →
+                </AnimatedButton>
+                <AnimatedButton variant="glow" href="#how-it-works" as="a" style={{ color: 'var(--color-ink-violet)', border: '1px solid rgba(49,38,59,0.22)', background: 'transparent' }}>
+                  See how it works
+                </AnimatedButton>
               </motion.div>
             </div>
 
@@ -160,67 +164,71 @@ export default function Landing() {
             <span className="lp-pill">Features</span>
             <h2>From search<br />to outreach-ready.</h2>
           </motion.div>
-          <div className="lp-features-grid">
+          <FollowingPointer label="Explore →" style={{ borderRadius: 12 }}>
+            <div className="lp-features-grid">
 
-            {[
-              {
-                icon: (
-                  <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                    <circle cx="18" cy="18" r="12" stroke="currentColor" strokeWidth="1.5"/>
-                    <line x1="27" y1="27" x2="36" y2="36" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="14" y1="18" x2="22" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                    <line x1="18" y1="14" x2="18" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'Company Discovery',
-                body: 'Search millions of B2B companies by industry, location, size, and keyword. Filter by sector — SaaS, Fintech, Healthtech, Cybersecurity and more — and add matching targets straight to your pipeline.',
-                link: 'Start discovering',
-              },
-              {
-                icon: (
-                  <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                    <rect x="4" y="8" width="32" height="24" rx="3" stroke="currentColor" strokeWidth="1.5"/>
-                    <path d="M4 14h32" stroke="currentColor" strokeWidth="1.5"/>
-                    <circle cx="20" cy="26" r="4" stroke="currentColor" strokeWidth="1.5"/>
-                    <path d="M17 26h-4M27 26h-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'AI Enrichment',
-                body: 'Our AI reads company websites, LinkedIn pages, and Google Maps to fill every blank — description, headcount, industry classification, tech stack signals, and decision-maker profiles. One click, complete record.',
-                link: 'See enrichment',
-              },
-              {
-                icon: (
-                  <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                    <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="1.5" opacity="0.25"/>
-                    <circle cx="20" cy="20" r="9"  stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
-                    <circle cx="20" cy="20" r="3.5" fill="currentColor"/>
-                    <line x1="22.5" y1="17.5" x2="30" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'ICP Scoring',
-                body: 'Define your ideal customer profile once — industry, company size, location, and custom criteria. Sonar automatically scores every company in your pipeline so you always work the highest-fit accounts first.',
-                link: 'Build your ICP',
-              },
-            ].map(({ icon, title, body, link }, i) => (
-              <CardSpotlight key={title} style={{ borderRadius: 12 }}>
-                <motion.div
-                  className="lp-feature-card"
-                  initial={{ opacity: 0, y: 32 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-40px' }}
-                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                >
-                  {icon}
-                  <h3>{title}</h3>
-                  <p className="lp-feature-body">{body}</p>
-                  <Link to="/signup" className="lp-feature-link">{link} <span>→</span></Link>
-                </motion.div>
-              </CardSpotlight>
-            ))}
+              {[
+                {
+                  icon: (
+                    <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                      <circle cx="18" cy="18" r="12" stroke="currentColor" strokeWidth="1.5"/>
+                      <line x1="27" y1="27" x2="36" y2="36" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <line x1="14" y1="18" x2="22" y2="18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      <line x1="18" y1="14" x2="18" y2="22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  ),
+                  title: 'Company Discovery',
+                  body: 'Search millions of B2B companies by industry, location, size, and keyword. Filter by sector — SaaS, Fintech, Healthtech, Cybersecurity and more — and add matching targets straight to your pipeline.',
+                  link: 'Start discovering',
+                },
+                {
+                  icon: (
+                    <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                      <rect x="4" y="8" width="32" height="24" rx="3" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M4 14h32" stroke="currentColor" strokeWidth="1.5"/>
+                      <circle cx="20" cy="26" r="4" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M17 26h-4M27 26h-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  ),
+                  title: 'AI Enrichment',
+                  body: 'Our AI reads company websites, LinkedIn pages, and Google Maps to fill every blank — description, headcount, industry classification, tech stack signals, and decision-maker profiles. One click, complete record.',
+                  link: 'See enrichment',
+                },
+                {
+                  icon: (
+                    <svg className="lp-feature-icon" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                      <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="1.5" opacity="0.25"/>
+                      <circle cx="20" cy="20" r="9"  stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+                      <circle cx="20" cy="20" r="3.5" fill="currentColor"/>
+                      <line x1="22.5" y1="17.5" x2="30" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  ),
+                  title: 'ICP Scoring',
+                  body: 'Define your ideal customer profile once — industry, company size, location, and custom criteria. Sonar automatically scores every company in your pipeline so you always work the highest-fit accounts first.',
+                  link: 'Build your ICP',
+                },
+              ].map(({ icon, title, body, link }, i) => (
+                <DirectionAwareHover key={title} style={{ borderRadius: 12 }}>
+                  <CardSpotlight style={{ borderRadius: 12 }}>
+                    <motion.div
+                      className="lp-feature-card"
+                      initial={{ opacity: 0, y: 32 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: '-40px' }}
+                      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
+                      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                    >
+                      {icon}
+                      <h3>{title}</h3>
+                      <p className="lp-feature-body">{body}</p>
+                      <Link to="/signup" className="lp-feature-link">{link} <span>→</span></Link>
+                    </motion.div>
+                  </CardSpotlight>
+                </DirectionAwareHover>
+              ))}
 
-          </div>
+            </div>
+          </FollowingPointer>
         </div>
       </section>
 
@@ -279,30 +287,9 @@ export default function Landing() {
                 <li><span className="lp-ext-dash">—</span>One click — leads appear in your dashboard instantly</li>
               </ul>
               <div className="lp-ext-actions">
-                <MovingBorderButton
-                  as="a"
-                  href="/sonar-extension.zip"
-                  download
-                  borderRadius="3px"
-                  style={{ display: 'inline-block' }}
-                  innerStyle={{
-                    padding: '10px 20px',
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontWeight: 500,
-                    fontSize: '14px',
-                    color: 'var(--color-ink-violet)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Download extension
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                    <path d="M7 1v8M3.5 6l3.5 3.5L10.5 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M1 11h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  </svg>
-                </MovingBorderButton>
+                <AnimatedButton variant="shimmer" href="/sonar-extension.zip" as="a" download>
+                  Download extension ↓
+                </AnimatedButton>
                 <ol className="lp-ext-steps">
                   <li><span className="lp-ext-step-num">1</span>Download and <strong>unzip</strong> the file</li>
                   <li><span className="lp-ext-step-num">2</span>Open <code>chrome://extensions</code> in Chrome</li>
@@ -418,26 +405,28 @@ export default function Landing() {
                 featured: false,
               },
             ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <CardSpotlight key={tier} style={{ borderRadius: 12 }}>
-                <motion.div
-                  className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
-                  initial={{ opacity: 0, y: 32 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-40px' }}
-                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                >
-                  {featured && <span className="lp-recommended-badge">Most popular</span>}
-                  <div className="lp-pricing-tier">{tier}</div>
-                  <div className="lp-pricing-price">{price}</div>
-                  <div className="lp-pricing-period">{period}</div>
-                  <div className="lp-pricing-divider"></div>
-                  <ul className="lp-pricing-features">
-                    {features.map(f => <li key={f}>{f}</li>)}
-                  </ul>
-                  {cta}
-                </motion.div>
-              </CardSpotlight>
+              <DirectionAwareHover key={tier} style={{ borderRadius: 12 }}>
+                <CardSpotlight style={{ borderRadius: 12 }}>
+                  <motion.div
+                    className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
+                    initial={{ opacity: 0, y: 32 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
+                    whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                  >
+                    {featured && <span className="lp-recommended-badge">Most popular</span>}
+                    <div className="lp-pricing-tier">{tier}</div>
+                    <div className="lp-pricing-price">{price}</div>
+                    <div className="lp-pricing-period">{period}</div>
+                    <div className="lp-pricing-divider"></div>
+                    <ul className="lp-pricing-features">
+                      {features.map(f => <li key={f}>{f}</li>)}
+                    </ul>
+                    {cta}
+                  </motion.div>
+                </CardSpotlight>
+              </DirectionAwareHover>
             ))}
 
           </div>

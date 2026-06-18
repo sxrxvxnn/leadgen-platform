@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import api from '../services/api'
+import { MultiStepLoader } from '../components/ui/MultiStepLoader'
+import { AnimatedButton } from '../components/ui/AnimatedButton'
 
 const BG   = '#fffcfc'
 const INK  = '#01011b'
@@ -50,8 +52,20 @@ export default function Onboarding() {
     }
   }
 
+  const loaderSteps = [
+    'Setting up your workspace…',
+    'Building your ICP profile…',
+    'Preparing your pipeline…',
+    'Configuring enrichment…',
+    'Almost ready…',
+  ]
+
   return (
     <motion.div style={{ background: BG, minHeight: '100vh', fontFamily: SANS, color: INK }} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
+
+      <AnimatePresence>
+        {loading && <MultiStepLoader steps={loaderSteps} active={loading} />}
+      </AnimatePresence>
 
       {/* Nav */}
       <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center' }}>
@@ -192,20 +206,9 @@ export default function Onboarding() {
                 </p>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <button
-                  onClick={() => { window.location.href = '/dashboard' }}
-                  style={{
-                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
-                    color: INK, background: '#ffffff',
-                    border: `1px solid ${PLUM}`, borderRadius: 3,
-                    padding: '10px 20px', cursor: 'pointer',
-                    width: 'fit-content', transition: 'all 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
-                >
+                <AnimatedButton variant="shimmer" as="button" onClick={() => { window.location.href = '/dashboard' }} style={{ width: 'fit-content' }}>
                   Go to dashboard →
-                </button>
+                </AnimatedButton>
                 <button
                   onClick={() => setStep(mode === 'team' ? 2 : 1)}
                   style={{ fontFamily: SANS, fontSize: 13, color: MID, background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', width: 'fit-content' }}
@@ -258,31 +261,18 @@ export default function Onboarding() {
               {error && <p style={{ fontSize: 13, color: '#b83232', marginBottom: 16 }}>{error}</p>}
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <button
+                <AnimatedButton
+                  variant="shimmer"
+                  as="button"
                   onClick={() => finish('team', teamName.trim(), false)}
                   disabled={!teamName.trim() || loading}
-                  style={{
-                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
-                    background: '#ffffff', color: INK,
-                    border: `1px solid ${teamName.trim() && !loading ? PLUM : LINE}`,
-                    padding: '10px 20px', borderRadius: 3,
-                    cursor: teamName.trim() && !loading ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.15s',
-                    opacity: !teamName.trim() || loading ? 0.5 : 1,
-                  }}
-                  onMouseEnter={e => { if (teamName.trim() && !loading) { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG } }}
-                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
+                  style={{ opacity: !teamName.trim() || loading ? 0.5 : 1, cursor: !teamName.trim() || loading ? 'not-allowed' : 'pointer' }}
                 >
-                  {loading ? 'Setting up…' : 'Continue →'}
-                </button>
+                  Continue →
+                </AnimatedButton>
                 <button
                   onClick={() => setStep(1)}
-                  style={{
-                    fontFamily: SANS, fontSize: 14, fontWeight: 500,
-                    color: MID, background: 'none', border: 'none',
-                    cursor: 'pointer', padding: '10px 4px',
-                    transition: 'color 0.15s',
-                  }}
+                  style={{ fontFamily: SANS, fontSize: 14, fontWeight: 500, color: MID, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', transition: 'color 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.color = INK}
                   onMouseLeave={e => e.currentTarget.style.color = MID}
                 >
