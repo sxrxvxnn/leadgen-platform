@@ -164,7 +164,7 @@ export default function Landing() {
             <span className="lp-pill">Features</span>
             <h2>From search<br />to outreach-ready.</h2>
           </motion.div>
-          <FollowingPointer label="Explore →" style={{ borderRadius: 12 }}>
+          <FollowingPointer label="Explore →" style={{ borderRadius: 0 }}>
             <div className="lp-features-grid">
 
               {[
@@ -216,7 +216,6 @@ export default function Landing() {
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true, margin: '-40px' }}
                       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                      whileHover={{ y: -4, transition: { duration: 0.2 } }}
                     >
                       {icon}
                       <h3>{title}</h3>
@@ -413,7 +412,6 @@ export default function Landing() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-40px' }}
                     transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: i * 0.1 }}
-                    whileHover={{ y: -6, transition: { duration: 0.2 } }}
                   >
                     {featured && <span className="lp-recommended-badge">Most popular</span>}
                     <div className="lp-pricing-tier">{tier}</div>

@@ -1,6 +1,6 @@
 import { useMotionTemplate, useMotionValue, motion } from 'motion/react'
 
-export function CardSpotlight({ children, style, radius = 260, color = 'rgba(111,99,183,0.12)' }) {
+export function CardSpotlight({ children, style, radius = 260, color = 'rgba(0,0,0,0.06)' }) {
   const mouseX = useMotionValue(-1000)
   const mouseY = useMotionValue(-1000)
 

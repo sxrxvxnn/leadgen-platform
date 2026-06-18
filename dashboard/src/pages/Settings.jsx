@@ -64,6 +64,7 @@ export default function Settings() {
                   cursor: 'pointer', borderRadius: '6px', textAlign: 'left',
                   transition: 'background 0.15s',
                   background: activeSection === sec.id ? 'var(--surface)' : 'transparent',
+                  borderRadius: 0,
                 }}
               >
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: activeSection === sec.id ? 'var(--accent)' : 'var(--text-muted)', fontWeight: '600', letterSpacing: '0.06em', flexShrink: 0 }}>
@@ -103,7 +104,7 @@ export default function Settings() {
               hint={
                 <span>
                   1. Open LinkedIn in your browser while logged in.<br />
-                  2. DevTools → Application → Cookies → www.linkedin.com → find <code style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', background: 'var(--surface)', padding: '1px 4px', borderRadius: '3px' }}>li_at</code> → copy its Value.<br />
+                  2. DevTools → Application → Cookies → www.linkedin.com → find <code style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', background: 'var(--surface)', padding: '1px 4px', borderRadius: 0 }}>li_at</code> → copy its Value.<br />
                   3. Paste below and Save. The cookie is only sent to your own backend.
                 </span>
               }>
@@ -112,7 +113,7 @@ export default function Settings() {
 
             <div style={{ marginTop: '16px' }}>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What this unlocks</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden' }}>
                 {[
                   { label: 'Phone',        text: 'Business phone number listed on LinkedIn About.' },
                   { label: 'Founded',      text: 'Company founding year.' },
@@ -161,7 +162,7 @@ export default function Settings() {
                 body: 'You have the right to access, correct, export, or delete your personal data at any time. To exercise these rights or for any privacy concerns, contact sonarleads@proton.me. We will respond within 30 days.',
               },
             ].map(({ title, body }) => (
-              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px' }}>
+              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, marginTop: '8px' }}>
                 <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
               </div>
@@ -208,7 +209,7 @@ export default function Settings() {
                 body: 'Our total liability for any claims is limited to the amount you paid us in the prior 12 months or ₹5,000, whichever is greater. We are not liable for indirect, incidental, or consequential damages including loss of business or data.',
               },
             ].map(({ title, body }) => (
-              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '8px' }}>
+              <div key={title} style={{ marginBottom: '1px', padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, marginTop: '8px' }}>
                 <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '6px' }}>{title}</p>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.7, margin: 0 }}>{body}</p>
               </div>
@@ -231,9 +232,9 @@ export default function Settings() {
             <button onClick={handleSave} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '14px 20px',
-              background: saved ? '#4a7c59' : '#1d1b1b', border: 'none', borderRadius: '8px',
+              background: saved ? '#4a7c59' : '#FFFF00', border: 'none', borderRadius: 0,
               fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600',
-              color: '#fdfdfd', cursor: 'pointer', transition: 'background 0.2s',
+              color: saved ? '#fdfdfd' : '#121212', cursor: 'pointer', transition: 'background 0.2s',
               letterSpacing: '0.04em',
             }}>
               <span>{saved ? '✓ Saved successfully' : 'Save settings'}</span>
@@ -297,9 +298,9 @@ function ExtLink({ href, children }) {
 }
 
 const badge = {
-  green: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(74,124,89,0.10)',  color: '#4a7c59', padding: '2px 7px', borderRadius: '3px', border: '1px solid rgba(74,124,89,0.22)',  letterSpacing: '0.04em', whiteSpace: 'nowrap' },
-  blue:  { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(91,141,184,0.10)', color: '#5b8db8', padding: '2px 7px', borderRadius: '3px', border: '1px solid rgba(91,141,184,0.22)', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
-  amber: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(168,100,72,0.10)', color: '#a86448', padding: '2px 7px', borderRadius: '3px', border: '1px solid rgba(168,100,72,0.22)', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
+  green: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
+  blue:  { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
+  amber: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
 }
 
 const s = {
@@ -308,5 +309,5 @@ const s = {
   heroSub:     { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.02em' },
   section:     { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px solid var(--border)' },
   sectionHint: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
-  input:       { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  input:       { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
 }

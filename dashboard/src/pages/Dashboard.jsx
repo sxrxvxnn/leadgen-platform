@@ -77,12 +77,12 @@ export default function Dashboard() {
       {showExtBanner && (
         <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent-dimmer)' }}>
           <div style={{ padding: '14px 48px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: 28, height: 28, background: 'var(--text)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 28, height: 28, background: '#FFFF00', borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="7" stroke="#fffcfc" strokeWidth="1.2" opacity="0.3"/>
-                <circle cx="8" cy="8" r="4" stroke="#fffcfc" strokeWidth="1.2" opacity="0.65"/>
-                <circle cx="8" cy="8" r="1.5" fill="#fffcfc"/>
-                <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fffcfc" strokeWidth="1.1" strokeLinecap="round"/>
+                <circle cx="8" cy="8" r="7" stroke="#121212" strokeWidth="1.2" opacity="0.4"/>
+                <circle cx="8" cy="8" r="4" stroke="#121212" strokeWidth="1.2" opacity="0.75"/>
+                <circle cx="8" cy="8" r="1.5" fill="#121212"/>
+                <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#121212" strokeWidth="1.1" strokeLinecap="round"/>
               </svg>
             </div>
             <div style={{ flex: 1 }}>

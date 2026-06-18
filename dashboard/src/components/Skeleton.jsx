@@ -6,10 +6,10 @@ const css = `
   100% { background-position: -200% 0 }
 }
 .sk {
-  background: linear-gradient(90deg, #ecedf2 25%, #e3e4ea 50%, #ecedf2 75%);
+  background: linear-gradient(90deg, #1A1A1A 25%, #2A2A2A 50%, #1A1A1A 75%);
   background-size: 200% 100%;
   animation: sk-shimmer 1.5s ease infinite;
-  border-radius: 4px;
+  border-radius: 0;
   display: inline-block;
 }
 `
