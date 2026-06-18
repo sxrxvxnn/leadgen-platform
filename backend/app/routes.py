@@ -3139,13 +3139,15 @@ Respond in JSON only:
 
 # ─── AI FEATURES ─────────────────────────────────────────────────────────────
 
-def _call_ai(prompt: str, max_tokens: int = 300) -> str:
-    """Call Groq → Gemini in order, return raw text or raise."""
-    import json as _json
+def _call_ai(prompt: str, max_tokens: int = 300, user_id: str = None, feature: str = None) -> str:
+    """Call Groq → Gemini in order, return raw text or raise. Emits $ai_generation to PostHog."""
+    import json as _json, time as _time, uuid as _uuid
     groq_key   = os.getenv("GROQ_API_KEY", "")
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     content = ""
+    trace_id = str(_uuid.uuid4())
     if groq_key:
+        t0 = _time.monotonic()
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
@@ -3153,10 +3155,24 @@ def _call_ai(prompt: str, max_tokens: int = 300) -> str:
                   "max_tokens": max_tokens, "temperature": 0.2},
             timeout=20,
         )
+        latency = _time.monotonic() - t0
         d = r.json()
         if "choices" in d:
             content = d["choices"][0]["message"]["content"].strip()
+            usage = d.get("usage", {})
+            if user_id:
+                posthog.capture(user_id, "$ai_generation", {
+                    "$ai_provider": "groq",
+                    "$ai_model": "llama-3.3-70b-versatile",
+                    "$ai_input_tokens": usage.get("prompt_tokens"),
+                    "$ai_output_tokens": usage.get("completion_tokens"),
+                    "$ai_latency": round(latency, 3),
+                    "$ai_http_status": r.status_code,
+                    "$ai_trace_id": trace_id,
+                    "feature": feature,
+                })
     if not content and gemini_key:
+        t0 = _time.monotonic()
         r = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
             headers={"Content-Type": "application/json"},
@@ -3164,9 +3180,22 @@ def _call_ai(prompt: str, max_tokens: int = 300) -> str:
                   "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens}},
             timeout=20,
         )
+        latency = _time.monotonic() - t0
         d = r.json()
         if "candidates" in d:
             content = d["candidates"][0]["content"]["parts"][0]["text"].strip()
+            usage = d.get("usageMetadata", {})
+            if user_id:
+                posthog.capture(user_id, "$ai_generation", {
+                    "$ai_provider": "gemini",
+                    "$ai_model": "gemini-2.0-flash",
+                    "$ai_input_tokens": usage.get("promptTokenCount"),
+                    "$ai_output_tokens": usage.get("candidatesTokenCount"),
+                    "$ai_latency": round(latency, 3),
+                    "$ai_http_status": r.status_code,
+                    "$ai_trace_id": trace_id,
+                    "feature": feature,
+                })
     if not content:
         raise HTTPException(status_code=503, detail="No AI key configured. Add GROQ_API_KEY or GEMINI_API_KEY in Settings.")
     return content
@@ -3230,7 +3259,7 @@ Reply ONLY with valid JSON (no markdown):
 {{"score": <integer 0-100>, "reason": "<one concise sentence explaining the score>"}}"""
 
         import re as _re, json as _json
-        raw = _call_ai(prompt, max_tokens=120)
+        raw = _call_ai(prompt, max_tokens=120, user_id=user_id, feature="icp-scoring")
         raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
         result = _json.loads(raw)
         score  = max(0, min(100, int(result["score"])))
@@ -3311,7 +3340,7 @@ Reply ONLY with valid JSON (no markdown):
 {{"subject": "<email subject line>", "body": "<email body with \\n for line breaks>"}}"""
 
         import re as _re, json as _json
-        raw = _call_ai(prompt, max_tokens=400)
+        raw = _call_ai(prompt, max_tokens=400, user_id=user_id, feature="email-draft")
         raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
         result  = _json.loads(raw)
         subject = result.get("subject", "")
@@ -3408,7 +3437,7 @@ What compliance standards does this company likely have? Reply ONLY valid JSON:
 Return empty array if not sure."""
                     try:
                         import re as _re
-                        raw = _call_ai(comp_prompt, max_tokens=150)
+                        raw = _call_ai(comp_prompt, max_tokens=150, user_id=user_id, feature="enrichment-pipeline")
                         raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
                         ai_comp = _json.loads(raw)
                         for item in ai_comp.get("additional_compliance", []):
