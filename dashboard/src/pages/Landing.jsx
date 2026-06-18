@@ -81,7 +81,7 @@ export default function Landing() {
                 <AnimatedButton variant="shimmer" href="/signup" as="a">
                   Start for free →
                 </AnimatedButton>
-                <AnimatedButton variant="glow" href="#how-it-works" as="a" style={{ color: 'var(--color-ink-violet)', border: '1px solid rgba(49,38,59,0.22)', background: 'transparent' }}>
+                <AnimatedButton variant="glow" href="#how-it-works" as="a" style={{ color: '#F5F5F5', border: '1px solid #3A3A3A', background: 'transparent' }}>
                   See how it works
                 </AnimatedButton>
               </motion.div>
@@ -99,7 +99,7 @@ export default function Landing() {
               </div>
 
               <div className="lp-signal-row">
-                <div className="lp-signal-accent" style={{ background: 'var(--color-amethyst)' }}></div>
+                <div className="lp-signal-accent" style={{ background: '#FFFF00' }}></div>
                 <div className="lp-signal-main">
                   <span className="lp-signal-company">Beagle Security</span>
                   <span className="lp-signal-badge">ICP Match · Score 94</span>
@@ -111,7 +111,7 @@ export default function Landing() {
               </div>
 
               <div className="lp-signal-row">
-                <div className="lp-signal-accent" style={{ background: 'var(--color-wisteria)' }}></div>
+                <div className="lp-signal-accent" style={{ background: '#F59E0B' }}></div>
                 <div className="lp-signal-main">
                   <span className="lp-signal-company">CloudOps Ltd</span>
                   <span className="lp-signal-badge">Email found · Hunter verified</span>
@@ -123,7 +123,7 @@ export default function Landing() {
               </div>
 
               <div className="lp-signal-row">
-                <div className="lp-signal-accent" style={{ background: 'var(--color-twilight-plum)' }}></div>
+                <div className="lp-signal-accent" style={{ background: '#0082F3' }}></div>
                 <div className="lp-signal-main">
                   <span className="lp-signal-company">ScaleAI Corp</span>
                   <span className="lp-signal-badge">LinkedIn enriched · 3 contacts</span>
@@ -152,13 +152,13 @@ export default function Landing() {
           <InfiniteMarquee
             items={['Founders', 'Sales teams', 'Growth operators', 'Solo closers', 'B2B agencies', 'SDR teams']}
             speed={25}
-            itemStyle={{ fontFamily: "'IBM Plex Sans', sans-serif", fontSize: 15, fontWeight: 500, color: 'var(--color-storm-mauve)', letterSpacing: '-0.01em' }}
+            itemStyle={{ fontFamily: "'Host Grotesk', sans-serif", fontSize: 11, fontWeight: 500, color: '#5B6670', letterSpacing: '0.08em', textTransform: 'uppercase' }}
           />
         </div>
       </div>
 
       {/* ── FEATURES ──────────────────────────────────────────────────────── */}
-      <section id="features" style={{ background: 'var(--color-parchment)' }}>
+      <section id="features">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">Features</span>
@@ -233,7 +233,7 @@ export default function Landing() {
       </section>
 
       {/* ── HOW IT WORKS ──────────────────────────────────────────────────── */}
-      <section id="how-it-works" style={{ background: 'var(--color-bone-mist)' }}>
+      <section id="how-it-works">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">How it works</span>
@@ -270,7 +270,7 @@ export default function Landing() {
       </section>
 
       {/* ── CHROME EXTENSION ──────────────────────────────────────────────── */}
-      <section id="extension" style={{ background: 'var(--color-parchment)', borderTop: '1px solid var(--color-fog-border)' }}>
+      <section id="extension">
         <div className="lp-container">
           <div className="lp-ext-grid">
             <motion.div className="lp-ext-copy" {...fadeUp()}>
@@ -342,7 +342,7 @@ export default function Landing() {
       </section>
 
       {/* ── WHAT WE FIND ──────────────────────────────────────────────────── */}
-      <section id="what-we-find" style={{ background: 'var(--color-parchment)' }}>
+      <section id="what-we-find">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">Data intelligence</span>
@@ -377,7 +377,7 @@ export default function Landing() {
       </section>
 
       {/* ── PRICING ───────────────────────────────────────────────────────── */}
-      <section id="pricing" style={{ background: 'var(--color-bone-mist)' }}>
+      <section id="pricing">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">Pricing</span>

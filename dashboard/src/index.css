@@ -4,92 +4,95 @@
   padding: 0;
 }
 
-/* ── Design tokens — hex / refero.design system ───────────────────────── */
+/* ── Design tokens — steven.com × en.protection.gr blend ─────────────── */
 :root {
   /* Backgrounds */
-  --bg:               #fffcfc;
-  --surface:          #ecedf2;
-  --surface-raised:   #ffffff;
+  --bg:               #121212;
+  --surface:          #1A1A1A;
+  --surface-raised:   #222222;
 
   /* Text */
-  --text:             #01011b;
-  --text-soft:        #31263b;
-  --text-secondary:   #43394c;
-  --text-muted:       #717a94;
+  --text:             #F5F5F5;
+  --text-soft:        #CCCCCC;
+  --text-secondary:   #A0A0A0;
+  --text-muted:       #69727D;
 
   /* Borders */
-  --border:           #dbd7da;
-  --border-strong:    #31263b;
-  --border-subtle:    #ecedf2;
-  --border-dash:      #dbd7da;
+  --border:           #2A2A2A;
+  --border-strong:    #3A3A3A;
+  --border-subtle:    #222222;
 
-  /* Accent / violet palette */
-  --accent:           #6f63b7;
-  --accent-dark:      #473982;
-  --accent-light:     #9e91d6;
-  --accent-dim:       rgba(111, 99, 183, 0.10);
-  --accent-dimmer:    rgba(111, 99, 183, 0.06);
-  --ambient-primary:  rgba(111, 99, 183, 0.08);
+  /* Accent — electric yellow (steven.com) */
+  --accent:           #FFFF00;
+  --accent-dark:      #E5E500;
+  --accent-light:     #FFFF66;
+  --accent-dim:       rgba(255, 255, 0, 0.10);
+  --accent-dimmer:    rgba(255, 255, 0, 0.06);
+  --ambient-primary:  rgba(255, 255, 0, 0.05);
+
+  /* Steel grays (protection.gr) */
+  --steel:            #5B6670;
+  --steel-mid:        #69727D;
 
   /* Status */
-  --green:            #2e7d4f;
-  --green-dim:        rgba(46, 125, 79, 0.10);
-  --blue:             #2a6496;
-  --blue-dim:         rgba(42, 100, 150, 0.10);
-  --amber:            #c8784a;
-  --amber-dim:        rgba(200, 120, 74, 0.10);
-  --red:              #b83232;
-  --red-dim:          rgba(184, 50, 50, 0.08);
+  --green:            #22C55E;
+  --green-dim:        rgba(34, 197, 94, 0.10);
+  --blue:             #0082F3;
+  --blue-dim:         rgba(0, 130, 243, 0.10);
+  --amber:            #F59E0B;
+  --amber-dim:        rgba(245, 158, 11, 0.10);
+  --red:              #EF4444;
+  --red-dim:          rgba(239, 68, 68, 0.08);
 
   /* Fonts */
-  --font-display:     'Cormorant Garamond', 'Georgia', serif;
-  --font-sans:        'IBM Plex Sans', 'DM Sans', sans-serif;
-  --font-body:        'IBM Plex Sans', 'DM Sans', sans-serif;
+  --font-display:     'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-sans:        'Host Grotesk', 'Roboto', sans-serif;
+  --font-body:        'Host Grotesk', 'Roboto', sans-serif;
   --font-mono:        'IBM Plex Mono', 'SFMono-Regular', 'Consolas', monospace;
 
   /* Nav */
-  --nav-bg:           #fffcfc;
-  --nav-bg-scrolled:  #fffcfc;
-  --nav-border:       #dbd7da;
+  --nav-bg:           rgba(18, 18, 18, 0.92);
+  --nav-bg-scrolled:  rgba(18, 18, 18, 0.96);
+  --nav-border:       #2A2A2A;
   --nav-height:       56px;
 
-  /* Shadows — violet-tinted stack */
-  --shadow-card:
-    rgba(49, 38, 59, 0.22) 0px 0px 0px 1px,
-    rgba(49, 38, 59, 0.08) 0px 8px 24px 0px;
-  --shadow-subtle:    rgba(71, 57, 130, 0.08) 0px 0px 0px 1px inset;
-  --shadow-focus:     0 0 0 3px rgba(71, 57, 130, 0.15);
+  /* Shadows */
+  --shadow-card:      0 0 0 1px #2A2A2A;
+  --shadow-subtle:    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  --shadow-focus:     0 0 0 2px rgba(255, 255, 0, 0.35);
+  --shadow-subtle-2:  0 0 0 1px #2A2A2A;
+  --shadow-subtle-4:  0 0 0 2px rgba(255, 255, 0, 0.30);
 
-  /* Shadows — full marketing three-layer stack */
-  --shadow-subtle-2:
-    rgba(49,38,59,0.22) 0px 0px 0px 1px,
-    rgba(49,38,59,0.09) 0px 103px 103px 0px,
-    rgba(49,38,59,0.10) 0px 26px 57px 0px;
-  --shadow-subtle-4: rgba(71,57,130,0.15) 0px 0px 0px 4px;
+  /* Shape */
+  --radius-buttons:   0px;
+  --radius-cards:     0px;
+  --radius-pills:     2px;
 
-  /* Marketing-page named aliases (same values, explicit names) */
-  --color-ink-violet:    #01011b;
-  --color-plum-charcoal: #31263b;
-  --color-storm-mauve:   #43394c;
-  --color-slate-iris:    #717a94;
-  --color-ash-lavender:  #89828d;
-  --color-parchment:     #fffcfc;
-  --color-bone-mist:     #ecedf2;
-  --color-fog-border:    #dbd7da;
-  --color-twilight-plum: #473982;
-  --color-amethyst:      #6f63b7;
-  --color-wisteria:      #9e91d6;
-  --gradient-indigo-plum: linear-gradient(90deg, #31263b 0%, #01011b 100%);
-  --radius-buttons: 3px;
-  --radius-cards:   6px;
-  --radius-pills:   9999px;
+  /* Light palette — for landing page sections (protection.gr) */
+  --bg-light:         #ECEDEC;
+  --bg-light-alt:     #E3E4E3;
+  --border-light:     #C8C9C8;
+
+  /* Named aliases kept for component compat */
+  --color-ink-violet:    #F5F5F5;
+  --color-plum-charcoal: #CCCCCC;
+  --color-storm-mauve:   #A0A0A0;
+  --color-slate-iris:    #69727D;
+  --color-ash-lavender:  #5B6670;
+  --color-parchment:     #ECEDEC;
+  --color-bone-mist:     #E3E4E3;
+  --color-fog-border:    #2A2A2A;
+  --color-twilight-plum: #E5E500;
+  --color-amethyst:      #FFFF00;
+  --color-wisteria:      #F59E0B;
+  --gradient-indigo-plum: linear-gradient(180deg, #1A1A1A 0%, #121212 100%);
 
   /* Backwards-compat aliases */
   --black:            var(--text);
-  --white:            var(--bg);
+  --white:            #F5F5F5;
   --gray-1:           var(--surface);
-  --gray-2:           #dbd7da;
-  --gray-3:           #c8c4c7;
+  --gray-2:           #2A2A2A;
+  --gray-3:           #3A3A3A;
   --gray-4:           var(--text-secondary);
   --gray-5:           var(--text-muted);
 }
@@ -99,8 +102,8 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -118,7 +121,7 @@ input, select, textarea { font-family: inherit; }
 /* ── Scrollbar ───────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 0; }
 
 /* ── Animations ──────────────────────────────────────────────────────── */
 @keyframes fadeUp {
@@ -138,77 +141,102 @@ input, select, textarea { font-family: inherit; }
 
 .eyebrow {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--steel-mid);
 }
 
 .hero-heading {
   font-family: var(--font-display);
-  font-weight: 300;
-  font-style: italic;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
   color: var(--text);
-  line-height: 1.2;
+  line-height: 1.0;
 }
 
-/* Primary: outlined button (never filled — brand rule) */
+/* Primary: yellow fill button */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   padding: 10px 20px;
-  background: #ffffff;
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
+  background: var(--accent);
+  color: #121212;
+  border: none;
+  border-radius: 0;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, box-shadow 0.2s;
 }
 .btn-primary:hover {
-  background: var(--text-soft);
-  color: var(--bg);
+  background: var(--accent-dark);
+  box-shadow: 0 0 20px rgba(255, 255, 0, 0.25);
 }
 
+/* Ghost button */
 .btn-ghost {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   padding: 8px 16px;
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-ghost:hover { background: var(--surface); color: var(--text); }
+.btn-ghost:hover { border-color: var(--border-strong); color: var(--text); }
+
+/* Steel button (secondary — protection.gr) */
+.btn-steel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  background: var(--steel-mid);
+  color: #ffffff;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-steel:hover { background: var(--steel); }
 
 .dash-border-t { border-top: 1px solid var(--border); }
 .dash-border-b { border-bottom: 1px solid var(--border); }
 .dash-border   { border: 1px solid var(--border); }
 
 .runner-card {
-  background: #ffffff;
-  border-radius: 6px;
-  box-shadow: var(--shadow-card);
+  background: var(--surface);
+  border-radius: 0;
+  border: 1px solid var(--border);
 }
 
 .mono-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
-::selection { background: var(--accent); color: #ffffff; }
+::selection { background: var(--accent); color: #121212; }

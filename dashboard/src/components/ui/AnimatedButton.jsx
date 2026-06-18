@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { motion } from 'motion/react'
 
-/* variant="shimmer" — animated diagonal shimmer sweep */
+/* variant="shimmer" — yellow primary CTA with shimmer sweep */
 function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
   const [hovered, setHovered] = useState(false)
 
@@ -17,17 +17,20 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
-        fontFamily: "'IBM Plex Sans', sans-serif",
-        fontSize: 14,
-        fontWeight: 600,
-        letterSpacing: '-0.01em',
-        color: '#fffcfc',
-        background: '#31263b',
+        fontFamily: "'Host Grotesk', 'Roboto', sans-serif",
+        fontSize: 12,
+        fontWeight: 500,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: '#121212',
+        background: '#FFFF00',
         border: 'none',
-        borderRadius: 3,
-        padding: '11px 22px',
+        borderRadius: 0,
+        padding: '11px 24px',
         cursor: 'pointer',
         textDecoration: 'none',
+        transition: 'background 0.15s, box-shadow 0.2s',
+        boxShadow: hovered ? '0 0 20px rgba(255,255,0,0.25)' : 'none',
         ...style,
       }}
       {...rest}
@@ -40,7 +43,7 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
           position: 'absolute',
           top: 0, left: 0,
           width: '60%', height: '100%',
-          background: 'linear-gradient(105deg, transparent 30%, rgba(255,252,252,0.22) 50%, transparent 70%)',
+          background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)',
           pointerEvents: 'none',
           zIndex: 1,
         }}
@@ -50,7 +53,7 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
   )
 }
 
-/* variant="glow" — subtle radial glow that pulses */
+/* variant="glow" — ghost button with yellow glow on hover */
 function GlowButton({ children, style, href, as: Tag = 'button', ...rest }) {
   const [hovered, setHovered] = useState(false)
   const El = href ? 'a' : Tag
@@ -65,20 +68,23 @@ function GlowButton({ children, style, href, as: Tag = 'button', ...rest }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
-        fontFamily: "'IBM Plex Sans', sans-serif",
-        fontSize: 14,
+        fontFamily: "'Host Grotesk', 'Roboto', sans-serif",
+        fontSize: 12,
         fontWeight: 500,
-        color: '#01011b',
-        background: '#ffffff',
-        border: '1px solid #31263b',
-        borderRadius: 3,
-        padding: '10px 22px',
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: '#F5F5F5',
+        background: 'transparent',
+        border: '1px solid #3A3A3A',
+        borderRadius: 0,
+        padding: '10px 24px',
         cursor: 'pointer',
         textDecoration: 'none',
-        transition: 'box-shadow 0.25s',
+        transition: 'border-color 0.15s, color 0.15s, box-shadow 0.25s',
+        borderColor: hovered ? '#FFFF00' : '#3A3A3A',
         boxShadow: hovered
-          ? '0 0 0 4px rgba(111,99,183,0.18), 0 0 16px rgba(111,99,183,0.12)'
-          : '0 0 0 0px rgba(111,99,183,0)',
+          ? '0 0 0 1px rgba(255,255,0,0.2), 0 0 12px rgba(255,255,0,0.08)'
+          : 'none',
         ...style,
       }}
       {...rest}
@@ -117,21 +123,23 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
           display: 'inline-flex',
           alignItems: 'center',
           gap: 8,
-          fontFamily: "'IBM Plex Sans', sans-serif",
-          fontSize: 14,
+          fontFamily: "'Host Grotesk', 'Roboto', sans-serif",
+          fontSize: 12,
           fontWeight: 500,
-          color: '#01011b',
-          background: '#ffffff',
-          border: '1px solid rgba(49,38,59,0.4)',
-          borderRadius: 3,
-          padding: '10px 22px',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: '#F5F5F5',
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 0,
+          padding: '10px 24px',
           cursor: 'pointer',
           textDecoration: 'none',
           transition: 'border-color 0.15s',
           ...style,
         }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = '#31263b'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(49,38,59,0.4)'}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
         {...rest}
       >
         {children}

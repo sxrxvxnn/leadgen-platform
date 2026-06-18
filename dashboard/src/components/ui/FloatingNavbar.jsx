@@ -5,9 +5,9 @@ export function FloatingNavbar({ items = [], logo, cta }) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    const lastY = { current: 0 }
     function onScroll() {
       const y = window.scrollY
-      // Original nav (~64px) has scrolled away — show floating nav
       setVisible(y > 100)
       lastY.current = y
     }
@@ -33,23 +33,24 @@ export function FloatingNavbar({ items = [], logo, cta }) {
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            background: 'rgba(255,252,252,0.88)',
+            background: 'rgba(18,18,18,0.92)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(49,38,59,0.12)',
-            borderRadius: 40,
+            border: '1px solid #2A2A2A',
+            borderRadius: 0,
             padding: '8px 8px 8px 18px',
-            boxShadow: '0 8px 32px rgba(49,38,59,0.12), 0 1px 4px rgba(49,38,59,0.08)',
+            boxShadow: '0 0 0 1px rgba(255,255,255,0.04)',
           }}
         >
           {/* Logo */}
           {logo && (
             <span style={{
-              fontFamily: "'IBM Plex Sans', sans-serif",
-              fontSize: 15,
+              fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
+              fontSize: 16,
               fontWeight: 700,
-              letterSpacing: '-0.03em',
-              color: '#01011b',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: '#F5F5F5',
               marginRight: 8,
             }}>
               {logo}
@@ -62,17 +63,19 @@ export function FloatingNavbar({ items = [], logo, cta }) {
               key={item.label}
               href={item.href}
               style={{
-                fontFamily: "'IBM Plex Sans', sans-serif",
-                fontSize: 13,
+                fontFamily: "'Host Grotesk', sans-serif",
+                fontSize: 11,
                 fontWeight: 500,
-                color: '#717a94',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: '#5B6670',
                 textDecoration: 'none',
                 padding: '6px 12px',
-                borderRadius: 24,
-                transition: 'color 0.15s, background 0.15s',
+                borderRadius: 0,
+                transition: 'color 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#01011b'; e.currentTarget.style.background = 'rgba(49,38,59,0.06)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#717a94'; e.currentTarget.style.background = 'transparent' }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#F5F5F5' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#5B6670' }}
             >
               {item.label}
             </a>
@@ -83,20 +86,22 @@ export function FloatingNavbar({ items = [], logo, cta }) {
             <a
               href={cta.href}
               style={{
-                fontFamily: "'IBM Plex Sans', sans-serif",
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#fffcfc',
-                background: '#31263b',
+                fontFamily: "'Host Grotesk', sans-serif",
+                fontSize: 11,
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: '#121212',
+                background: '#FFFF00',
                 textDecoration: 'none',
                 padding: '7px 16px',
-                borderRadius: 24,
-                marginLeft: 4,
-                transition: 'background 0.15s',
+                borderRadius: 0,
+                marginLeft: 8,
+                transition: 'background 0.15s, box-shadow 0.2s',
                 whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => e.currentTarget.style.background = '#01011b'}
-              onMouseLeave={e => e.currentTarget.style.background = '#31263b'}
+              onMouseEnter={e => { e.currentTarget.style.background = '#E5E500'; e.currentTarget.style.boxShadow = '0 0 12px rgba(255,255,0,0.2)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#FFFF00'; e.currentTarget.style.boxShadow = 'none' }}
             >
               {cta.label}
             </a>
