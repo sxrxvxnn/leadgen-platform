@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { login as loginApi, signup as signupApi, forgotPassword as forgotPasswordApi, resetPassword as resetPasswordApi } from '../services/api'
 import api from '../services/api'
+import posthog from '../lib/posthog'
 
 const AuthContext = createContext(null)
 
@@ -53,8 +54,10 @@ export function AuthProvider({ children }) {
     const savedToken = localStorage.getItem('token')
     const savedUser = localStorage.getItem('user')
     if (savedToken && savedUser) {
+      const parsedUser = JSON.parse(savedUser)
       setToken(savedToken)
-      setUser(JSON.parse(savedUser))
+      setUser(parsedUser)
+      posthog.identify(parsedUser.id, { email: parsedUser.email })
       _scheduleRefresh(savedToken)
       setProfileLoading(true)
       _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
@@ -72,6 +75,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('userEmail', email)
     setToken(access_token)
     setUser(user)
+    posthog.identify(user.id, { email })
     _scheduleRefresh(access_token)
     setProfileLoading(true)
     _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
@@ -99,6 +103,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
     localStorage.removeItem('userEmail')
+    posthog.reset()
     setToken(null)
     setUser(null)
     setProfile(null)

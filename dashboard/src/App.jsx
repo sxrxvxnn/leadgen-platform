@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import { PostHogProvider } from './components/PostHogProvider'
 
 // Eagerly load auth-critical pages (shown immediately on cold visit)
 import Login from './pages/Login'
@@ -41,6 +42,7 @@ function RootRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
+      <PostHogProvider>
       <AuthProvider>
         <BulkOpsProvider>
           <Suspense fallback={<PageFallback />}>
@@ -67,6 +69,7 @@ export default function App() {
           </Suspense>
         </BulkOpsProvider>
       </AuthProvider>
+      </PostHogProvider>
     </BrowserRouter>
   )
 }
