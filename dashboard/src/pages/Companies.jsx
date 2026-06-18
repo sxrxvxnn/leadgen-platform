@@ -9,6 +9,7 @@ import BulkAddModal from '../components/BulkAddModal'
 import CompaniesSpreadsheet from '../components/CompaniesSpreadsheet'
 import Navbar from '../components/Navbar'
 import { SkeletonCard } from '../components/Skeleton'
+import AIFeatureCards from '../components/AIFeatureCards'
 
 const CLASSIFICATIONS = [
   'Unclassified', 'Fintech', 'Healthtech', 'SaaS', 'Cybersecurity',
@@ -1022,6 +1023,8 @@ export default function Companies() {
           <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: '#1d1b1b', color: '#fdfdfd', border: 'none' }}>Export →</button>
         </div>
       </motion.div>
+
+      <AIFeatureCards />
 
       <div style={s.container}>
         {/* Action toolbar — left-aligned chips */}
