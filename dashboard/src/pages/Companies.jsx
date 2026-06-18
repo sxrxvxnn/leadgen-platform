@@ -10,6 +10,7 @@ import CompaniesSpreadsheet from '../components/CompaniesSpreadsheet'
 import Navbar from '../components/Navbar'
 import { SkeletonCard } from '../components/Skeleton'
 import AIFeatureCards from '../components/AIFeatureCards'
+import { CardContainer, CardBody, CardItem } from '../components/ThreeDCard'
 
 const CLASSIFICATIONS = [
   'Unclassified', 'Fintech', 'Healthtech', 'SaaS', 'Cybersecurity',
@@ -428,22 +429,23 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const isSuspicious = accuracy?.confidence === 'low' || accuracy?.confidence === 'medium'
 
   return (
-    <div style={{ ...card.wrapper }}>
+    <CardContainer style={{ borderRadius: '8px' }}>
+    <CardBody style={{ ...card.wrapper }}>
 
-      {/* Accent strip — orange when data is missing, amber when suspicious, classification color when clean */}
-      <div style={{ height: '2px', background: missingFields.length > 0 ? 'rgba(168,100,72,0.5)' : isSuspicious ? 'rgba(217,119,6,0.6)' : classColor, opacity: 0.75 }} />
+      {/* Accent strip */}
+      <div style={{ height: '3px', background: missingFields.length > 0 ? 'rgba(168,100,72,0.5)' : isSuspicious ? 'rgba(217,119,6,0.6)' : classColor, opacity: 0.8 }} />
 
       {/* Header */}
       <div style={card.header}>
         <div style={card.headerLeft}>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '2px' }}>
+          <CardItem translateZ={28} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '2px' }}>
             <h3 style={card.name}>{company.name}</h3>
             {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
-          </div>
+          </CardItem>
           {company.tagline && company.tagline.length <= 100 && (
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '2px', lineHeight: 1.4 }}>{company.tagline}</p>
+            <CardItem as="p" translateZ={16} style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '2px', lineHeight: 1.4 }}>{company.tagline}</CardItem>
           )}
-          <p style={card.industry}>{company.classification || company.industry || 'Unknown industry'}</p>
+          <CardItem as="p" translateZ={10} style={card.industry}>{company.classification || company.industry || 'Unknown industry'}</CardItem>
           {missingFields.length > 0 && (
             <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
               {missingFields.map(f => (
@@ -671,7 +673,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       )}
 
       {/* Footer */}
-      <div style={card.footer}>
+      <CardItem translateZ={20} style={card.footer}>
         <select value={prospectStatus} onChange={e => handleStatusChange(e.target.value)}
           style={{ ...card.statusSelect, color: statusColor, borderColor: `${statusColor}40` }}>
           {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -698,8 +700,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           )}
           <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
         </div>
-      </div>
-    </div>
+      </CardItem>
+    </CardBody>
+    </CardContainer>
   )
 }
 
@@ -1228,7 +1231,7 @@ const s = {
 const card = {
   wrapper: {
     background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.6)',
-    borderRadius: '8px', overflow: 'hidden',
+    borderRadius: '8px',
     display: 'flex', flexDirection: 'column',
   },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px 10px', gap: '10px' },
