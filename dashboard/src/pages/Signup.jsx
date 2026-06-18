@@ -120,7 +120,7 @@ export default function Signup() {
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 0 }}>
 
         {/* Left */}
-        <div style={{ padding: '64px 56px', borderRight: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: SURF }}>
+        <div style={{ padding: '64px 56px', borderRight: `1px solid ${LINE}`, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: SURF, backgroundImage: `radial-gradient(${PLUM}22 1.5px, transparent 1.5px)`, backgroundSize: '28px 28px', position: 'relative' }}>
           <p style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: MID, textTransform: 'uppercase', marginBottom: 32 }}>① Get started</p>
           <h1 style={{ margin: '0 0 24px', lineHeight: 1.05 }}>
             <motion.span initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0 }} style={{ display: 'block', fontFamily: SERIF, fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK }}>

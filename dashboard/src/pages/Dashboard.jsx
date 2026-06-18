@@ -6,6 +6,9 @@ import { getLeads, getCompanies } from '../services/api'
 import Navbar from '../components/Navbar'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
+import Globe from '../components/Globe'
+import ImagesFanBadge from '../components/ImagesFanBadge'
+import CanvasText from '../components/CanvasText'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -44,9 +47,17 @@ export default function Dashboard() {
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         >
           <p style={s.eyebrow}>Overview</p>
-          <h1 style={s.heroTitle}>
-            {loading ? '—' : stats.totalLeads}
-            <span style={s.heroUnit}> leads</span>
+          <h1 style={{ ...s.heroTitle, display: 'flex', alignItems: 'flex-end', gap: 0, flexWrap: 'wrap' }}>
+            <span>{loading ? '—' : <CountUp to={stats.totalLeads} delay={0.1} />}</span>
+            {!loading && (
+              <CanvasText
+                text=" leads"
+                font='300 52px "IBM Plex Sans","DM Sans","Inter",sans-serif'
+                width={248}
+                height={70}
+                style={{ position: 'relative', top: -2, opacity: 0.92 }}
+              />
+            )}
           </h1>
           <p style={s.heroSub}>welcome back, {displayName}</p>
         </motion.div>
@@ -99,33 +110,83 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Stats — gap-px grid, no rounded cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: '#c4c1bd', borderBottom: '1px solid var(--border)' }}>
-        {[
-          { label: 'New',       value: stats.newLeads,   note: 'awaiting action' },
-          { label: 'Contacted', value: stats.contacted,  note: 'in progress' },
-          { label: 'Companies', value: stats.companies,  note: 'tracked' },
-          { label: 'Total',     value: stats.totalLeads, note: 'all leads' },
-        ].map(({ label, value, note }, i) => (
-          <motion.div
-            key={label}
-            style={{ background: 'var(--bg)', padding: '28px 32px' }}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 + i * 0.07 }}
-          >
-            <p style={s.statLabel}>{label}</p>
-            <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : <CountUp to={value} delay={0.1 + i * 0.08} />}</p>
-            <p style={s.statNote}>{note}</p>
-          </motion.div>
-        ))}
+      {/* Bento stats grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gridTemplateRows: '200px 200px', gap: '1px', background: '#c4c1bd', borderBottom: '1px solid var(--border)' }}>
+
+        {/* Total — large hero cell spanning cols 1-2 */}
+        <motion.div
+          style={{ background: 'var(--bg)', padding: '32px 36px', gridColumn: '1/3', gridRow: '1/2', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+        >
+          <p style={s.statLabel}>Total leads</p>
+          <p style={{ ...s.statValue, fontSize: 'clamp(48px,6vw,76px)' }}>
+            {loading ? <Skeleton w={80} h={56} r={4} /> : <CountUp to={stats.totalLeads} delay={0.1} />}
+          </p>
+          {!loading && (
+            <CanvasText
+              text="leads"
+              font='600 26px "IBM Plex Sans","DM Sans","Inter",sans-serif'
+              width={108}
+              height={40}
+              style={{ marginTop: 4, opacity: 0.88 }}
+            />
+          )}
+        </motion.div>
+
+        {/* New — col 3, row 1 */}
+        <motion.div
+          style={{ background: 'var(--bg)', padding: '28px 32px', gridColumn: '3/4', gridRow: '1/2' }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+        >
+          <p style={s.statLabel}>New</p>
+          <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : <CountUp to={stats.newLeads} delay={0.18} />}</p>
+          <p style={s.statNote}>awaiting action</p>
+        </motion.div>
+
+        {/* Contacted — col 1, row 2 */}
+        <motion.div
+          style={{ background: 'var(--bg)', padding: '28px 32px', gridColumn: '1/2', gridRow: '2/3' }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.19 }}
+        >
+          <p style={s.statLabel}>Contacted</p>
+          <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : <CountUp to={stats.contacted} delay={0.26} />}</p>
+          <p style={s.statNote}>in progress</p>
+        </motion.div>
+
+        {/* Companies — col 2, row 2 */}
+        <motion.div
+          style={{ background: 'var(--bg)', padding: '28px 32px', gridColumn: '2/3', gridRow: '2/3' }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.26 }}
+        >
+          <p style={s.statLabel}>Companies</p>
+          <p style={s.statValue}>{loading ? <Skeleton w={48} h={40} r={4} /> : <CountUp to={stats.companies} delay={0.34} />}</p>
+          <p style={s.statNote}>tracked</p>
+        </motion.div>
+
+        {/* Globe — col 3, row 2 */}
+        <motion.div
+          style={{ background: 'var(--bg)', gridColumn: '3/4', gridRow: '2/3', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, position: 'relative' }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.33 }}
+        >
+          <Globe size={148} />
+          <p style={{ ...s.statNote, fontSize: '9px', letterSpacing: '0.1em', textAlign: 'center' }}>Technopark · Kerala</p>
+        </motion.div>
+
       </div>
 
       {/* Recent leads */}
       <div style={{ padding: '0 48px 48px' }}>
         {/* Section header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 0 16px', borderBottom: '1px solid var(--border)', marginBottom: '0' }}>
-          <p style={s.sectionTitle}>Recent leads</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <p style={s.sectionTitle}>Recent leads</p>
+            {!loading && recentLeads.length > 0 && <ImagesFanBadge leads={recentLeads} max={5} />}
+          </div>
           <button style={s.viewAllBtn} onClick={() => navigate('/leads')}>View all →</button>
         </div>
 
