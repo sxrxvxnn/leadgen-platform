@@ -3137,6 +3137,331 @@ Respond in JSON only:
 
 
 
+# ─── AI FEATURES ─────────────────────────────────────────────────────────────
+
+def _call_ai(prompt: str, max_tokens: int = 300) -> str:
+    """Call Groq → Gemini in order, return raw text or raise."""
+    import json as _json
+    groq_key   = os.getenv("GROQ_API_KEY", "")
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    content = ""
+    if groq_key:
+        r = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": max_tokens, "temperature": 0.2},
+            timeout=20,
+        )
+        d = r.json()
+        if "choices" in d:
+            content = d["choices"][0]["message"]["content"].strip()
+    if not content and gemini_key:
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": prompt}]}],
+                  "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens}},
+            timeout=20,
+        )
+        d = r.json()
+        if "candidates" in d:
+            content = d["candidates"][0]["content"]["parts"][0]["text"].strip()
+    if not content:
+        raise HTTPException(status_code=503, detail="No AI key configured. Add GROQ_API_KEY or GEMINI_API_KEY in Settings.")
+    return content
+
+
+@router.post("/leads/{lead_id}/score-icp")
+async def score_lead_icp(lead_id: str, authorization: str = Header(...)):
+    """Score a lead 0–100 against the user's ICP profiles using AI."""
+    validate_uuid(lead_id, "lead_id")
+    user_id = get_user_id(authorization)
+    try:
+        lead_res = supabase.table("leads").select("*").eq("id", lead_id).eq("user_id", user_id).execute()
+        if not lead_res.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        lead = lead_res.data[0]
+
+        icp_res = supabase.table("icp_profiles").select("*").eq("user_id", user_id).limit(10).execute()
+        icps = icp_res.data or []
+
+        # Aggregate ICP criteria
+        target_roles = list({r for p in icps for r in (p.get("target_roles") or [])})
+        pain_points  = list({pp for p in icps for pp in (p.get("pain_points") or [])})
+        tech_stack   = list({t for p in icps for t in (p.get("tech_stack") or [])})
+        industries   = list({p.get("industry") for p in icps if p.get("industry")})
+        sizes        = list({p.get("company_size") for p in icps if p.get("company_size")})
+
+        criteria_lines = []
+        if target_roles:  criteria_lines.append(f"Target roles: {', '.join(target_roles)}")
+        if industries:    criteria_lines.append(f"Target industries: {', '.join(industries)}")
+        if sizes:         criteria_lines.append(f"Target company sizes: {', '.join(sizes)}")
+        if pain_points:   criteria_lines.append(f"Pain points we solve: {', '.join(pain_points)}")
+        if tech_stack:    criteria_lines.append(f"Relevant tech stack: {', '.join(tech_stack)}")
+
+        if not criteria_lines:
+            criteria_lines = ["No specific ICP defined — score based on general B2B sales-readiness signals."]
+
+        exp_summary = ""
+        if lead.get("experience"):
+            titles = [e.get("title", "") for e in (lead["experience"] or [])[:3] if e.get("title")]
+            if titles:
+                exp_summary = f"\nPast roles: {', '.join(titles)}"
+
+        prompt = f"""You are a B2B sales qualification expert. Score this lead against the Ideal Customer Profile (ICP).
+
+ICP CRITERIA:
+{chr(10).join(criteria_lines)}
+
+LEAD:
+Name: {lead.get('name', '—')}
+Title: {lead.get('title', '—')}
+Company: {lead.get('company', '—')}
+Location: {lead.get('location', '—')}
+About: {(lead.get('about') or '')[:300]}{exp_summary}
+
+Score from 0–100 based on how well this lead matches the ICP. Be precise and honest.
+- 80–100: Strong fit — matches role, industry, and likely has pain points
+- 50–79: Moderate fit — partial match
+- 0–49: Weak fit — unlikely match
+
+Reply ONLY with valid JSON (no markdown):
+{{"score": <integer 0-100>, "reason": "<one concise sentence explaining the score>"}}"""
+
+        import re as _re, json as _json
+        raw = _call_ai(prompt, max_tokens=120)
+        raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
+        result = _json.loads(raw)
+        score  = max(0, min(100, int(result["score"])))
+        reason = result.get("reason", "")
+
+        supabase.table("leads").update({"icp_score": score, "icp_score_reason": reason})\
+            .eq("id", lead_id).eq("user_id", user_id).execute()
+
+        posthog.capture(user_id, "lead_icp_scored", {"score": score})
+        return {"score": score, "reason": reason}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/leads/{lead_id}/draft-email")
+async def draft_outreach_email(
+    lead_id: str,
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Generate a personalized cold outreach email for a lead."""
+    validate_uuid(lead_id, "lead_id")
+    user_id = get_user_id(authorization)
+    try:
+        lead_res = supabase.table("leads").select("*").eq("id", lead_id).eq("user_id", user_id).execute()
+        if not lead_res.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        lead = lead_res.data[0]
+
+        # Fetch linked company for extra context
+        company_ctx = ""
+        if lead.get("company"):
+            co_res = supabase.table("companies").select(
+                "description,industry,classification,compliance,specialties,tagline"
+            ).eq("user_id", user_id).ilike("name", lead["company"]).limit(1).execute()
+            if co_res.data:
+                c = co_res.data[0]
+                parts = []
+                if c.get("industry"):       parts.append(f"Industry: {c['industry']}")
+                if c.get("classification"): parts.append(f"Type: {c['classification']}")
+                if c.get("description"):    parts.append(f"About: {c['description'][:200]}")
+                if c.get("compliance"):     parts.append(f"Compliance: {c['compliance']}")
+                company_ctx = "\n".join(parts)
+
+        tone = payload.get("tone", "professional")
+        sender_name = payload.get("sender_name", "")
+        sender_role = payload.get("sender_role", "")
+        value_prop  = payload.get("value_prop", "")
+
+        sender_block = ""
+        if sender_name: sender_block += f"Sender name: {sender_name}\n"
+        if sender_role: sender_block += f"Sender role: {sender_role}\n"
+        if value_prop:  sender_block += f"Value proposition: {value_prop}\n"
+
+        exp_summary = ""
+        if lead.get("experience"):
+            recent = lead["experience"][:2] if lead["experience"] else []
+            bits = [f"{e.get('title','')} at {e.get('company','')}" for e in recent if e.get("title")]
+            if bits: exp_summary = f"\nRecent experience: {', '.join(bits)}"
+
+        prompt = f"""Write a personalized B2B cold outreach email. Be {tone}, concise (under 120 words body), and specific to this person. Do NOT use generic openers like "I hope this email finds you well."
+
+LEAD:
+Name: {lead.get('name', 'there')}
+Title: {lead.get('title', '—')}
+Company: {lead.get('company', '—')}
+Location: {lead.get('location', '')}
+About: {(lead.get('about') or '')[:200]}{exp_summary}
+
+COMPANY CONTEXT:
+{company_ctx or 'No additional company data available.'}
+
+{sender_block}
+
+Reply ONLY with valid JSON (no markdown):
+{{"subject": "<email subject line>", "body": "<email body with \\n for line breaks>"}}"""
+
+        import re as _re, json as _json
+        raw = _call_ai(prompt, max_tokens=400)
+        raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
+        result  = _json.loads(raw)
+        subject = result.get("subject", "")
+        body    = result.get("body", "")
+
+        supabase.table("leads").update({"email_draft": body, "email_draft_subject": subject})\
+            .eq("id", lead_id).eq("user_id", user_id).execute()
+
+        posthog.capture(user_id, "lead_email_drafted")
+        return {"subject": subject, "body": body}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/companies/{company_id}/enrich-pipeline")
+async def enrich_pipeline(
+    company_id: str,
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Run website analysis → compliance check → maps enrich in one streaming call."""
+    validate_uuid(company_id, "company_id")
+    user_id = get_user_id(authorization)
+
+    co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    from .website_analyzer import (
+        fetch_website_content, analyze_with_gemini, analyze_with_groq,
+        classify_with_groq, classify_company_type_rules,
+    )
+    import json as _json
+
+    gemini_key     = os.getenv("GEMINI_API_KEY", "")
+    groq_key       = os.getenv("GROQ_API_KEY", "")
+    li_cookie      = payload.get("li_cookie") or os.getenv("LI_SESSION_COOKIE", "")
+
+    async def _stream():
+        company = co_res.data[0]
+        update_patch = {}
+
+        # ── Step 1: Website Analysis ─────────────────────────────
+        yield _json.dumps({"step": "website", "status": "running", "label": "Analyzing website…"}) + "\n"
+        try:
+            website = company.get("website", "")
+            if website:
+                website_data = fetch_website_content(website)
+                rule_type, rule_confidence = classify_company_type_rules(
+                    website_data, company.get("description", "")
+                )
+                result = {}
+                if rule_confidence != "High":
+                    if website_data and gemini_key:
+                        result = analyze_with_gemini(website_data, company.get("name", ""), gemini_key) or {}
+                    if not result and groq_key:
+                        result = analyze_with_groq(
+                            website_data, company.get("name", ""),
+                            company.get("industry", ""), company.get("description", ""), groq_key
+                        ) or {}
+                if not result and rule_type:
+                    result = {"classification": rule_type}
+                for field in ("classification", "industry", "description", "revenue", "employee_count", "tagline", "specialties"):
+                    if result.get(field) and not company.get(field):
+                        update_patch[field] = result[field]
+                yield _json.dumps({"step": "website", "status": "done", "label": "Website analyzed", "data": result}) + "\n"
+            else:
+                yield _json.dumps({"step": "website", "status": "skipped", "label": "No website — skipped"}) + "\n"
+        except Exception as e:
+            yield _json.dumps({"step": "website", "status": "error", "label": f"Website error: {str(e)[:80]}"}) + "\n"
+
+        # ── Step 2: Compliance Check ──────────────────────────────
+        yield _json.dumps({"step": "compliance", "status": "running", "label": "Checking compliance…"}) + "\n"
+        try:
+            if not company.get("compliance"):
+                website = company.get("website", "")
+                compliance_found = []
+                if website:
+                    website_data = fetch_website_content(website)
+                    if website_data:
+                        compliance_found = website_data.get("compliance_detected", [])
+                if (groq_key or gemini_key) and company.get("name"):
+                    description = update_patch.get("description") or company.get("description", "")
+                    industry    = update_patch.get("industry")    or company.get("industry", "")
+                    comp_prompt = f"""Company: {company['name']}
+Industry: {industry or 'Unknown'}
+Description: {description or 'None'}
+Compliance already detected: {compliance_found}
+
+What compliance standards does this company likely have? Reply ONLY valid JSON:
+{{"additional_compliance": [], "has_security_team": "Yes" or "No" or "Unknown"}}
+Return empty array if not sure."""
+                    try:
+                        import re as _re
+                        raw = _call_ai(comp_prompt, max_tokens=150)
+                        raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
+                        ai_comp = _json.loads(raw)
+                        for item in ai_comp.get("additional_compliance", []):
+                            if item and item not in compliance_found:
+                                compliance_found.append(item)
+                    except Exception:
+                        pass
+                if compliance_found:
+                    update_patch["compliance"] = ", ".join(compliance_found)
+                yield _json.dumps({"step": "compliance", "status": "done", "label": "Compliance checked", "data": {"compliance": compliance_found}}) + "\n"
+            else:
+                yield _json.dumps({"step": "compliance", "status": "skipped", "label": "Compliance already set"}) + "\n"
+        except Exception as e:
+            yield _json.dumps({"step": "compliance", "status": "error", "label": f"Compliance error: {str(e)[:80]}"}) + "\n"
+
+        # ── Step 3: Maps Enrich ───────────────────────────────────
+        yield _json.dumps({"step": "maps", "status": "running", "label": "Enriching from Google Maps…"}) + "\n"
+        try:
+            maps_key = os.getenv("GOOGLE_MAPS_API_KEY", "")
+            if maps_key and not company.get("phone") and company.get("name"):
+                search_q = f"{company['name']} {company.get('headquarters', '')}"
+                place_res = requests.get(
+                    "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+                    params={"input": search_q, "inputtype": "textquery",
+                            "fields": "name,formatted_phone_number,website,rating,user_ratings_total",
+                            "key": maps_key},
+                    timeout=10,
+                ).json()
+                candidates = place_res.get("candidates", [])
+                if candidates:
+                    p = candidates[0]
+                    if p.get("formatted_phone_number") and not company.get("phone"):
+                        update_patch["phone"] = p["formatted_phone_number"]
+                    if p.get("website") and not company.get("website"):
+                        update_patch["website"] = p["website"]
+                yield _json.dumps({"step": "maps", "status": "done", "label": "Maps enriched", "data": {"phone": update_patch.get("phone")}}) + "\n"
+            else:
+                yield _json.dumps({"step": "maps", "status": "skipped", "label": "Maps skipped (no key or phone already set)"}) + "\n"
+        except Exception as e:
+            yield _json.dumps({"step": "maps", "status": "error", "label": f"Maps error: {str(e)[:80]}"}) + "\n"
+
+        # ── Save all collected patches ────────────────────────────
+        if update_patch:
+            supabase.table("companies").update(update_patch)\
+                .eq("id", company_id).eq("user_id", user_id).execute()
+
+        posthog.capture(user_id, "company_pipeline_enriched", {"fields_updated": list(update_patch.keys())})
+        yield _json.dumps({"step": "done", "status": "done", "label": "Pipeline complete", "fields_updated": list(update_patch.keys())}) + "\n"
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(_stream(), media_type="application/x-ndjson")
+
+
 @router.get("/health")
 def health_check():
     return {"status": "ok"}

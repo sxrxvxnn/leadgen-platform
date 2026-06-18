@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline } from '../services/api'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { syncToDirectory } from '../services/companyDirectory'
 import DMFinder from '../components/DMFinder'
@@ -265,6 +265,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const [analyzeResult, setAnalyzeResult] = useState(null)
   const [fillingLI, setFillingLI] = useState(false)
   const [fillResult, setFillResult] = useState(null)
+  const [pipelining, setPipelining] = useState(false)
+  const [pipelineSteps, setPipelineSteps] = useState([])
   const [showEdit, setShowEdit] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -368,6 +370,29 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     } finally {
       setFillingLI(false)
     }
+  }
+
+  async function handleEnrichPipeline() {
+    setPipelining(true)
+    setPipelineSteps([])
+    try {
+      await enrichPipeline(company.id, (_, __, result) => {
+        if (result?.step) {
+          setPipelineSteps(prev => {
+            const idx = prev.findIndex(s => s.step === result.step)
+            if (idx >= 0) { const next = [...prev]; next[idx] = result; return next }
+            return [...prev, result]
+          })
+          if (result.step === 'done' && result.fields_updated?.length) {
+            // refresh the card with updated data
+            const patch = {}
+            // The pipeline already saved to DB; trigger parent refresh
+            onUpdate(company.id, {})
+          }
+        }
+      })
+    } catch (e) { console.error(e) }
+    finally { setPipelining(false) }
   }
 
   function openEdit() {
@@ -660,6 +685,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             style={{ ...card.actionBtn, color: fillingLI ? 'var(--text-muted)' : 'var(--accent)', borderColor: fillingLI ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: fillingLI ? 0.5 : 1 }}
             onClick={handleFillLinkedIn} disabled={fillingLI}>
             {fillingLI ? 'Filling…' : '↯ Fill LI'}
+          </button>
+          <button
+            title="Run website analysis + compliance check + maps enrich in one click"
+            style={{ ...card.actionBtn, color: pipelining ? 'var(--text-muted)' : '#5b8db8', borderColor: pipelining ? 'var(--border)' : 'rgba(91,141,184,0.35)', opacity: pipelining ? 0.6 : 1 }}
+            onClick={handleEnrichPipeline} disabled={pipelining}>
+            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : '⚡ Full Enrich'}
           </button>
           {company.linkedin_url && (
             <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LinkedIn ↗</a>

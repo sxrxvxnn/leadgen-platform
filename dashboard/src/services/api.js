@@ -161,6 +161,10 @@ export const autofillBulk = (leadIds, batchStart = 0) =>
     batch_start: batchStart,
   })
 export const enrichLead = (id, payload) => api.post(`/leads/${id}/enrich`, payload)
+export const scoreLeadICP = (id) => api.post(`/leads/${id}/score-icp`)
+export const draftEmail = (id, payload = {}) => api.post(`/leads/${id}/draft-email`, payload)
+export const enrichPipeline = (companyId, onProgress) =>
+  _streamingFetch(`/companies/${companyId}/enrich-pipeline`, {}, onProgress)
 
 // ─── COMPANIES ────────────────────────────────────────────────
 export const getCompanies = async () => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus } from '../services/api'
+import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, scoreLeadICP, draftEmail } from '../services/api'
 import Navbar from '../components/Navbar'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
@@ -170,6 +170,62 @@ function StatusBadge({ status }) {
   return React.createElement('span', { style: { fontSize: '10px', fontWeight: '500', padding: '2px 8px', borderRadius: '4px', color: st.color, background: st.background, border: `1px solid ${st.border}` } }, status || 'new')
 }
 
+function IcpScoreBadge({ score, reason }) {
+  if (score == null) return null
+  const color = score >= 70 ? '#4a7c59' : score >= 40 ? '#a86448' : '#a1a1a1'
+  const bg    = score >= 70 ? 'rgba(74,124,89,0.10)' : score >= 40 ? 'rgba(168,100,72,0.10)' : 'rgba(161,161,161,0.08)'
+  const border= score >= 70 ? 'rgba(74,124,89,0.3)' : score >= 40 ? 'rgba(168,100,72,0.3)' : 'rgba(161,161,161,0.25)'
+  return React.createElement(
+    'span',
+    { title: reason || '', style: { fontSize: '9px', fontWeight: '700', padding: '2px 5px', borderRadius: '4px', color, background: bg, border: `1px solid ${border}`, letterSpacing: '0.04em', cursor: reason ? 'help' : 'default', whiteSpace: 'nowrap' } },
+    score
+  )
+}
+
+function EmailDraftModal({ lead, draft, onClose }) {
+  const [copied, setCopied] = React.useState(false)
+  if (!draft) return null
+
+  function copy(text) {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
+  return React.createElement(
+    'div',
+    { style: { position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(29,27,27,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }, onClick: onClose },
+    React.createElement(
+      'div',
+      { style: { background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '12px', width: '100%', maxWidth: '600px', padding: '28px', boxShadow: '0 20px 60px rgba(29,27,27,0.2)', maxHeight: '90vh', overflowY: 'auto' }, onClick: e => e.stopPropagation() },
+      // Header
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' } },
+        React.createElement('div', null,
+          React.createElement('p', { style: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: '4px' } }, 'Draft outreach'),
+          React.createElement('p', { style: { fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', letterSpacing: '-0.02em', color: 'var(--text)' } }, lead.name || 'Lead')
+        ),
+        React.createElement('button', { onClick: onClose, style: { background: 'none', border: 'none', fontSize: '18px', color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1, padding: '4px' } }, '✕')
+      ),
+      // Subject
+      React.createElement('div', { style: { marginBottom: '16px' } },
+        React.createElement('p', { style: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' } }, 'Subject'),
+        React.createElement('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+          React.createElement('p', { style: { fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', flex: 1, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', margin: 0 } }, draft.subject),
+          React.createElement('button', { onClick: () => copy(draft.subject), style: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', padding: '8px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap' } }, 'Copy')
+        )
+      ),
+      // Body
+      React.createElement('div', { style: { marginBottom: '20px' } },
+        React.createElement('p', { style: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '6px' } }, 'Email body'),
+        React.createElement('pre', { style: { fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--text)', lineHeight: 1.7, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }, draft.body)
+      ),
+      // Copy all button
+      React.createElement('button', {
+        onClick: () => copy(`Subject: ${draft.subject}\n\n${draft.body}`),
+        style: { width: '100%', padding: '12px', background: copied ? '#4a7c59' : '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.06em', cursor: 'pointer', transition: 'background 0.2s' }
+      }, copied ? '✓ Copied to clipboard' : 'Copy entire email')
+    )
+  )
+}
+
 function CellInput({ value, onChange, onBlur, onKeyDown }) {
   return React.createElement('input', { value, onChange, onBlur, onKeyDown, autoFocus: true, style: sub.cellInput })
 }
@@ -182,8 +238,10 @@ function CellSelect({ value, onChange, onBlur }) {
   )
 }
 
-function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEnrich, onStar, onConnectionStatus, enrichingId, isSelected, onToggleSelect }) {
+function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEnrich, onStar, onConnectionStatus, enrichingId, isSelected, onToggleSelect, onScore, onDraft, scoringId, draftingId }) {
   const isEnriching = enrichingId === lead.id
+  const isScoring   = scoringId === lead.id
+  const isDrafting  = draftingId === lead.id
   const isDecisionMaker = DECISION_MAKER_KEYWORDS.test(lead.title || '')
   const isSecurity = SECURITY_KEYWORDS.test(lead.title || '')
 
@@ -195,9 +253,10 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       <div style={{ width: '28px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <StarButton starred={lead.starred} onClick={(e) => { e.stopPropagation(); onStar(lead.id, !lead.starred) }} />
       </div>
-      <div style={{ width: '60px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '3px' }}>
+      <div style={{ width: '80px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'wrap' }}>
         {isDecisionMaker && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: '1px solid rgba(91,141,184,0.3)', letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>DM</span>}
         {isSecurity && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(184,50,50,0.10)', color: 'var(--red)', border: '1px solid rgba(184,50,50,0.3)', letterSpacing: '0.3px' }}>SEC</span>}
+        <IcpScoreBadge score={lead.icp_score} reason={lead.icp_score_reason} />
       </div>
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
@@ -214,17 +273,27 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       <div style={{ width: '170px', flexShrink: 0, display: 'flex', alignItems: 'center', paddingRight: '8px' }}>
         <ConnectionStatusDropdown status={lead.connection_status || 'Not Requested'} onChange={(val) => onConnectionStatus(lead.id, val)} />
       </div>
-      <div style={{ width: '130px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ width: '190px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
         {lead.profile_url && !lead.about && <EnrichProfileLink url={lead.profile_url} />}
         {lead.profile_url && lead.about && <ViewLink url={lead.profile_url} />}
-        {!lead.profile_url && null}
         {!lead.email && (
           <button style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: isEnriching ? 'var(--text-muted)' : 'var(--accent)', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEnrich(lead.id) }}>
-            {isEnriching ? '...' : 'Email'}
+            {isEnriching ? '…' : 'Email'}
           </button>
         )}
-        {lead.email && <span style={{ fontSize: '10px', color: '#4a7c59', fontWeight: '600' }}>✓ email</span>}
+        <button
+          title={lead.icp_score != null ? `ICP score: ${lead.icp_score} — click to refresh` : 'Score against ICP'}
+          style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: isScoring ? 'var(--text-muted)' : '#5b8db8', background: 'transparent', border: '1px solid rgba(91,141,184,0.3)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onScore(lead.id) }}>
+          {isScoring ? '…' : 'Score'}
+        </button>
+        <button
+          title="Draft outreach email"
+          style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: isDrafting ? 'var(--text-muted)' : '#4a7c59', background: 'transparent', border: '1px solid rgba(74,124,89,0.3)', borderRadius: '4px', cursor: 'pointer', fontWeight: '600', padding: '2px 6px' }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDraft(lead.id) }}>
+          {isDrafting ? '…' : 'Draft'}
+        </button>
         <button style={sub.deleteBtn} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(lead.id) }}>✕</button>
       </div>
     </div>
@@ -244,6 +313,10 @@ export default function Leads() {
   const [selected, setSelected] = useState([])
   const [enrichingId, setEnrichingId] = useState(null)
   const [enrichMsg, setEnrichMsg] = useState('')
+  const [scoringId, setScoringId] = useState(null)
+  const [draftingId, setDraftingId] = useState(null)
+  const [emailDraft, setEmailDraft] = useState(null)   // { lead, subject, body }
+
 
   useEffect(() => { fetchLeads() }, [])
 
@@ -344,6 +417,27 @@ export default function Leads() {
       setEnrichingId(null)
       setTimeout(() => setEnrichMsg(''), 5000)
     }
+  }
+
+  async function handleScoreICP(leadId) {
+    setScoringId(leadId)
+    try {
+      const res = await scoreLeadICP(leadId)
+      const { score, reason } = res.data
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, icp_score: score, icp_score_reason: reason } : l))
+    } catch (e) { console.error(e) }
+    finally { setScoringId(null) }
+  }
+
+  async function handleDraftEmail(leadId) {
+    setDraftingId(leadId)
+    try {
+      const lead = leads.find(l => l.id === leadId)
+      const res = await draftEmail(leadId)
+      setEmailDraft({ lead, subject: res.data.subject, body: res.data.body })
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, email_draft: res.data.body, email_draft_subject: res.data.subject } : l))
+    } catch (e) { console.error(e) }
+    finally { setDraftingId(null) }
   }
 
   const filtered = leads.filter((l) => {
@@ -460,14 +554,14 @@ export default function Leads() {
             <div style={{ width: '28px', flexShrink: 0 }}>
               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>★</span>
             </div>
-            <div style={{ width: '60px', flexShrink: 0 }}>
-              <span style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '1px' }}>TYPE</span>
+            <div style={{ width: '80px', flexShrink: 0 }}>
+              <span style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '1px' }}>TYPE / ICP</span>
             </div>
             {columns.map((col) => (
               <span key={col.key} style={{ ...s.th, flex: col.flex }}>{col.label}</span>
             ))}
             <span style={{ ...s.th, width: '170px', flexShrink: 0 }}>CONNECTION</span>
-            <span style={{ ...s.th, width: '100px', flexShrink: 0 }}>ACTIONS</span>
+            <span style={{ ...s.th, width: '190px', flexShrink: 0 }}>ACTIONS</span>
           </div>
 
           {loading && [...Array(8)].map((_, i) => <SkeletonRow key={i} cols={[0.3, 0.5, 2, 2, 2, 1.5, 1.5, 1]} />)}
@@ -498,12 +592,22 @@ export default function Leads() {
                 onStartEdit={startEdit} onSaveEdit={saveEdit} onCancelEdit={() => setEditingCell(null)}
                 onDelete={handleDelete} onStar={handleStar} onConnectionStatus={handleConnectionStatus}
                 onEnrich={handleEnrich} enrichingId={enrichingId}
+                onScore={handleScoreICP} scoringId={scoringId}
+                onDraft={handleDraftEmail} draftingId={draftingId}
                 isSelected={selected.includes(lead.id)} onToggleSelect={() => toggleSelect(lead.id)}
               />
             </motion.div>
           ))}
         </div>
       </div>
+
+      {emailDraft && (
+        <EmailDraftModal
+          lead={emailDraft.lead}
+          draft={{ subject: emailDraft.subject, body: emailDraft.body }}
+          onClose={() => setEmailDraft(null)}
+        />
+      )}
 
       {showSpreadsheet && (
         <SpreadsheetView
