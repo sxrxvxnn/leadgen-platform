@@ -16,12 +16,12 @@ export default function Globe({ size = 160 }) {
       phi:    phiRef.current,
       theta:  0.18,
       dark:   1,
-      diffuse: 1.2,
-      mapSamples:    14000,
-      mapBrightness: 6,
-      baseColor:   [0.22, 0.22, 0.22],
+      diffuse: 1.5,
+      mapSamples:    16000,
+      mapBrightness: 8,
+      baseColor:   [1, 1, 1],
       markerColor: [1, 1, 0],
-      glowColor:   [0.15, 0.15, 0.15],
+      glowColor:   [0.3, 0.3, 0.3],
       markers: [
         { location: [8.5241, 76.9366], size: 0.07 }, // Technopark, Kerala
       ],
