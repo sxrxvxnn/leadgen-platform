@@ -1,19 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 
 export function FloatingNavbar({ items = [], logo, cta }) {
   const [visible, setVisible] = useState(false)
-  const lastY = useRef(0)
 
   useEffect(() => {
     function onScroll() {
       const y = window.scrollY
-      // Show when scrolled past 80px AND scrolling up (or just past threshold)
-      if (y > 80 && y < lastY.current) {
-        setVisible(true)
-      } else if (y <= 80 || y > lastY.current + 4) {
-        setVisible(false)
-      }
+      // Original nav (~64px) has scrolled away — show floating nav
+      setVisible(y > 100)
       lastY.current = y
     }
 
