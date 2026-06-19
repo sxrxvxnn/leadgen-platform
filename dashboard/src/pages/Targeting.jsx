@@ -50,7 +50,7 @@ function CompanyPicker({ companies, selected, onSelect }) {
           type="text" value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onSelect(null) }}
           onFocus={() => setOpen(true)}
-          placeholder="Search your pipeline…"
+          placeholder="Search your workspace…"
           style={{ width: '100%', padding: '10px 36px 10px 12px', background: 'var(--bg)', border: `1px solid ${open ? 'rgba(29,27,27,0.28)' : 'var(--border)'}`, borderRadius: open && filtered.length > 0 ? '7px 7px 0 0' : '7px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text)', outline: 'none', boxSizing: 'border-box', letterSpacing: '0.02em', transition: 'border-color 0.1s' }}
         />
         {query && (
@@ -259,7 +259,7 @@ export default function Targeting() {
             Find decision makers
           </h1>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)', letterSpacing: '0.03em', lineHeight: 1.7, maxWidth: '520px' }}>
-            Pick a company from your pipeline, filter by role, then find and add decision makers directly to your leads list.
+            Pick a company from your workspace, filter by role, then find and add decision makers directly to your leads list.
           </p>
         </div>
       </motion.div>
@@ -275,7 +275,7 @@ export default function Targeting() {
             <div style={{ marginTop: '10px' }}>
               {isEmpty ? (
                 <div style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px' }}>
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '8px' }}>No companies in pipeline.</p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '8px' }}>No companies in workspace.</p>
                   <button onClick={() => navigate('/directory')} style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: '600', letterSpacing: '0.04em' }}>Go to Discovery →</button>
                 </div>
               ) : (
@@ -326,12 +326,12 @@ export default function Targeting() {
             /* No company selected */
             <div style={{ padding: '80px 0', textAlign: 'center' }}>
               <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'var(--text)', marginBottom: '10px' }}>
-                {isEmpty ? 'No companies in pipeline yet' : 'Select a company to begin'}
+                {isEmpty ? 'No companies in workspace yet' : 'Select a company to begin'}
               </p>
               <p style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.9, maxWidth: '380px', margin: '0 auto 20px', letterSpacing: '0.02em' }}>
                 {isEmpty
                   ? 'Use Discovery to find and add companies first, then come back here to find their key contacts.'
-                  : 'Pick a company from your pipeline on the left, optionally filter by role, then click "Find Contacts" to search for decision makers via Apollo.'}
+                  : 'Pick a company from your workspace on the left, optionally filter by role, then click "Find Contacts" to search for decision makers via Apollo.'}
               </p>
               {isEmpty && (
                 <button onClick={() => navigate('/directory')} style={{ padding: '10px 22px', background: 'var(--text)', color: '#FFFFFF', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', letterSpacing: '0.06em' }}>

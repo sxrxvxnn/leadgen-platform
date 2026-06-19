@@ -116,7 +116,7 @@
   color: #FFFFFF;
   background: var(--lp-accent);
   border: none;
-  border-radius: 0;
+  border-radius: 9999px;
   padding: 12px 26px;
   cursor: pointer;
   transition: background 0.15s, box-shadow 0.2s;
@@ -141,6 +141,7 @@
   cursor: pointer;
   transition: color 0.15s;
   text-decoration: none;
+  border-radius: 9999px;
 }
 .lp .lp-btn-ghost:hover { color: var(--lp-text); }
 .lp .lp-btn-ghost-inline { display: inline-flex; align-items: center; }
@@ -226,6 +227,7 @@
   text-decoration: none;
   margin-bottom: 40px;
   transition: border-color 0.15s;
+  border-radius: 9999px;
 }
 .lp-announce:hover { border-color: var(--lp-accent); color: var(--lp-text); }
 .lp-announce-badge {
@@ -616,6 +618,7 @@
   letter-spacing: 0.06em; text-transform: uppercase;
   color: #FFFFFF; background: var(--lp-accent);
   border: none; padding: 14px 36px; text-decoration: none;
+  border-radius: 9999px;
   transition: background 0.15s, box-shadow 0.2s;
 }
 .lp-cta-btn:hover { background: #c40009; box-shadow: 0 4px 20px rgba(231,0,11,0.25); }

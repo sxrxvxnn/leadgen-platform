@@ -30,6 +30,8 @@
       font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
+      border-radius: 12px;
+      overflow: hidden;
     }
 
     a { text-decoration: none; color: inherit; }
@@ -90,7 +92,7 @@
       padding: 9px 13px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 0;
+      border-radius: 8px;
     }
     .sl-lead-label {
       font-size: 10px;
@@ -113,7 +115,7 @@
       gap: 7px;
       padding: 5px 11px;
       border: 1px solid var(--border);
-      border-radius: 0;
+      border-radius: 999px;
       background: transparent;
       width: fit-content;
     }
@@ -139,7 +141,7 @@
       font-size: 12px;
       line-height: 1.5;
       padding: 9px 12px;
-      border-radius: 0;
+      border-radius: 8px;
       display: none;
       border: 1px solid transparent;
     }
@@ -163,7 +165,7 @@
       line-height: 1.55;
       padding: 8px 10px;
       background: var(--surface);
-      border-radius: 0;
+      border-radius: 8px;
       border-left: 2px solid var(--border-mid);
     }
 
@@ -183,15 +185,17 @@
       color: #FFFFFF;
       background: var(--accent);
       border: none;
-      border-radius: 0;
+      border-radius: 8px;
       padding: 10px 14px;
       cursor: pointer;
-      transition: background 0.15s, box-shadow 0.2s;
+      transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
       text-align: left;
+      animation: sl-fade-in 0.3s ease 0.15s both;
     }
     .sl-btn:hover:not(:disabled) {
       background: #C50009;
       box-shadow: 0 0 14px rgba(231,0,11,0.18);
+      transform: translateY(-1px);
     }
     .sl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -209,15 +213,16 @@
       color: var(--accent);
       background: var(--accent-dim);
       border: 1px solid rgba(231,0,11,0.3);
-      border-radius: 0;
+      border-radius: 8px;
       padding: 10px 14px;
       cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.2s;
+      transition: border-color 0.15s, box-shadow 0.2s, transform 0.15s;
       text-align: left;
     }
     .sl-btn-accent:hover:not(:disabled) {
       border-color: var(--accent);
       box-shadow: 0 0 10px rgba(231,0,11,0.10);
+      transform: translateY(-1px);
     }
     .sl-btn-accent:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -231,7 +236,7 @@
       color: var(--text-muted);
       background: transparent;
       border: 1px solid var(--border);
-      border-radius: 0;
+      border-radius: 8px;
       padding: 9px 14px;
       cursor: pointer;
       transition: border-color 0.15s, color 0.15s;
@@ -305,7 +310,7 @@
       padding: 9px 12px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 0;
+      border-radius: 6px;
       font-family: 'Segoe UI', system-ui, sans-serif;
       font-size: 13px;
       color: var(--text);
@@ -322,7 +327,7 @@
       padding: 7px 10px;
       background: rgba(239,68,68,0.06);
       border: 1px solid rgba(239,68,68,0.16);
-      border-radius: 0;
+      border-radius: 8px;
     }
     .sl-error-msg.show { display: block; }
 
@@ -330,6 +335,15 @@
     #enrichProfileBtn { display: none; }
     #autoScrollBtn    { display: none; }
     #peopleTip        { display: none; }
+
+    /* ── Animations ───────────────────────────────────────────── */
+    @keyframes sl-fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .sl-body, .sl-login-body { animation: sl-fade-in 0.25s ease both; }
+    .sl-lead-strip { animation: sl-fade-in 0.3s ease 0.05s both; }
+    .sl-page-badge { animation: sl-fade-in 0.3s ease 0.10s both; }
   </style>
 </head>
 <body>

@@ -49,10 +49,13 @@ export default function Navbar() {
       <div style={{
         padding: '0 32px',
         height: '56px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        gap: '16px',
       }}>
 
-        {/* Logo */}
+        {/* Logo - left */}
         <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '9px' }}>
           <div style={{ width: '28px', height: '28px', background: LOGO_BG, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
@@ -72,7 +75,7 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Center nav */}
+        {/* Nav links - center */}
         <nav style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
           {NAV_LINKS.map(({ label, path }) => (
             <Link
@@ -120,8 +123,8 @@ export default function Navbar() {
           )}
         </nav>
 
-        {/* Right: user + sign out */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
+        {/* Right actions - right */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'flex-end' }}>
           {displayName && (
             <span style={{ fontFamily: SANS, fontSize: '12px', color: STEEL, letterSpacing: '0.04em' }}>
               {displayName}

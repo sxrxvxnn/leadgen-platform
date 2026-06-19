@@ -19,7 +19,7 @@ const fadeUp = (delay = 0) => ({
 })
 
 const TESTIMONIALS = [
-  { quote: "Sonar cut our prospecting time by 70%. We went from 2 hours of manual research per lead to instant enriched records ready to reach out.", name: "Arjun Mehta", role: "Head of Sales, Beagle Security" },
+  { quote: "Sonar cut our prospecting time by 70%. We went from 2 hours of manual research per lead to instant enriched records ready to reach out.", name: "Arjun Mehta", role: "Head of Sales, NovaSpark AI" },
   { quote: "The ICP scoring is what makes it different. Every morning I open Sonar and my best-fit leads are already ranked and ready.", name: "Priya Nair", role: "Founder, CloudOps Ltd" },
   { quote: "We used to miss SaaS companies in the 20–50 headcount range. Sonar finds them all and enriches them automatically.", name: "Liam Chen", role: "SDR Lead, Stackify" },
   { quote: "Installing the Chrome extension took 2 minutes. I pulled 80 qualified leads from LinkedIn in my first session.", name: "Sarah Kim", role: "AE, ScaleAI Corp" },
@@ -59,12 +59,12 @@ const FEATURE_TABS = [
     id: 'discovery',
     label: 'Company Discovery',
     heading: 'Search millions of B2B companies.',
-    body: 'Filter by industry, location, headcount, and keyword. Sector presets for SaaS, Fintech, Healthtech, Cybersecurity, and more. Add matching companies straight to your pipeline in one click.',
+    body: 'Filter by industry, location, headcount, and keyword. Sector presets for SaaS, Fintech, Healthtech, Cybersecurity, and more. Add matching companies straight to your workspace in one click.',
     visual: (
       <div className="lp-tab-visual">
         <div className="lp-tv-header"><span className="lp-tv-dot y"></span><span className="lp-tv-label">Company Directory</span></div>
         {[
-          { name: 'Beagle Security', tag: 'Cybersecurity', score: 94 },
+          { name: 'NovaSpark AI', tag: 'Cybersecurity', score: 94 },
           { name: 'CloudOps Ltd', tag: 'SaaS', score: 87 },
           { name: 'ScaleAI Corp', tag: 'AI/ML', score: 82 },
           { name: 'FinVerse', tag: 'Fintech', score: 79 },
@@ -85,11 +85,11 @@ const FEATURE_TABS = [
     body: 'Our AI reads websites, LinkedIn pages, and Google Maps to extract descriptions, headcount, tech stack signals, industry classification, and verified decision-maker contacts automatically.',
     visual: (
       <div className="lp-tab-visual">
-        <div className="lp-tv-header"><span className="lp-tv-dot g"></span><span className="lp-tv-label">Enrichment pipeline — live</span></div>
+        <div className="lp-tv-header"><span className="lp-tv-dot g"></span><span className="lp-tv-label">Enrichment queue — live</span></div>
         {[
           { step: 'Website AI', status: 'done', detail: 'SaaS · 12-50 employees' },
           { step: 'LinkedIn', status: 'done', detail: '3 decision makers found' },
-          { step: 'Hunter.io', status: 'done', detail: 'cto@beaglesec.io · verified' },
+          { step: 'Hunter.io', status: 'done', detail: 'cto@novaspark.io · verified' },
           { step: 'ICP Score', status: 'running', detail: 'Scoring…' },
         ].map((s, i) => (
           <motion.div key={s.step} className="lp-tv-row" initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }}>
@@ -105,7 +105,7 @@ const FEATURE_TABS = [
     id: 'scoring',
     label: 'ICP Scoring',
     heading: 'Your best accounts rise to the top.',
-    body: 'Define your ideal customer — industry, size, location, role keywords — once. Sonar scores every company in your pipeline automatically so you always work the highest-fit leads first.',
+    body: 'Define your ideal customer — industry, size, location, role keywords — once. Sonar scores every company in your workspace automatically so you always work the highest-fit leads first.',
     visual: (
       <div className="lp-tab-visual">
         <div className="lp-tv-header"><span className="lp-tv-dot y"></span><span className="lp-tv-label">ICP Score breakdown</span></div>
@@ -127,7 +127,7 @@ const FEATURE_TABS = [
   {
     id: 'export',
     label: 'Lead Export',
-    heading: 'From pipeline to outreach in seconds.',
+    heading: 'From discovery to outreach in seconds.',
     body: 'Export any selection as a clean CSV, open LinkedIn profiles in batch, or send to your CRM. Every record arrives with verified emails, job titles, LinkedIn URLs, and ICP scores attached.',
     visual: (
       <div className="lp-tab-visual">
@@ -149,10 +149,30 @@ const FEATURE_TABS = [
   },
 ]
 
+const LEARN_MORE_CONTENT = {
+  'Advanced Company Discovery': {
+    headline: 'Discover any B2B company in seconds',
+    body: 'Search across millions of companies filtered by industry vertical, headcount range, location, and keyword signals. Pre-built sector filters for SaaS, Fintech, Healthtech, Cybersecurity, and Manufacturing mean you can go from zero to qualified target list in under a minute. Results are ranked by match strength against your ICP.',
+  },
+  'Secure Data Handling': {
+    headline: 'Your data never leaves your control',
+    body: 'Every record is stored in Supabase with Row Level Security — only your account can query your data. All API calls travel over HTTPS. Your LinkedIn session cookie is sent only to your own Vercel backend, never to third-party servers. We never sell or share your prospect data.',
+  },
+  'Seamless Integration': {
+    headline: 'Pull leads from anywhere with one click',
+    body: 'The Chrome extension works on any LinkedIn page — company profiles, people search, Sales Navigator results. Hunter.io and Apollo.io are pre-wired to verify emails and enrich contact data automatically. No API keys to configure, no CSV exports needed.',
+  },
+  'Custom ICP Scoring': {
+    headline: 'Always work your best accounts first',
+    body: 'Define your ideal customer profile once — industry, headcount range, location, and role keywords. Sonar scores every company in your workspace from 0–100 on ICP fit and re-scores automatically when you update the criteria. The highest-fit accounts always appear at the top of your workspace.',
+  },
+}
+
 export default function Landing() {
   const [legal, setLegal] = useState(null)
   const [activeTab, setActiveTab] = useState('discovery')
   const [openFaq, setOpenFaq] = useState(null)
+  const [learnMoreOpen, setLearnMoreOpen] = useState(null)
 
   const activeTabData = FEATURE_TABS.find(t => t.id === activeTab)
 
@@ -212,7 +232,7 @@ export default function Landing() {
           {/* Heading */}
           <motion.h1 className="lp-hero-h1" {...fadeUp(0.08)}>
             <FlipWords
-              words={['Find the lead.', 'Close the deal.', 'Build the pipeline.', 'Score the fit.']}
+              words={['Find the lead.', 'Close the deal.', 'Build the list.', 'Score the fit.']}
               duration={3200}
             />
             <br />Before your<br />competitor does.
@@ -223,7 +243,7 @@ export default function Landing() {
           </motion.p>
 
           <motion.div className="lp-hero-ctas lp-hero-ctas-center" {...fadeUp(0.22)}>
-            <AnimatedButton variant="shimmer" href="/signup" as="a">
+            <AnimatedButton variant="shimmer" href="/signup" as="a" style={{ borderRadius: 9999 }}>
               Get started for free
             </AnimatedButton>
             <a href="#how-it-works" className="lp-btn-ghost lp-btn-ghost-inline">
@@ -246,7 +266,7 @@ export default function Landing() {
             <div className="lp-preview-body">
               <div className="lp-preview-row">
                 <span className="lp-preview-accent" style={{ background: '#FFFF00' }}></span>
-                <span className="lp-preview-name">Beagle Security</span>
+                <span className="lp-preview-name">NovaSpark AI</span>
                 <span className="lp-preview-tag">ICP Match · 94</span>
                 <div className="lp-preview-bar-score"><div style={{ width: '94%' }}></div></div>
               </div>
@@ -269,7 +289,7 @@ export default function Landing() {
                 <div className="lp-preview-bar-score"><div style={{ width: '71%' }}></div></div>
               </div>
               <div className="lp-preview-footer">
-                <span>4 companies enriched · auto pipeline</span>
+                <span>4 companies enriched · auto-synced</span>
                 <span className="lp-preview-cta">View all →</span>
               </div>
             </div>
@@ -293,7 +313,7 @@ export default function Landing() {
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">The problem</span>
-            <h2>Manually building your<br />pipeline is exhausting.</h2>
+            <h2>Manually building your<br />prospect list is exhausting.</h2>
           </motion.div>
           <div className="lp-problem-grid">
             {[
@@ -329,7 +349,7 @@ export default function Landing() {
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">Solution</span>
             <h2>Empower your sales team<br />with AI intelligence.</h2>
-            <p className="lp-section-sub">Generic tools won't cut it. Sonar is purpose-built for B2B pipeline — from discovery to deal-ready lead, everything automated.</p>
+            <p className="lp-section-sub">Generic tools won't cut it. Sonar is purpose-built for B2B outreach — from discovery to deal-ready lead, everything automated.</p>
           </motion.div>
           <div className="lp-solution-grid">
             {[
@@ -385,7 +405,7 @@ export default function Landing() {
                   <div className="lp-solution-icon">{icon}</div>
                   <h3>{title}</h3>
                   <p>{body}</p>
-                  <a href="#" className="lp-solution-link">Learn more <span>→</span></a>
+                  <button onClick={() => setLearnMoreOpen(title)} className="lp-solution-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Learn more <span>→</span></button>
                 </motion.div>
               </CardSpotlight>
             ))}
@@ -410,7 +430,7 @@ export default function Landing() {
               {
                 num: '02',
                 title: 'Discover and enrich',
-                body: 'Search the company directory or use the Maps explorer. Add targets to your pipeline, then let AI fill website data, LinkedIn profiles, and verified emails automatically.',
+                body: 'Search the company directory or use the Maps explorer. Add targets to your workspace, then let AI fill website data, LinkedIn profiles, and verified emails automatically.',
               },
               {
                 num: '03',
@@ -442,7 +462,7 @@ export default function Landing() {
               <div className="lp-hl-avatar">A</div>
               <div>
                 <div className="lp-hl-name">Arjun Mehta</div>
-                <div className="lp-hl-role">Head of Sales, Beagle Security</div>
+                <div className="lp-hl-role">Head of Sales, NovaSpark AI</div>
               </div>
             </div>
           </motion.div>
@@ -454,7 +474,7 @@ export default function Landing() {
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
             <span className="lp-pill">Platform</span>
-            <h2>Everything your pipeline needs.</h2>
+            <h2>Everything your workspace needs.</h2>
           </motion.div>
           <div className="lp-tabs-layout">
             {/* Left: tab list */}
@@ -552,7 +572,7 @@ export default function Landing() {
               <span className="lp-pill" style={{ marginBottom: '20px', display: 'inline-flex' }}>Chrome extension</span>
               <h2 style={{ marginTop: '20px', color: 'var(--lp-text)' }}>Extract leads straight<br />from LinkedIn.</h2>
               <p className="lp-ext-sub">
-                Install the Sonar extension and pull people and companies from any LinkedIn page — profiles, company pages, search results, Sales Navigator — directly into your pipeline. No copy-paste, no CSV.
+                Install the Sonar extension and pull people and companies from any LinkedIn page — profiles, company pages, search results, Sales Navigator — directly into your workspace. No copy-paste, no CSV.
               </p>
               <ul className="lp-ext-features">
                 <li><span className="lp-ext-dash">—</span>Extract from LinkedIn people search &amp; Sales Nav</li>
@@ -562,7 +582,7 @@ export default function Landing() {
                 <li><span className="lp-ext-dash">—</span>One click — leads appear in your dashboard instantly</li>
               </ul>
               <div className="lp-ext-actions">
-                <AnimatedButton variant="shimmer" href="/sonar-extension.zip" as="a" download>
+                <AnimatedButton variant="shimmer" href="/sonar-extension.zip" as="a" download style={{ borderRadius: 9999 }}>
                   Download extension ↓
                 </AnimatedButton>
                 <ol className="lp-ext-steps">
@@ -667,7 +687,7 @@ export default function Landing() {
               },
               {
                 tier: 'Team', price: 'Custom', period: 'contact us for team pricing',
-                features: ['Everything in Solo', 'Invite team members', 'Role-based access control', 'Admin dashboard', 'Shared pipeline & leads', 'Priority support'],
+                features: ['Everything in Solo', 'Invite team members', 'Role-based access control', 'Admin dashboard', 'Shared workspace & leads', 'Priority support'],
                 cta: <a href="mailto:sonarleads@proton.me" className="lp-btn">Contact us</a>,
                 featured: true,
               },
@@ -793,6 +813,65 @@ export default function Landing() {
       </footer>
 
       {legal && <LegalModal type={legal} onClose={() => setLegal(null)} />}
+
+      {/* ── LEARN MORE MODAL ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {learnMoreOpen && LEARN_MORE_CONTENT[learnMoreOpen] && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => setLearnMoreOpen(null)}
+            style={{
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.45)',
+              zIndex: 9000,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: '#FFFFFF',
+                maxWidth: 480,
+                width: '90%',
+                borderRadius: 16,
+                padding: '32px',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+                position: 'relative',
+              }}
+            >
+              <button
+                onClick={() => setLearnMoreOpen(null)}
+                style={{
+                  position: 'absolute', top: 16, right: 16,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 20, lineHeight: 1, color: '#6B7280',
+                  padding: '4px 8px', borderRadius: 6,
+                  transition: 'color 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#0A0A0A'; e.currentTarget.style.background = '#F3F4F6' }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#6B7280'; e.currentTarget.style.background = 'none' }}
+              >
+                ×
+              </button>
+              <div style={{ borderLeft: '4px solid #E7000B', paddingLeft: 16, marginBottom: 20 }}>
+                <h3 style={{ fontFamily: "'Host Grotesk', sans-serif", fontSize: 20, fontWeight: 700, color: '#0A0A0A', margin: 0, lineHeight: 1.3 }}>
+                  {LEARN_MORE_CONTENT[learnMoreOpen].headline}
+                </h3>
+              </div>
+              <p style={{ fontFamily: "'Host Grotesk', sans-serif", fontSize: 14, lineHeight: 1.75, color: '#6B7280', margin: 0 }}>
+                {LEARN_MORE_CONTENT[learnMoreOpen].body}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   )

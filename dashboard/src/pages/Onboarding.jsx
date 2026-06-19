@@ -55,7 +55,7 @@ export default function Onboarding() {
   const loaderSteps = [
     'Setting up your workspace…',
     'Building your ICP profile…',
-    'Preparing your pipeline…',
+    'Preparing your workspace…',
     'Configuring enrichment…',
     'Almost ready…',
   ]
@@ -97,7 +97,7 @@ export default function Onboarding() {
               <ModeCard
                 label="A"
                 title="Solo"
-                desc="Just me — building my own pipeline and prospecting independently."
+                desc="Just me — building my own prospect list and prospecting independently."
                 items={['Company discovery', 'AI enrichment', 'Lead management']}
                 onClick={() => !loading && handleModeSelect('solo')}
                 loading={loading && mode === 'solo'}
@@ -145,7 +145,7 @@ export default function Onboarding() {
                 </span>
               </h1>
               <p style={{ fontSize: 14, color: MID, margin: '20px 0 32px', lineHeight: 1.7, maxWidth: 420 }}>
-                The Sonar Chrome extension lets you pull people and companies from any LinkedIn page — profiles, people pages, search results — directly into your pipeline with one click.
+                The Sonar Chrome extension lets you pull people and companies from any LinkedIn page — profiles, people pages, search results — directly into your workspace with one click.
               </p>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
@@ -242,7 +242,7 @@ export default function Onboarding() {
                 type="text"
                 value={teamName}
                 onChange={e => setTeamName(e.target.value)}
-                placeholder="e.g. Beagle Security"
+                placeholder="e.g. NovaSpark AI"
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && teamName.trim() && finish('team', teamName.trim())}
                 style={{
