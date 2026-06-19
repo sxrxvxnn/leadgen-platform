@@ -402,41 +402,56 @@ export default function Landing() {
       </section>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-alt" id="how-it-works">
+      <section className="lp-section lp-section-dark" id="how-it-works">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill">How it works</span>
-            <h2>Just 3 steps to get started.</h2>
+            <span className="lp-pill lp-pill-dark">How it works</span>
+            <h2 style={{ color: '#F5F5F5' }}>Just 3 steps to get started.</h2>
           </motion.div>
-          <div className="lp-steps">
-            {[
-              {
-                num: '01',
-                title: 'Build your ICP',
-                body: 'Define your ideal customer — industry, company size, location, and role keywords. Sonar uses this profile to score every company it discovers.',
-              },
-              {
-                num: '02',
-                title: 'Discover and enrich',
-                body: 'Search the company directory or use the Maps explorer. Add targets to your workspace, then let AI fill website data, LinkedIn profiles, and verified emails automatically.',
-              },
-              {
-                num: '03',
-                title: 'Reach out and close',
-                body: 'Your leads arrive with verified emails, LinkedIn profiles, job titles, and ICP scores. Export a clean list or open LinkedIn profiles in batch — ready to reach out immediately.',
-              },
-            ].map(({ num, title, body }, i) => (
-              <motion.div key={num} {...fadeUp(i * 0.1)}>
-                <WobbleCard>
-                  <div className="lp-step-card">
-                    <div className="lp-step-num">{num}</div>
-                    <h3>{title}</h3>
-                    <p>{body}</p>
-                  </div>
-                </WobbleCard>
-              </motion.div>
-            ))}
+
+          {/* Row 1: narrow (1/3) + wide (2/3) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <motion.div style={{ gridColumn: '1 / 2' }} {...fadeUp(0)}>
+              <BentoCard bg="linear-gradient(135deg, #9D0010 0%, #5c0008 100%)" minHeight={340}>
+                <div style={{ marginBottom: 20 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: '#E7000B', textTransform: 'uppercase' }}>01</span>
+                </div>
+                <h3 style={{ color: 'white', fontSize: 'clamp(20px, 2vw, 28px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 14, letterSpacing: '-0.02em' }}>Build your ICP</h3>
+                <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                  Define your ideal customer — industry, company size, location, and role keywords. Sonar uses this profile to score every company it discovers.
+                </p>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '2 / 4' }} {...fadeUp(0.08)}>
+              <BentoCard bg="linear-gradient(135deg, #E7000B 0%, #b30009 100%)" minHeight={340}>
+                <div style={{ marginBottom: 20 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>02</span>
+                </div>
+                <div style={{ maxWidth: 420 }}>
+                  <h3 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 14, letterSpacing: '-0.02em' }}>Discover and enrich</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                    Search the company directory or use the Maps explorer. Add targets to your workspace, then let AI fill website data, LinkedIn profiles, and verified emails automatically.
+                  </p>
+                </div>
+              </BentoCard>
+            </motion.div>
           </div>
+
+          {/* Row 2: full width */}
+          <motion.div {...fadeUp(0.16)}>
+            <BentoCard bg="linear-gradient(135deg, #1a0404 0%, #0d0202 100%)" minHeight={240}>
+              <div style={{ maxWidth: 540 }}>
+                <div style={{ marginBottom: 20 }}>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', color: '#E7000B', textTransform: 'uppercase' }}>03</span>
+                </div>
+                <h3 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 14, letterSpacing: '-0.02em' }}>Reach out and close</h3>
+                <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                  Your leads arrive with verified emails, LinkedIn profiles, job titles, and ICP scores. Export a clean list or open LinkedIn profiles in batch — ready to reach out immediately.
+                </p>
+              </div>
+            </BentoCard>
+          </motion.div>
         </div>
       </section>
 
@@ -630,88 +645,167 @@ export default function Landing() {
       </section>
 
       {/* ── DATA INTELLIGENCE ────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-alt" id="what-we-find">
+      <section className="lp-section lp-section-dark" id="what-we-find">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill">Data intelligence</span>
-            <h2>Every data point<br />your team needs.</h2>
+            <span className="lp-pill lp-pill-dark">Data intelligence</span>
+            <h2 style={{ color: '#F5F5F5' }}>Every data point<br />your team needs.</h2>
           </motion.div>
-          <div className="lp-signals-grid">
-            {[
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>, label: 'Website Intelligence',    desc: 'AI reads company websites to extract descriptions, industry signals, and tech stack clues — no manual research.' },
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'LinkedIn Enrichment',     desc: 'Pull company LinkedIn pages, decision-maker profiles, headcount, and job titles into every record automatically.' },
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>, label: 'Verified Email Finder',   desc: 'Hunter.io integration finds and verifies professional email addresses for every contact you want to reach.' },
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Maps Intelligence',       desc: 'Discover local and regional businesses via Google Maps and enrich their details — ideal for territory-based sales.' },
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>, label: 'ICP Score',               desc: 'Every company gets an automatic fit score against your saved ICP criteria so your best-fit accounts rise to the top.' },
-              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, label: 'Industry Classification', desc: 'AI classifies every company into the right sector — SaaS, Fintech, Healthtech, Cybersecurity, and more — on enrichment.' },
-            ].map(({ icon, label, desc }, i) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-30px' }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: i * 0.07 }}
-              >
-                <WobbleCard>
-                  <div className="lp-signal-tile">
-                    <span className="lp-tile-icon">{icon}</span>
-                    <div>
-                      <div className="lp-tile-label">{label}</div>
-                      <div className="lp-tile-desc">{desc}</div>
-                    </div>
+
+          {/* 3-col bento grid — alternating 2/3 + 1/3 pattern */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+
+            {/* Row 1: 2/3 + 1/3 */}
+            <motion.div style={{ gridColumn: '1 / 3' }} {...fadeUp(0)}>
+              <BentoCard bg="linear-gradient(135deg, #C90008 0%, #8a0006 100%)" minHeight={260}>
+                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', flexShrink: 0, marginTop: 3 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                   </div>
-                </WobbleCard>
-              </motion.div>
-            ))}
+                  <div>
+                    <div style={{ color: 'white', fontWeight: 700, fontSize: 20, marginBottom: 10, letterSpacing: '-0.01em' }}>Website Intelligence</div>
+                    <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65 }}>AI reads company websites to extract descriptions, industry signals, and tech stack clues — no manual research.</div>
+                  </div>
+                </div>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '3 / 4' }} {...fadeUp(0.07)}>
+              <BentoCard bg="linear-gradient(135deg, #1a0505 0%, #0a0000 100%)" minHeight={260}>
+                <div style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 16 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div style={{ color: 'white', fontWeight: 700, fontSize: 18, marginBottom: 10, letterSpacing: '-0.01em' }}>LinkedIn Enrichment</div>
+                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.65 }}>Pull company LinkedIn pages, decision-maker profiles, headcount, and job titles into every record automatically.</div>
+              </BentoCard>
+            </motion.div>
+
+            {/* Row 2: 1/3 + 2/3 */}
+            <motion.div style={{ gridColumn: '1 / 2' }} {...fadeUp(0.12)}>
+              <BentoCard bg="linear-gradient(135deg, #0d0202 0%, #180303 100%)" minHeight={260}>
+                <div style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 16 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </div>
+                <div style={{ color: 'white', fontWeight: 700, fontSize: 18, marginBottom: 10, letterSpacing: '-0.01em' }}>Verified Email Finder</div>
+                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.65 }}>Hunter.io integration finds and verifies professional email addresses for every contact you want to reach.</div>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '2 / 4' }} {...fadeUp(0.16)}>
+              <BentoCard bg="linear-gradient(135deg, #9D0010 0%, #4c0008 100%)" minHeight={260}>
+                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', flexShrink: 0, marginTop: 3 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ color: 'white', fontWeight: 700, fontSize: 20, marginBottom: 10, letterSpacing: '-0.01em' }}>Maps Intelligence</div>
+                    <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65 }}>Discover local and regional businesses via Google Maps and enrich their details — ideal for territory-based sales.</div>
+                  </div>
+                </div>
+              </BentoCard>
+            </motion.div>
+
+            {/* Row 3: 2/3 + 1/3 */}
+            <motion.div style={{ gridColumn: '1 / 3' }} {...fadeUp(0.20)}>
+              <BentoCard bg="linear-gradient(135deg, #B8000A 0%, #7a0007 100%)" minHeight={220}>
+                <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', flexShrink: 0, marginTop: 3 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  </div>
+                  <div>
+                    <div style={{ color: 'white', fontWeight: 700, fontSize: 20, marginBottom: 10, letterSpacing: '-0.01em' }}>ICP Score</div>
+                    <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65 }}>Every company gets an automatic fit score against your saved ICP criteria so your best-fit accounts rise to the top.</div>
+                  </div>
+                </div>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '3 / 4' }} {...fadeUp(0.24)}>
+              <BentoCard bg="linear-gradient(135deg, #160202 0%, #0a0101 100%)" minHeight={220}>
+                <div style={{ color: 'rgba(255,255,255,0.85)', marginBottom: 16 }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="24" height="24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                </div>
+                <div style={{ color: 'white', fontWeight: 700, fontSize: 18, marginBottom: 10, letterSpacing: '-0.01em' }}>Industry Classification</div>
+                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.65 }}>AI classifies every company into the right sector — SaaS, Fintech, Healthtech, Cybersecurity — on enrichment.</div>
+              </BentoCard>
+            </motion.div>
+
           </div>
         </div>
       </section>
 
       {/* ── PRICING ──────────────────────────────────────────────────────── */}
-      <section className="lp-section" id="pricing">
+      <section className="lp-section lp-section-dark" id="pricing">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill">Pricing</span>
-            <h2>Start free.<br />Scale when you're ready.</h2>
+            <span className="lp-pill lp-pill-dark">Pricing</span>
+            <h2 style={{ color: '#F5F5F5' }}>Start free.<br />Scale when you're ready.</h2>
           </motion.div>
-          <div className="lp-pricing-grid">
-            {[
-              {
-                tier: 'Solo', price: 'Free', period: 'forever, no card needed',
-                features: ['Company discovery & directory', 'AI website enrichment', 'LinkedIn enrichment', 'ICP profile & scoring', 'Lead management', 'Email finder (Hunter)', 'CSV export'],
-                cta: <Link to="/signup" className="lp-btn">Get started free</Link>,
-                featured: false,
-              },
-              {
-                tier: 'Team', price: 'Custom', period: 'contact us for team pricing',
-                features: ['Everything in Solo', 'Invite team members', 'Role-based access control', 'Admin dashboard', 'Shared workspace & leads', 'Priority support'],
-                cta: <a href="mailto:sonarleads@proton.me" className="lp-btn">Contact us</a>,
-                featured: true,
-              },
-              {
-                tier: 'Enterprise', price: 'Custom', period: 'for larger sales orgs',
-                features: ['Everything in Team', 'Unlimited seats', 'Custom ICP workflows', 'Dedicated onboarding', 'API access', 'SLA & dedicated support'],
-                cta: <a href="mailto:sonarleads@proton.me" className="lp-btn">Talk to us</a>,
-                featured: false,
-              },
-            ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <motion.div key={tier} {...fadeUp(i * 0.1)}>
-                <WobbleCard>
-                  <div className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}>
-                    {featured && <span className="lp-recommended-badge">Most popular</span>}
-                    <div className="lp-pricing-tier">{tier}</div>
-                    <div className="lp-pricing-price">{price}</div>
-                    <div className="lp-pricing-period">{period}</div>
-                    <div className="lp-pricing-divider"></div>
-                    <ul className="lp-pricing-features">
-                      {features.map(f => <li key={f}>{f}</li>)}
-                    </ul>
-                    {cta}
+
+          {/* Row 1: Solo (1/3) + Team featured (2/3) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <motion.div style={{ gridColumn: '1 / 2' }} {...fadeUp(0)}>
+              <BentoCard bg="linear-gradient(135deg, #160303 0%, #0a0101 100%)" minHeight={480}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', marginBottom: 16 }}>Solo</div>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 800, color: 'white', lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 6 }}>Free</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24 }}>forever, no card needed</div>
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', marginBottom: 24 }} />
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', flex: 1 }}>
+                    {['Company discovery & directory', 'AI website enrichment', 'LinkedIn enrichment', 'ICP profile & scoring', 'Lead management', 'Email finder (Hunter)', 'CSV export'].map(f => (
+                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 11, color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.4 }}>
+                        <span style={{ color: '#E7000B', flexShrink: 0, marginTop: 1 }}>—</span>{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/signup" style={{ display: 'block', background: '#E7000B', color: 'white', textAlign: 'center', padding: '14px 24px', borderRadius: 9999, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Get started free</Link>
+                </div>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '2 / 4' }} {...fadeUp(0.08)}>
+              <BentoCard bg="linear-gradient(135deg, #E7000B 0%, #9D0000 100%)" minHeight={480}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>Team</div>
+                    <span style={{ background: 'rgba(255,255,255,0.2)', color: 'white', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 10px', borderRadius: 9999 }}>Most popular</span>
                   </div>
-                </WobbleCard>
-              </motion.div>
-            ))}
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 800, color: 'white', lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 6 }}>Custom</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 24 }}>contact us for team pricing</div>
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.2)', marginBottom: 24 }} />
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', flex: 1, columns: 2, columnGap: 32 }}>
+                    {['Everything in Solo', 'Invite team members', 'Role-based access control', 'Admin dashboard', 'Shared workspace & leads', 'Priority support'].map(f => (
+                      <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 11, color: 'rgba(255,255,255,0.8)', fontSize: 14, lineHeight: 1.4, breakInside: 'avoid' }}>
+                        <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0, marginTop: 1 }}>—</span>{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <a href="mailto:sonarleads@proton.me" style={{ display: 'block', background: 'white', color: '#E7000B', textAlign: 'center', padding: '14px 24px', borderRadius: 9999, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Contact us</a>
+                </div>
+              </BentoCard>
+            </motion.div>
           </div>
+
+          {/* Row 2: Enterprise full width */}
+          <motion.div {...fadeUp(0.16)}>
+            <BentoCard bg="linear-gradient(135deg, #9D0010 0%, #5c0008 100%)" minHeight={280}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', marginBottom: 14 }}>Enterprise</div>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 64, fontWeight: 800, color: 'white', lineHeight: 1, letterSpacing: '-0.03em', marginBottom: 6 }}>Custom</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 24 }}>for larger sales orgs</div>
+                  <a href="mailto:sonarleads@proton.me" style={{ display: 'inline-block', background: 'white', color: '#9D0010', padding: '14px 32px', borderRadius: 9999, fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', textDecoration: 'none' }}>Talk to us</a>
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {['Everything in Team', 'Unlimited seats', 'Custom ICP workflows', 'Dedicated onboarding', 'API access', 'SLA & dedicated support'].map(f => (
+                    <li key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 11, color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.4 }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)', flexShrink: 0, marginTop: 1 }}>—</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </BentoCard>
+          </motion.div>
         </div>
       </section>
 
