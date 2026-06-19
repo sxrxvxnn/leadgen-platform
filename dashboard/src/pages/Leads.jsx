@@ -220,7 +220,7 @@ function EmailDraftModal({ lead, draft, onClose }) {
       // Copy all button
       React.createElement('button', {
         onClick: () => copy(`Subject: ${draft.subject}\n\n${draft.body}`),
-        style: { width: '100%', padding: '12px', background: copied ? '#4a7c59' : '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.06em', cursor: 'pointer', transition: 'background 0.2s' }
+        style: { width: '100%', padding: '12px', background: copied ? '#4a7c59' : 'var(--text)', color: '#FFFFFF', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', letterSpacing: '0.06em', cursor: 'pointer', transition: 'background 0.2s' }
       }, copied ? '✓ Copied to clipboard' : 'Copy entire email')
     )
   )
@@ -633,11 +633,11 @@ const s = {
   heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
   starFilterBtn: { padding: '8px 14px', border: '1px solid', borderRadius: '7px', fontSize: '10px', fontWeight: '600', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'all 0.15s', letterSpacing: '0.04em' },
   spreadsheetBtn: { padding: '8px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
-  exportBtn: { padding: '8px 14px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
+  exportBtn: { padding: '8px 14px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' },
   container: { padding: '20px 48px' },
   viewTabs: { display: 'flex', gap: '2px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' },
   viewTab: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'transparent', border: 'none', fontSize: '11px', fontWeight: '400', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'var(--font-mono)', transition: 'color 0.15s', borderRadius: '5px' },
-  viewTabActive: { background: '#1d1b1b', color: '#fdfdfd' },
+  viewTabActive: { background: 'var(--text)', color: '#FFFFFF' },
   viewTabCount: { padding: '1px 6px', borderRadius: '8px', fontSize: '9px', fontWeight: '600' },
   filters: { display: 'flex', gap: '10px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', flex: 1, minWidth: '200px' },

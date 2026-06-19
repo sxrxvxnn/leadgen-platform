@@ -6,7 +6,7 @@ const css = `
   100% { background-position: -200% 0 }
 }
 .sk {
-  background: linear-gradient(90deg, #1A1A1A 25%, #2A2A2A 50%, #1A1A1A 75%);
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
   background-size: 200% 100%;
   animation: sk-shimmer 1.5s ease infinite;
   border-radius: 0;

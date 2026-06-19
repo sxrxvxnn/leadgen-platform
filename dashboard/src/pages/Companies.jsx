@@ -800,7 +800,7 @@ function AnalysisModal({ result, onClose }) {
           ) : (
             <>
               {/* Stats gap-px grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: '#c4c1bd', border: '1px solid #c4c1bd', borderRadius: '6px', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'var(--border-strong)', border: '1px solid var(--border-strong)', borderRadius: '6px', overflow: 'hidden' }}>
                 {[
                   { label: 'Company Type',  value: analysis.company_type || '—' },
                   { label: 'Is SaaS',       value: analysis.is_saas === true ? 'Yes' : analysis.is_saas === false ? 'No' : '—' },
@@ -848,7 +848,7 @@ function AnalysisModal({ result, onClose }) {
 
         {/* Footer */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-          <button onClick={onClose} style={{ width: '100%', padding: '10px', background: '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ width: '100%', padding: '10px', background: 'var(--text)', color: '#FFFFFF', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', cursor: 'pointer' }}>
             Close
           </button>
         </div>
@@ -1023,7 +1023,7 @@ export default function Companies() {
         <div style={{ position: 'relative', display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button onClick={() => setShowBulkAdd(true)} style={s.heroBtn}>Bulk Add</button>
           <button onClick={() => setShowSpreadsheet(true)} style={s.heroBtn}>Spreadsheet</button>
-          <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: '#1d1b1b', color: '#fdfdfd', border: 'none' }}>Export →</button>
+          <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: 'var(--text)', color: '#FFFFFF', border: 'none' }}>Export →</button>
         </div>
       </motion.div>
 
@@ -1219,7 +1219,7 @@ const s = {
   searchBox: { display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', flex: 1, minWidth: '200px' },
   searchInput: { flex: 1, padding: '9px 12px', background: 'transparent', border: 'none', outline: 'none', fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' },
   select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.04em' },
-  primaryBtn: { padding: '9px 16px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
+  primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
@@ -1248,7 +1248,7 @@ const card = {
   editInput: { width: '100%', padding: '7px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '12px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
   editFooter: { display: 'flex', justifyContent: 'flex-end', gap: '8px' },
   editCancelBtn: { fontFamily: 'var(--font-mono)', padding: '7px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer' },
-  editSaveBtn: { fontFamily: 'var(--font-mono)', padding: '7px 16px', background: '#1d1b1b', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer' },
+  editSaveBtn: { fontFamily: 'var(--font-mono)', padding: '7px 16px', background: 'var(--text)', border: 'none', borderRadius: '6px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer' },
   infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid rgba(196,193,189,0.5)', borderBottom: '1px solid rgba(196,193,189,0.5)', background: 'rgba(196,193,189,0.35)', gap: '1px' },
   infoItem: { padding: '9px 14px', background: 'var(--bg)' },
   infoLabel: { fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },
@@ -1265,7 +1265,7 @@ const card = {
   statusSelect: { fontFamily: 'var(--font-mono)', padding: '4px 8px', background: 'var(--surface)', border: '1px solid', borderRadius: '4px', fontSize: '9px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
   actionBtn: { fontFamily: 'var(--font-mono)', padding: '4px 9px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '9px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.04em' },
   linkedinBtn: { fontFamily: 'var(--font-mono)', padding: '4px 9px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', textDecoration: 'none', letterSpacing: '0.04em' },
-  primaryBtn: { fontFamily: 'var(--font-mono)', padding: '5px 12px', background: '#1d1b1b', border: 'none', borderRadius: '5px', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', cursor: 'pointer', letterSpacing: '0.04em' },
+  primaryBtn: { fontFamily: 'var(--font-mono)', padding: '5px 12px', background: 'var(--text)', border: 'none', borderRadius: '5px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', letterSpacing: '0.04em' },
 }
 
 const modal = {

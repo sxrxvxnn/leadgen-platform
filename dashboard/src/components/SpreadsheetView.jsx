@@ -367,7 +367,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
                 fontSize: '10px',
                 fontWeight: viewFilter === f ? '600' : '400',
                 letterSpacing: '0.04em',
-                color: viewFilter === f ? '#fdfdfd' : 'rgba(253,253,253,0.45)',
+                color: viewFilter === f ? '#FFFFFF' : 'rgba(253,253,253,0.45)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }
@@ -465,7 +465,7 @@ const overlay = { position: 'fixed', inset: 0, background: 'rgba(29,27,27,0.4)',
 const modal = { background: 'var(--bg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }
 
 const hdr = {
-  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: '#1d1b1b', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
+  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: 'var(--text)', flexShrink: 0, gap: '10px', flexWrap: 'wrap' },
   left: {},
   label: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: '4px', textTransform: 'uppercase' },
   title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: '400', letterSpacing: '-0.04em', color: 'rgba(253,253,253,0.95)', lineHeight: 1 },
@@ -474,8 +474,8 @@ const hdr = {
   saving: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', fontWeight: '600', letterSpacing: '0.08em' },
   input: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.85)', outline: 'none', width: '160px' },
   select: { padding: '7px 10px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'rgba(253,253,253,0.75)', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
-  autofillBtn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#fdfdfd', whiteSpace: 'nowrap', cursor: 'pointer', letterSpacing: '0.04em' },
-  exportBtn: { padding: '7px 14px', background: 'rgba(253,253,253,0.9)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#1d1b1b', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
+  autofillBtn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', whiteSpace: 'nowrap', cursor: 'pointer', letterSpacing: '0.04em' },
+  exportBtn: { padding: '7px 14px', background: 'rgba(253,253,253,0.9)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   closeBtn: { padding: '7px 12px', background: 'transparent', border: '1px solid rgba(253,253,253,0.15)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', color: 'rgba(253,253,253,0.5)', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
 }
 

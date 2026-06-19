@@ -4,35 +4,35 @@
   padding: 0;
 }
 
-/* ── Design tokens — steven.com × en.protection.gr blend ─────────────── */
+/* ── Design tokens — light theme matching saas-magicui ────────────────── */
 :root {
   /* Backgrounds */
-  --bg:               #121212;
-  --surface:          #1A1A1A;
-  --surface-raised:   #222222;
+  --bg:               #FFFFFF;
+  --surface:          #F9FAFB;
+  --surface-raised:   #F3F4F6;
 
   /* Text */
-  --text:             #F5F5F5;
-  --text-soft:        #CCCCCC;
-  --text-secondary:   #A0A0A0;
-  --text-muted:       #69727D;
+  --text:             #0A0A0A;
+  --text-soft:        #374151;
+  --text-secondary:   #6B7280;
+  --text-muted:       #9CA3AF;
 
   /* Borders */
-  --border:           #2A2A2A;
-  --border-strong:    #3A3A3A;
-  --border-subtle:    #222222;
+  --border:           #E5E7EB;
+  --border-strong:    #D1D5DB;
+  --border-subtle:    #F3F4F6;
 
-  /* Accent — electric yellow (steven.com) */
-  --accent:           #FFFF00;
-  --accent-dark:      #E5E500;
-  --accent-light:     #FFFF66;
-  --accent-dim:       rgba(255, 255, 0, 0.10);
-  --accent-dimmer:    rgba(255, 255, 0, 0.06);
-  --ambient-primary:  rgba(255, 255, 0, 0.05);
+  /* Accent — red (saas-magicui) */
+  --accent:           #E7000B;
+  --accent-dark:      #C50009;
+  --accent-light:     #FF3333;
+  --accent-dim:       rgba(231, 0, 11, 0.10);
+  --accent-dimmer:    rgba(231, 0, 11, 0.06);
+  --ambient-primary:  rgba(231, 0, 11, 0.05);
 
-  /* Steel grays (protection.gr) */
+  /* Steel grays */
   --steel:            #5B6670;
-  --steel-mid:        #69727D;
+  --steel-mid:        #6B7280;
 
   /* Status */
   --green:            #22C55E;
@@ -51,48 +51,48 @@
   --font-mono:        'IBM Plex Mono', 'SFMono-Regular', 'Consolas', monospace;
 
   /* Nav */
-  --nav-bg:           rgba(18, 18, 18, 0.92);
-  --nav-bg-scrolled:  rgba(18, 18, 18, 0.96);
-  --nav-border:       #2A2A2A;
+  --nav-bg:           rgba(255, 255, 255, 0.92);
+  --nav-bg-scrolled:  rgba(255, 255, 255, 0.96);
+  --nav-border:       #E5E7EB;
   --nav-height:       56px;
 
   /* Shadows */
-  --shadow-card:      0 0 0 1px #2A2A2A;
-  --shadow-subtle:    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  --shadow-focus:     0 0 0 2px rgba(255, 255, 0, 0.35);
-  --shadow-subtle-2:  0 0 0 1px #2A2A2A;
-  --shadow-subtle-4:  0 0 0 2px rgba(255, 255, 0, 0.30);
+  --shadow-card:      0 0 0 1px #E5E7EB;
+  --shadow-subtle:    0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-focus:     0 0 0 2px rgba(231, 0, 11, 0.25);
+  --shadow-subtle-2:  0 0 0 1px #E5E7EB;
+  --shadow-subtle-4:  0 0 0 2px rgba(231, 0, 11, 0.20);
 
   /* Shape */
   --radius-buttons:   0px;
   --radius-cards:     0px;
   --radius-pills:     2px;
 
-  /* Light palette — for landing page sections (protection.gr) */
-  --bg-light:         #ECEDEC;
-  --bg-light-alt:     #E3E4E3;
-  --border-light:     #C8C9C8;
+  /* Subtle backgrounds */
+  --bg-light:         #F3F4F6;
+  --bg-light-alt:     #E9EAEB;
+  --border-light:     #D1D5DB;
 
   /* Named aliases kept for component compat */
-  --color-ink-violet:    #F5F5F5;
-  --color-plum-charcoal: #CCCCCC;
-  --color-storm-mauve:   #A0A0A0;
-  --color-slate-iris:    #69727D;
-  --color-ash-lavender:  #5B6670;
-  --color-parchment:     #ECEDEC;
-  --color-bone-mist:     #E3E4E3;
-  --color-fog-border:    #2A2A2A;
-  --color-twilight-plum: #E5E500;
-  --color-amethyst:      #FFFF00;
+  --color-ink-violet:    #0A0A0A;
+  --color-plum-charcoal: #374151;
+  --color-storm-mauve:   #6B7280;
+  --color-slate-iris:    #9CA3AF;
+  --color-ash-lavender:  #6B7280;
+  --color-parchment:     #F9FAFB;
+  --color-bone-mist:     #F3F4F6;
+  --color-fog-border:    #E5E7EB;
+  --color-twilight-plum: #C50009;
+  --color-amethyst:      #E7000B;
   --color-wisteria:      #F59E0B;
-  --gradient-indigo-plum: linear-gradient(180deg, #1A1A1A 0%, #121212 100%);
+  --gradient-indigo-plum: linear-gradient(180deg, #F9FAFB 0%, #FFFFFF 100%);
 
   /* Backwards-compat aliases */
   --black:            var(--text);
-  --white:            #F5F5F5;
+  --white:            #FFFFFF;
   --gray-1:           var(--surface);
-  --gray-2:           #2A2A2A;
-  --gray-3:           #3A3A3A;
+  --gray-2:           #E5E7EB;
+  --gray-3:           #D1D5DB;
   --gray-4:           var(--text-secondary);
   --gray-5:           var(--text-muted);
 }
@@ -157,7 +157,7 @@ input, select, textarea { font-family: inherit; }
   line-height: 1.0;
 }
 
-/* Primary: yellow fill button */
+/* Primary: red fill button */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -169,7 +169,7 @@ input, select, textarea { font-family: inherit; }
   text-transform: uppercase;
   padding: 10px 20px;
   background: var(--accent);
-  color: #121212;
+  color: #FFFFFF;
   border: none;
   border-radius: 0;
   cursor: pointer;
@@ -177,7 +177,7 @@ input, select, textarea { font-family: inherit; }
 }
 .btn-primary:hover {
   background: var(--accent-dark);
-  box-shadow: 0 0 20px rgba(255, 255, 0, 0.25);
+  box-shadow: 0 0 20px rgba(231, 0, 11, 0.25);
 }
 
 /* Ghost button */
@@ -200,7 +200,7 @@ input, select, textarea { font-family: inherit; }
 }
 .btn-ghost:hover { border-color: var(--border-strong); color: var(--text); }
 
-/* Steel button (secondary — protection.gr) */
+/* Steel button (secondary) */
 .btn-steel {
   display: inline-flex;
   align-items: center;
@@ -239,4 +239,4 @@ input, select, textarea { font-family: inherit; }
   color: var(--text-muted);
 }
 
-::selection { background: var(--accent); color: #121212; }
+::selection { background: var(--accent); color: #FFFFFF; }

@@ -11,11 +11,12 @@ const NAV_LINKS = [
   { label: 'Settings',  path: '/settings' },
 ]
 
-const DARK    = '#121212'
-const BORDER  = '#2A2A2A'
-const INK     = '#F5F5F5'
-const STEEL   = '#5B6670'
-const ACCENT  = '#FFFF00'
+const DARK    = '#FFFFFF'
+const BORDER  = '#E5E7EB'
+const INK     = '#0A0A0A'
+const STEEL   = '#6B7280'
+const ACCENT  = '#E7000B'
+const LOGO_BG = '#FFFF00'
 const SANS    = "'Host Grotesk', 'Roboto', sans-serif"
 const DISPLAY = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 
@@ -53,7 +54,7 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '9px' }}>
-          <div style={{ width: '28px', height: '28px', background: ACCENT, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ width: '28px', height: '28px', background: LOGO_BG, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
               <circle cx="7.5" cy="7.5" r="6.5" stroke="#121212" strokeWidth="1.4" fill="none"/>
               <circle cx="7.5" cy="7.5" r="3.8" stroke="#121212" strokeWidth="1.4" fill="none"/>
@@ -90,7 +91,7 @@ export default function Navbar() {
                 padding: '5px 12px',
                 textDecoration: 'none',
                 borderRadius: 0,
-                background: isActive(path) ? 'rgba(255,255,255,0.07)' : 'transparent',
+                background: isActive(path) ? 'rgba(0,0,0,0.05)' : 'transparent',
                 borderBottom: isActive(path) ? `1px solid ${ACCENT}` : '1px solid transparent',
                 transition: 'all 0.15s',
               }}
@@ -143,7 +144,7 @@ export default function Navbar() {
               cursor: 'pointer',
               transition: 'border-color 0.15s, box-shadow 0.2s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.boxShadow = `0 0 10px rgba(255,255,0,0.12)` }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.boxShadow = `0 0 10px rgba(231,0,11,0.15)` }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = 'none' }}
           >
             Sign out

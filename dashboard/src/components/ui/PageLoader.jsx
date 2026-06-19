@@ -85,7 +85,7 @@ export function PageLoader({ onDone }) {
               style={{
                 position: 'absolute', left: 0, top: 0,
                 height: '100%',
-                background: '#FFFF00',
+                background: '#E7000B',
                 width: `${count}%`,
                 transition: 'width 0.05s linear',
               }}

@@ -68,12 +68,12 @@ export default function DMFinder({ companies, onClose }) {
           {['all', 'pending', 'opened', 'done'].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '5px 12px',
-              background: filter === f ? '#1d1b1b' : 'transparent',
-              border: `1px solid ${filter === f ? '#1d1b1b' : 'var(--border)'}`,
+              background: filter === f ? 'var(--text)' : 'transparent',
+              border: `1px solid ${filter === f ? 'var(--text)' : 'var(--border)'}`,
               borderRadius: '5px',
               fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: filter === f ? '600' : '400',
               letterSpacing: '0.04em',
-              color: filter === f ? '#fdfdfd' : 'var(--text-muted)',
+              color: filter === f ? '#FFFFFF' : 'var(--text-muted)',
               cursor: 'pointer', transition: 'all 0.15s',
             }}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -113,7 +113,7 @@ export default function DMFinder({ companies, onClose }) {
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                 {item.status !== 'done' && item.peopleUrl && (
                   <a href={item.peopleUrl} target="_blank" rel="noreferrer" onClick={() => markOpened(item.id)}
-                    style={{ padding: '6px 14px', background: item.status === 'opened' ? 'var(--accent)' : '#1d1b1b', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', textDecoration: 'none', display: 'inline-block' }}>
+                    style={{ padding: '6px 14px', background: item.status === 'opened' ? 'var(--accent)' : 'var(--text)', borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#FFFFFF', textDecoration: 'none', display: 'inline-block' }}>
                     {item.status === 'opened' ? 'Reopen →' : 'Open →'}
                   </a>
                 )}

@@ -77,7 +77,7 @@ export default function Dashboard() {
       {showExtBanner && (
         <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent-dimmer)' }}>
           <div style={{ padding: '14px 48px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: 28, height: 28, background: '#FFFF00', borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 28, height: 28, background: 'var(--accent-dim)', borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="7" stroke="#121212" strokeWidth="1.2" opacity="0.4"/>
                 <circle cx="8" cy="8" r="4" stroke="#121212" strokeWidth="1.2" opacity="0.75"/>
@@ -90,7 +90,7 @@ export default function Dashboard() {
               <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>— extract leads from LinkedIn with one click.</span>
             </div>
             <a href="/sonar-extension.zip" download onClick={() => setExtStepsOpen(true)}
-              style={{ fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#121212', background: '#FFFF00', border: 'none', borderRadius: 0, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
+              style={{ fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#FFFFFF', background: 'var(--accent)', border: 'none', borderRadius: 0, padding: '6px 14px', textDecoration: 'none', flexShrink: 0 }}>
               Download ↓
             </a>
             <button onClick={() => { setShowExtBanner(false); localStorage.setItem('extBannerDismissed', '1') }}
@@ -116,7 +116,7 @@ export default function Dashboard() {
         gridTemplateColumns: 'repeat(3, 1fr)',
         gridTemplateRows: '190px 210px',
         gap: '1px',
-        background: '#c4c1bd',
+        background: 'var(--border)',
         borderBottom: '1px solid var(--border)',
       }}>
 

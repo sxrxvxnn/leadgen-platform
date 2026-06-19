@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { motion } from 'motion/react'
 
-/* variant="shimmer" — yellow primary CTA with shimmer sweep */
+/* variant="shimmer" — red primary CTA with shimmer sweep */
 function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
   const [hovered, setHovered] = useState(false)
 
@@ -22,15 +22,15 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
         fontWeight: 500,
         letterSpacing: '0.06em',
         textTransform: 'uppercase',
-        color: '#121212',
-        background: '#FFFF00',
+        color: '#FFFFFF',
+        background: 'var(--accent)',
         border: 'none',
         borderRadius: 0,
         padding: '11px 24px',
         cursor: 'pointer',
         textDecoration: 'none',
         transition: 'background 0.15s, box-shadow 0.2s',
-        boxShadow: hovered ? '0 0 20px rgba(255,255,0,0.25)' : 'none',
+        boxShadow: hovered ? '0 0 20px rgba(231,0,11,0.25)' : 'none',
         ...style,
       }}
       {...rest}
@@ -53,7 +53,7 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
   )
 }
 
-/* variant="glow" — ghost button with yellow glow on hover */
+/* variant="glow" — ghost button with accent glow on hover */
 function GlowButton({ children, style, href, as: Tag = 'button', ...rest }) {
   const [hovered, setHovered] = useState(false)
   const El = href ? 'a' : Tag
@@ -73,17 +73,17 @@ function GlowButton({ children, style, href, as: Tag = 'button', ...rest }) {
         fontWeight: 500,
         letterSpacing: '0.06em',
         textTransform: 'uppercase',
-        color: '#F5F5F5',
+        color: 'var(--text)',
         background: 'transparent',
-        border: '1px solid #3A3A3A',
+        border: '1px solid var(--border)',
         borderRadius: 0,
         padding: '10px 24px',
         cursor: 'pointer',
         textDecoration: 'none',
         transition: 'border-color 0.15s, color 0.15s, box-shadow 0.25s',
-        borderColor: hovered ? '#FFFF00' : '#3A3A3A',
+        borderColor: hovered ? 'var(--accent)' : 'var(--border)',
         boxShadow: hovered
-          ? '0 0 0 1px rgba(255,255,0,0.2), 0 0 12px rgba(255,255,0,0.08)'
+          ? '0 0 0 1px rgba(231,0,11,0.2), 0 0 12px rgba(231,0,11,0.08)'
           : 'none',
         ...style,
       }}
@@ -128,9 +128,9 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
           fontWeight: 500,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
-          color: '#F5F5F5',
+          color: 'var(--text)',
           background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.15)',
+          border: '1px solid var(--border)',
           borderRadius: 0,
           padding: '10px 24px',
           cursor: 'pointer',
@@ -138,8 +138,8 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
           transition: 'border-color 0.15s',
           ...style,
         }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
         {...rest}
       >
         {children}

@@ -226,9 +226,9 @@ export default function Settings() {
             <button onClick={handleSave} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '14px 20px',
-              background: saved ? '#4a7c59' : '#FFFF00', border: 'none', borderRadius: 0,
+              background: saved ? '#4a7c59' : 'var(--accent)', border: 'none', borderRadius: 0,
               fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: '600',
-              color: saved ? '#fdfdfd' : '#121212', cursor: 'pointer', transition: 'background 0.2s',
+              color: '#FFFFFF', cursor: 'pointer', transition: 'background 0.2s',
               letterSpacing: '0.04em',
             }}>
               <span>{saved ? '✓ Saved successfully' : 'Save settings'}</span>
@@ -300,8 +300,8 @@ function ToggleRow({ label, checked, onChange }) {
         style={{
           position: 'relative', flexShrink: 0,
           width: '44px', height: '24px',
-          background: checked ? '#FFFF00' : 'var(--surface2, #222)',
-          border: checked ? '1px solid #FFFF00' : '1px solid var(--border)',
+          background: checked ? 'var(--accent)' : 'var(--surface)',
+          border: checked ? '1px solid var(--accent)' : '1px solid var(--border)',
           borderRadius: '12px',
           cursor: 'pointer',
           transition: 'background 0.2s, border-color 0.2s',
@@ -315,7 +315,7 @@ function ToggleRow({ label, checked, onChange }) {
           left: checked ? '22px' : '3px',
           width: '16px', height: '16px',
           borderRadius: '50%',
-          background: checked ? '#121212' : '#5B6670',
+          background: checked ? '#FFFFFF' : '#9CA3AF',
           transition: 'left 0.2s',
           display: 'block',
         }} />
@@ -325,9 +325,9 @@ function ToggleRow({ label, checked, onChange }) {
 }
 
 const badge = {
-  green: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
-  blue:  { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
-  amber: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'rgba(255,255,0,0.08)', color: '#FFFF00', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(255,255,0,0.22)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
+  green: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'var(--accent-dim)', color: 'var(--accent)', padding: '2px 7px', borderRadius: 0, border: '1px solid var(--accent-light)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
+  blue:  { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'var(--blue-dim)', color: 'var(--blue)', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(0,130,243,0.3)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
+  amber: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', background: 'var(--amber-dim)', color: 'var(--amber)', padding: '2px 7px', borderRadius: 0, border: '1px solid rgba(245,158,11,0.3)', letterSpacing: '0.06em', whiteSpace: 'nowrap' },
 }
 
 const s = {

@@ -336,7 +336,7 @@ const s = {
   peopleLinkBtn: { display: 'inline-block', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: 'var(--accent)', border: '1px solid rgba(168,100,72,0.3)', padding: '4px 10px', borderRadius: '5px', textDecoration: 'none' },
   errorMsg: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--red)', margin: '8px 0' },
   actions: { display: 'flex', gap: '10px', marginTop: '4px' },
-  primaryBtn: { padding: '10px 18px', background: '#1d1b1b', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#fdfdfd', cursor: 'pointer' },
+  primaryBtn: { padding: '10px 18px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.04em', color: '#FFFFFF', cursor: 'pointer' },
   secondaryBtn: { padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '400', letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer' },
   // Autocomplete dropdown
   dropdown: { position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 8px 24px rgba(29,27,27,0.12)', zIndex: 100, overflow: 'hidden' },

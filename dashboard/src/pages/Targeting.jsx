@@ -83,7 +83,7 @@ function CompanyPicker({ companies, selected, onSelect }) {
 // ── Role chip row ──────────────────────────────────────────────
 function RoleChip({ label, active, onClick }) {
   return (
-    <button onClick={onClick} style={{ padding: '5px 10px', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: active ? '600' : '400', cursor: 'pointer', background: active ? '#1d1b1b' : 'transparent', color: active ? '#fdfdfd' : 'var(--text-muted)', border: `1px solid ${active ? '#1d1b1b' : 'var(--border)'}`, letterSpacing: '0.04em', transition: 'all 0.1s', whiteSpace: 'nowrap' }}>{label}</button>
+    <button onClick={onClick} style={{ padding: '5px 10px', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: active ? '600' : '400', cursor: 'pointer', background: active ? 'var(--text)' : 'transparent', color: active ? '#FFFFFF' : 'var(--text-muted)', border: `1px solid ${active ? 'var(--text)' : 'var(--border)'}`, letterSpacing: '0.04em', transition: 'all 0.1s', whiteSpace: 'nowrap' }}>{label}</button>
   )
 }
 
@@ -120,7 +120,7 @@ function PersonCard({ person, addState, onAdd, existingLead }) {
         {isAdded ? (
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.04em', marginLeft: 'auto' }}>✓ In leads</span>
         ) : (
-          <button onClick={onAdd} disabled={isAdding} style={{ marginLeft: 'auto', padding: '5px 12px', background: isAdding ? 'var(--surface)' : '#1d1b1b', color: isAdding ? 'var(--text-muted)' : '#fdfdfd', border: 'none', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', cursor: isAdding ? 'default' : 'pointer', letterSpacing: '0.04em' }}>
+          <button onClick={onAdd} disabled={isAdding} style={{ marginLeft: 'auto', padding: '5px 12px', background: isAdding ? 'var(--surface)' : 'var(--text)', color: isAdding ? 'var(--text-muted)' : '#FFFFFF', border: 'none', borderRadius: '5px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', cursor: isAdding ? 'default' : 'pointer', letterSpacing: '0.04em' }}>
             {isAdding ? 'Adding…' : 'Add to Leads'}
           </button>
         )}
@@ -309,7 +309,7 @@ export default function Targeting() {
               <button
                 onClick={handleSearch}
                 disabled={!selectedCompany || searching}
-                style={{ width: '100%', padding: '10px 16px', background: selectedCompany ? '#1d1b1b' : 'var(--surface)', color: selectedCompany ? '#fdfdfd' : 'var(--text-muted)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: selectedCompany ? 'pointer' : 'default', letterSpacing: '0.06em', transition: 'background 0.15s' }}
+                style={{ width: '100%', padding: '10px 16px', background: selectedCompany ? 'var(--text)' : 'var(--surface)', color: selectedCompany ? '#FFFFFF' : 'var(--text-muted)', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: selectedCompany ? 'pointer' : 'default', letterSpacing: '0.06em', transition: 'background 0.15s' }}
               >
                 {searching ? 'Searching…' : selectedCompany ? `Find at ${selectedCompany.name}` : 'Select a company first'}
               </button>
@@ -334,7 +334,7 @@ export default function Targeting() {
                   : 'Pick a company from your pipeline on the left, optionally filter by role, then click "Find Contacts" to search for decision makers via Apollo.'}
               </p>
               {isEmpty && (
-                <button onClick={() => navigate('/directory')} style={{ padding: '10px 22px', background: '#1d1b1b', color: '#fdfdfd', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', letterSpacing: '0.06em' }}>
+                <button onClick={() => navigate('/directory')} style={{ padding: '10px 22px', background: 'var(--text)', color: '#FFFFFF', border: 'none', borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '600', cursor: 'pointer', letterSpacing: '0.06em' }}>
                   Go to Discovery →
                 </button>
               )}
@@ -442,5 +442,5 @@ export default function Targeting() {
 
 const lbl = { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase' }
 const stepLbl = { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '7px', margin: 0 }
-const stepNum = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', background: '#1d1b1b', color: '#fdfdfd', fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '700', flexShrink: 0 }
+const stepNum = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--text)', color: '#FFFFFF', fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '700', flexShrink: 0 }
 const sectionLbl = { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', margin: 0, textTransform: 'uppercase' }
