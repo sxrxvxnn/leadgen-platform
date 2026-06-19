@@ -17,45 +17,55 @@ const ARCS = [
   { startLat: 1.3521,   startLng: 103.8198, endLat: 35.6762,  endLng: 139.6503 },
 ]
 
-function makeMarker() {
-  const wrap = document.createElement('div')
-  wrap.style.cssText = `
-    display:flex; flex-direction:column; align-items:center;
-    pointer-events:none; transform:translate(-50%,-100%);
+function makeMarker(imgSrc) {
+  // CSS2DRenderer centers the returned element at the projected 2D position.
+  // A 0×0 anchor lets us then absolutely position the content so its
+  // bottom edge sits exactly at the projected (surface) coordinate.
+  const anchor = document.createElement('div')
+  anchor.style.cssText = `
+    width:0; height:0; overflow:visible;
+    position:relative; pointer-events:none;
   `
 
-  const avatar = document.createElement('div')
-  avatar.style.cssText = `
+  const content = document.createElement('div')
+  content.style.cssText = `
+    position:absolute;
+    bottom:0;
+    left:0;
+    transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center;
+    pointer-events:none;
+  `
+
+  const imgWrap = document.createElement('div')
+  imgWrap.style.cssText = `
     width:44px; height:44px; border-radius:50%; overflow:hidden;
-    border:2px solid rgba(255,255,255,0.75);
-    box-shadow:0 2px 16px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.12);
+    border:2px solid rgba(255,255,255,0.8);
+    box-shadow:0 2px 20px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1);
     background:#1e293b; flex-shrink:0;
   `
   const img = document.createElement('img')
+  img.src = imgSrc
   img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;'
-  avatar.appendChild(img)
+  imgWrap.appendChild(img)
 
-  // Line from avatar down to globe surface
   const line = document.createElement('div')
   line.style.cssText = `
-    width:1px; height:26px; flex-shrink:0;
-    background:linear-gradient(to bottom,rgba(255,255,255,0.5),rgba(231,0,11,0.9));
+    width:1px; height:24px; flex-shrink:0;
+    background:linear-gradient(to bottom,rgba(255,255,255,0.55),rgba(231,0,11,0.85));
   `
 
-  // Red dot at the surface
   const dot = document.createElement('div')
   dot.style.cssText = `
     width:5px; height:5px; border-radius:50%; flex-shrink:0;
-    background:#E7000B; box-shadow:0 0 5px #E7000B;
+    background:#E7000B; box-shadow:0 0 6px rgba(231,0,11,0.8);
   `
 
-  wrap.appendChild(avatar)
-  wrap.appendChild(line)
-  wrap.appendChild(dot)
-
-  // Attach img src after DOM is created so we can return wrap first
-  wrap._setImg = (src) => { img.src = src }
-  return wrap
+  content.appendChild(imgWrap)
+  content.appendChild(line)
+  content.appendChild(dot)
+  anchor.appendChild(content)
+  return anchor
 }
 
 export default function Globe({ style }) {
@@ -115,12 +125,8 @@ export default function Globe({ style }) {
           arcDashGap={0.2}
           arcDashAnimateTime={2500}
           htmlElementsData={MARKERS}
-          htmlElement={d => {
-            const el = makeMarker()
-            el._setImg(d.img)
-            return el
-          }}
-          htmlAltitude={0.02}
+          htmlElement={d => makeMarker(d.img)}
+          htmlAltitude={0}
         />
       )}
     </div>
