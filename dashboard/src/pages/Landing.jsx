@@ -361,7 +361,7 @@ export default function Landing() {
           {/* Row 1: large (2/3) + small (1/3) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <motion.div style={{ gridColumn: '1 / 3' }} {...fadeUp(0)}>
-              <BentoCard bg="linear-gradient(135deg, #9D174D 0%, #7f1d1d 100%)" minHeight={300}>
+              <BentoCard bg="linear-gradient(135deg, #E7000B 0%, #b30009 100%)" minHeight={300}>
                 <div style={{ maxWidth: 340 }}>
                   <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
                     Find your perfect customers at scale
@@ -374,7 +374,7 @@ export default function Landing() {
             </motion.div>
 
             <motion.div style={{ gridColumn: '3 / 4' }} {...fadeUp(0.08)}>
-              <BentoCard bg="linear-gradient(135deg, #4f46e5 0%, #312e81 100%)" minHeight={300}>
+              <BentoCard bg="linear-gradient(135deg, #9D0010 0%, #5c0008 100%)" minHeight={300}>
                 <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 30px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
                   Zero-trust data security.
                 </h2>
@@ -387,7 +387,7 @@ export default function Landing() {
 
           {/* Row 2: full-width */}
           <motion.div {...fadeUp(0.16)}>
-            <BentoCard bg="linear-gradient(135deg, #1d4ed8 0%, #312e81 100%)" minHeight={300}>
+            <BentoCard bg="linear-gradient(135deg, #1a0404 0%, #0d0202 100%)" minHeight={300}>
               <div style={{ maxWidth: 480 }}>
                 <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
                   Your entire outreach stack, connected.
