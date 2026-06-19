@@ -6,7 +6,7 @@ import LegalModal from '../components/LegalModal'
 import { FlipWords } from '../components/ui/FlipWords'
 import { BackgroundBeams } from '../components/ui/BackgroundBeams'
 import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
-import { CardSpotlight } from '../components/ui/CardSpotlight'
+import { WobbleCard } from '../components/ui/WobbleCard'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
@@ -335,10 +335,14 @@ export default function Landing() {
                 body: 'Switching between Apollo, Hunter, LinkedIn, and your CRM means constant copy-paste, data gaps, and stale records by the time you reach out.',
               },
             ].map(({ icon, title, body }, i) => (
-              <motion.div key={title} className="lp-problem-card" {...fadeUp(i * 0.1)}>
-                <span className="lp-problem-icon">{icon}</span>
-                <h3>{title}</h3>
-                <p>{body}</p>
+              <motion.div key={title} {...fadeUp(i * 0.1)}>
+                <WobbleCard>
+                  <div className="lp-problem-card">
+                    <span className="lp-problem-icon">{icon}</span>
+                    <h3>{title}</h3>
+                    <p>{body}</p>
+                  </div>
+                </WobbleCard>
               </motion.div>
             ))}
           </div>
@@ -402,14 +406,16 @@ export default function Landing() {
                 body: 'Define your ideal customer once. Sonar scores every company automatically so your best-fit accounts always surface to the top.',
               },
             ].map(({ icon, title, body }, i) => (
-              <CardSpotlight key={title} style={{ borderRadius: 0 }} color="rgba(255,255,0,0.04)">
-                <motion.div className="lp-solution-card" {...fadeUp(i * 0.09)}>
-                  <div className="lp-solution-icon">{icon}</div>
-                  <h3>{title}</h3>
-                  <p>{body}</p>
-                  <button onClick={() => setLearnMoreOpen(title)} className="lp-solution-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Learn more <span>→</span></button>
-                </motion.div>
-              </CardSpotlight>
+              <motion.div key={title} {...fadeUp(i * 0.09)}>
+                <WobbleCard>
+                  <div className="lp-solution-card">
+                    <div className="lp-solution-icon">{icon}</div>
+                    <h3>{title}</h3>
+                    <p>{body}</p>
+                    <button onClick={() => setLearnMoreOpen(title)} className="lp-solution-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Learn more <span>→</span></button>
+                  </div>
+                </WobbleCard>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -440,10 +446,14 @@ export default function Landing() {
                 body: 'Your leads arrive with verified emails, LinkedIn profiles, job titles, and ICP scores. Export a clean list or open LinkedIn profiles in batch — ready to reach out immediately.',
               },
             ].map(({ num, title, body }, i) => (
-              <motion.div key={num} className="lp-step-card" {...fadeUp(i * 0.1)}>
-                <div className="lp-step-num">{num}</div>
-                <h3>{title}</h3>
-                <p>{body}</p>
+              <motion.div key={num} {...fadeUp(i * 0.1)}>
+                <WobbleCard>
+                  <div className="lp-step-card">
+                    <div className="lp-step-num">{num}</div>
+                    <h3>{title}</h3>
+                    <p>{body}</p>
+                  </div>
+                </WobbleCard>
               </motion.div>
             ))}
           </div>
@@ -523,16 +533,18 @@ export default function Landing() {
         <div className="lp-testimonials-track">
           <div className="lp-testimonials-inner">
             {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
-              <div key={i} className="lp-tcard">
-                <p className="lp-tcard-quote">"{t.quote}"</p>
-                <div className="lp-tcard-author">
-                  <div className="lp-tcard-avatar">{t.name[0]}</div>
-                  <div>
-                    <div className="lp-tcard-name">{t.name}</div>
-                    <div className="lp-tcard-role">{t.role}</div>
+              <WobbleCard key={i} style={{ flexShrink: 0, height: 'auto' }} innerStyle={{ height: 'auto' }}>
+                <div className="lp-tcard">
+                  <p className="lp-tcard-quote">"{t.quote}"</p>
+                  <div className="lp-tcard-author">
+                    <div className="lp-tcard-avatar">{t.name[0]}</div>
+                    <div>
+                      <div className="lp-tcard-name">{t.name}</div>
+                      <div className="lp-tcard-role">{t.role}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </WobbleCard>
             ))}
           </div>
         </div>
@@ -655,17 +667,20 @@ export default function Landing() {
             ].map(({ icon, label, desc }, i) => (
               <motion.div
                 key={label}
-                className="lp-signal-tile"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-30px' }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: i * 0.07 }}
               >
-                <span className="lp-tile-icon">{icon}</span>
-                <div>
-                  <div className="lp-tile-label">{label}</div>
-                  <div className="lp-tile-desc">{desc}</div>
-                </div>
+                <WobbleCard>
+                  <div className="lp-signal-tile">
+                    <span className="lp-tile-icon">{icon}</span>
+                    <div>
+                      <div className="lp-tile-label">{label}</div>
+                      <div className="lp-tile-desc">{desc}</div>
+                    </div>
+                  </div>
+                </WobbleCard>
               </motion.div>
             ))}
           </div>
@@ -700,20 +715,20 @@ export default function Landing() {
                 featured: false,
               },
             ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <motion.div
-                key={tier}
-                className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
-                {...fadeUp(i * 0.1)}
-              >
-                {featured && <span className="lp-recommended-badge">Most popular</span>}
-                <div className="lp-pricing-tier">{tier}</div>
-                <div className="lp-pricing-price">{price}</div>
-                <div className="lp-pricing-period">{period}</div>
-                <div className="lp-pricing-divider"></div>
-                <ul className="lp-pricing-features">
-                  {features.map(f => <li key={f}>{f}</li>)}
-                </ul>
-                {cta}
+              <motion.div key={tier} {...fadeUp(i * 0.1)}>
+                <WobbleCard>
+                  <div className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}>
+                    {featured && <span className="lp-recommended-badge">Most popular</span>}
+                    <div className="lp-pricing-tier">{tier}</div>
+                    <div className="lp-pricing-price">{price}</div>
+                    <div className="lp-pricing-period">{period}</div>
+                    <div className="lp-pricing-divider"></div>
+                    <ul className="lp-pricing-features">
+                      {features.map(f => <li key={f}>{f}</li>)}
+                    </ul>
+                    {cta}
+                  </div>
+                </WobbleCard>
               </motion.div>
             ))}
           </div>
