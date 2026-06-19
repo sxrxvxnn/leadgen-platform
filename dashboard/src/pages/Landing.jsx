@@ -11,6 +11,7 @@ import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
 import Globe3D from '../components/ui/3d-globe'
+import { MacbookScroll } from '../components/ui/MacbookScroll'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -256,48 +257,48 @@ export default function Landing() {
             Free plan — no credit card required.
           </motion.p>
 
-          {/* Hero preview */}
-          <motion.div className="lp-hero-preview" {...fadeUp(0.34)}>
-            <div className="lp-preview-bar">
-              <span className="lp-preview-bar-dot r"></span>
-              <span className="lp-preview-bar-dot y"></span>
-              <span className="lp-preview-bar-dot g"></span>
-              <span className="lp-preview-bar-label">sonarleads.vercel.app / dashboard</span>
-            </div>
-            <div className="lp-preview-body">
-              <div className="lp-preview-row">
-                <span className="lp-preview-accent" style={{ background: '#FFFF00' }}></span>
-                <span className="lp-preview-name">NovaSpark AI</span>
-                <span className="lp-preview-tag">ICP Match · 94</span>
-                <div className="lp-preview-bar-score"><div style={{ width: '94%' }}></div></div>
-              </div>
-              <div className="lp-preview-row">
-                <span className="lp-preview-accent" style={{ background: '#22C55E' }}></span>
-                <span className="lp-preview-name">CloudOps Ltd</span>
-                <span className="lp-preview-tag">Email verified</span>
-                <div className="lp-preview-bar-score"><div style={{ width: '78%' }}></div></div>
-              </div>
-              <div className="lp-preview-row">
-                <span className="lp-preview-accent" style={{ background: '#0082F3' }}></span>
-                <span className="lp-preview-name">ScaleAI Corp</span>
-                <span className="lp-preview-tag">LinkedIn enriched</span>
-                <div className="lp-preview-bar-score"><div style={{ width: '86%' }}></div></div>
-              </div>
-              <div className="lp-preview-row">
-                <span className="lp-preview-accent" style={{ background: '#A855F7' }}></span>
-                <span className="lp-preview-name">FinVerse</span>
-                <span className="lp-preview-tag">3 contacts found</span>
-                <div className="lp-preview-bar-score"><div style={{ width: '71%' }}></div></div>
-              </div>
-              <div className="lp-preview-footer">
-                <span>4 companies enriched · auto-synced</span>
-                <span className="lp-preview-cta">View all →</span>
-              </div>
-            </div>
-          </motion.div>
-
         </div>
       </section>
+
+      {/* ── MACBOOK SCROLL ───────────────────────────────────────────────── */}
+      <MacbookScroll>
+        <div className="lp-preview-bar">
+          <span className="lp-preview-bar-dot r"></span>
+          <span className="lp-preview-bar-dot y"></span>
+          <span className="lp-preview-bar-dot g"></span>
+          <span className="lp-preview-bar-label">sonarleads.vercel.app / dashboard</span>
+        </div>
+        <div className="lp-preview-body">
+          <div className="lp-preview-row">
+            <span className="lp-preview-accent" style={{ background: '#FFFF00' }}></span>
+            <span className="lp-preview-name">NovaSpark AI</span>
+            <span className="lp-preview-tag">ICP Match · 94</span>
+            <div className="lp-preview-bar-score"><div style={{ width: '94%' }}></div></div>
+          </div>
+          <div className="lp-preview-row">
+            <span className="lp-preview-accent" style={{ background: '#22C55E' }}></span>
+            <span className="lp-preview-name">CloudOps Ltd</span>
+            <span className="lp-preview-tag">Email verified</span>
+            <div className="lp-preview-bar-score"><div style={{ width: '78%' }}></div></div>
+          </div>
+          <div className="lp-preview-row">
+            <span className="lp-preview-accent" style={{ background: '#0082F3' }}></span>
+            <span className="lp-preview-name">ScaleAI Corp</span>
+            <span className="lp-preview-tag">LinkedIn enriched</span>
+            <div className="lp-preview-bar-score"><div style={{ width: '86%' }}></div></div>
+          </div>
+          <div className="lp-preview-row">
+            <span className="lp-preview-accent" style={{ background: '#A855F7' }}></span>
+            <span className="lp-preview-name">FinVerse</span>
+            <span className="lp-preview-tag">3 contacts found</span>
+            <div className="lp-preview-bar-score"><div style={{ width: '71%' }}></div></div>
+          </div>
+          <div className="lp-preview-footer">
+            <span>4 companies enriched · auto-synced</span>
+            <span className="lp-preview-cta">View all →</span>
+          </div>
+        </div>
+      </MacbookScroll>
 
       {/* ── TRUSTED BY MARQUEE ───────────────────────────────────────────── */}
       <div className="lp-trusted">
