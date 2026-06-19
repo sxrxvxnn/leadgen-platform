@@ -7,7 +7,7 @@ import { FlipWords } from '../components/ui/FlipWords'
 import { BackgroundBeams } from '../components/ui/BackgroundBeams'
 import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
 import { WobbleCard, BentoCard } from '../components/ui/WobbleCard'
-import { ContainerScrollAnimation } from '../components/ui/ContainerScrollAnimation'
+import { SectionReveal } from '../components/ui/SectionReveal'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
@@ -313,8 +313,8 @@ export default function Landing() {
 
       {/* ── PROBLEM ──────────────────────────────────────────────────────── */}
       <section className="lp-section lp-section-alt" style={{ padding: 0 }}>
-        <ContainerScrollAnimation
-          titleComponent={
+        <SectionReveal
+          title={
             <div className="lp-section-header" style={{ marginBottom: 0 }}>
               <span className="lp-pill">The problem</span>
               <h2>Manually building your<br />prospect list is exhausting.</h2>
@@ -352,13 +352,13 @@ export default function Landing() {
               </motion.div>
             ))}
           </div>
-        </ContainerScrollAnimation>
+        </SectionReveal>
       </section>
 
       {/* ── SOLUTION BENTO ───────────────────────────────────────────────── */}
       <section className="lp-section lp-section-dark" id="features" style={{ padding: 0 }}>
-        <ContainerScrollAnimation
-          titleComponent={
+        <SectionReveal
+          title={
             <div className="lp-section-header" style={{ marginBottom: 0 }}>
               <span className="lp-pill lp-pill-dark">Solution</span>
               <h2 style={{ color: '#F5F5F5' }}>Empower your sales team<br />with AI intelligence.</h2>
@@ -408,13 +408,13 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </ContainerScrollAnimation>
+        </SectionReveal>
       </section>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
       <section className="lp-section lp-section-dark" id="how-it-works" style={{ padding: 0 }}>
-        <ContainerScrollAnimation
-          titleComponent={
+        <SectionReveal
+          title={
             <div className="lp-section-header" style={{ marginBottom: 0 }}>
               <span className="lp-pill lp-pill-dark">How it works</span>
               <h2 style={{ color: '#F5F5F5' }}>Just 3 steps to get started.</h2>
@@ -466,7 +466,7 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </ContainerScrollAnimation>
+        </SectionReveal>
       </section>
 
       {/* ── TESTIMONIAL HIGHLIGHT ─────────────────────────────────────────── */}
@@ -660,8 +660,8 @@ export default function Landing() {
 
       {/* ── DATA INTELLIGENCE ────────────────────────────────────────────── */}
       <section className="lp-section lp-section-dark" id="what-we-find" style={{ padding: 0 }}>
-        <ContainerScrollAnimation
-          titleComponent={
+        <SectionReveal
+          title={
             <div className="lp-section-header" style={{ marginBottom: 0 }}>
               <span className="lp-pill lp-pill-dark">Data intelligence</span>
               <h2 style={{ color: '#F5F5F5' }}>Every data point<br />your team needs.</h2>
@@ -749,13 +749,13 @@ export default function Landing() {
             </motion.div>
 
           </div>
-        </ContainerScrollAnimation>
+        </SectionReveal>
       </section>
 
       {/* ── PRICING ──────────────────────────────────────────────────────── */}
       <section className="lp-section lp-section-dark" id="pricing" style={{ padding: 0 }}>
-        <ContainerScrollAnimation
-          titleComponent={
+        <SectionReveal
+          title={
             <div className="lp-section-header" style={{ marginBottom: 0 }}>
               <span className="lp-pill lp-pill-dark">Pricing</span>
               <h2 style={{ color: '#F5F5F5' }}>Start free.<br />Scale when you're ready.</h2>
@@ -828,7 +828,7 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </ContainerScrollAnimation>
+        </SectionReveal>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────────────── */}
