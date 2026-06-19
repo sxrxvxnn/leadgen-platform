@@ -158,10 +158,9 @@
   margin: 0 auto;
   padding: 0 40px;
   height: 64px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
 }
 .lp-logo {
   font-family: var(--lp-display);
@@ -235,9 +234,7 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: #FFFFFF;
-  background: var(--lp-accent);
-  padding: 2px 6px;
+  color: var(--lp-accent);
   flex-shrink: 0;
 }
 .lp-announce-arrow { opacity: 0.4; }
