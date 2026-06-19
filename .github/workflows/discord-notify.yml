@@ -1,0 +1,118 @@
+name: Discord Deploy Notifications
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, closed, reopened]
+    branches: [main]
+
+jobs:
+  notify-deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deploy started notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          AUTHOR="${{ github.event.head_commit.author.name }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🚀 Deploying to production\",
+                \"description\": \"**${COMMIT_MSG}**\",
+                \"color\": 15138560,
+                \"fields\": [
+                  { \"name\": \"Author\", \"value\": \"${AUTHOR}\", \"inline\": true },
+                  { \"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${REPO_URL}/commit/${{ github.sha }})\", \"inline\": true },
+                  { \"name\": \"Preview\", \"value\": \"[sonarleads.vercel.app](https://sonarleads.vercel.app)\", \"inline\": true }
+                ],
+                \"footer\": { \"text\": \"Vercel auto-deploy triggered\" }
+              }]
+            }"
+
+  notify-deploy-done:
+    if: github.event_name == 'push'
+    needs: notify-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel deploy
+        run: sleep 60
+
+      - name: Send deploy complete notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"✅ Deploy complete\",
+                \"description\": \"**${COMMIT_MSG}**\",
+                \"color\": 5763719,
+                \"fields\": [
+                  { \"name\": \"Live at\", \"value\": \"[sonarleads.vercel.app](https://sonarleads.vercel.app)\", \"inline\": true },
+                  { \"name\": \"Commit\", \"value\": \"\`${SHORT_SHA}\`\", \"inline\": true }
+                ],
+                \"footer\": { \"text\": \"Sonar · Production\" }
+              }]
+            }"
+
+  notify-pr-opened:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PR opened notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"📬 PR #${PR_NUMBER}: ${PR_TITLE}\",
+                \"url\": \"${PR_URL}\",
+                \"description\": \"Opened by **${AUTHOR}** — review needed\",
+                \"color\": 5814783
+              }]
+            }"
+
+  notify-pr-merged:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send PR merged notification
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          AUTHOR="${{ github.event.pull_request.merged_by.login }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"🔀 PR #${PR_NUMBER} merged\",
+                \"url\": \"${PR_URL}\",
+                \"description\": \"**${PR_TITLE}**\nMerged by **${AUTHOR}**\",
+                \"color\": 10181046
+              }]
+            }"
