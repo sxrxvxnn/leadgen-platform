@@ -8,17 +8,17 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:           #121212;
-      --surface:      #1A1A1A;
-      --surface2:     #222222;
-      --text:         #F5F5F5;
-      --text-soft:    #C8C9C8;
-      --text-muted:   #5B6670;
-      --border:       #2A2A2A;
-      --border-mid:   #3A3A3A;
-      --accent:       #FFFF00;
-      --accent-dim:   rgba(255,255,0,0.08);
-      --accent-light: rgba(255,255,0,0.25);
+      --bg:           #FFFFFF;
+      --surface:      #F9FAFB;
+      --surface2:     #F3F4F6;
+      --text:         #0A0A0A;
+      --text-soft:    #374151;
+      --text-muted:   #6B7280;
+      --border:       #E5E7EB;
+      --border-mid:   #D1D5DB;
+      --accent:       #E7000B;
+      --accent-dim:   rgba(231,0,11,0.08);
+      --accent-light: rgba(231,0,11,0.25);
       --green:        #22C55E;
       --red:          #EF4444;
     }
@@ -58,6 +58,7 @@
       flex-shrink: 0;
     }
     .sl-logo svg { width: 14px; height: 14px; }
+    .sl-logo { background: #FFFF00 !important; }
     .sl-logo svg circle { stroke: #121212 !important; }
     .sl-logo svg line { stroke: #121212 !important; }
     .sl-brand {
@@ -168,7 +169,7 @@
 
     /* ── Buttons ───────────────────────────────────────────── */
 
-    /* Primary — yellow fill */
+    /* Primary — red fill */
     .sl-btn {
       width: 100%;
       display: flex;
@@ -179,7 +180,7 @@
       font-size: 12px;
       letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: #121212;
+      color: #FFFFFF;
       background: var(--accent);
       border: none;
       border-radius: 0;
@@ -189,12 +190,12 @@
       text-align: left;
     }
     .sl-btn:hover:not(:disabled) {
-      background: #E5E500;
-      box-shadow: 0 0 14px rgba(255,255,0,0.18);
+      background: #C50009;
+      box-shadow: 0 0 14px rgba(231,0,11,0.18);
     }
     .sl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-    /* Accent — yellow outline */
+    /* Accent — red outline */
     .sl-btn-accent {
       width: 100%;
       display: flex;
@@ -207,7 +208,7 @@
       text-transform: uppercase;
       color: var(--accent);
       background: var(--accent-dim);
-      border: 1px solid rgba(255,255,0,0.3);
+      border: 1px solid rgba(231,0,11,0.3);
       border-radius: 0;
       padding: 10px 14px;
       cursor: pointer;
@@ -216,7 +217,7 @@
     }
     .sl-btn-accent:hover:not(:disabled) {
       border-color: var(--accent);
-      box-shadow: 0 0 10px rgba(255,255,0,0.10);
+      box-shadow: 0 0 10px rgba(231,0,11,0.10);
     }
     .sl-btn-accent:disabled { opacity: 0.3; cursor: not-allowed; }
 

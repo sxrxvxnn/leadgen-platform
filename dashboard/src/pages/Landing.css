@@ -41,6 +41,7 @@
 .lp .lp-section      { padding: 100px 0; background: var(--lp-bg); }
 .lp .lp-section-alt  { background: var(--lp-alt); }
 .lp .lp-section-deep { background: var(--lp-deep); }
+.lp .lp-section-dark { background: #0A0A0A; }
 
 /* ── Typography ─────────────────────────────────────────────────────── */
 .lp h1, .lp h2 {
@@ -83,6 +84,10 @@
   text-transform: uppercase;
   color: var(--lp-muted);
   background: transparent;
+}
+.lp .lp-pill-dark {
+  border-color: #2A2A2A;
+  color: #6A7282;
 }
 
 /* ── Section header ─────────────────────────────────────────────────── */
@@ -346,7 +351,7 @@
   transition: background 0.15s;
 }
 .lp-problem-card:hover { background: var(--lp-deep); }
-.lp-problem-icon { font-size: 22px; line-height: 1; opacity: 0.8; }
+.lp-problem-icon { color: var(--lp-accent); line-height: 1; }
 .lp-problem-card h3 { color: var(--lp-text); }
 .lp-problem-card p { font-size: 13px; line-height: 1.7; color: var(--lp-muted); margin: 0; }
 
@@ -521,7 +526,7 @@
   letter-spacing: -0.02em; color: var(--lp-accent); line-height: 1;
 }
 .lp-globe-stat-label {
-  font-family: var(--lp-mono); font-size: 10px; color: var(--lp-muted);
+  font-family: var(--lp-mono); font-size: 10px; color: #6A7282;
   letter-spacing: 0.08em; text-transform: uppercase; margin-top: 6px;
 }
 .lp-globe-wrap { display: flex; align-items: center; justify-content: center; }
@@ -537,6 +542,7 @@
 }
 .lp-signal-tile:hover { background: var(--lp-deep); }
 .lp-tile-emoji { font-size: 20px; line-height: 1; flex-shrink: 0; margin-top: 2px; opacity: 0.75; }
+.lp-tile-icon { color: var(--lp-accent); flex-shrink: 0; margin-top: 2px; display: flex; }
 .lp-tile-label { font-weight: 600; font-size: 14px; color: var(--lp-text); margin-bottom: 6px; }
 .lp-tile-desc { font-size: 12px; color: var(--lp-muted); line-height: 1.65; }
 
@@ -662,26 +668,27 @@
 .lp-ext-steps strong { font-weight: 600; color: var(--lp-text); }
 .lp-ext-preview { display: flex; align-items: center; justify-content: center; }
 .lp-ext-mock {
-  width: 300px; background: #1A1A1A;
-  border: 1px solid #2A2A2A; overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  width: 300px; background: #FFFFFF;
+  border: 1px solid #E5E7EB; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
 }
-.lp-ext-mock-bar { display: flex; align-items: center; gap: 9px; padding: 13px 18px 12px; border-bottom: 1px solid #2A2A2A; background: #121212; }
-.lp-ext-mock-logo { width: 24px; height: 24px; background: var(--lp-accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.lp-ext-mock-logo svg circle, .lp-ext-mock-logo svg line { stroke: #FFFFFF !important; }
-.lp-ext-mock-brand { font-family: var(--lp-display); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: #F5F5F5; flex: 1; }
+.lp-ext-mock-bar { display: flex; align-items: center; gap: 9px; padding: 13px 18px 12px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB; }
+.lp-ext-mock-logo { width: 24px; height: 24px; background: #FFFF00; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.lp-ext-mock-logo svg circle, .lp-ext-mock-logo svg line { stroke: #121212 !important; }
+.lp-ext-mock-logo svg circle[r="1"] { fill: #121212 !important; stroke: none !important; }
+.lp-ext-mock-brand { font-family: var(--lp-display); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: #0A0A0A; flex: 1; }
 .lp-ext-mock-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; flex-shrink: 0; }
 .lp-ext-mock-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
-.lp-ext-mock-strip { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #222; border: 1px solid #2A2A2A; }
-.lp-ext-mock-label { font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #5B6670; }
+.lp-ext-mock-strip { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: #F3F4F6; border: 1px solid #E5E7EB; }
+.lp-ext-mock-label { font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #6B7280; }
 .lp-ext-mock-count { font-family: var(--lp-mono); font-size: 12px; color: var(--lp-accent); }
-.lp-ext-mock-badge { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid #0082F3; width: fit-content; }
+.lp-ext-mock-badge { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid #0082F3; width: fit-content; background: rgba(0,130,243,0.05); }
 .lp-ext-mock-badge-dot { width: 5px; height: 5px; border-radius: 50%; background: #0082F3; flex-shrink: 0; }
 .lp-ext-mock-badge-text { font-family: var(--lp-mono); font-size: 8px; letter-spacing: 0.08em; color: #0082F3; }
 .lp-ext-mock-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #FFFFFF; background: var(--lp-accent); border: none; padding: 9px 13px; cursor: default; }
-.lp-ext-mock-btn-ghost { width: 100%; display: flex; align-items: center; justify-content: space-between; font-weight: 500; font-size: 11px; color: #69727D; background: transparent; border: 1px solid #3A3A3A; padding: 8px 13px; cursor: default; }
-.lp-ext-mock-footer { display: flex; align-items: center; justify-content: space-between; padding: 11px 18px 14px; border-top: 1px solid #2A2A2A; }
-.lp-ext-mock-link { font-size: 11px; font-weight: 500; color: #5B6670; }
+.lp-ext-mock-btn-ghost { width: 100%; display: flex; align-items: center; justify-content: space-between; font-weight: 500; font-size: 11px; color: #6B7280; background: transparent; border: 1px solid #E5E7EB; padding: 8px 13px; cursor: default; }
+.lp-ext-mock-footer { display: flex; align-items: center; justify-content: space-between; padding: 11px 18px 14px; border-top: 1px solid #E5E7EB; }
+.lp-ext-mock-link { font-size: 11px; font-weight: 500; color: #6B7280; }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
 @media (max-width: 1020px) {

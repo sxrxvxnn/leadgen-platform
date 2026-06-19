@@ -3,27 +3,28 @@ import { Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 
-const BG   = '#fffcfc'
-const INK  = '#01011b'
-const PLUM = '#31263b'
-const MID  = '#717a94'
-const LINE = '#dbd7da'
-const SANS = "'IBM Plex Sans', 'DM Sans', sans-serif"
-const SERIF = "'Cormorant Garamond', Georgia, serif"
+const BG      = '#FFFFFF'
+const SURF    = '#F9FAFB'
+const BORDER  = '#E5E7EB'
+const INK     = '#0A0A0A'
+const STEEL   = '#6B7280'
+const ACCENT  = '#E7000B'
+
+const SANS    = "'Host Grotesk', 'Roboto', sans-serif"
+const DISPLAY = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 
 const inp = {
   padding: '10px 14px',
-  background: '#ffffff',
-  border: `1px solid ${LINE}`,
-  borderRadius: 6,
-  fontSize: 14,
+  background: '#FFFFFF',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 0,
+  fontSize: 13,
   color: INK,
   outline: 'none',
   fontFamily: SANS,
   width: '100%',
   boxSizing: 'border-box',
-  boxShadow: 'rgba(71, 57, 130, 0.06) 0px 0px 0px 1px inset',
-  transition: 'border-color 0.15s, box-shadow 0.15s',
+  transition: 'border-color 0.15s',
 }
 
 export default function ForgotPassword() {
@@ -39,13 +40,30 @@ export default function ForgotPassword() {
     finally { setSent(true); setLoading(false) }
   }
 
+  const NavLogo = () => (
+    <Link to="/" style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 26, height: 26, background: '#FFFF00', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="6" stroke="#121212" strokeWidth="1.3"/>
+          <circle cx="7" cy="7" r="3.2" stroke="#121212" strokeWidth="1.3"/>
+          <circle cx="7" cy="7" r="1" fill="#121212"/>
+          <line x1="7" y1="1" x2="7" y2="3" stroke="#121212" strokeWidth="1.1"/>
+          <line x1="7" y1="11" x2="7" y2="13" stroke="#121212" strokeWidth="1.1"/>
+          <line x1="1" y1="7" x2="3" y2="7" stroke="#121212" strokeWidth="1.1"/>
+          <line x1="11" y1="7" x2="13" y2="7" stroke="#121212" strokeWidth="1.1"/>
+        </svg>
+      </div>
+      Sonar
+    </Link>
+  )
+
   const Shell = ({ children }) => (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: SANS, color: INK, display: 'flex', flexDirection: 'column' }}>
-      <nav style={{ borderBottom: `1px solid ${LINE}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link to="/" style={{ fontFamily: SANS, fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: INK, textDecoration: 'none' }}>Sonar</Link>
-        <Link to="/login" style={{ fontFamily: SANS, fontSize: 14, fontWeight: 500, color: MID, textDecoration: 'none', transition: 'color 0.15s' }}
+      <nav style={{ borderBottom: `1px solid ${BORDER}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: BG }}>
+        <NavLogo />
+        <Link to="/login" style={{ fontFamily: SANS, fontSize: 11, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: STEEL, textDecoration: 'none', transition: 'color 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.color = INK}
-          onMouseLeave={e => e.currentTarget.style.color = MID}
+          onMouseLeave={e => e.currentTarget.style.color = STEEL}
         >Sign in</Link>
       </nav>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
@@ -58,13 +76,13 @@ export default function ForgotPassword() {
     return (
       <Shell>
         <div style={{ maxWidth: 480, textAlign: 'center' }}>
-          <div style={{ display: 'inline-block', width: 40, height: 40, borderRadius: '50%', border: `1px solid rgba(46,125,79,0.4)`, background: 'rgba(46,125,79,0.08)', lineHeight: '40px', fontSize: 16, color: '#2e7d4f', marginBottom: 24 }}>✓</div>
-          <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK, marginBottom: 16, lineHeight: 1.1 }}>Check your inbox.</h2>
-          <p style={{ fontSize: 14, color: MID, lineHeight: 1.7, marginBottom: 32 }}>
+          <div style={{ display: 'inline-block', width: 40, height: 40, border: `1px solid rgba(34,197,94,0.4)`, background: 'rgba(34,197,94,0.08)', lineHeight: '40px', fontSize: 16, color: '#22C55E', marginBottom: 24 }}>✓</div>
+          <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(40px, 5vw, 60px)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', color: INK, marginBottom: 16, lineHeight: 1.0 }}>Check your inbox.</h2>
+          <p style={{ fontSize: 13, color: STEEL, lineHeight: 1.7, marginBottom: 32 }}>
             If <strong style={{ color: INK }}>{email}</strong> is registered, we've sent a reset link.<br />
             Check your inbox and spam folder — the link expires in 1 hour.
           </p>
-          <Link to="/login" style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, color: PLUM, borderBottom: `1px solid ${LINE}` }}>
+          <Link to="/login" style={{ fontFamily: SANS, fontSize: 12, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: ACCENT }}>
             Back to sign in →
           </Link>
         </div>
@@ -75,42 +93,44 @@ export default function ForgotPassword() {
   return (
     <Shell>
       <motion.div style={{ width: '100%', maxWidth: 420 }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
-        <p style={{ fontFamily: SANS, fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: MID, textTransform: 'uppercase', marginBottom: 16 }}>① Password reset</p>
-        <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 300, fontStyle: 'italic', letterSpacing: '-0.02em', color: INK, marginBottom: 12, lineHeight: 1.1 }}>
+        <p style={{ fontFamily: SANS, fontSize: 10, fontWeight: 500, letterSpacing: '0.1em', color: STEEL, textTransform: 'uppercase', marginBottom: 16 }}>① Password reset</p>
+        <h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '-0.01em', color: INK, marginBottom: 12, lineHeight: 1.0 }}>
           Forgot your password?
         </h2>
-        <p style={{ fontSize: 14, color: MID, lineHeight: 1.65, marginBottom: 32 }}>
+        <p style={{ fontSize: 13, color: STEEL, lineHeight: 1.65, marginBottom: 32 }}>
           Enter your email and we'll send a reset link if an account exists.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: PLUM }}>Email address</label>
+            <label style={{ fontFamily: SANS, fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: STEEL }}>Email address</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)}
               placeholder="you@company.com" required autoFocus style={inp}
-              onFocus={e => { e.target.style.borderColor = '#6f63b7'; e.target.style.boxShadow = '0 0 0 3px rgba(71,57,130,0.12)' }}
-              onBlur={e => { e.target.style.borderColor = LINE; e.target.style.boxShadow = 'rgba(71, 57, 130, 0.06) 0px 0px 0px 1px inset' }}
+              onFocus={e => { e.target.style.borderColor = ACCENT }}
+              onBlur={e => { e.target.style.borderColor = BORDER }}
             />
           </div>
           <button type="submit" disabled={loading} style={{
-            fontFamily: SANS, fontSize: 14, fontWeight: 500,
-            padding: '10px 20px', background: '#ffffff', color: INK,
-            border: `1px solid ${PLUM}`, borderRadius: 3, cursor: 'pointer',
-            opacity: loading ? 0.6 : 1, transition: 'all 0.15s',
+            fontFamily: SANS, fontSize: 12, fontWeight: 500,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            padding: '11px 20px', background: ACCENT, color: '#FFFFFF',
+            border: 'none', borderRadius: 0, cursor: loading ? 'default' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+            transition: 'background 0.15s, box-shadow 0.2s',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             marginTop: 4,
           }}
-            onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = PLUM; e.currentTarget.style.color = BG } }}
-            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = INK }}
+            onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = '#C50009'; e.currentTarget.style.boxShadow = '0 0 16px rgba(231,0,11,0.2)' } }}
+            onMouseLeave={e => { e.currentTarget.style.background = ACCENT; e.currentTarget.style.boxShadow = 'none' }}
           >
             <span>{loading ? 'Sending…' : 'Send reset link'}</span>
             <span>→</span>
           </button>
         </form>
 
-        <p style={{ marginTop: 24, fontSize: 13, color: MID }}>
+        <p style={{ marginTop: 24, fontSize: 12, color: STEEL }}>
           Remember it?{' '}
-          <Link to="/login" style={{ color: PLUM, fontWeight: 600, borderBottom: `1px solid ${LINE}` }}>Sign in</Link>
+          <Link to="/login" style={{ color: INK, fontWeight: 600 }}>Sign in</Link>
         </p>
       </motion.div>
     </Shell>

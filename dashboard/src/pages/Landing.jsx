@@ -9,7 +9,7 @@ import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
 import { CardSpotlight } from '../components/ui/CardSpotlight'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
-import Globe from '../components/Globe'
+import Globe, { LANDING_MARKERS } from '../components/Globe'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -301,17 +301,17 @@ export default function Landing() {
           <div className="lp-problem-grid">
             {[
               {
-                icon: '⏱',
+                icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
                 title: 'Research Takes Hours',
                 body: 'Sales reps spend 40% of their time on manual research — looking up company info, finding contacts, verifying emails — instead of actually selling.',
               },
               {
-                icon: '📉',
+                icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
                 title: 'Missed Opportunities',
                 body: 'Without ICP scoring, your team wastes cycles on low-fit accounts. The best opportunities get buried under noise and never reach the top of your queue.',
               },
               {
-                icon: '🔒',
+                icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
                 title: 'Fragmented Data',
                 body: 'Switching between Apollo, Hunter, LinkedIn, and your CRM means constant copy-paste, data gaps, and stale records by the time you reach out.',
               },
@@ -439,7 +439,7 @@ export default function Landing() {
               <path d="M0 20C0 13 4 8 12 5L14 8C10 10 8 13 8 16H14V32H0V20ZM22 20C22 13 26 8 34 5L36 8C32 10 30 13 30 16H36V32H22V20Z" fill="currentColor" opacity="0.18"/>
             </svg>
             <blockquote className="lp-hl-quote">
-              Sonar cut our prospecting time by <span style={{ color: '#FFFF00' }}>70%</span>. We went from 2 hours of manual research per lead to instant enriched records ready to reach out.
+              Sonar cut our prospecting time by <span style={{ color: 'var(--lp-accent)' }}>70%</span>. We went from 2 hours of manual research per lead to instant enriched records ready to reach out.
             </blockquote>
             <div className="lp-hl-author">
               <div className="lp-hl-avatar">A</div>
@@ -520,13 +520,13 @@ export default function Landing() {
       </section>
 
       {/* ── GLOBE + STATS ────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-deep">
+      <section className="lp-section lp-section-dark">
         <div className="lp-container">
           <motion.div className="lp-globe-section" {...fadeUp()}>
             <div className="lp-globe-copy">
-              <span className="lp-pill">Global reach</span>
+              <span className="lp-pill lp-pill-dark">Global reach</span>
               <h2 style={{ marginTop: 20, color: '#F5F5F5' }}>Discover companies<br />from 140+ countries.</h2>
-              <p className="lp-globe-sub">Sonar indexes B2B companies from across the globe, with deep enrichment for companies in India, APAC, Europe, and North America.</p>
+              <p className="lp-globe-sub" style={{ color: '#6A7282' }}>Sonar indexes B2B companies from across the globe, with deep enrichment for companies in India, APAC, Europe, and North America.</p>
               <div className="lp-globe-stats">
                 {[
                   { num: '10M+', label: 'Companies indexed' },
@@ -541,7 +541,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="lp-globe-wrap">
-              <Globe size={320} />
+              <Globe size={320} markers={LANDING_MARKERS} markerColor={[0.91, 0, 0.04]} />
             </div>
           </motion.div>
         </div>
@@ -553,7 +553,7 @@ export default function Landing() {
           <div className="lp-ext-grid">
             <motion.div className="lp-ext-copy" {...fadeUp()}>
               <span className="lp-pill" style={{ marginBottom: '20px', display: 'inline-flex' }}>Chrome extension</span>
-              <h2 style={{ marginTop: '20px', color: '#F5F5F5' }}>Extract leads straight<br />from LinkedIn.</h2>
+              <h2 style={{ marginTop: '20px', color: 'var(--lp-text)' }}>Extract leads straight<br />from LinkedIn.</h2>
               <p className="lp-ext-sub">
                 Install the Sonar extension and pull people and companies from any LinkedIn page — profiles, company pages, search results, Sales Navigator — directly into your pipeline. No copy-paste, no CSV.
               </p>
@@ -627,12 +627,12 @@ export default function Landing() {
           </motion.div>
           <div className="lp-signals-grid">
             {[
-              { icon: '🌐', label: 'Website Intelligence',    desc: 'AI reads company websites to extract descriptions, industry signals, and tech stack clues — no manual research.' },
-              { icon: '👤', label: 'LinkedIn Enrichment',     desc: 'Pull company LinkedIn pages, decision-maker profiles, headcount, and job titles into every record automatically.' },
-              { icon: '📧', label: 'Verified Email Finder',   desc: 'Hunter.io integration finds and verifies professional email addresses for every contact you want to reach.' },
-              { icon: '📍', label: 'Maps Intelligence',       desc: 'Discover local and regional businesses via Google Maps and enrich their details — ideal for territory-based sales.' },
-              { icon: '🎯', label: 'ICP Score',               desc: 'Every company gets an automatic fit score against your saved ICP criteria so your best-fit accounts rise to the top.' },
-              { icon: '🏭', label: 'Industry Classification', desc: 'AI classifies every company into the right sector — SaaS, Fintech, Healthtech, Cybersecurity, and more — on enrichment.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>, label: 'Website Intelligence',    desc: 'AI reads company websites to extract descriptions, industry signals, and tech stack clues — no manual research.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: 'LinkedIn Enrichment',     desc: 'Pull company LinkedIn pages, decision-maker profiles, headcount, and job titles into every record automatically.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>, label: 'Verified Email Finder',   desc: 'Hunter.io integration finds and verifies professional email addresses for every contact you want to reach.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>, label: 'Maps Intelligence',       desc: 'Discover local and regional businesses via Google Maps and enrich their details — ideal for territory-based sales.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>, label: 'ICP Score',               desc: 'Every company gets an automatic fit score against your saved ICP criteria so your best-fit accounts rise to the top.' },
+              { icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="20" height="20"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>, label: 'Industry Classification', desc: 'AI classifies every company into the right sector — SaaS, Fintech, Healthtech, Cybersecurity, and more — on enrichment.' },
             ].map(({ icon, label, desc }, i) => (
               <motion.div
                 key={label}
@@ -642,7 +642,7 @@ export default function Landing() {
                 viewport={{ once: true, margin: '-30px' }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: i * 0.07 }}
               >
-                <span className="lp-tile-emoji">{icon}</span>
+                <span className="lp-tile-icon">{icon}</span>
                 <div>
                   <div className="lp-tile-label">{label}</div>
                   <div className="lp-tile-desc">{desc}</div>
@@ -681,22 +681,21 @@ export default function Landing() {
                 featured: false,
               },
             ].map(({ tier, price, period, features, cta, featured }, i) => (
-              <CardSpotlight key={tier} style={{ borderRadius: 0 }} color="rgba(255,255,0,0.04)">
-                <motion.div
-                  className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
-                  {...fadeUp(i * 0.1)}
-                >
-                  {featured && <span className="lp-recommended-badge">Most popular</span>}
-                  <div className="lp-pricing-tier">{tier}</div>
-                  <div className="lp-pricing-price">{price}</div>
-                  <div className="lp-pricing-period">{period}</div>
-                  <div className="lp-pricing-divider"></div>
-                  <ul className="lp-pricing-features">
-                    {features.map(f => <li key={f}>{f}</li>)}
-                  </ul>
-                  {cta}
-                </motion.div>
-              </CardSpotlight>
+              <motion.div
+                key={tier}
+                className={`lp-pricing-card${featured ? ' lp-pricing-card-featured' : ''}`}
+                {...fadeUp(i * 0.1)}
+              >
+                {featured && <span className="lp-recommended-badge">Most popular</span>}
+                <div className="lp-pricing-tier">{tier}</div>
+                <div className="lp-pricing-price">{price}</div>
+                <div className="lp-pricing-period">{period}</div>
+                <div className="lp-pricing-divider"></div>
+                <ul className="lp-pricing-features">
+                  {features.map(f => <li key={f}>{f}</li>)}
+                </ul>
+                {cta}
+              </motion.div>
             ))}
           </div>
         </div>
