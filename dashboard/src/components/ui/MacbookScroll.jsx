@@ -1,225 +1,373 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useScroll, useTransform } from 'motion/react'
+import {
+  IconBrightnessDown, IconBrightnessUp, IconCaretRightFilled,
+  IconCaretUpFilled, IconChevronUp, IconMicrophone, IconMoon,
+  IconPlayerSkipForward, IconPlayerTrackNext, IconPlayerTrackPrev,
+  IconTable, IconVolume, IconVolume2, IconVolume3, IconSearch,
+  IconWorld, IconCommand, IconCaretLeftFilled, IconCaretDownFilled,
+} from '@tabler/icons-react'
 
-// ── Dark MacBook keyboard SVG ─────────────────────────────────────────
-const C = {
-  body:  '#1c1c1e',
-  key:   '#2a2a2c',
-  edge:  '#3a3a3c',
-  dim:   '#505050',
-  bezel: '#161618',
-}
-
-// Renders one row of keys from a [width, label?] array
-function renderRow(row, y, h, sx = 14, gap = 5) {
-  let x = sx
-  return row.map(([w, label], i) => {
-    const el = (
-      <g key={i}>
-        <rect x={x} y={y} width={w} height={h} rx={3.5}
-              fill={C.key} stroke={C.edge} strokeWidth={0.6} />
-        {label != null && (
-          <text x={x + w / 2} y={y + h / 2}
-                fill={C.dim} fontSize={7.5}
-                fontFamily="system-ui,sans-serif"
-                textAnchor="middle" dominantBaseline="middle">
-            {label}
-          </text>
-        )}
-      </g>
-    )
-    x += w + gap
-    return el
-  })
-}
-
-function Keyboard() {
+// ── KBtn ─────────────────────────────────────────────────────────────
+function KBtn({ children, style = {}, childStyle = {}, backlit = true }) {
   return (
-    <svg viewBox="0 0 920 308" xmlns="http://www.w3.org/2000/svg"
-         style={{ width: '100%', height: '100%', display: 'block' }}>
-      <rect width="920" height="308" fill={C.body} />
+    <div style={{
+      transform: 'translateZ(0)',
+      borderRadius: 4,
+      padding: 0.5,
+      willChange: 'transform',
+      background: backlit ? 'rgba(255,255,255,0.2)' : 'transparent',
+      boxShadow: backlit ? '0 20px 25px -5px rgba(255,255,255,0.4)' : 'none',
+      ...style,
+    }}>
+      <div style={{
+        display: 'flex',
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 3.5,
+        background: '#0A090D',
+        boxShadow: '0px -0.5px 2px 0 #0D0D0F inset, -0.5px 0px 2px 0 #0D0D0F inset',
+      }}>
+        <div style={{
+          display: 'flex',
+          width: '100%',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 5,
+          color: backlit ? '#fff' : '#e5e5e5',
+          ...childStyle,
+        }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      {/* ── Fn row ──────── y=10 h=26 */}
-      {renderRow([
-        [52,'esc'], [14,null],
-        [48,'F1'],[48,'F2'],[48,'F3'],[48,'F4'], [14,null],
-        [48,'F5'],[48,'F6'],[48,'F7'],[48,'F8'], [14,null],
-        [48,'F9'],[48,'F10'],[48,'F11'],[48,'F12'], [16,null],
-        [52,'◉'],
-      ], 10, 26, 14, 0)}
+// ── SpeakerGrid ──────────────────────────────────────────────────────
+function SpeakerGrid() {
+  return (
+    <div style={{
+      marginTop: 8,
+      display: 'flex',
+      height: 160,
+      gap: 2,
+      padding: '0 0.5px',
+      backgroundImage: 'radial-gradient(circle, #08080A 0.5px, transparent 0.5px)',
+      backgroundSize: '3px 3px',
+    }} />
+  )
+}
 
-      {/* ── Number row ── y=46 h=36 */}
-      {renderRow([
-        [54,'`'],[54,'1'],[54,'2'],[54,'3'],[54,'4'],[54,'5'],
-        [54,'6'],[54,'7'],[54,'8'],[54,'9'],[54,'0'],[54,'-'],[54,'='],
-        [124,'delete'],
-      ], 46, 36)}
+// ── Trackpad ─────────────────────────────────────────────────────────
+function Trackpad() {
+  return (
+    <div style={{
+      margin: '4px auto',
+      height: 128,
+      width: '40%',
+      borderRadius: 12,
+      boxShadow: '0px 0px 1px 1px rgba(0,0,0,0.12) inset',
+    }} />
+  )
+}
 
-      {/* ── QWERTY ──────── y=87 h=36 */}
-      {renderRow([
-        [80,'tab'],
-        [54,'Q'],[54,'W'],[54,'E'],[54,'R'],[54,'T'],
-        [54,'Y'],[54,'U'],[54,'I'],[54,'O'],[54,'P'],
-        [54,'['],[54,']'],[108,'\\'],
-      ], 87, 36)}
-
-      {/* ── ASDF ─────────── y=128 h=36 */}
-      {renderRow([
-        [94,'caps'],
-        [54,'A'],[54,'S'],[54,'D'],[54,'F'],[54,'G'],
-        [54,'H'],[54,'J'],[54,'K'],[54,'L'],[54,';'],[54,"'"],
-        [148,'return'],
-      ], 128, 36)}
-
-      {/* ── ZXCV ─────────── y=169 h=36 */}
-      {renderRow([
-        [124,'shift'],
-        [54,'Z'],[54,'X'],[54,'C'],[54,'V'],[54,'B'],
-        [54,'N'],[54,'M'],[54,','],[54,'.'],[54,'/'],
-        [124,'shift'],
-      ], 169, 36)}
-
-      {/* ── Bottom row ── y=210 h=36 */}
-      {renderRow([
-        [54,'fn'],[64,'ctrl'],[64,'⌥'],[84,'⌘'],
-        [268,''],
-        [84,'⌘'],[64,'⌥'],
-      ], 210, 36)}
-
-      {/* Arrow keys — ← full, ↑/↓ half, → full */}
-      <rect x={752} y={210} width={52} height={36} rx={3.5} fill={C.key} stroke={C.edge} strokeWidth={0.6} />
-      <text x={778} y={228} fill={C.dim} fontSize={7.5} fontFamily="system-ui" textAnchor="middle" dominantBaseline="middle">←</text>
-
-      <rect x={809} y={210} width={52} height={16} rx={3.5} fill={C.key} stroke={C.edge} strokeWidth={0.6} />
-      <text x={835} y={218} fill={C.dim} fontSize={7.5} fontFamily="system-ui" textAnchor="middle" dominantBaseline="middle">↑</text>
-
-      <rect x={809} y={230} width={52} height={16} rx={3.5} fill={C.key} stroke={C.edge} strokeWidth={0.6} />
-      <text x={835} y={238} fill={C.dim} fontSize={7.5} fontFamily="system-ui" textAnchor="middle" dominantBaseline="middle">↓</text>
-
-      <rect x={866} y={210} width={40} height={36} rx={3.5} fill={C.key} stroke={C.edge} strokeWidth={0.6} />
-      <text x={886} y={228} fill={C.dim} fontSize={7.5} fontFamily="system-ui" textAnchor="middle" dominantBaseline="middle">→</text>
-
-      {/* Spacebar glow */}
-      <defs>
-        <radialGradient id="sg" cx="50%" cy="100%" r="60%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-      </defs>
-      <rect x={271} y={213} width={266} height={30} rx={3.5} fill="url(#sg)" />
-
-      {/* Trackpad */}
-      <rect x={310} y={256} width={300} height={46} rx={9}
-            fill="#232325" stroke={C.edge} strokeWidth={0.6} />
+// ── OptionKey SVG ────────────────────────────────────────────────────
+function OptionKey({ size = 6 }) {
+  return (
+    <svg fill="none" viewBox="0 0 32 32" width={size} height={size}
+         xmlns="http://www.w3.org/2000/svg">
+      <rect stroke="currentColor" strokeWidth={2} x="18" y="5" width="10" height="2" />
+      <polygon stroke="currentColor" strokeWidth={2}
+               points="10.6,5 4,5 4,7 9.4,7 18.4,27 28,27 28,25 19.6,25" />
+      <rect width="32" height="32" stroke="none" />
     </svg>
   )
 }
 
-// ── MacBook Scroll ────────────────────────────────────────────────────
-export function MacbookScroll({ children }) {
+// ── Keypad ───────────────────────────────────────────────────────────
+function Keypad() {
+  const row = { display: 'flex', width: '100%', flexShrink: 0, gap: 2, marginBottom: 2 }
+  const icon = { width: 6, height: 6 }
+  const sub  = { display: 'flex', width: '100%' }
+  const jEnd = { justifyContent: 'flex-end', paddingRight: 4 }
+  const jStr = { justifyContent: 'flex-start', paddingLeft: 4 }
+
+  return (
+    <div style={{
+      margin: '0 4px',
+      height: '100%',
+      transform: 'translateZ(0)',
+      borderRadius: 6,
+      background: '#050505',
+      padding: 4,
+      willChange: 'transform',
+    }}>
+      {/* Row 1 — Fn keys */}
+      <div style={row}>
+        <KBtn style={{ width: 40 }} childStyle={{ alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 2, paddingLeft: 4 }}>esc</KBtn>
+        <KBtn><IconBrightnessDown style={icon} /><span style={{ marginTop: 2 }}>F1</span></KBtn>
+        <KBtn><IconBrightnessUp style={icon} /><span style={{ marginTop: 2 }}>F2</span></KBtn>
+        <KBtn><IconTable style={icon} /><span style={{ marginTop: 2 }}>F3</span></KBtn>
+        <KBtn><IconSearch style={icon} /><span style={{ marginTop: 2 }}>F4</span></KBtn>
+        <KBtn><IconMicrophone style={icon} /><span style={{ marginTop: 2 }}>F5</span></KBtn>
+        <KBtn><IconMoon style={icon} /><span style={{ marginTop: 2 }}>F6</span></KBtn>
+        <KBtn><IconPlayerTrackPrev style={icon} /><span style={{ marginTop: 2 }}>F7</span></KBtn>
+        <KBtn><IconPlayerSkipForward style={icon} /><span style={{ marginTop: 2 }}>F8</span></KBtn>
+        <KBtn><IconPlayerTrackNext style={icon} /><span style={{ marginTop: 2 }}>F9</span></KBtn>
+        <KBtn><IconVolume3 style={icon} /><span style={{ marginTop: 2 }}>F10</span></KBtn>
+        <KBtn><IconVolume2 style={icon} /><span style={{ marginTop: 2 }}>F11</span></KBtn>
+        <KBtn><IconVolume style={icon} /><span style={{ marginTop: 2 }}>F12</span></KBtn>
+        <KBtn>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'linear-gradient(to bottom, #1a1a1a 20%, #000 50%, #1a1a1a 95%)', padding: 1 }}>
+            <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#000' }} />
+          </div>
+        </KBtn>
+      </div>
+
+      {/* Row 2 — Numbers */}
+      <div style={row}>
+        {[['~','`'],['!','1'],['@','2'],['#','3'],['$','4'],['%','5'],['^','6'],['&','7'],['*','8'],['(','9'],[')',')'],['—','_'],['+','=']].map(([top,bot],i) => (
+          <KBtn key={i}><span style={{ display:'block' }}>{top}</span><span style={{ display:'block' }}>{bot}</span></KBtn>
+        ))}
+        <KBtn style={{ width: 40 }} childStyle={{ alignItems: 'flex-end', justifyContent: 'flex-end', paddingBottom: 2, paddingRight: 4 }}>delete</KBtn>
+      </div>
+
+      {/* Row 3 — QWERTY */}
+      <div style={row}>
+        <KBtn style={{ width: 40 }} childStyle={{ alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 2, paddingLeft: 4 }}>tab</KBtn>
+        {['Q','W','E','R','T','Y','U','I','O','P'].map(k => <KBtn key={k}><span>{k}</span></KBtn>)}
+        <KBtn><span>{'{'}</span><span>{'['}</span></KBtn>
+        <KBtn><span>{'}'}</span><span>{']'}</span></KBtn>
+        <KBtn><span>{'|'}</span><span>{'\\'}</span></KBtn>
+      </div>
+
+      {/* Row 4 — ASDF */}
+      <div style={row}>
+        <KBtn style={{ width: 44 }} childStyle={{ alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 2, paddingLeft: 4 }}>caps lock</KBtn>
+        {['A','S','D','F','G','H','J','K','L'].map(k => <KBtn key={k}><span>{k}</span></KBtn>)}
+        <KBtn><span>:</span><span>;</span></KBtn>
+        <KBtn><span>"</span><span>'</span></KBtn>
+        <KBtn style={{ width: 46 }} childStyle={{ alignItems: 'flex-end', justifyContent: 'flex-end', paddingBottom: 2, paddingRight: 4 }}>return</KBtn>
+      </div>
+
+      {/* Row 5 — ZXCV */}
+      <div style={row}>
+        <KBtn style={{ width: 58 }} childStyle={{ alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 2, paddingLeft: 4 }}>shift</KBtn>
+        {['Z','X','C','V','B','N','M'].map(k => <KBtn key={k}><span>{k}</span></KBtn>)}
+        <KBtn><span>{'<'}</span><span>{','}</span></KBtn>
+        <KBtn><span>{'>'}</span><span>{'.'}</span></KBtn>
+        <KBtn><span>{'?'}</span><span>{'/'}</span></KBtn>
+        <KBtn style={{ width: 58 }} childStyle={{ alignItems: 'flex-end', justifyContent: 'flex-end', paddingBottom: 2, paddingRight: 4 }}>shift</KBtn>
+      </div>
+
+      {/* Row 6 — Bottom */}
+      <div style={{ ...row, marginBottom: 0 }}>
+        <KBtn childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jEnd }}><span>fn</span></div>
+          <div style={{ ...sub, ...jStr }}><IconWorld style={icon} /></div>
+        </KBtn>
+        <KBtn childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jEnd }}><IconChevronUp style={icon} /></div>
+          <div style={{ ...sub, ...jStr }}><span>control</span></div>
+        </KBtn>
+        <KBtn childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jEnd }}><OptionKey /></div>
+          <div style={{ ...sub, ...jStr }}><span>option</span></div>
+        </KBtn>
+        <KBtn style={{ width: 32 }} childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jEnd }}><IconCommand style={icon} /></div>
+          <div style={{ ...sub, ...jStr }}><span>command</span></div>
+        </KBtn>
+        {/* Spacebar */}
+        <KBtn style={{ width: 131 }} />
+        <KBtn style={{ width: 32 }} childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jStr }}><IconCommand style={icon} /></div>
+          <div style={{ ...sub, ...jStr }}><span>command</span></div>
+        </KBtn>
+        <KBtn childStyle={{ height: '100%', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 4 }}>
+          <div style={{ ...sub, ...jStr }}><OptionKey /></div>
+          <div style={{ ...sub, ...jStr }}><span>option</span></div>
+        </KBtn>
+        {/* Arrow cluster */}
+        <div style={{ marginTop: 2, display: 'flex', height: 24, width: 78, flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', borderRadius: 4, padding: 0.5 }}>
+          <KBtn style={{ height: 12, width: 24 }}><IconCaretUpFilled style={icon} /></KBtn>
+          <div style={{ display: 'flex' }}>
+            <KBtn style={{ height: 12, width: 24 }}><IconCaretLeftFilled style={icon} /></KBtn>
+            <KBtn style={{ height: 12, width: 24 }}><IconCaretDownFilled style={icon} /></KBtn>
+            <KBtn style={{ height: 12, width: 24 }}><IconCaretRightFilled style={icon} /></KBtn>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Lid ──────────────────────────────────────────────────────────────
+function Lid({ scaleX, scaleY, rotate, translate, children }) {
+  return (
+    <div style={{ position: 'relative', perspective: 800 }}>
+      {/* Static closed lid — visible at start */}
+      <div style={{
+        transform: 'perspective(800px) rotateX(-25deg) translateZ(0px)',
+        transformOrigin: 'bottom',
+        transformStyle: 'preserve-3d',
+        position: 'relative',
+        height: 192,
+        width: 512,
+        borderRadius: 16,
+        background: '#010101',
+        padding: 8,
+      }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 8,
+          background: '#010101',
+          boxShadow: '0px 2px 0px 2px #171717 inset',
+        }}>
+          {/* Sonar logo mark on closed lid */}
+          <svg width="24" height="24" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="7" stroke="#fff" strokeWidth="1" opacity="0.3"/>
+            <circle cx="8" cy="8" r="4" stroke="#fff" strokeWidth="1" opacity="0.6"/>
+            <circle cx="8" cy="8" r="1.5" fill="#fff"/>
+            <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" strokeWidth="1" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* Animated opening lid — reveals screen content */}
+      <motion.div style={{
+        scaleX,
+        scaleY,
+        rotateX: rotate,
+        translateY: translate,
+        transformStyle: 'preserve-3d',
+        transformOrigin: 'top',
+        position: 'absolute',
+        inset: 0,
+        height: 384,
+        width: 512,
+        borderRadius: 16,
+        background: '#010101',
+        padding: 8,
+      }}>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 8, background: '#272729' }} />
+        {/* Screen content */}
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: 8,
+          overflow: 'hidden', background: '#f5f5f5',
+        }}>
+          {children}
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ── MacbookScroll (public export) ─────────────────────────────────────
+export function MacbookScroll({ children, title }) {
   const ref = useRef(null)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (window.innerWidth < 768) setIsMobile(true)
+  }, [])
+
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ['start start', 'end start'],
   })
 
-  // Lid rotates from nearly-closed to open
-  const rotate   = useTransform(scrollYProgress, [0, 0.5], [28, 0])
-  const opacity  = useTransform(scrollYProgress, [0.1, 0.45], [0, 1])
-  const scale    = useTransform(scrollYProgress, [0, 0.55], [0.55, 1])
-  const translateY = useTransform(scrollYProgress, [0, 0.5], ['10%', '0%'])
+  // Exact Aceternity transform values
+  const scaleX     = useTransform(scrollYProgress, [0, 0.3], [1.2, isMobile ? 1 : 1.5])
+  const scaleY     = useTransform(scrollYProgress, [0, 0.3], [0.6, isMobile ? 1 : 1.5])
+  const translate  = useTransform(scrollYProgress, [0, 1], [0, 1500])
+  const rotate     = useTransform(scrollYProgress, [0.1, 0.12, 0.3], [-28, -28, 0])
+  const textY      = useTransform(scrollYProgress, [0, 0.3], [0, 100])
+  const textOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0])
 
   return (
-    <div ref={ref} style={{ height: '260vh', position: 'relative', background: '#0a0a0a' }}>
-      <div style={{
-        height: '100vh',
-        position: 'sticky',
-        top: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        perspective: '1000px',
-        perspectiveOrigin: '50% 30%',
-        background: '#0a0a0a',
-      }}>
-        <motion.div style={{
-          scale,
-          translateY,
-          transformStyle: 'preserve-3d',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          width: 900,
+    <div ref={ref} style={{
+      display: 'flex',
+      minHeight: '200vh',
+      flexShrink: 0,
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      padding: '0 0 320px',
+      perspective: '800px',
+      background: '#0B0B0F',
+    }}>
+      {/* Title */}
+      {title && (
+        <motion.h2 style={{
+          translateY: textY,
+          opacity: textOpacity,
+          marginBottom: 80,
+          textAlign: 'center',
+          fontSize: 30,
+          fontWeight: 700,
+          color: '#fff',
+          fontFamily: 'inherit',
         }}>
+          {title}
+        </motion.h2>
+      )}
 
-          {/* ── SCREEN LID ───────────────────────────────────────── */}
-          <motion.div style={{
-            rotateX: rotate,
-            transformOrigin: 'bottom center',
-            transformStyle: 'preserve-3d',
-            width: '100%',
-            // Outer aluminum edge
-            background: 'linear-gradient(180deg,#3a3a3c 0%,#2a2a2c 100%)',
-            borderRadius: '12px 12px 0 0',
-            padding: '3px 3px 0',
-            boxShadow: '0 -8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
-          }}>
-            {/* Dark glass bezel */}
-            <div style={{
-              background: C.bezel,
-              borderRadius: '10px 10px 0 0',
-              padding: '18px 16px 0',
-              position: 'relative',
-            }}>
-              {/* Camera */}
-              <div style={{
-                position: 'absolute',
-                top: 8,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: '#2e2e30',
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.05)',
-              }} />
+      {/* Lid (screen) */}
+      <Lid scaleX={scaleX} scaleY={scaleY} rotate={rotate} translate={translate}>
+        {children}
+      </Lid>
 
-              {/* Screen area */}
-              <div style={{
-                background: '#f5f5f5',
-                borderRadius: '4px 4px 0 0',
-                overflow: 'hidden',
-                height: 430,
-              }}>
-                <motion.div style={{ opacity, height: '100%' }}>
-                  {children}
-                </motion.div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* ── KEYBOARD / BASE ──────────────────────────────────── */}
+      {/* Base / keyboard area */}
+      <div style={{
+        position: 'relative',
+        zIndex: -10,
+        height: 352,
+        width: 512,
+        overflow: 'hidden',
+        borderRadius: 16,
+        background: '#272729',
+      }}>
+        {/* Hinge strip above keyboard */}
+        <div style={{ position: 'relative', height: 40, width: '100%' }}>
           <div style={{
-            width: '100%',
-            height: 308,
-            borderRadius: '0 0 16px 16px',
-            overflow: 'hidden',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.4)',
-          }}>
-            <Keyboard />
-          </div>
-
-          {/* Bottom chin / base edge */}
-          <div style={{
-            width: '96%',
-            height: 8,
-            background: 'linear-gradient(180deg,#2a2a2c 0%,#222224 100%)',
-            borderRadius: '0 0 20px 20px',
-            boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+            position: 'absolute',
+            left: 0, right: 0,
+            margin: '0 auto',
+            height: 16,
+            width: '80%',
+            background: '#050505',
           }} />
+        </div>
 
-        </motion.div>
+        {/* Speakers + Keyboard */}
+        <div style={{ position: 'relative', display: 'flex' }}>
+          <div style={{ margin: '0 auto', height: '100%', width: '10%', overflow: 'hidden' }}>
+            <SpeakerGrid />
+          </div>
+          <div style={{ margin: '0 auto', height: '100%', width: '80%' }}>
+            <Keypad />
+          </div>
+          <div style={{ margin: '0 auto', height: '100%', width: '10%', overflow: 'hidden' }}>
+            <SpeakerGrid />
+          </div>
+        </div>
+
+        <Trackpad />
+
+        {/* Bottom gradient notch */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          margin: '0 auto',
+          height: 8, width: 80,
+          borderRadius: '12px 12px 0 0',
+          background: 'linear-gradient(to top, #272729, #050505)',
+        }} />
       </div>
     </div>
   )

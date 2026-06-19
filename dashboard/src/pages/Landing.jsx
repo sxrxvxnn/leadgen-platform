@@ -261,7 +261,7 @@ export default function Landing() {
       </section>
 
       {/* ── MACBOOK SCROLL ───────────────────────────────────────────────── */}
-      <MacbookScroll>
+      <MacbookScroll title={<span>Your pipeline.<br />On autopilot.</span>}>
         <div className="lp-preview-bar">
           <span className="lp-preview-bar-dot r"></span>
           <span className="lp-preview-bar-dot y"></span>
