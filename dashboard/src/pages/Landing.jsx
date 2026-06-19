@@ -6,7 +6,7 @@ import LegalModal from '../components/LegalModal'
 import { FlipWords } from '../components/ui/FlipWords'
 import { BackgroundBeams } from '../components/ui/BackgroundBeams'
 import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
-import { WobbleCard } from '../components/ui/WobbleCard'
+import { WobbleCard, BentoCard } from '../components/ui/WobbleCard'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
@@ -349,75 +349,55 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── SOLUTION / FEATURES GRID ─────────────────────────────────────── */}
-      <section className="lp-section" id="features">
+      {/* ── SOLUTION BENTO ───────────────────────────────────────────────── */}
+      <section className="lp-section lp-section-dark" id="features">
         <div className="lp-container">
           <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill">Solution</span>
-            <h2>Empower your sales team<br />with AI intelligence.</h2>
-            <p className="lp-section-sub">Generic tools won't cut it. Sonar is purpose-built for B2B outreach — from discovery to deal-ready lead, everything automated.</p>
+            <span className="lp-pill lp-pill-dark">Solution</span>
+            <h2 style={{ color: '#F5F5F5' }}>Empower your sales team<br />with AI intelligence.</h2>
+            <p className="lp-section-sub" style={{ color: '#6A7282' }}>Purpose-built for B2B outreach — from discovery to deal-ready lead, everything automated.</p>
           </motion.div>
-          <div className="lp-solution-grid">
-            {[
-              {
-                icon: (
-                  <svg viewBox="0 0 32 32" fill="none" width="22" height="22">
-                    <circle cx="14" cy="14" r="9" stroke="currentColor" strokeWidth="1.4"/>
-                    <line x1="21" y1="21" x2="29" y2="29" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                    <line x1="11" y1="14" x2="17" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                    <line x1="14" y1="11" x2="14" y2="17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'Advanced Company Discovery',
-                body: 'Search millions of B2B companies by industry, size, location and keyword. Sector filters for SaaS, Fintech, Healthtech and more.',
-              },
-              {
-                icon: (
-                  <svg viewBox="0 0 32 32" fill="none" width="22" height="22">
-                    <rect x="3" y="6" width="26" height="20" rx="2" stroke="currentColor" strokeWidth="1.4"/>
-                    <path d="M3 11h26" stroke="currentColor" strokeWidth="1.4"/>
-                    <circle cx="16" cy="20" r="3" stroke="currentColor" strokeWidth="1.4"/>
-                    <path d="M13 20H9M23 20h-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'Secure Data Handling',
-                body: 'All data encrypted over HTTPS. LinkedIn cookie stays on your own backend. Row Level Security ensures only you see your records.',
-              },
-              {
-                icon: (
-                  <svg viewBox="0 0 32 32" fill="none" width="22" height="22">
-                    <path d="M16 3L28 9V23L16 29L4 23V9L16 3Z" stroke="currentColor" strokeWidth="1.4"/>
-                    <path d="M16 3V29M4 9L28 23M28 9L4 23" stroke="currentColor" strokeWidth="1.4" opacity="0.4"/>
-                  </svg>
-                ),
-                title: 'Seamless Integration',
-                body: 'Chrome extension pulls leads from any LinkedIn page. Hunter and Apollo integrate automatically for email verification and supplemental data.',
-              },
-              {
-                icon: (
-                  <svg viewBox="0 0 32 32" fill="none" width="22" height="22">
-                    <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="1.4" opacity="0.3"/>
-                    <circle cx="16" cy="16" r="7" stroke="currentColor" strokeWidth="1.4" opacity="0.6"/>
-                    <circle cx="16" cy="16" r="2.5" fill="currentColor"/>
-                    <line x1="18" y1="14" x2="24" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                  </svg>
-                ),
-                title: 'Custom ICP Scoring',
-                body: 'Define your ideal customer once. Sonar scores every company automatically so your best-fit accounts always surface to the top.',
-              },
-            ].map(({ icon, title, body }, i) => (
-              <motion.div key={title} {...fadeUp(i * 0.09)}>
-                <WobbleCard>
-                  <div className="lp-solution-card">
-                    <div className="lp-solution-icon">{icon}</div>
-                    <h3>{title}</h3>
-                    <p>{body}</p>
-                    <button onClick={() => setLearnMoreOpen(title)} className="lp-solution-link" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Learn more <span>→</span></button>
-                  </div>
-                </WobbleCard>
-              </motion.div>
-            ))}
+
+          {/* Row 1: large (2/3) + small (1/3) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <motion.div style={{ gridColumn: '1 / 3' }} {...fadeUp(0)}>
+              <BentoCard bg="linear-gradient(135deg, #9D174D 0%, #7f1d1d 100%)" minHeight={300}>
+                <div style={{ maxWidth: 340 }}>
+                  <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                    Find your perfect customers at scale
+                  </h2>
+                  <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                    Search 10M+ B2B companies by industry, size, and location. Every company gets an automatic ICP fit score — your best accounts always surface first.
+                  </p>
+                </div>
+              </BentoCard>
+            </motion.div>
+
+            <motion.div style={{ gridColumn: '3 / 4' }} {...fadeUp(0.08)}>
+              <BentoCard bg="linear-gradient(135deg, #4f46e5 0%, #312e81 100%)" minHeight={300}>
+                <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 30px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                  Zero-trust data security.
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                  All data encrypted over HTTPS. Your LinkedIn cookie stays on your own backend. Row Level Security ensures only you see your records.
+                </p>
+              </BentoCard>
+            </motion.div>
           </div>
+
+          {/* Row 2: full-width */}
+          <motion.div {...fadeUp(0.16)}>
+            <BentoCard bg="linear-gradient(135deg, #1d4ed8 0%, #312e81 100%)" minHeight={300}>
+              <div style={{ maxWidth: 480 }}>
+                <h2 style={{ color: 'white', fontSize: 'clamp(22px, 2.5vw, 32px)', fontWeight: 700, lineHeight: 1.2, marginBottom: 16, letterSpacing: '-0.02em' }}>
+                  Your entire outreach stack, connected.
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.72)', fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+                  Chrome extension pulls leads from any LinkedIn page. Hunter.io verifies emails, Apollo supplements data — everything flows automatically into your workspace with zero copy-paste.
+                </p>
+              </div>
+            </BentoCard>
+          </motion.div>
         </div>
       </section>
 
