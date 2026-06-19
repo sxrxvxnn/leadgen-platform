@@ -673,9 +673,9 @@
   box-shadow: 0 8px 32px rgba(0,0,0,0.10);
 }
 .lp-ext-mock-bar { display: flex; align-items: center; gap: 9px; padding: 13px 18px 12px; border-bottom: 1px solid #E5E7EB; background: #F9FAFB; }
-.lp-ext-mock-logo { width: 24px; height: 24px; background: #FFFF00; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.lp-ext-mock-logo svg circle, .lp-ext-mock-logo svg line { stroke: #121212 !important; }
-.lp-ext-mock-logo svg circle[r="1"] { fill: #121212 !important; stroke: none !important; }
+.lp-ext-mock-logo { width: 24px; height: 24px; background: #E7000B; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.lp-ext-mock-logo svg circle, .lp-ext-mock-logo svg line { stroke: #FFFFFF !important; }
+.lp-ext-mock-logo svg circle[r="1"] { fill: #FFFFFF !important; stroke: none !important; }
 .lp-ext-mock-brand { font-family: var(--lp-display); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: #0A0A0A; flex: 1; }
 .lp-ext-mock-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; flex-shrink: 0; }
 .lp-ext-mock-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }

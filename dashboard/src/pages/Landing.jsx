@@ -175,14 +175,11 @@ export default function Landing() {
         <div className="lp-nav-inner">
           <Link to="/" className="lp-logo">
             <span className="lp-logo-mark">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="6" stroke="#121212" strokeWidth="1.3" fill="none"/>
-                <circle cx="7" cy="7" r="3.2" stroke="#121212" strokeWidth="1.3" fill="none"/>
-                <circle cx="7" cy="7" r="1" fill="#121212"/>
-                <line x1="7" y1="1" x2="7" y2="3" stroke="#121212" strokeWidth="1.1"/>
-                <line x1="7" y1="11" x2="7" y2="13" stroke="#121212" strokeWidth="1.1"/>
-                <line x1="1" y1="7" x2="3" y2="7" stroke="#121212" strokeWidth="1.1"/>
-                <line x1="11" y1="7" x2="13" y2="7" stroke="#121212" strokeWidth="1.1"/>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
+                <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
+                <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
+                <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
             </span>
             Sonar
@@ -755,10 +752,11 @@ export default function Landing() {
           <div className="lp-footer-brand">
             <span className="lp-footer-logo">
               <span className="lp-logo-mark lp-logo-mark-sm">
-                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                  <circle cx="7" cy="7" r="6" stroke="#FFFF00" strokeWidth="1.3" fill="none"/>
-                  <circle cx="7" cy="7" r="3.2" stroke="#FFFF00" strokeWidth="1.3" fill="none"/>
-                  <circle cx="7" cy="7" r="1" fill="#FFFF00"/>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
+                  <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
+                  <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
+                  <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
                 </svg>
               </span>
               Sonar

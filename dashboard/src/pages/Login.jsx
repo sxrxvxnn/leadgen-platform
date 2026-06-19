@@ -63,15 +63,12 @@ export default function Login() {
       {/* Nav */}
       <nav style={{ borderBottom: `1px solid ${BORDER}`, padding: '0 40px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: BG }}>
         <Link to="/" style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 26, height: 26, background: '#FFFF00', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-              <circle cx="7" cy="7" r="6" stroke="#121212" strokeWidth="1.3"/>
-              <circle cx="7" cy="7" r="3.2" stroke="#121212" strokeWidth="1.3"/>
-              <circle cx="7" cy="7" r="1" fill="#121212"/>
-              <line x1="7" y1="1" x2="7" y2="3" stroke="#121212" strokeWidth="1.1"/>
-              <line x1="7" y1="11" x2="7" y2="13" stroke="#121212" strokeWidth="1.1"/>
-              <line x1="1" y1="7" x2="3" y2="7" stroke="#121212" strokeWidth="1.1"/>
-              <line x1="11" y1="7" x2="13" y2="7" stroke="#121212" strokeWidth="1.1"/>
+          <div style={{ width: 26, height: 26, background: '#E7000B', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
+              <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
+              <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
+              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
           </div>
           Sonar

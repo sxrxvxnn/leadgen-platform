@@ -16,7 +16,7 @@ const BORDER  = '#E5E7EB'
 const INK     = '#0A0A0A'
 const STEEL   = '#6B7280'
 const ACCENT  = '#E7000B'
-const LOGO_BG = '#FFFF00'
+const LOGO_BG = '#E7000B'
 const SANS    = "'Host Grotesk', 'Roboto', sans-serif"
 const DISPLAY = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 
@@ -55,14 +55,11 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '9px' }}>
           <div style={{ width: '28px', height: '28px', background: LOGO_BG, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-              <circle cx="7.5" cy="7.5" r="6.5" stroke="#121212" strokeWidth="1.4" fill="none"/>
-              <circle cx="7.5" cy="7.5" r="3.8" stroke="#121212" strokeWidth="1.4" fill="none"/>
-              <circle cx="7.5" cy="7.5" r="1.2" fill="#121212"/>
-              <line x1="7.5" y1="1" x2="7.5" y2="3.5" stroke="#121212" strokeWidth="1.2"/>
-              <line x1="7.5" y1="11.5" x2="7.5" y2="14" stroke="#121212" strokeWidth="1.2"/>
-              <line x1="1" y1="7.5" x2="3.5" y2="7.5" stroke="#121212" strokeWidth="1.2"/>
-              <line x1="11.5" y1="7.5" x2="14" y2="7.5" stroke="#121212" strokeWidth="1.2"/>
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
+              <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
+              <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
+              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
           </div>
           <span style={{
