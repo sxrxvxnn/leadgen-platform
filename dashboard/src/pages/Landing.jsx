@@ -583,7 +583,7 @@ export default function Landing() {
                 zIndex: 1,
                 pointerEvents: 'none',
               }} />
-              <Globe3D style={{ maxWidth: 360, margin: '0 auto', position: 'relative', zIndex: 2 }} />
+              <Globe3D style={{ width: '100%', position: 'relative', zIndex: 2 }} />
             </div>
           </motion.div>
         </div>

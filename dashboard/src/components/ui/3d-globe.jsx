@@ -1,135 +1,104 @@
-import { useEffect, useRef } from 'react'
-import createGlobe from 'cobe'
+import { useRef, useEffect, useState } from 'react'
 
-export const GLOBE_CONFIG = {
-  devicePixelRatio: 2,
-  phi: 0,
-  theta: 0.3,
-  dark: 1,
-  diffuse: 0.4,
-  mapSamples: 16000,
-  mapBrightness: 1.2,
-  baseColor: [1, 1, 1],
-  markerColor: [0.906, 0, 0.043],
-  glowColor: [0.12, 0.12, 0.12],
-  markers: [
-    { location: [8.5241,   76.9366], size: 0.07 }, // Technopark
-    { location: [40.7128,  -74.006], size: 0.10 }, // NYC
-    { location: [51.5074,  -0.1278], size: 0.07 }, // London
-    { location: [37.7749,-122.4194], size: 0.06 }, // SF
-    { location: [1.3521,  103.8198], size: 0.05 }, // Singapore
-    { location: [35.6762,  139.6503],size: 0.05 }, // Tokyo
-    { location: [48.8566,   2.3522], size: 0.05 }, // Paris
-    { location: [-33.8688,151.2093], size: 0.04 }, // Sydney
-    { location: [19.0760,  72.8777], size: 0.05 }, // Mumbai
-    { location: [25.2048,  55.2708], size: 0.04 }, // Dubai
-    { location: [52.5200,  13.4050], size: 0.04 }, // Berlin
-    { location: [-23.5505,-46.6333], size: 0.06 }, // São Paulo
-  ],
-  arcs: [
-    { from: [8.5241,   76.9366], to: [40.7128,  -74.006]  },
-    { from: [8.5241,   76.9366], to: [51.5074,  -0.1278]  },
-    { from: [8.5241,   76.9366], to: [1.3521,  103.8198]  },
-    { from: [8.5241,   76.9366], to: [19.0760,  72.8777]  },
-    { from: [40.7128,  -74.006], to: [51.5074,  -0.1278]  },
-    { from: [40.7128,  -74.006], to: [37.7749,-122.4194]  },
-    { from: [37.7749,-122.4194], to: [35.6762, 139.6503]  },
-    { from: [48.8566,   2.3522], to: [1.3521,  103.8198]  },
-    { from: [1.3521,  103.8198], to: [35.6762, 139.6503]  },
-    { from: [25.2048,  55.2708], to: [19.0760,  72.8777]  },
-    { from: [51.5074,  -0.1278], to: [48.8566,   2.3522]  },
-    { from: [40.7128,  -74.006], to: [-23.5505,-46.6333]  },
-  ],
-  arcColor: [0.906, 0, 0.043],
-  arcWidth: 1.5,
-  arcHeight: 0.25,
+const MARKERS = [
+  { lat: 8.5241,   lng: 76.9366,  label: 'TK' }, // Technopark
+  { lat: 40.7128,  lng: -74.006,  label: 'NY' }, // NYC
+  { lat: 51.5074,  lng: -0.1278,  label: 'LN' }, // London
+  { lat: 37.7749,  lng:-122.4194, label: 'SF' }, // SF
+  { lat: 1.3521,   lng: 103.8198, label: 'SG' }, // Singapore
+  { lat: 25.2048,  lng: 55.2708,  label: 'DB' }, // Dubai
+]
+
+const ARCS = [
+  { startLat: 8.5241,  startLng: 76.9366,  endLat: 40.7128,  endLng: -74.006  },
+  { startLat: 8.5241,  startLng: 76.9366,  endLat: 51.5074,  endLng: -0.1278  },
+  { startLat: 8.5241,  startLng: 76.9366,  endLat: 1.3521,   endLng: 103.8198 },
+  { startLat: 8.5241,  startLng: 76.9366,  endLat: 25.2048,  endLng: 55.2708  },
+  { startLat: 40.7128, startLng: -74.006,  endLat: 51.5074,  endLng: -0.1278  },
+  { startLat: 37.7749, startLng:-122.4194, endLat: 40.7128,  endLng: -74.006  },
+]
+
+function makeMarker(d) {
+  const el = document.createElement('div')
+  el.style.cssText = `
+    width:40px;height:40px;border-radius:50%;
+    background:#111;border:2px solid #E7000B;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Host Grotesk',sans-serif;font-size:11px;
+    font-weight:600;color:#fff;letter-spacing:.04em;
+    box-shadow:0 0 14px rgba(231,0,11,.5);
+    pointer-events:none;
+  `
+  el.textContent = d.label
+  return el
 }
 
-export default function Globe({ style, config = {} }) {
-  const canvasRef = useRef(null)
-  const phiRef    = useRef(0)
-  const widthRef  = useRef(0)
-  const pointerInteracting = useRef(null)
+export default function Globe({ style }) {
+  const wrapRef = useRef(null)
+  const globeRef = useRef(null)
+  const [size, setSize] = useState(0)
+  const [GlobeGL, setGlobeGL] = useState(null)
 
+  // Measure container once mounted
   useEffect(() => {
-    let globe
-    let raf
-
-    const onResize = () => {
-      if (canvasRef.current) widthRef.current = canvasRef.current.offsetWidth
-    }
-    window.addEventListener('resize', onResize)
-
-    const init = () => {
-      if (!canvasRef.current) return
-      const w = canvasRef.current.offsetWidth
-      if (w === 0) { raf = requestAnimationFrame(init); return }
-      widthRef.current = w
-
-      const mergedConfig = { ...GLOBE_CONFIG, ...config }
-      globe = createGlobe(canvasRef.current, {
-        ...mergedConfig,
-        width:  w * 2,
-        height: w * 2,
-        onRender: (state) => {
-          if (!pointerInteracting.current) phiRef.current += 0.005
-          state.phi    = phiRef.current
-          state.width  = widthRef.current * 2
-          state.height = widthRef.current * 2
-        },
-      })
-
-      setTimeout(() => {
-        if (canvasRef.current) canvasRef.current.style.opacity = '1'
-      })
-    }
-
-    raf = requestAnimationFrame(init)
-
-    return () => {
-      globe?.destroy()
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', onResize)
-    }
+    if (wrapRef.current) setSize(wrapRef.current.offsetWidth || 400)
+    const obs = new ResizeObserver(([e]) => setSize(Math.round(e.contentRect.width)))
+    obs.observe(wrapRef.current)
+    return () => obs.disconnect()
   }, [])
 
+  // Lazy-load the heavy library
+  useEffect(() => {
+    import('react-globe.gl').then(m => setGlobeGL(() => m.default))
+  }, [])
+
+  // Configure controls after globe mounts
+  useEffect(() => {
+    if (!globeRef.current || !GlobeGL) return
+    const ctrl = globeRef.current.controls()
+    ctrl.autoRotate = true
+    ctrl.autoRotateSpeed = 0.5
+    ctrl.enableZoom = false
+    ctrl.minPolarAngle = Math.PI * 0.15
+    ctrl.maxPolarAngle = Math.PI * 0.85
+    globeRef.current.pointOfView({ lat: 22, lng: 30, altitude: 1.7 }, 800)
+  }, [GlobeGL, size])
+
   return (
-    <div style={{ width: '100%', aspectRatio: '1/1', position: 'relative', ...style }}>
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: '100%',
-          height: '100%',
-          contain: 'layout paint size',
-          opacity: 0,
-          transition: 'opacity 1s ease',
-          cursor: 'grab',
-        }}
-        onPointerDown={e => {
-          pointerInteracting.current = e.clientX
-          canvasRef.current && (canvasRef.current.style.cursor = 'grabbing')
-        }}
-        onPointerUp={() => {
-          pointerInteracting.current = null
-          canvasRef.current && (canvasRef.current.style.cursor = 'grab')
-        }}
-        onPointerOut={() => {
-          pointerInteracting.current = null
-          canvasRef.current && (canvasRef.current.style.cursor = 'grab')
-        }}
-        onMouseMove={e => {
-          if (pointerInteracting.current !== null) {
-            phiRef.current += (e.clientX - pointerInteracting.current) / 400
-            pointerInteracting.current = e.clientX
-          }
-        }}
-        onTouchMove={e => {
-          if (e.touches[0] && pointerInteracting.current !== null) {
-            phiRef.current += (e.touches[0].clientX - pointerInteracting.current) / 400
-            pointerInteracting.current = e.touches[0].clientX
-          }
-        }}
-      />
+    <div
+      ref={wrapRef}
+      style={{
+        width: '100%',
+        aspectRatio: '1/1',
+        position: 'relative',
+        overflow: 'visible',
+        ...style,
+      }}
+    >
+      {GlobeGL && size > 0 && (
+        <GlobeGL
+          ref={globeRef}
+          width={size}
+          height={size}
+          backgroundColor="rgba(0,0,0,0)"
+          globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+          bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+          atmosphereColor="#E7000B"
+          atmosphereAltitude={0.1}
+          arcsData={ARCS}
+          arcColor={() => '#E7000B'}
+          arcAltitude={0.2}
+          arcStroke={0.5}
+          arcDashLength={0.5}
+          arcDashGap={0.2}
+          arcDashAnimateTime={2200}
+          htmlElementsData={MARKERS}
+          htmlElement={makeMarker}
+          htmlAltitude={0.05}
+        />
+      )}
     </div>
   )
 }
+
+export const GLOBE_CONFIG = {}

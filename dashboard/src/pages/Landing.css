@@ -531,7 +531,7 @@
   font-family: var(--lp-mono); font-size: 10px; color: #6A7282;
   letter-spacing: 0.08em; text-transform: uppercase; margin-top: 6px;
 }
-.lp-globe-wrap { display: flex; align-items: center; justify-content: center; width: 360px; flex-shrink: 0; }
+.lp-globe-wrap { display: flex; align-items: center; justify-content: center; width: 460px; flex-shrink: 0; overflow: visible; }
 
 /* ── DATA INTELLIGENCE ──────────────────────────────────────────────── */
 .lp-signals-grid {
