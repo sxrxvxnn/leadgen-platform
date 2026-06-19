@@ -10,6 +10,7 @@ import { CardSpotlight } from '../components/ui/CardSpotlight'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
+import Globe3D from '../components/ui/3d-globe'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -557,8 +558,32 @@ export default function Landing() {
                 ))}
               </div>
             </div>
-            <div className="lp-globe-wrap">
-              <Globe size={320} markers={LANDING_MARKERS} markerColor={[0.91, 0, 0.04]} />
+            <div className="lp-globe-wrap" style={{ position: 'relative' }}>
+              {/* Red glow beneath the globe */}
+              <div style={{
+                position: 'absolute',
+                bottom: '-10%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '70%',
+                height: 60,
+                background: 'radial-gradient(ellipse, rgba(231,0,11,0.4) 0%, transparent 70%)',
+                filter: 'blur(16px)',
+                pointerEvents: 'none',
+                zIndex: 0,
+              }} />
+              {/* Bottom fade overlay */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '25%',
+                background: 'linear-gradient(to top, #111111, transparent)',
+                zIndex: 1,
+                pointerEvents: 'none',
+              }} />
+              <Globe3D style={{ maxWidth: 360, margin: '0 auto', position: 'relative', zIndex: 2 }} />
             </div>
           </motion.div>
         </div>
