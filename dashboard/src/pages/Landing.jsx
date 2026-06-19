@@ -7,6 +7,7 @@ import { FlipWords } from '../components/ui/FlipWords'
 import { BackgroundBeams } from '../components/ui/BackgroundBeams'
 import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
 import { WobbleCard, BentoCard } from '../components/ui/WobbleCard'
+import { ContainerScrollAnimation } from '../components/ui/ContainerScrollAnimation'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
@@ -311,13 +312,18 @@ export default function Landing() {
       </div>
 
       {/* ── PROBLEM ──────────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-alt">
-        <div className="lp-container">
-          <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill">The problem</span>
-            <h2>Manually building your<br />prospect list is exhausting.</h2>
-          </motion.div>
-          <div className="lp-problem-grid">
+      <section className="lp-section lp-section-alt" style={{ padding: 0 }}>
+        <ContainerScrollAnimation
+          titleComponent={
+            <div className="lp-section-header" style={{ marginBottom: 0 }}>
+              <span className="lp-pill">The problem</span>
+              <h2>Manually building your<br />prospect list is exhausting.</h2>
+            </div>
+          }
+          cardBg="#FFFFFF"
+          borderColor="#E5E7EB"
+        >
+          <div className="lp-problem-grid" style={{ padding: '8px 0' }}>
             {[
               {
                 icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="22" height="22"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
@@ -346,18 +352,22 @@ export default function Landing() {
               </motion.div>
             ))}
           </div>
-        </div>
+        </ContainerScrollAnimation>
       </section>
 
       {/* ── SOLUTION BENTO ───────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-dark" id="features">
-        <div className="lp-container">
-          <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill lp-pill-dark">Solution</span>
-            <h2 style={{ color: '#F5F5F5' }}>Empower your sales team<br />with AI intelligence.</h2>
-            <p className="lp-section-sub" style={{ color: '#6A7282' }}>Purpose-built for B2B outreach — from discovery to deal-ready lead, everything automated.</p>
-          </motion.div>
-
+      <section className="lp-section lp-section-dark" id="features" style={{ padding: 0 }}>
+        <ContainerScrollAnimation
+          titleComponent={
+            <div className="lp-section-header" style={{ marginBottom: 0 }}>
+              <span className="lp-pill lp-pill-dark">Solution</span>
+              <h2 style={{ color: '#F5F5F5' }}>Empower your sales team<br />with AI intelligence.</h2>
+              <p className="lp-section-sub" style={{ color: '#6A7282' }}>Purpose-built for B2B outreach — from discovery to deal-ready lead, everything automated.</p>
+            </div>
+          }
+          cardBg="#0d0d0d"
+          borderColor="#2a2a2a"
+        >
           {/* Row 1: large (2/3) + small (1/3) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <motion.div style={{ gridColumn: '1 / 3' }} {...fadeUp(0)}>
@@ -398,17 +408,21 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </div>
+        </ContainerScrollAnimation>
       </section>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-dark" id="how-it-works">
-        <div className="lp-container">
-          <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill lp-pill-dark">How it works</span>
-            <h2 style={{ color: '#F5F5F5' }}>Just 3 steps to get started.</h2>
-          </motion.div>
-
+      <section className="lp-section lp-section-dark" id="how-it-works" style={{ padding: 0 }}>
+        <ContainerScrollAnimation
+          titleComponent={
+            <div className="lp-section-header" style={{ marginBottom: 0 }}>
+              <span className="lp-pill lp-pill-dark">How it works</span>
+              <h2 style={{ color: '#F5F5F5' }}>Just 3 steps to get started.</h2>
+            </div>
+          }
+          cardBg="#0d0d0d"
+          borderColor="#2a2a2a"
+        >
           {/* Row 1: narrow (1/3) + wide (2/3) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <motion.div style={{ gridColumn: '1 / 2' }} {...fadeUp(0)}>
@@ -452,7 +466,7 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </div>
+        </ContainerScrollAnimation>
       </section>
 
       {/* ── TESTIMONIAL HIGHLIGHT ─────────────────────────────────────────── */}
@@ -645,13 +659,17 @@ export default function Landing() {
       </section>
 
       {/* ── DATA INTELLIGENCE ────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-dark" id="what-we-find">
-        <div className="lp-container">
-          <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill lp-pill-dark">Data intelligence</span>
-            <h2 style={{ color: '#F5F5F5' }}>Every data point<br />your team needs.</h2>
-          </motion.div>
-
+      <section className="lp-section lp-section-dark" id="what-we-find" style={{ padding: 0 }}>
+        <ContainerScrollAnimation
+          titleComponent={
+            <div className="lp-section-header" style={{ marginBottom: 0 }}>
+              <span className="lp-pill lp-pill-dark">Data intelligence</span>
+              <h2 style={{ color: '#F5F5F5' }}>Every data point<br />your team needs.</h2>
+            </div>
+          }
+          cardBg="#0d0d0d"
+          borderColor="#2a2a2a"
+        >
           {/* 3-col bento grid — alternating 2/3 + 1/3 pattern */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 
@@ -731,17 +749,21 @@ export default function Landing() {
             </motion.div>
 
           </div>
-        </div>
+        </ContainerScrollAnimation>
       </section>
 
       {/* ── PRICING ──────────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section-dark" id="pricing">
-        <div className="lp-container">
-          <motion.div className="lp-section-header" {...fadeUp()}>
-            <span className="lp-pill lp-pill-dark">Pricing</span>
-            <h2 style={{ color: '#F5F5F5' }}>Start free.<br />Scale when you're ready.</h2>
-          </motion.div>
-
+      <section className="lp-section lp-section-dark" id="pricing" style={{ padding: 0 }}>
+        <ContainerScrollAnimation
+          titleComponent={
+            <div className="lp-section-header" style={{ marginBottom: 0 }}>
+              <span className="lp-pill lp-pill-dark">Pricing</span>
+              <h2 style={{ color: '#F5F5F5' }}>Start free.<br />Scale when you're ready.</h2>
+            </div>
+          }
+          cardBg="#0d0d0d"
+          borderColor="#2a2a2a"
+        >
           {/* Row 1: Solo (1/3) + Team featured (2/3) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <motion.div style={{ gridColumn: '1 / 2' }} {...fadeUp(0)}>
@@ -806,7 +828,7 @@ export default function Landing() {
               </div>
             </BentoCard>
           </motion.div>
-        </div>
+        </ContainerScrollAnimation>
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────────────────── */}
