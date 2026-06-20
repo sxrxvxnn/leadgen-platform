@@ -5,10 +5,10 @@ import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
 const STEP_TYPES = [
-  { id: 'email',    label: 'Email',    icon: '✉' },
-  { id: 'wait',     label: 'Wait',     icon: '⏱' },
-  { id: 'linkedin', label: 'LinkedIn', icon: 'in' },
-  { id: 'call',     label: 'Call',     icon: '📞' },
+  { id: 'email',    label: 'Email'    },
+  { id: 'wait',     label: 'Wait'     },
+  { id: 'linkedin', label: 'LinkedIn' },
+  { id: 'call',     label: 'Call'     },
 ]
 
 const STATUS_COLOR = { draft: '#888', active: '#4a7c59', paused: '#b07d2e' }
@@ -26,7 +26,7 @@ function StepCard({ step, index, onChange, onRemove }) {
           {STEP_TYPES.map(t => (
             <button key={t.id} onClick={() => onChange({ ...step, type: t.id })}
               style={{ padding: '5px 12px', borderRadius: 6, border: step.type === t.id ? '1.5px solid #E7000B' : '1px solid var(--border)', background: step.type === t.id ? '#E7000B18' : 'transparent', color: step.type === t.id ? '#E7000B' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-              {t.icon} {t.label}
+              {t.label}
             </button>
           ))}
           <div style={{ flex: 1 }} />
@@ -93,7 +93,7 @@ function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
         {(seq.steps || []).map((step, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ padding: '3px 10px', borderRadius: 20, background: 'var(--bg)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
-              {STEP_TYPES.find(t => t.id === step.type)?.icon} {step.type === 'wait' ? `Wait ${step.delay_days}d` : step.type}
+              {step.type === 'wait' ? `Wait ${step.delay_days}d` : STEP_TYPES.find(t => t.id === step.type)?.label || step.type}
             </span>
             {i < seq.steps.length - 1 && <span style={{ color: 'var(--border)', fontSize: 10 }}>→</span>}
           </div>
@@ -275,7 +275,7 @@ export default function Sequences() {
           </div>
         ) : sequences.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>✉</div>
+            <div style={{ fontSize: 40, marginBottom: 16, color: 'var(--border)' }}>—</div>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>No sequences yet. Create your first outreach campaign.</p>
             <button style={s.btn} onClick={openNew}>Create sequence</button>
           </div>
