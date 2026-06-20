@@ -1,0 +1,88 @@
+name: Add GitHub Collaborator
+
+on:
+  workflow_dispatch:
+    inputs:
+      github_username:
+        description: "GitHub username to add as collaborator"
+        required: true
+        type: string
+
+jobs:
+  add-collaborator:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Add collaborator via GitHub API
+        id: add
+        env:
+          GH_TOKEN: ${{ secrets.COLLAB_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/sxrxvxnn/leadgen-platform/collaborators/${{ github.event.inputs.github_username }}" \
+            -d '{"permission":"push"}')
+
+          echo "status=$RESPONSE" >> $GITHUB_OUTPUT
+
+          if [ "$RESPONSE" = "201" ]; then
+            echo "result=invited" >> $GITHUB_OUTPUT
+          elif [ "$RESPONSE" = "204" ]; then
+            echo "result=already_member" >> $GITHUB_OUTPUT
+          else
+            echo "result=failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Discord — invited
+        if: steps.add.outputs.result == 'invited'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"✅ Collaborator invited\",
+                \"description\": \"**${{ github.event.inputs.github_username }}** has been sent a GitHub invite. They need to accept it before they can push code.\",
+                \"color\": 5763719,
+                \"fields\": [
+                  { \"name\": \"Invited by\", \"value\": \"${{ github.actor }}\", \"inline\": true },
+                  { \"name\": \"Permission\", \"value\": \"Write (push)\", \"inline\": true }
+                ],
+                \"footer\": { \"text\": \"They should check their email or github.com/notifications\" }
+              }]
+            }"
+
+      - name: Notify Discord — already a member
+        if: steps.add.outputs.result == 'already_member'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"ℹ️ Already a collaborator\",
+                \"description\": \"**${{ github.event.inputs.github_username }}** already has access to the repo.\",
+                \"color\": 16776960
+              }]
+            }"
+
+      - name: Notify Discord — failed
+        if: steps.add.outputs.result == 'failed'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"❌ Failed to add collaborator\",
+                \"description\": \"Could not add **${{ github.event.inputs.github_username }}**. Make sure the GitHub username is spelled correctly.\",
+                \"color\": 15158332
+              }]
+            }"
