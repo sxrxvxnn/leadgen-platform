@@ -9,7 +9,13 @@
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{js,jsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{js,jsx,css}\"",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "cd .. && husky"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
@@ -37,6 +43,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.8.4",
     "vite": "^6.4.1"
   }
