@@ -535,9 +535,9 @@ export default function Leads() {
             disabled={scoringAll}
             style={{ padding: '7px 14px', background: scoringAll ? 'var(--surface)' : '#1d1b1b', border: '1px solid var(--border)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#fff', cursor: scoringAll ? 'default' : 'pointer', opacity: scoringAll ? 0.6 : 1 }}
           >
-            {scoringAll ? 'Scoring…' : '⚡ Score All'}
+            {scoringAll ? 'Scoring…' : 'Score All'}
           </button>
-          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>⊞ Spreadsheet</button>
+          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>Spreadsheet</button>
           <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
         </div>
       </motion.div>
@@ -588,7 +588,7 @@ export default function Leads() {
               onClick={() => setShowAdvanced(v => !v)}
               style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${showAdvanced || filterSeniority || filterConnection || filterMinScore ? 'var(--accent)' : 'var(--border)'}`, background: 'transparent', fontFamily: 'var(--font-mono)', fontSize: 11, color: showAdvanced ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}
             >
-              Filters {(filterSeniority || filterConnection || filterMinScore) ? '●' : ''}
+              Filters {(filterSeniority || filterConnection || filterMinScore) ? '(active)' : ''}
             </button>
           </div>
         </div>
