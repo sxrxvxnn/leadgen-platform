@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals } from '../services/api'
+import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { syncToDirectory } from '../services/companyDirectory'
 import DMFinder from '../components/DMFinder'
@@ -272,6 +273,14 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const [showEdit, setShowEdit] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [showSignals, setShowSignals] = useState(false)
+  const [cachedSignals, setCachedSignals] = useState(null)
+
+  useEffect(() => {
+    getCompanySignals(company.id).then(r => {
+      if (r.data.signals?.length) setCachedSignals(r.data.signals)
+    }).catch(() => {})
+  }, [company.id])
 
   useEffect(() => {
     if (!company.classification || company.classification === 'Unclassified') {
@@ -698,9 +707,24 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           {company.linkedin_url && (
             <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LinkedIn ↗</a>
           )}
+          <button
+            style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
+            onClick={() => setShowSignals(v => !v)}
+          >
+            {cachedSignals?.length ? `${cachedSignals.length} signals` : 'Signals'}
+          </button>
           <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
         </div>
       </CardItem>
+      {showSignals && (
+        <CardItem translateZ={0} style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
+          <CompanySignals
+            companyId={company.id}
+            initialSignals={cachedSignals}
+            compact={false}
+          />
+        </CardItem>
+      )}
     </CardBody>
     </CardContainer>
   )

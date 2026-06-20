@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, detectCompanySignals } from '../services/api'
+import CompanySignals from './CompanySignals'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -59,6 +60,16 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [notes, setNotes]         = useState(lead.notes || '')
   const [editingField, setEditingField] = useState(null)
   const [editValue, setEditValue]       = useState('')
+  const [signals, setSignals]           = useState(null)
+  const [signalCompanyId, setSignalCompanyId] = useState(null)
+
+  useEffect(() => {
+    if (!lead?.id) return
+    getLeadSignals(lead.id).then(r => {
+      setSignals(r.data.signals || [])
+      setSignalCompanyId(r.data.company_id || null)
+    }).catch(() => {})
+  }, [lead?.id])
 
   if (!lead) return null
 
@@ -227,6 +238,16 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                   <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#E7000B', letterSpacing: '0.1em' }}>HAS SECURITY TEAM</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Buying Signals */}
+          {(L.company || signalCompanyId) && (
+            <div>
+              <CompanySignals
+                companyId={signalCompanyId}
+                initialSignals={signals && signals.length > 0 ? signals : null}
+              />
             </div>
           )}
 
