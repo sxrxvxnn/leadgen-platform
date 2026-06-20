@@ -4,6 +4,8 @@ import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, sco
 import Navbar from '../components/Navbar'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
+import LeadDrawer from '../components/LeadDrawer'
+import PipelineView from '../components/PipelineView'
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'disqualified']
 
@@ -238,7 +240,7 @@ function CellSelect({ value, onChange, onBlur }) {
   )
 }
 
-function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEnrich, onStar, onConnectionStatus, enrichingId, isSelected, onToggleSelect, onScore, onDraft, scoringId, draftingId }) {
+function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartEdit, onSaveEdit, onCancelEdit, onDelete, onEnrich, onStar, onConnectionStatus, enrichingId, isSelected, onToggleSelect, onScore, onDraft, scoringId, draftingId, onRowClick }) {
   const isEnriching = enrichingId === lead.id
   const isScoring   = scoringId === lead.id
   const isDrafting  = draftingId === lead.id
@@ -261,11 +263,11 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
         return (
-          <div key={col.key} style={{ ...s.td, flex: col.flex, cursor: 'text' }} onClick={() => onStartEdit(lead.id, col.key, lead[col.key])}>
+          <div key={col.key} style={{ ...s.td, flex: col.flex, cursor: col.key === 'name' && onRowClick ? 'pointer' : 'text' }} onClick={() => col.key === 'name' && onRowClick ? onRowClick(lead) : onStartEdit(lead.id, col.key, lead[col.key])}>
             {isEditing && col.key === 'status' && <CellSelect value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} />}
             {isEditing && col.key !== 'status' && <CellInput value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(lead.id); if (e.key === 'Escape') onCancelEdit() }} />}
             {!isEditing && col.key === 'status' && <StatusBadge status={lead.status} />}
-            {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500' }}>{lead.name || '—'}</span>}
+            {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500', textDecoration: onRowClick ? 'underline' : 'none', textDecorationColor: 'var(--border-strong)', textUnderlineOffset: 3 }}>{lead.name || '—'}</span>}
             {!isEditing && col.key !== 'status' && col.key !== 'name' && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lead[col.key] || '—'}</span>}
           </div>
         )
@@ -324,6 +326,8 @@ export default function Leads() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [scoringAll, setScoringAll] = useState(false)
   const [scoreMsg, setScoreMsg] = useState('')
+  const [selectedLead, setSelectedLead] = useState(null)
+  const [viewMode, setViewMode] = useState('table') // 'table' | 'pipeline'
 
 
   useEffect(() => { fetchLeads() }, [])
@@ -535,9 +539,16 @@ export default function Leads() {
             disabled={scoringAll}
             style={{ padding: '7px 14px', background: scoringAll ? 'var(--surface)' : '#1d1b1b', border: '1px solid var(--border)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#fff', cursor: scoringAll ? 'default' : 'pointer', opacity: scoringAll ? 0.6 : 1 }}
           >
-            {scoringAll ? 'Scoring…' : '⚡ Score All'}
+            {scoringAll ? 'Scoring…' : 'Score All'}
           </button>
-          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>⊞ Spreadsheet</button>
+          <div style={{ display: 'flex', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, overflow: 'hidden' }}>
+            {['table', 'pipeline'].map(mode => (
+              <button key={mode} onClick={() => setViewMode(mode)} style={{ padding: '7px 14px', background: viewMode === mode ? 'var(--text)' : 'transparent', color: viewMode === mode ? 'var(--bg)' : 'var(--text-muted)', border: 'none', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize', transition: 'all 0.15s' }}>
+                {mode === 'table' ? 'Table' : 'Pipeline'}
+              </button>
+            ))}
+          </div>
+          <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>Spreadsheet</button>
           <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
         </div>
       </motion.div>
@@ -588,7 +599,7 @@ export default function Leads() {
               onClick={() => setShowAdvanced(v => !v)}
               style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${showAdvanced || filterSeniority || filterConnection || filterMinScore ? 'var(--accent)' : 'var(--border)'}`, background: 'transparent', fontFamily: 'var(--font-mono)', fontSize: 11, color: showAdvanced ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}
             >
-              Filters {(filterSeniority || filterConnection || filterMinScore) ? '●' : ''}
+              Filters {(filterSeniority || filterConnection || filterMinScore) ? '(active)' : ''}
             </button>
           </div>
         </div>
@@ -635,7 +646,15 @@ export default function Leads() {
           </div>
         )}
 
-        <div style={s.table}>
+        {viewMode === 'pipeline' && (
+          <PipelineView
+            leads={filtered}
+            onLeadClick={setSelectedLead}
+            onLeadsUpdate={setLeads}
+          />
+        )}
+
+        {viewMode === 'table' && <div style={s.table}>
           <div style={s.thead}>
             <div style={{ width: '32px', flexShrink: 0 }}>
               <input type="checkbox" onChange={toggleSelectAll} checked={selected.length === filtered.length && filtered.length > 0} style={sub.checkbox} />
@@ -684,11 +703,21 @@ export default function Leads() {
                 onScore={handleScoreICP} scoringId={scoringId}
                 onDraft={handleDraftEmail} draftingId={draftingId}
                 isSelected={selected.includes(lead.id)} onToggleSelect={() => toggleSelect(lead.id)}
+                onRowClick={setSelectedLead}
               />
             </motion.div>
           ))}
-        </div>
+        </div>}
       </div>
+
+      {selectedLead && (
+        <LeadDrawer
+          lead={leads.find(l => l.id === selectedLead.id) || selectedLead}
+          onClose={() => setSelectedLead(null)}
+          onUpdate={(id, data) => setLeads(prev => prev.map(l => l.id === id ? { ...l, ...data } : l))}
+          onDelete={(id) => { setLeads(prev => prev.filter(l => l.id !== id)); setSelectedLead(null) }}
+        />
+      )}
 
       {emailDraft && (
         <EmailDraftModal
