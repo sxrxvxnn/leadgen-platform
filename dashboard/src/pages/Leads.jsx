@@ -317,6 +317,14 @@ export default function Leads() {
   const [draftingId, setDraftingId] = useState(null)
   const [emailDraft, setEmailDraft] = useState(null)   // { lead, subject, body }
 
+  // Advanced filters
+  const [filterSeniority, setFilterSeniority] = useState('')
+  const [filterConnection, setFilterConnection] = useState('')
+  const [filterMinScore, setFilterMinScore] = useState(0)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [scoringAll, setScoringAll] = useState(false)
+  const [scoreMsg, setScoreMsg] = useState('')
+
 
   useEffect(() => { fetchLeads() }, [])
 
@@ -440,6 +448,27 @@ export default function Leads() {
     finally { setDraftingId(null) }
   }
 
+  async function handleScoreAll() {
+    setScoringAll(true)
+    setScoreMsg('')
+    try {
+      const { default: api } = await import('../services/api')
+      const res = await api.post('/leads/score', { rescore: false })
+      const { scored } = res.data
+      setScoreMsg(scored > 0 ? `Scored ${scored} leads` : 'All leads already scored')
+      await fetchLeads()
+    } catch { setScoreMsg('Scoring failed') }
+    finally { setScoringAll(false) }
+  }
+
+  const SENIORITY_MAP = {
+    'c-suite':    /\b(ceo|cto|cfo|coo|cro|cpo|ciso|chief)\b/i,
+    'vp':         /\b(vp|vice president|svp|evp)\b/i,
+    'director':   /\b(director|head of)\b/i,
+    'manager':    /\b(manager|lead|senior manager)\b/i,
+    'individual': /\b(engineer|developer|analyst|specialist|associate)\b/i,
+  }
+
   const filtered = leads.filter((l) => {
     const ms = search === '' || [l.name, l.title, l.company, l.location].join(' ').toLowerCase().includes(search.toLowerCase())
     const mf = statusFilter === 'all' || l.status === statusFilter
@@ -448,7 +477,10 @@ export default function Leads() {
     const mv = viewFilter === 'all' ||
       (viewFilter === 'decision-makers' && DECISION_MAKER_KEYWORDS.test(titleText)) ||
       (viewFilter === 'security' && SECURITY_KEYWORDS.test(titleText))
-    return ms && mf && mstar && mv
+    const msen = !filterSeniority || (SENIORITY_MAP[filterSeniority] && SENIORITY_MAP[filterSeniority].test(l.title || ''))
+    const mconn = !filterConnection || l.connection_status === filterConnection
+    const mscore = !filterMinScore || (l.icp_score != null && l.icp_score >= filterMinScore)
+    return ms && mf && mstar && mv && msen && mconn && mscore
   })
 
   function toggleSelect(id) { setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]) }
@@ -490,13 +522,20 @@ export default function Leads() {
             <span style={s.heroUnit}>{' targets'}</span>
           </h1>
         </div>
-        <div style={{ position: 'relative', display: 'flex', gap: '10px', alignItems: 'center' }}>
-          {enrichMsg && <span style={{ fontSize: '12px', color: '#4a7c59', fontWeight: '500' }}>{enrichMsg}</span>}
+        <div style={{ position: 'relative', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {(enrichMsg || scoreMsg) && <span style={{ fontSize: '12px', color: '#4a7c59', fontWeight: '500' }}>{scoreMsg || enrichMsg}</span>}
           <button
             style={{ ...s.starFilterBtn, background: starredOnly ? 'var(--accent)' : 'transparent', color: starredOnly ? 'var(--bg)' : 'var(--accent)', borderColor: 'rgba(168,100,72,0.4)' }}
             onClick={() => setStarredOnly(!starredOnly)}
           >
             ★ {starredCount} starred
+          </button>
+          <button
+            onClick={handleScoreAll}
+            disabled={scoringAll}
+            style={{ padding: '7px 14px', background: scoringAll ? 'var(--surface)' : '#1d1b1b', border: '1px solid var(--border)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#fff', cursor: scoringAll ? 'default' : 'pointer', opacity: scoringAll ? 0.6 : 1 }}
+          >
+            {scoringAll ? 'Scoring…' : '⚡ Score All'}
           </button>
           <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>⊞ Spreadsheet</button>
           <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
@@ -535,16 +574,66 @@ export default function Leads() {
         <div style={s.filters}>
           <div style={s.searchBox}>
             <span style={s.searchIcon}>↗</span>
-            <input type="text" placeholder="Search targets..." value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} />
+            <input type="text" placeholder="Search by name, title, company…" value={search} onChange={(e) => setSearch(e.target.value)} style={s.searchInput} />
           </div>
-          <div style={s.filterTabs}>
-            {['all', ...STATUS_OPTIONS].map((f) => (
-              <button key={f} onClick={() => setStatusFilter(f)} style={{ ...s.filterTab, ...(statusFilter === f ? s.filterTabActive : {}) }}>
-                {f}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={s.filterTabs}>
+              {['all', ...STATUS_OPTIONS].map((f) => (
+                <button key={f} onClick={() => setStatusFilter(f)} style={{ ...s.filterTab, ...(statusFilter === f ? s.filterTabActive : {}) }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowAdvanced(v => !v)}
+              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${showAdvanced || filterSeniority || filterConnection || filterMinScore ? 'var(--accent)' : 'var(--border)'}`, background: 'transparent', fontFamily: 'var(--font-mono)', fontSize: 11, color: showAdvanced ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              Filters {(filterSeniority || filterConnection || filterMinScore) ? '●' : ''}
+            </button>
           </div>
         </div>
+
+        {showAdvanced && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Seniority</label>
+              <select value={filterSeniority} onChange={e => setFilterSeniority(e.target.value)}
+                style={{ padding: '6px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', outline: 'none' }}>
+                <option value="">All levels</option>
+                <option value="c-suite">C-Suite</option>
+                <option value="vp">VP / SVP</option>
+                <option value="director">Director</option>
+                <option value="manager">Manager / Lead</option>
+                <option value="individual">Individual Contributor</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Connection</label>
+              <select value={filterConnection} onChange={e => setFilterConnection(e.target.value)}
+                style={{ padding: '6px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', outline: 'none' }}>
+                <option value="">Any status</option>
+                {CONNECTION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Min ICP Score</label>
+              <select value={filterMinScore} onChange={e => setFilterMinScore(Number(e.target.value))}
+                style={{ padding: '6px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', outline: 'none' }}>
+                <option value={0}>Any score</option>
+                <option value={40}>40+ (Fair)</option>
+                <option value={60}>60+ (Good)</option>
+                <option value={70}>70+ (Strong)</option>
+                <option value={85}>85+ (Excellent)</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button onClick={() => { setFilterSeniority(''); setFilterConnection(''); setFilterMinScore(0) }}
+                style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                Clear filters
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={s.table}>
           <div style={s.thead}>

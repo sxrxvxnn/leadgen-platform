@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 import { getLeads, getCompanies } from '../services/api'
+import api from '../services/api'
 import Navbar from '../components/Navbar'
 import { Skeleton, SkeletonRow } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
@@ -15,6 +16,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [stats, setStats]         = useState({ totalLeads: 0, newLeads: 0, contacted: 0, companies: 0 })
+  const [analytics, setAnalytics] = useState(null)
   const [recentLeads, setRecentLeads]     = useState([])
   const [recentCompanies, setRecentCompanies] = useState([])
   const [loading, setLoading]     = useState(true)
@@ -25,7 +27,7 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const [lr, cr] = await Promise.all([getLeads(), getCompanies()])
+        const [lr, cr, ar] = await Promise.all([getLeads(), getCompanies(), api.get('/analytics')])
         const leads     = lr.data.leads
         const companies = cr.data.companies
         setStats({
@@ -34,6 +36,7 @@ export default function Dashboard() {
           contacted:  leads.filter(l => l.status === 'contacted').length,
           companies:  companies.length,
         })
+        setAnalytics(ar.data)
         setRecentLeads(leads.slice(0, 8))
         setRecentCompanies(companies.slice(0, 8))
       } catch (e) { console.error(e) }
@@ -217,6 +220,27 @@ export default function Dashboard() {
         </motion.div>
 
       </div>
+
+      {/* ── Analytics strip ───────────────────────────────────────────────── */}
+      {analytics && (
+        <div style={{ padding: '24px 48px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 0, overflowX: 'auto' }}>
+          {[
+            { label: 'Avg ICP Score',    value: analytics.leads.avg_score || 0,              suffix: '/100', color: analytics.leads.avg_score >= 70 ? '#4a7c59' : 'var(--text)' },
+            { label: 'High-Value Leads', value: analytics.leads.high_value || 0,             suffix: '', color: '#E7000B' },
+            { label: 'Leads Scored',     value: analytics.leads.scored || 0,                 suffix: `/${analytics.leads.total}`, color: 'var(--text)' },
+            { label: 'Sequences',        value: analytics.sequences.active || 0,             suffix: ' active', color: '#5b8db8' },
+            { label: 'Enrolled',         value: analytics.sequences.total_enrolled || 0,     suffix: '', color: 'var(--text)' },
+            { label: 'Reply Rate',       value: analytics.sequences.reply_rate || 0,         suffix: '%', color: analytics.sequences.reply_rate >= 10 ? '#4a7c59' : 'var(--text)' },
+          ].map((m, i) => (
+            <div key={m.label} style={{ flex: '0 0 auto', minWidth: 130, padding: '0 28px', borderRight: i < 5 ? '1px solid var(--border)' : 'none' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>{m.label}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 26, fontWeight: 700, color: m.color, letterSpacing: '-0.02em' }}>
+                <CountUp to={m.value} delay={0.1} /><span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-muted)' }}>{m.suffix}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Recent section with Tabs ──────────────────────────────────────── */}
       <div style={{ padding: '0 48px 56px' }}>
