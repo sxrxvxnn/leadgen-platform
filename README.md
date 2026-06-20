@@ -1,133 +1,70 @@
 # Sonar — B2B Lead Intelligence Platform
 
-> Find, enrich, and score companies against your ideal customer profile.
-
 **Live site:** [sonarleads.vercel.app](https://sonarleads.vercel.app)
 
----
-
-## What is this project?
-
-Sonar helps sales teams discover B2B companies, auto-fill their data (website, LinkedIn, emails, headcount), and score them against a custom ICP (Ideal Customer Profile). Think of it as a smart company database that keeps itself updated.
+Sonar helps businesses find and track potential customers (called "leads"). It automatically fills in company information like their website, LinkedIn, emails, and team size.
 
 ---
 
-## Tech Stack (plain English)
+## New to the team? Start here
 
-| Layer | What we use | What it does |
+**Step 1 — Install these tools** (in this order, click each link):
+
+| Tool | What it is | Download |
 |---|---|---|
-| Frontend | React + Vite | The dashboard and landing page (what users see) |
-| Styling | Inline CSS styles | No Tailwind — we write styles directly in JSX |
-| Animations | `motion/react` | Smooth animations on the UI |
-| Backend | FastAPI (Python) | The API server — handles enrichment, ICP scoring |
-| Database | Supabase (PostgreSQL) | Stores companies, leads, user data |
-| Hosting | Vercel | Auto-deploys when we push to `main` |
-| Auth | Supabase Auth | Login, signup, password reset |
+| VS Code | The app you write code in | [code.visualstudio.com](https://code.visualstudio.com) |
+| Git | Saves and tracks your code changes | [git-scm.com](https://git-scm.com) |
+| Node.js | Runs the frontend | [nodejs.org](https://nodejs.org) — download the LTS version |
+| Python | Runs the backend | [python.org](https://python.org) — download 3.11 or newer |
+
+**Step 2 — Join Discord** and say hi in #general. The team lead will give you the `.env` file you need.
+
+**Step 3 — Pick up an issue** at [github.com/sxrxvxnn/leadgen-platform/issues](https://github.com/sxrxvxnn/leadgen-platform/issues) — look for ones labeled `good first issue`.
+
+**Step 4 — Read CONTRIBUTING.md** — it explains exactly how to make changes and submit them.
 
 ---
 
-## Folder Structure
+## What does the code look like?
+
+The project has two main parts:
+
+### Frontend (what users see in their browser)
+- Written in **React** — a popular way to build websites using JavaScript
+- Files live in `dashboard/src/`
+- The main pages are in `dashboard/src/pages/`
+- Run it with: `cd dashboard` then `npm install` then `npm run dev`
+- Opens at http://localhost:5173
+
+### Backend (the server that does the hard work)
+- Written in **Python** using a tool called FastAPI
+- Files live in `backend/app/`
+- Run it with: `cd backend` then `pip install -r requirements.txt` then `uvicorn app.main:app --reload`
+- Opens at http://localhost:8000
+
+You likely only need to run the frontend for most tasks.
+
+---
+
+## Folder map
 
 ```
 leadgen-platform/
-├── dashboard/              ← React frontend (Vite)
-│   ├── src/
-│   │   ├── pages/          ← Full page components (Landing, Dashboard, Companies…)
-│   │   ├── components/     ← Reusable UI components
-│   │   │   └── ui/         ← Aceternity-style animated components
-│   │   └── App.jsx         ← Routes
-│   └── public/             ← Static files (images, screenshots)
 │
-├── backend/                ← FastAPI Python server
-│   └── app/
-│       ├── main.py         ← API entry point
-│       ├── routers/        ← API route files (companies, leads, icp…)
-│       └── services/       ← Business logic (enrichment, scoring)
+├── dashboard/src/pages/        ← Main pages (Landing, Dashboard, Companies…)
+├── dashboard/src/components/   ← Smaller reusable pieces of the UI
+├── dashboard/public/           ← Images and static files
 │
-└── .github/workflows/      ← GitHub Actions (Discord notifications)
+├── backend/app/routers/        ← API endpoints (URLs the frontend calls)
+├── backend/app/services/       ← Business logic (enrichment, scoring)
+│
+└── .github/workflows/          ← Automated tasks (Discord notifications)
 ```
 
 ---
 
-## How to Run Locally
+## Getting help
 
-### Frontend
-```bash
-cd dashboard
-npm install
-npm run dev
-# Opens at http://localhost:5173
-```
-
-### Backend
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-# API runs at http://localhost:8000
-```
-
-You will need a `.env` file in `dashboard/` — ask the team lead for the values.
-
----
-
-## How We Work (Git Workflow)
-
-**Never push directly to `main`.** Always use a branch + Pull Request.
-
-```bash
-# 1. Make sure you're on main and up to date
-git checkout main
-git pull
-
-# 2. Create your branch (use your name or the feature)
-git checkout -b your-name/feature-name
-# e.g. git checkout -b priya/fix-login-button
-
-# 3. Make your changes, then commit
-git add .
-git commit -m "fix: login button not responding on mobile"
-
-# 4. Push your branch
-git push origin your-name/feature-name
-
-# 5. Open a Pull Request on GitHub and ask for review
-```
-
-### Commit message format
-```
-feat: add export to CSV button          new feature
-fix: company card showing wrong logo    bug fix
-style: update button color to red       visual / CSS only
-docs: update README setup steps         documentation
-```
-
----
-
-## Areas of the App
-
-| Area | Files | Description |
-|---|---|---|
-| Landing page | `dashboard/src/pages/Landing.jsx` | Marketing site at sonarleads.vercel.app |
-| Dashboard | `dashboard/src/pages/Dashboard.jsx` | Main app after login |
-| Companies | `dashboard/src/pages/Companies.jsx` | Company list and cards |
-| ICP Settings | `dashboard/src/pages/ICP.jsx` | Ideal Customer Profile config |
-| UI Components | `dashboard/src/components/ui/` | Animated components |
-| API routes | `backend/app/routers/` | Backend endpoints |
-
----
-
-## Getting Help
-
-- Ask in **#engineering** on Discord for code questions
-- Ask in **#general** for anything else
-- When stuck, describe what you tried and paste the error — do not just say "it is not working"
-
----
-
-## Useful Links
-
-- [React docs](https://react.dev)
-- [FastAPI docs](https://fastapi.tiangolo.com)
-- [Supabase docs](https://supabase.com/docs)
-- [Motion (animations)](https://motion.dev/docs)
+- Stuck? Ask in **#engineering** on Discord
+- Not sure what to work on? Ask the team lead
+- Something broken? Check that you ran `npm install` and have the `.env` file
