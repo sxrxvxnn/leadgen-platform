@@ -240,4 +240,9 @@ export const bulkAnalyzeCompaniesAsync = (companyIds) =>
 export const bulkMapsEnrichAsync = (companyIds) =>
   api.post('/companies/bulk-maps-enrich/async', { company_ids: companyIds })
 
+// ─── BUYING SIGNALS ───────────────────────────────────────────────
+export const getCompanySignals  = (id) => api.get(`/companies/${id}/signals`)
+export const detectCompanySignals = (id, force = false) => api.post(`/companies/${id}/signals`, { force })
+export const getLeadSignals     = (id) => api.get(`/leads/${id}/signals`)
+
 export default api

@@ -1001,6 +1001,153 @@ async def get_company_leads(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── BUYING SIGNALS ──────────────────────────────────────────────
+
+@router.get("/companies/{company_id}/signals")
+async def get_company_signals(company_id: str, authorization: str = Header(...)):
+    validate_uuid(company_id, "company_id")
+    user_id = get_user_id(authorization)
+    res = supabase.table("company_signals")\
+        .select("*")\
+        .eq("company_id", company_id)\
+        .eq("user_id", user_id)\
+        .order("relevance_score", desc=True)\
+        .execute()
+    return {"signals": res.data}
+
+
+@router.post("/companies/{company_id}/signals")
+async def detect_company_signals(
+    company_id: str,
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    validate_uuid(company_id, "company_id")
+    user_id = get_user_id(authorization)
+
+    co_res = supabase.table("companies").select("*").eq("id", company_id).eq("user_id", user_id).execute()
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+    co = co_res.data[0]
+    name = co.get("name", "")
+
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    cached = supabase.table("company_signals")\
+        .select("*")\
+        .eq("company_id", company_id)\
+        .eq("user_id", user_id)\
+        .gt("detected_at", cutoff)\
+        .execute()
+    if cached.data and not payload.get("force"):
+        return {"signals": sorted(cached.data, key=lambda x: -(x.get("relevance_score") or 0)), "cached": True}
+
+    supabase.table("company_signals").delete().eq("company_id", company_id).eq("user_id", user_id).execute()
+
+    raw_results = []
+    try:
+        from ddgs import DDGS
+        queries = [
+            f'"{name}" hiring security OR CISO OR compliance',
+            f'"{name}" funding OR investment OR "Series A" OR "Series B"',
+            f'"{name}" data breach OR regulatory OR GDPR OR ISO27001',
+        ]
+        with _DDGS_SEM:
+            with DDGS() as ddgs:
+                for q in queries:
+                    try:
+                        for r in ddgs.text(q, max_results=4):
+                            raw_results.append({
+                                "title": r.get("title", ""),
+                                "body": r.get("body", ""),
+                                "url": r.get("href", ""),
+                            })
+                    except Exception:
+                        pass
+    except ImportError:
+        pass
+
+    search_ctx = ""
+    for r in raw_results[:10]:
+        search_ctx += f"- {r['title']}: {r['body'][:180]}\n"
+
+    prompt = f"""You are a sales intelligence AI. Identify buying signals for a cybersecurity/compliance service.
+
+Company: {name}
+Industry: {co.get('industry') or 'Unknown'}
+Size: {co.get('size') or 'Unknown'}
+Description: {(co.get('description') or '')[:300]}
+
+{"Search results:\n" + search_ctx if search_ctx else "Infer signals from industry and company size."}
+
+Return 3-5 buying signals as a JSON array only:
+[
+  {{
+    "signal_type": "hiring",
+    "title": "Title under 70 chars",
+    "description": "1-2 sentence explanation of why this is a buying signal",
+    "relevance_score": 80,
+    "source_url": ""
+  }}
+]
+Signal types: hiring, funding, compliance, news, growth. Return only the JSON array."""
+
+    import json as _json, re as _re
+    raw = _call_ai(prompt, max_tokens=900, user_id=user_id, feature="company_signals")
+    signals = []
+    try:
+        m = _re.search(r'\[.*?\]', raw, _re.DOTALL)
+        if m:
+            signals = _json.loads(m.group())
+    except Exception:
+        pass
+
+    to_insert = []
+    valid_types = {"hiring", "funding", "compliance", "news", "growth"}
+    for s in signals[:6]:
+        stype = s.get("signal_type", "news")
+        if stype not in valid_types:
+            stype = "news"
+        to_insert.append({
+            "user_id": user_id,
+            "company_id": company_id,
+            "signal_type": stype,
+            "title": str(s.get("title", ""))[:200],
+            "description": str(s.get("description", ""))[:500],
+            "source_url": str(s.get("source_url", ""))[:500],
+            "relevance_score": min(100, max(0, int(s.get("relevance_score", 50)))),
+        })
+
+    if to_insert:
+        res = supabase.table("company_signals").insert(to_insert).execute()
+        return {"signals": res.data, "cached": False}
+    return {"signals": [], "cached": False}
+
+
+@router.get("/leads/{lead_id}/signals")
+async def get_lead_company_signals(lead_id: str, authorization: str = Header(...)):
+    """Fetch cached buying signals for the company this lead works at."""
+    validate_uuid(lead_id, "lead_id")
+    user_id = get_user_id(authorization)
+    lead_res = supabase.table("leads").select("company").eq("id", lead_id).eq("user_id", user_id).execute()
+    if not lead_res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    company_name = lead_res.data[0].get("company", "")
+    if not company_name:
+        return {"signals": [], "company_id": None}
+    co_res = supabase.table("companies").select("id").eq("user_id", user_id).ilike("name", company_name).limit(1).execute()
+    if not co_res.data:
+        return {"signals": [], "company_id": None}
+    company_id = co_res.data[0]["id"]
+    sigs = supabase.table("company_signals")\
+        .select("*")\
+        .eq("company_id", company_id)\
+        .eq("user_id", user_id)\
+        .order("relevance_score", desc=True)\
+        .execute()
+    return {"signals": sigs.data, "company_id": company_id}
+
+
 # ─── TECHNOPARK DIRECTORY ────────────────────────────────────────
 
 _TECHNOPARK_DISK_CACHE = os.path.join(
