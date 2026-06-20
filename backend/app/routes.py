@@ -3617,6 +3617,12 @@ def _require_admin(user_id: str):
         raise HTTPException(status_code=403, detail="Not part of a team")
     return team_id
 
+OWNER_USER_ID = os.environ.get("OWNER_USER_ID", "5c9c0565-cec6-40ba-887a-84b665c40a44")
+
+def _require_owner(user_id: str):
+    if user_id != OWNER_USER_ID:
+        raise HTTPException(status_code=403, detail="Owner access required")
+
 
 @router.get("/admin/members")
 async def list_members(authorization: str = Header(...)):
@@ -3704,7 +3710,7 @@ DISCORD_WEBHOOKS = {
 @router.post("/admin/discord")
 async def post_discord(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    _require_admin(user_id)
+    _require_owner(user_id)
     channel = payload.get("channel", "engineering")
     message = (payload.get("message") or "").strip()
     if not message:
@@ -3721,7 +3727,7 @@ async def post_discord(payload: dict, authorization: str = Header(...)):
 @router.post("/admin/github-invite")
 async def github_invite(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    _require_admin(user_id)
+    _require_owner(user_id)
     username = (payload.get("username") or "").strip()
     if not username:
         raise HTTPException(status_code=422, detail="username is required")
