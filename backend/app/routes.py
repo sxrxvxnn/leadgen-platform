@@ -7,6 +7,10 @@ logger = logging.getLogger(__name__)
 # Cap concurrent DDGS calls to 3 — prevents DuckDuckGo rate-limiting during bulk autofill
 _DDGS_SEM = _threading_mod.Semaphore(3)
 from fastapi import APIRouter, HTTPException, Header, Request
+from fastapi.responses import Response, RedirectResponse
+import base64
+import secrets
+import re as _re
 from typing import Optional
 import os
 import posthog
@@ -1146,6 +1150,121 @@ async def get_lead_company_signals(lead_id: str, authorization: str = Header(...
         .order("relevance_score", desc=True)\
         .execute()
     return {"signals": sigs.data, "company_id": company_id}
+
+
+# ─── EMAIL TRACKING ──────────────────────────────────────────────
+
+_GIF_1x1 = base64.b64decode(
+    "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+)
+_API_BASE = os.getenv("API_BASE_URL", "https://leadgenengineplatform-api.vercel.app/api")
+
+
+@router.post("/leads/{lead_id}/track-email")
+async def create_email_tracking(lead_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    tracking_id = secrets.token_urlsafe(20)
+    subject    = payload.get("subject", "")
+    body       = payload.get("body", "")
+
+    # Wrap links in the body with click-tracking redirects
+    def wrap_url(m):
+        raw = m.group(0)
+        import urllib.parse
+        encoded = urllib.parse.quote(raw, safe='')
+        return f"{_API_BASE}/track/click/{tracking_id}?url={encoded}"
+
+    tracked_body = _re.sub(r'https?://[^\s\)\"\'<>]+', wrap_url, body)
+    # Append tracking pixel
+    pixel_url  = f"{_API_BASE}/track/open/{tracking_id}"
+    tracked_body_html = tracked_body + f'\n\n<img src="{pixel_url}" width="1" height="1" alt="" style="display:none">'
+
+    supabase.table("email_tracking").insert({
+        "user_id": user_id,
+        "lead_id": lead_id,
+        "tracking_id": tracking_id,
+        "subject": subject,
+        "body_preview": body[:120],
+    }).execute()
+
+    return {
+        "tracking_id": tracking_id,
+        "subject": subject,
+        "body": tracked_body,
+        "body_html": tracked_body_html,
+        "pixel_url": pixel_url,
+    }
+
+
+@router.get("/leads/{lead_id}/email-opens")
+async def get_email_opens(lead_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    rows = (
+        supabase.table("email_tracking")
+        .select("*")
+        .eq("lead_id", lead_id)
+        .eq("user_id", user_id)
+        .order("sent_at", desc=True)
+        .limit(20)
+        .execute()
+    )
+    # For each tracking_id, pull clicks
+    result = []
+    for row in rows.data:
+        clicks = (
+            supabase.table("email_clicks")
+            .select("url,clicked_at")
+            .eq("tracking_id", row["tracking_id"])
+            .order("clicked_at", desc=False)
+            .execute()
+        )
+        result.append({**row, "clicks": clicks.data})
+    return {"emails": result}
+
+
+# Public — no auth — called by email clients loading the pixel
+@router.get("/track/open/{tracking_id}")
+async def track_open(tracking_id: str):
+    try:
+        row = (
+            supabase.table("email_tracking")
+            .select("open_count,first_opened_at")
+            .eq("tracking_id", tracking_id)
+            .maybe_single()
+            .execute()
+        )
+        if row.data:
+            now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+            update = {
+                "open_count": (row.data.get("open_count") or 0) + 1,
+                "last_opened_at": now,
+            }
+            if not row.data.get("first_opened_at"):
+                update["first_opened_at"] = now
+            supabase.table("email_tracking").update(update).eq("tracking_id", tracking_id).execute()
+    except Exception:
+        pass
+    return Response(content=_GIF_1x1, media_type="image/gif", headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Pragma": "no-cache",
+    })
+
+
+# Public — no auth — wraps links for click tracking
+@router.get("/track/click/{tracking_id}")
+async def track_click(tracking_id: str, url: str):
+    try:
+        now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+        supabase.table("email_clicks").insert({
+            "tracking_id": tracking_id,
+            "url": url,
+            "clicked_at": now,
+        }).execute()
+    except Exception:
+        pass
+    return RedirectResponse(url=url, status_code=302)
 
 
 # ─── TECHNOPARK DIRECTORY ────────────────────────────────────────
