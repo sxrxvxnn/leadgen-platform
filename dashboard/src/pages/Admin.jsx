@@ -10,9 +10,12 @@ const CHANNELS = [
   { id: 'product',     label: '#product',     color: '#5c0008' },
 ]
 
+const OWNER_USER_ID = '5c9c0565-cec6-40ba-887a-84b665c40a44'
+
 export default function Admin() {
   const { profile } = useAuth()
   const navigate = useNavigate()
+  const isOwner = profile?.id === OWNER_USER_ID
   const [members, setMembers] = useState([])
   const [invites, setInvites] = useState([])
   const [inviteEmail, setInviteEmail] = useState('')
@@ -217,8 +220,8 @@ export default function Admin() {
           )}
         </section>
 
-        {/* Discord broadcast */}
-        <section style={s.section}>
+        {/* Discord broadcast — owner only */}
+        {isOwner && <section style={s.section}>
           <h2 style={s.sectionTitle}>Post to Discord</h2>
           <form onSubmit={handleDiscordSend} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -288,10 +291,10 @@ export default function Admin() {
               )}
             </div>
           </form>
-        </section>
+        </section>}
 
-        {/* GitHub collaborator */}
-        <section style={s.section}>
+        {/* GitHub collaborator — owner only */}
+        {isOwner && <section style={s.section}>
           <h2 style={s.sectionTitle}>Add to GitHub</h2>
           <p style={{ ...s.muted, marginBottom: 16 }}>
             Team member posts their GitHub username in #engineering → enter it here → they get an invite by email.
@@ -350,7 +353,7 @@ export default function Admin() {
               ))}
             </div>
           )}
-        </section>
+        </section>}
 
         {/* Pending invites */}
         {invites.length > 0 && (
