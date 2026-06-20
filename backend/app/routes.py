@@ -3693,3 +3693,51 @@ async def revoke_invite(invite_id: str, authorization: str = Header(...)):
     team_id = _require_admin(user_id)
     supabase.table("team_invites").update({"status": "revoked"}).eq("id", invite_id).eq("team_id", team_id).execute()
     return {"ok": True}
+
+
+DISCORD_WEBHOOKS = {
+    "engineering": os.environ.get("DISCORD_ENGINEERING_WEBHOOK", ""),
+    "design":      os.environ.get("DISCORD_DESIGN_WEBHOOK", ""),
+    "product":     os.environ.get("DISCORD_PRODUCT_WEBHOOK", ""),
+}
+
+@router.post("/admin/discord")
+async def post_discord(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_admin(user_id)
+    channel = payload.get("channel", "engineering")
+    message = (payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="message is required")
+    webhook_url = DISCORD_WEBHOOKS.get(channel)
+    if not webhook_url:
+        raise HTTPException(status_code=500, detail=f"Webhook not configured for #{channel}")
+    res = requests.post(webhook_url, json={"content": message}, timeout=8)
+    if res.status_code not in (200, 204):
+        raise HTTPException(status_code=502, detail="Discord delivery failed")
+    return {"ok": True}
+
+
+@router.post("/admin/github-invite")
+async def github_invite(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_admin(user_id)
+    username = (payload.get("username") or "").strip()
+    if not username:
+        raise HTTPException(status_code=422, detail="username is required")
+    token = os.environ.get("GITHUB_COLLAB_TOKEN", "")
+    if not token:
+        raise HTTPException(status_code=500, detail="GITHUB_COLLAB_TOKEN not configured")
+    res = requests.put(
+        f"https://api.github.com/repos/sxrxvxnn/leadgen-platform/collaborators/{username}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        json={"permission": "push"},
+        timeout=10,
+    )
+    if res.status_code == 201:
+        return {"status": "invited"}
+    if res.status_code == 204:
+        return {"status": "already_member"}
+    if res.status_code == 404:
+        raise HTTPException(status_code=404, detail=f"GitHub user '{username}' not found")
+    raise HTTPException(status_code=502, detail="GitHub API error")
