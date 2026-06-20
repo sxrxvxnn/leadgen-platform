@@ -245,4 +245,8 @@ export const getCompanySignals  = (id) => api.get(`/companies/${id}/signals`)
 export const detectCompanySignals = (id, force = false) => api.post(`/companies/${id}/signals`, { force })
 export const getLeadSignals     = (id) => api.get(`/leads/${id}/signals`)
 
+// ─── EMAIL TRACKING ───────────────────────────────────────────────
+export const trackEmail    = (id, subject, body) => api.post(`/leads/${id}/track-email`, { subject, body })
+export const getEmailOpens = (id) => api.get(`/leads/${id}/email-opens`)
+
 export default api
