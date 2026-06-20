@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, detectCompanySignals } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail } from '../services/api'
 import CompanySignals from './CompanySignals'
+import EmailTimeline from './EmailTimeline'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -62,6 +63,9 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [editValue, setEditValue]       = useState('')
   const [signals, setSignals]           = useState(null)
   const [signalCompanyId, setSignalCompanyId] = useState(null)
+  const [tracking, setTracking]         = useState(false)
+  const [tracked, setTracked]           = useState(null)
+  const [emailTimelineKey, setEmailTimelineKey] = useState(0)
 
   useEffect(() => {
     if (!lead?.id) return
@@ -97,6 +101,19 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
       const r = await draftEmail(L.id)
       setDraft(r.data)
     } catch (e) { console.error(e) } finally { setDrafting(false) }
+  }
+
+  async function handleTrackCopy() {
+    if (!draft) return
+    setTracking(true)
+    try {
+      const r = await trackEmail(L.id, draft.subject, draft.body)
+      setTracked(r.data)
+      const fullText = `Subject: ${r.data.subject}\n\n${r.data.body}`
+      await navigator.clipboard.writeText(fullText)
+      setEmailTimelineKey(k => k + 1)
+    } catch (e) { console.error(e) }
+    finally { setTracking(false) }
   }
 
   async function handleStatusChange(status) {
@@ -288,15 +305,32 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                   </div>
                   <pre style={{ fontFamily: SANS, fontSize: 13, color: 'var(--text)', lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{draft.body}</pre>
                 </div>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`)}
-                  style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '8px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 5, cursor: 'pointer' }}
-                >
-                  Copy Full Email
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleTrackCopy}
+                    disabled={tracking}
+                    style={{ flex: 1, fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '8px', background: tracking ? 'var(--surface)' : 'var(--text)', color: tracking ? 'var(--text-muted)' : 'var(--bg)', border: 'none', borderRadius: 5, cursor: tracking ? 'default' : 'pointer' }}
+                  >
+                    {tracking ? 'Preparing…' : tracked ? 'Copied with Tracking' : 'Copy + Track Opens'}
+                  </button>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`)}
+                    style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 12px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer' }}
+                  >
+                    Copy Plain
+                  </button>
+                </div>
+                {tracked && (
+                  <p style={{ fontFamily: MONO, fontSize: 9, color: '#4a7c59', margin: '4px 0 0', letterSpacing: '0.06em' }}>
+                    Tracking active — opens and link clicks will appear below
+                  </p>
+                )}
               </div>
             )}
           </div>
+
+          {/* Email Activity Timeline */}
+          <EmailTimeline key={emailTimelineKey} leadId={L.id} />
 
           {/* Status & Connection */}
           <div>
