@@ -1,0 +1,26 @@
+{
+  "recommendations": [
+    // Code quality
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+
+    // React / JavaScript
+    "dsznajder.es7-react-js-snippets",
+    "christian-kohler.path-intellisense",
+    "formulahendry.auto-rename-tag",
+    "steoates.autoimport",
+
+    // Git
+    "eamodio.gitlens",
+    "github.vscode-pull-request-github",
+
+    // AI assistant (free for students via GitHub Education)
+    "github.copilot",
+    "github.copilot-chat",
+
+    // Productivity
+    "streetsidesoftware.code-spell-checker",
+    "usernamehw.errorlens",
+    "pkief.material-icon-theme"
+  ]
+}
