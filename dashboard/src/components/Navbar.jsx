@@ -3,12 +3,13 @@ import { useAuth } from '../context/AuthContext'
 import { useState, useEffect } from 'react'
 
 const NAV_LINKS = [
-  { label: 'Overview',  path: '/dashboard' },
-  { label: 'Discovery', path: '/directory' },
-  { label: 'Companies', path: '/companies' },
-  { label: 'Targeting', path: '/targeting' },
-  { label: 'Leads',     path: '/leads' },
-  { label: 'Settings',  path: '/settings' },
+  { label: 'Overview',   path: '/dashboard' },
+  { label: 'Discovery',  path: '/directory' },
+  { label: 'Companies',  path: '/companies' },
+  { label: 'Targeting',  path: '/targeting' },
+  { label: 'Leads',      path: '/leads' },
+  { label: 'Sequences',  path: '/sequences' },
+  { label: 'Settings',   path: '/settings' },
 ]
 
 const DARK    = '#FFFFFF'
