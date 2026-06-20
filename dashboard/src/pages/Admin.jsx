@@ -4,6 +4,12 @@ import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
+const CHANNELS = [
+  { id: 'engineering', label: '#engineering', color: '#E7000B' },
+  { id: 'design',      label: '#design',      color: '#9D0010' },
+  { id: 'product',     label: '#product',     color: '#5c0008' },
+]
+
 export default function Admin() {
   const { profile } = useAuth()
   const navigate = useNavigate()
@@ -15,6 +21,18 @@ export default function Admin() {
   const [inviting, setInviting] = useState(false)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
+
+  // Discord broadcast
+  const [discordChannel, setDiscordChannel] = useState('engineering')
+  const [discordMsg, setDiscordMsg] = useState('')
+  const [discordSending, setDiscordSending] = useState(false)
+  const [discordFeedback, setDiscordFeedback] = useState(null)
+
+  // GitHub collaborator
+  const [ghUsername, setGhUsername] = useState('')
+  const [ghAdding, setGhAdding] = useState(false)
+  const [ghFeedback, setGhFeedback] = useState(null)
+  const [ghLog, setGhLog] = useState([])
 
   useEffect(() => {
     if (profile && profile.role !== 'admin') { navigate('/dashboard'); return }
@@ -69,6 +87,47 @@ export default function Admin() {
       await api.delete(`/admin/invites/${inviteId}`)
       setInvites(prev => prev.filter(i => i.id !== inviteId))
     } catch {}
+  }
+
+  async function handleDiscordSend(e) {
+    e.preventDefault()
+    if (!discordMsg.trim()) return
+    setDiscordSending(true)
+    setDiscordFeedback(null)
+    try {
+      await api.post('/admin/discord', { channel: discordChannel, message: discordMsg.trim() })
+      setDiscordFeedback({ ok: true, text: `Sent to #${discordChannel}` })
+      setDiscordMsg('')
+    } catch (err) {
+      setDiscordFeedback({ ok: false, text: err?.response?.data?.detail || 'Failed to send.' })
+    }
+    setDiscordSending(false)
+  }
+
+  async function handleGithubInvite(e) {
+    e.preventDefault()
+    const username = ghUsername.trim()
+    if (!username) return
+    setGhAdding(true)
+    setGhFeedback(null)
+    try {
+      const res = await api.post('/admin/github-invite', { username })
+      const status = res.data.status
+      const entry = {
+        username,
+        time: new Date().toLocaleTimeString(),
+        ok: true,
+        label: status === 'invited' ? 'Invite sent' : 'Already a member',
+      }
+      setGhFeedback({ ok: true, text: status === 'invited' ? `✓ Invite sent to ${username} — they need to accept via email.` : `${username} already has access.` })
+      setGhLog(prev => [entry, ...prev].slice(0, 10))
+      setGhUsername('')
+    } catch (err) {
+      const text = err?.response?.data?.detail || 'Failed to add.'
+      setGhFeedback({ ok: false, text })
+      setGhLog(prev => [{ username, time: new Date().toLocaleTimeString(), ok: false, label: 'Failed' }, ...prev].slice(0, 10))
+    }
+    setGhAdding(false)
   }
 
   return (
@@ -152,6 +211,141 @@ export default function Admin() {
                   {m.id === profile?.id && (
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', padding: '4px 8px' }}>You</span>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Discord broadcast */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Post to Discord</h2>
+          <form onSubmit={handleDiscordSend} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {CHANNELS.map(ch => (
+                <button
+                  key={ch.id}
+                  type="button"
+                  onClick={() => setDiscordChannel(ch.id)}
+                  style={{
+                    padding: '7px 14px',
+                    borderRadius: 6,
+                    border: discordChannel === ch.id ? `1.5px solid ${ch.color}` : '1.5px solid var(--border)',
+                    background: discordChannel === ch.id ? `${ch.color}18` : 'transparent',
+                    color: discordChannel === ch.id ? ch.color : 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {ch.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={discordMsg}
+              onChange={e => setDiscordMsg(e.target.value)}
+              placeholder="Write your message here — onboarding steps, announcements, reminders…"
+              rows={4}
+              style={{
+                padding: '12px 14px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 7,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                color: 'var(--text)',
+                outline: 'none',
+                resize: 'vertical',
+                lineHeight: 1.6,
+              }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                type="submit"
+                disabled={discordSending || !discordMsg.trim()}
+                style={{
+                  padding: '10px 20px',
+                  background: discordSending ? 'var(--surface)' : '#E7000B',
+                  border: 'none',
+                  borderRadius: 7,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: discordSending ? 'default' : 'pointer',
+                  opacity: !discordMsg.trim() ? 0.4 : 1,
+                }}
+              >
+                {discordSending ? 'Sending…' : 'Send message'}
+              </button>
+              {discordFeedback && (
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: discordFeedback.ok ? '#4a7c59' : '#e07070', margin: 0 }}>
+                  {discordFeedback.ok ? '✓ ' : '✗ '}{discordFeedback.text}
+                </p>
+              )}
+            </div>
+          </form>
+        </section>
+
+        {/* GitHub collaborator */}
+        <section style={s.section}>
+          <h2 style={s.sectionTitle}>Add to GitHub</h2>
+          <p style={{ ...s.muted, marginBottom: 16 }}>
+            Team member posts their GitHub username in #engineering → enter it here → they get an invite by email.
+          </p>
+          <form onSubmit={handleGithubInvite} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            <input
+              type="text"
+              value={ghUsername}
+              onChange={e => setGhUsername(e.target.value)}
+              placeholder="their-github-username"
+              style={{
+                flex: 1,
+                minWidth: 200,
+                padding: '11px 14px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 7,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                color: 'var(--text)',
+                outline: 'none',
+              }}
+            />
+            <button
+              type="submit"
+              disabled={ghAdding || !ghUsername.trim()}
+              style={{
+                padding: '11px 20px',
+                background: ghAdding ? 'var(--surface)' : '#1d1b1b',
+                border: 'none',
+                borderRadius: 7,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#fdfdfd',
+                cursor: ghAdding ? 'default' : 'pointer',
+                opacity: !ghUsername.trim() ? 0.4 : 1,
+              }}
+            >
+              {ghAdding ? 'Adding…' : 'Add collaborator'}
+            </button>
+          </form>
+          {ghFeedback && (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: ghFeedback.ok ? '#4a7c59' : '#e07070', marginBottom: 16 }}>
+              {ghFeedback.ok ? '✓ ' : '✗ '}{ghFeedback.text}
+            </p>
+          )}
+          {ghLog.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {ghLog.map((entry, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', flex: 1 }}>{entry.username}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: entry.ok ? '#4a7c59' : '#e07070' }}>{entry.label}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{entry.time}</span>
                 </div>
               ))}
             </div>
