@@ -3747,3 +3747,284 @@ async def github_invite(payload: dict, authorization: str = Header(...)):
     if res.status_code == 404:
         raise HTTPException(status_code=404, detail=f"GitHub user '{username}' not found")
     raise HTTPException(status_code=502, detail="GitHub API error")
+
+
+# ─── PHASE 1: ADVANCED LEAD SEARCH ──────────────────────────────────────────
+
+@router.get("/leads/search")
+async def search_leads(
+    authorization: str = Header(...),
+    q: str = "",
+    industry: str = "",
+    size: str = "",
+    location: str = "",
+    seniority: str = "",
+    connection_status: str = "",
+    starred: str = "",
+    min_score: int = 0,
+    max_score: int = 100,
+):
+    user_id = get_user_id(authorization)
+    query = supabase.table("leads").select("*").eq("user_id", user_id)
+
+    if q:
+        query = query.or_(f"name.ilike.%{q}%,title.ilike.%{q}%,company.ilike.%{q}%,email.ilike.%{q}%")
+    if industry:
+        query = query.ilike("company", f"%{industry}%")
+    if location:
+        query = query.ilike("location", f"%{location}%")
+    if connection_status:
+        query = query.eq("connection_status", connection_status)
+    if starred == "true":
+        query = query.eq("starred", True)
+
+    SENIORITY_KEYWORDS = {
+        "c-suite":    ["CEO","CTO","CFO","COO","CRO","CPO","CISO","Chief"],
+        "vp":         ["VP","Vice President","SVP","EVP"],
+        "director":   ["Director","Head of"],
+        "manager":    ["Manager","Lead","Senior Manager"],
+        "individual": ["Engineer","Developer","Analyst","Specialist","Associate"],
+    }
+    if seniority and seniority in SENIORITY_KEYWORDS:
+        keywords = SENIORITY_KEYWORDS[seniority]
+        filter_str = ",".join(f"title.ilike.%{kw}%" for kw in keywords)
+        query = query.or_(filter_str)
+
+    res = query.order("created_at", desc=True).execute()
+    leads = res.data or []
+
+    # score filter applied in Python (score may be null)
+    if min_score > 0 or max_score < 100:
+        leads = [
+            l for l in leads
+            if (l.get("icp_score") or 0) >= min_score
+            and (l.get("icp_score") or 0) <= max_score
+        ]
+
+    return {"leads": leads, "total": len(leads)}
+
+
+# ─── PHASE 1: AI LEAD SCORING ────────────────────────────────────────────────
+
+@router.post("/leads/score")
+async def score_leads(payload: dict, authorization: str = Header(...)):
+    """Score all unscoredleads for the user using AI."""
+    user_id = get_user_id(authorization)
+
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+
+    if not (groq_key or gemini_key or openrouter_key):
+        raise HTTPException(status_code=500, detail="No AI API key configured")
+
+    # Fetch leads that need scoring (or rescore flag)
+    rescore = payload.get("rescore", False)
+    leads_query = supabase.table("leads").select("*").eq("user_id", user_id)
+    if not rescore:
+        leads_query = leads_query.is_("icp_score", "null")
+    leads_res = leads_query.limit(50).execute()
+    leads = leads_res.data or []
+
+    if not leads:
+        return {"scored": 0, "message": "All leads already scored. Pass rescore=true to re-score."}
+
+    # Fetch ICP profiles for context
+    icp_res = supabase.table("icp_profiles").select("*").eq("user_id", user_id).execute()
+    icp_profiles = icp_res.data or []
+    icp_context = ""
+    if icp_profiles:
+        icp_context = "Ideal Customer Profile:\n" + "\n".join(
+            f"- {p.get('name','')}: {p.get('description','')}" for p in icp_profiles
+        )
+
+    scored = 0
+    for lead in leads:
+        prompt = f"""You are a B2B sales scoring assistant. Score this lead from 0-100 based on how well they fit the ICP.
+
+{icp_context if icp_context else "No ICP defined — score based on general B2B value signals."}
+
+Lead details:
+- Name: {lead.get('name','')}
+- Title: {lead.get('title','')}
+- Company: {lead.get('company','')}
+- Location: {lead.get('location','')}
+- About: {lead.get('about','')[:300] if lead.get('about') else ''}
+- Employee count: {lead.get('employee_count','')}
+- Revenue: {lead.get('revenue','')}
+
+Respond in this exact JSON format (no markdown):
+{{"score": <0-100>, "reason": "<2-3 sentence explanation of the score>"}}"""
+
+        try:
+            result = None
+            if groq_key:
+                import httpx
+                r = httpx.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    json={"model": "llama3-8b-8192", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3, "max_tokens": 200},
+                    timeout=15,
+                )
+                if r.status_code == 200:
+                    content = r.json()["choices"][0]["message"]["content"].strip()
+                    import json as _json
+                    result = _json.loads(content)
+
+            if result and isinstance(result.get("score"), (int, float)):
+                supabase.table("leads").update({
+                    "icp_score": int(result["score"]),
+                    "icp_score_reason": result.get("reason", ""),
+                }).eq("id", lead["id"]).execute()
+                scored += 1
+        except Exception:
+            continue
+
+    return {"scored": scored, "total": len(leads)}
+
+
+# ─── PHASE 1: SEQUENCES CRUD ─────────────────────────────────────────────────
+
+@router.get("/sequences")
+async def list_sequences(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("sequences").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    sequences = res.data or []
+    for seq in sequences:
+        steps_res = supabase.table("sequence_steps").select("*").eq("sequence_id", seq["id"]).order("step_number").execute()
+        seq["steps"] = steps_res.data or []
+        count_res = supabase.table("sequence_enrollments").select("id", count="exact").eq("sequence_id", seq["id"]).execute()
+        seq["enrolled_count"] = count_res.count or 0
+    return {"sequences": sequences}
+
+
+@router.post("/sequences")
+async def create_sequence(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    res = supabase.table("sequences").insert({
+        "user_id": user_id,
+        "name": name,
+        "description": payload.get("description", ""),
+        "status": "draft",
+    }).execute()
+    seq = res.data[0]
+    steps = payload.get("steps", [])
+    for i, step in enumerate(steps):
+        supabase.table("sequence_steps").insert({
+            "sequence_id": seq["id"],
+            "step_number": i + 1,
+            "type": step.get("type", "email"),
+            "delay_days": step.get("delay_days", 0),
+            "subject": step.get("subject", ""),
+            "body": step.get("body", ""),
+        }).execute()
+    seq["steps"] = steps
+    return seq
+
+
+@router.patch("/sequences/{seq_id}")
+async def update_sequence(seq_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    allowed = {k: v for k, v in payload.items() if k in ("name", "description", "status")}
+    if allowed:
+        allowed["updated_at"] = "now()"
+        supabase.table("sequences").update(allowed).eq("id", seq_id).eq("user_id", user_id).execute()
+    if "steps" in payload:
+        supabase.table("sequence_steps").delete().eq("sequence_id", seq_id).execute()
+        for i, step in enumerate(payload["steps"]):
+            supabase.table("sequence_steps").insert({
+                "sequence_id": seq_id,
+                "step_number": i + 1,
+                "type": step.get("type", "email"),
+                "delay_days": step.get("delay_days", 0),
+                "subject": step.get("subject", ""),
+                "body": step.get("body", ""),
+            }).execute()
+    return {"ok": True}
+
+
+@router.delete("/sequences/{seq_id}")
+async def delete_sequence(seq_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("sequences").delete().eq("id", seq_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@router.post("/sequences/{seq_id}/enroll")
+async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    lead_ids = payload.get("lead_ids", [])
+    if not lead_ids:
+        raise HTTPException(status_code=422, detail="lead_ids required")
+    enrolled = 0
+    skipped = 0
+    for lead_id in lead_ids:
+        try:
+            supabase.table("sequence_enrollments").insert({
+                "sequence_id": seq_id,
+                "lead_id": lead_id,
+                "user_id": user_id,
+                "status": "active",
+                "current_step": 1,
+            }).execute()
+            enrolled += 1
+        except Exception:
+            skipped += 1
+    return {"enrolled": enrolled, "skipped": skipped}
+
+
+# ─── PHASE 1: ANALYTICS ──────────────────────────────────────────────────────
+
+@router.get("/analytics")
+async def get_analytics(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+
+    leads_res = supabase.table("leads").select("id, icp_score, starred, connection_status, created_at").eq("user_id", user_id).execute()
+    leads = leads_res.data or []
+
+    companies_res = supabase.table("companies").select("id, prospect_status, created_at").eq("user_id", user_id).execute()
+    companies = companies_res.data or []
+
+    sequences_res = supabase.table("sequences").select("id, status, name").eq("user_id", user_id).execute()
+    sequences = sequences_res.data or []
+
+    total_enrolled = 0
+    total_replied = 0
+    for seq in sequences:
+        enr = supabase.table("sequence_enrollments").select("id, status", count="exact").eq("sequence_id", seq["id"]).execute()
+        seq["enrolled"] = enr.count or 0
+        total_enrolled += seq["enrolled"]
+        replied = supabase.table("sequence_enrollments").select("id", count="exact").eq("sequence_id", seq["id"]).eq("status", "replied").execute()
+        seq["replied"] = replied.count or 0
+        total_replied += seq["replied"]
+
+    scored_leads = [l for l in leads if l.get("icp_score") is not None]
+    avg_score = round(sum(l["icp_score"] for l in scored_leads) / len(scored_leads)) if scored_leads else 0
+    high_value = len([l for l in scored_leads if l["icp_score"] >= 70])
+    starred_count = len([l for l in leads if l.get("starred")])
+
+    reply_rate = round((total_replied / total_enrolled * 100)) if total_enrolled > 0 else 0
+
+    return {
+        "leads": {
+            "total": len(leads),
+            "scored": len(scored_leads),
+            "avg_score": avg_score,
+            "high_value": high_value,
+            "starred": starred_count,
+        },
+        "companies": {
+            "total": len(companies),
+        },
+        "sequences": {
+            "total": len(sequences),
+            "active": len([s for s in sequences if s["status"] == "active"]),
+            "total_enrolled": total_enrolled,
+            "total_replied": total_replied,
+            "reply_rate": reply_rate,
+            "list": sequences,
+        },
+    }

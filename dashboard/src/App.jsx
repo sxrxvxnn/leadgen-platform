@@ -20,6 +20,7 @@ const Settings        = lazy(() => import('./pages/Settings'))
 const CompanyDirectory= lazy(() => import('./pages/CompanyDirectory'))
 const Onboarding      = lazy(() => import('./pages/Onboarding'))
 const Admin           = lazy(() => import('./pages/Admin'))
+const Sequences       = lazy(() => import('./pages/Sequences'))
 const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
@@ -70,6 +71,7 @@ export default function App() {
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/companies" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
               <Route path="/directory" element={<ProtectedRoute><CompanyDirectory /></ProtectedRoute>} />
+              <Route path="/sequences" element={<ProtectedRoute><Sequences /></ProtectedRoute>} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
