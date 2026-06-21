@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import Navbar from '../components/Navbar'
 import { prefillCompany, createCompany, mapsDiscover, bulkCreateCompanies } from '../services/api'
 
 // Leaflet default icon fix for bundlers
@@ -297,7 +296,6 @@ export default function CompanyDiscovery() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
-      <Navbar />
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: mode === 'discover' ? '860px' : '720px', margin: '0 auto', padding: '72px 32px 80px', transition: 'max-width 0.3s' }}>
 
