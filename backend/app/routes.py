@@ -232,6 +232,42 @@ async def get_lead_by_profile_url(url: str, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/leads/by-email")
+async def get_lead_by_email(email: str, authorization: str = Header(...)):
+    """Used by the Gmail sidebar to look up a lead by sender email."""
+    user_id = get_user_id(authorization)
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Valid email required")
+    try:
+        res = supabase.table("leads")\
+            .select("id, name, title, company, location, email, stage, icp_score, icp_score_reason, email_score, email_status, profile_url, starred, status, connection_status")\
+            .eq("user_id", user_id)\
+            .ilike("email", email.strip())\
+            .limit(1)\
+            .execute()
+        if not res.data:
+            return {"lead": None}
+        lead_row = res.data[0]
+        enroll_res = supabase.table("sequence_enrollments")\
+            .select("id, status, sequence_id, sequences(name)")\
+            .eq("user_id", user_id)\
+            .eq("lead_id", lead_row["id"])\
+            .in_("status", ["active", "paused"])\
+            .limit(5)\
+            .execute()
+        lead_row["enrollments"] = enroll_res.data or []
+        activity_res = supabase.table("activities")\
+            .select("type, created_at, note")\
+            .eq("lead_id", lead_row["id"])\
+            .order("created_at", desc=True)\
+            .limit(5)\
+            .execute()
+        lead_row["recent_activity"] = activity_res.data or []
+        return {"lead": lead_row}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/leads")
 async def create_lead(lead: LeadCreate, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
@@ -3941,6 +3977,31 @@ Reply ONLY with valid JSON (no markdown):
         return {"subject": subject, "body": body}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/leads/draft-cold")
+async def draft_cold_email(payload: dict, authorization: str = Header(...)):
+    """Draft a cold reply for a sender who is not yet in the pipeline (used by Gmail sidebar)."""
+    user_id = get_user_id(authorization)
+    import json as _json, re as _re
+    name    = payload.get("name", "there")
+    subject = payload.get("subject", "")
+    prompt = f"""Write a short, professional reply email.
+
+Context:
+- Sender name: {name}
+- Original subject: {subject}
+- We're replying on behalf of a B2B sales professional
+- Keep it friendly, concise (3-4 sentences), no fluff
+
+Reply with JSON only: {{"subject": "<reply subject>", "body": "<email body>"}}"""
+    try:
+        raw = _call_ai(prompt, max_tokens=300, user_id=user_id, feature="cold-draft")
+        raw = _re.sub(r'^```json\s*|^```\s*|\s*```$', '', raw.strip(), flags=_re.MULTILINE).strip()
+        result = _json.loads(raw)
+        return {"subject": result.get("subject", f"Re: {subject}"), "body": result.get("body", "")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
