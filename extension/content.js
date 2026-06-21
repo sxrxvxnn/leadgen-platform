@@ -354,6 +354,22 @@ async function loadPanel() {
     </div>`
 
     if (lead) {
+      // ── Job change detection
+      const storedCompany = (lead.company || '').trim().toLowerCase()
+      const liveCompany   = (pageData.company || '').trim().toLowerCase()
+      const storedTitle   = (lead.title || '').trim().toLowerCase()
+      const liveTitle     = (pageData.title || '').trim().toLowerCase()
+      const companyChanged = liveCompany && storedCompany && liveCompany !== storedCompany
+      const titleChanged   = liveTitle && storedTitle && liveTitle !== storedTitle && companyChanged
+
+      if (companyChanged) {
+        html += `<div style="margin:0 0 10px;padding:10px 12px;background:rgba(176,125,46,0.08);border:1px solid rgba(176,125,46,0.3);border-radius:7px">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#b07d2e;margin-bottom:5px">Job Change Detected</div>
+          <div style="font-size:10px;color:#bbb;line-height:1.5">${lead.company} <span style="color:#b07d2e">→</span> ${pageData.company}</div>
+          <button id="sp-flag-jobchange" data-lid="${lead.id}" data-old-company="${lead.company || ''}" data-old-title="${lead.title || ''}" data-new-company="${pageData.company || ''}" data-new-title="${pageData.title || ''}" style="margin-top:8px;padding:4px 10px;background:rgba(176,125,46,0.15);border:1px solid rgba(176,125,46,0.35);border-radius:4px;color:#b07d2e;font-size:9px;font-weight:700;letter-spacing:.06em;cursor:pointer;font-family:inherit">Flag in Sonar</button>
+        </div>`
+      }
+
       // ── Pipeline status
       html += `<div class="sp-sec">
         <span class="sp-lbl">Pipeline</span>
@@ -441,6 +457,24 @@ function wirePanelHandlers(pageData, lead, token) {
       navigator.clipboard.writeText(btn.dataset.copy).catch(() => {})
       const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500)
     })
+  })
+
+  // Flag job change
+  document.getElementById('sp-flag-jobchange')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = 'Flagging…'
+    try {
+      await fetchAPI('/job-change-alerts', 'POST', {
+        lead_id:     btn.dataset.lid,
+        old_company: btn.dataset.oldCompany,
+        old_title:   btn.dataset.oldTitle,
+        new_company: btn.dataset.newCompany,
+        new_title:   btn.dataset.newTitle,
+        detected_via: 'extension',
+      }, token)
+      btn.textContent = '✓ Flagged in Sonar'
+      btn.style.color = '#4a7c59'
+      btn.style.borderColor = 'rgba(74,124,89,0.4)'
+    } catch { btn.textContent = 'Failed'; btn.disabled = false }
   })
 
   // View in Sonar

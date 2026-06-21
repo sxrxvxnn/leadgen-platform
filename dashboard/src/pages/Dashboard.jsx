@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
-import { getDashboardSummary } from '../services/api'
+import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert } from '../services/api'
 import { Skeleton } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
 
@@ -122,15 +122,29 @@ function TaskItem({ task }) {
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [data, setData]     = useState(null)
+  const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
+  const [jobAlerts, setJobAlerts] = useState([])
 
   useEffect(() => {
     getDashboardSummary()
       .then(res => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+    listJobChangeAlerts()
+      .then(r => setJobAlerts(r.data.alerts || []))
+      .catch(() => {})
   }, [])
+
+  async function handleMarkAllSeen() {
+    await markAllAlertsSeen().catch(() => {})
+    setJobAlerts(a => a.map(x => ({ ...x, seen: true })))
+  }
+
+  async function handleDismissAlert(id) {
+    await dismissAlert(id).catch(() => {})
+    setJobAlerts(a => a.filter(x => x.id !== id))
+  }
 
   const displayName = localStorage.getItem('fullName') || user?.email?.split('@')[0] || 'there'
   const L = data?.leads        || {}
@@ -266,8 +280,61 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Right sidebar — tasks + activity */}
+        {/* Right sidebar — job alerts + tasks + activity */}
         <div style={{ padding: '24px 24px 48px' }}>
+
+          {/* Job change alerts */}
+          {jobAlerts.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Job Changes</p>
+                  {jobAlerts.some(a => !a.seen) && (
+                    <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#b07d2e18', border: '1px solid #b07d2e40', color: '#b07d2e' }}>
+                      {jobAlerts.filter(a => !a.seen).length} new
+                    </span>
+                  )}
+                </div>
+                {jobAlerts.some(a => !a.seen) && (
+                  <button onClick={handleMarkAllSeen} style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>Mark all seen</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {jobAlerts.slice(0, 5).map(alert => {
+                  const lead = alert.leads || {}
+                  const isBounce = alert.detected_via === 'bounce'
+                  return (
+                    <div key={alert.id} style={{ padding: '10px 12px', background: alert.seen ? 'var(--bg)' : 'rgba(176,125,46,0.06)', border: `1px solid ${alert.seen ? 'var(--border)' : 'rgba(176,125,46,0.25)'}`, borderRadius: 7, position: 'relative' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, color: 'var(--text)', margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {lead.name || 'Unknown lead'}
+                          </p>
+                          {isBounce ? (
+                            <p style={{ fontFamily: MONO, fontSize: 10, color: '#b07d2e', margin: 0, lineHeight: 1.5 }}>
+                              Email bounced — may have changed jobs
+                              {alert.old_company && <span style={{ color: 'var(--text-muted)' }}> at {alert.old_company}</span>}
+                            </p>
+                          ) : (
+                            <p style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+                              {alert.old_company && alert.new_company && alert.old_company !== alert.new_company
+                                ? <>{alert.old_company} <span style={{ color: '#b07d2e' }}>→</span> {alert.new_company}</>
+                                : alert.new_title || alert.old_title || 'Role changed'}
+                            </p>
+                          )}
+                        </div>
+                        <button onClick={() => handleDismissAlert(alert.id)}
+                          style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 8px', lineHeight: 1, flexShrink: 0 }}>×</button>
+                      </div>
+                      <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                        {isBounce ? 'Email bounce' : 'Detected via extension'} · {new Date(alert.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Tasks due today */}
           <div style={{ marginBottom: 28 }}>
