@@ -424,10 +424,6 @@ async def bulk_enrich_emails_selected(payload: dict, authorization: str = Header
     leads_data = [l for l in (leads_res.data or []) if not l.get("email")]
 
     from .enrichment import waterfall_find_email, extract_domain
-    prof_res = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
-    ecfg       = ((prof_res.data or {}).get("enrichment_config") or {})
-    hunter_key = ecfg.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
-    apollo_key = ecfg.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
 
     enriched = 0
     results  = []
@@ -444,8 +440,7 @@ async def bulk_enrich_emails_selected(payload: dict, authorization: str = Header
                     .eq("user_id", user_id).ilike("name", company).limit(1).execute()
                 if co_res.data and co_res.data[0].get("website"):
                     domain = extract_domain(co_res.data[0]["website"])
-            hit = waterfall_find_email(name, company=company, domain=domain,
-                                       hunter_key=hunter_key, apollo_key=apollo_key)
+            hit = waterfall_find_email(name, company=company, domain=domain)
             if hit.get("email"):
                 upd = {"email": hit["email"],
                        "email_provider": hit.get("email_provider"),
@@ -639,10 +634,6 @@ async def enrich_lead_route(
             return {"lead": lead, "enriched": False, "message": "Email already exists"}
 
         from .enrichment import waterfall_find_email, extract_domain
-        prof_res   = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
-        ecfg       = ((prof_res.data or {}).get("enrichment_config") or {})
-        hunter_key = payload.get("hunter_key") or ecfg.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
-        apollo_key = payload.get("apollo_key") or ecfg.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
 
         name    = lead.get("name", "")
         company = lead.get("company", "")
@@ -658,8 +649,7 @@ async def enrich_lead_route(
                 pass
 
         domain = extract_domain(website) if website else ""
-        result = waterfall_find_email(name, company=company, domain=domain,
-                                      hunter_key=hunter_key, apollo_key=apollo_key)
+        result = waterfall_find_email(name, company=company, domain=domain)
 
         if result.get("email"):
             upd = {"email": result["email"],
@@ -862,25 +852,22 @@ async def prefill_company(
         except Exception as e:
             print(f"DDGS LinkedIn fallback error: {e}")
 
-    # Fallback 2: Apollo.io organization enrichment by domain
+    # Fallback 2: Scrape company homepage for LinkedIn company URL
     if not linkedin_url:
         try:
-            apollo_key = os.getenv("APOLLO_API_KEY", "")
+            from .enrichment import _fetch
             domain = urlparse(url).netloc.replace("www.", "")
-            if apollo_key and domain:
-                apollo_res = requests.post(
-                    "https://api.apollo.io/api/v1/organizations/enrich",
-                    json={"api_key": apollo_key, "domain": domain},
-                    timeout=10,
+            html = _fetch(f"https://{domain}")
+            if html:
+                li_match = re.search(
+                    r'https?://(?:www\.)?linkedin\.com/company/([a-zA-Z0-9_-]+)',
+                    html,
                 )
-                if apollo_res.status_code == 200:
-                    org = apollo_res.json().get("organization") or {}
-                    li = org.get("linkedin_url") or ""
-                    if li and "linkedin.com/company/" in li:
-                        linkedin_url = li if li.startswith("http") else "https://" + li
-                        print(f"LinkedIn URL found via Apollo for {name}: {linkedin_url}")
+                if li_match:
+                    linkedin_url = f"https://www.linkedin.com/company/{li_match.group(1)}/"
+                    print(f"LinkedIn URL found via site scrape for {name}: {linkedin_url}")
         except Exception as e:
-            print(f"Apollo LinkedIn fallback error: {e}")
+            print(f"Site scrape LinkedIn fallback error: {e}")
 
     # Fallback 3: Guess slug from domain (e.g. sequantix.com → /company/sequantix)
     if not linkedin_url:
@@ -920,48 +907,107 @@ async def prefill_company(
     }
 
 
-# ─── PEOPLE SEARCH (Hunter + DDGS fallback) ──────────────────────────────────────
+# ─── PEOPLE SEARCH (proprietary — site scrape + DDG LinkedIn) ────────────────
 
-def _hunter_domain_search(domain: str, roles: list) -> list:
-    """Search Hunter.io domain-search for people at a company domain."""
-    hunter_key = os.getenv("HUNTER_API_KEY", "")
-    if not hunter_key or not domain:
-        return []
+def _sonar_team_scrape(domain: str, roles: list) -> list:
+    """
+    Scrape company team/about pages for staff — proprietary people discovery.
+    Looks for JSON-LD Person schema first, then email+name heuristics.
+    """
+    import json as _json
+    from .enrichment import _fetch, _extract_emails_from_html, _GENERIC_LOCALS
 
-    clean_domain = domain.replace("https://", "").replace("http://", "").split("/")[0].strip()
-    params = {"domain": clean_domain, "api_key": hunter_key, "limit": 100, "type": "personal"}
-    try:
-        res = requests.get("https://api.hunter.io/v2/domain-search", params=params, timeout=12)
-        if res.status_code != 200:
-            print(f"Hunter domain-search returned {res.status_code}: {res.text[:200]}")
-            return []
-        emails = res.json().get("data", {}).get("emails") or []
-        people = []
-        for e in emails:
-            first = e.get("first_name") or ""
-            last  = e.get("last_name") or ""
-            title = e.get("position") or ""
-            # filter by role if specified
-            if roles:
-                title_lower = title.lower()
-                if not any(r.lower() in title_lower for r in roles):
-                    continue
+    slugs = ["/team", "/about", "/about-us", "/people", "/our-team",
+             "/leadership", "/management", "/who-we-are", "/press"]
+    people = []
+    seen_emails: set[str] = set()
+
+    for slug in slugs:
+        html = _fetch(f"https://{domain}{slug}")
+        if not html:
+            continue
+
+        # JSON-LD Person / Organization schema
+        ld_blocks = re.findall(
+            r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            html, re.DOTALL | re.IGNORECASE,
+        )
+        for block in ld_blocks:
+            try:
+                data = _json.loads(block)
+                # flatten to list
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    # unwrap Organization.member / .employee
+                    if item.get("@type") in ("Organization", "WebSite"):
+                        items.extend(item.get("member") or item.get("employee") or [])
+                        continue
+                    if item.get("@type") != "Person":
+                        continue
+                    name  = (item.get("name") or "").strip()
+                    title = (item.get("jobTitle") or "").strip()
+                    email = (item.get("email") or "").replace("mailto:", "").strip()
+                    li    = item.get("sameAs") or item.get("url") or ""
+                    if not name:
+                        continue
+                    if roles and title and not any(r.lower() in title.lower() for r in roles):
+                        continue
+                    name_parts = name.split(" ", 1)
+                    first = name_parts[0]
+                    last  = name_parts[1] if len(name_parts) > 1 else ""
+                    entry = {
+                        "first_name":   first,
+                        "last_name":    last,
+                        "name":         name,
+                        "title":        title,
+                        "company":      domain,
+                        "location":     "",
+                        "linkedin_url": li if "linkedin.com" in (li or "") else "",
+                        "email":        email,
+                        "photo_url":    "",
+                        "confidence":   85,
+                    }
+                    if email:
+                        if email not in seen_emails:
+                            seen_emails.add(email)
+                            people.append(entry)
+                    else:
+                        people.append(entry)
+            except Exception:
+                continue
+
+        # Personal emails found on page (no name, but useful)
+        page_emails = [
+            e for e in _extract_emails_from_html(html, domain)
+            if e.split("@")[0] not in _GENERIC_LOCALS and e not in seen_emails
+        ]
+        for email in page_emails:
+            seen_emails.add(email)
+            local = email.split("@")[0]
             people.append({
-                "first_name":   first,
-                "last_name":    last,
-                "name":         f"{first} {last}".strip(),
-                "title":        title,
-                "company":      e.get("company") or "",
+                "first_name":   "",
+                "last_name":    "",
+                "name":         local,
+                "title":        "",
+                "company":      domain,
                 "location":     "",
-                "linkedin_url": e.get("linkedin") or "",
-                "email":        e.get("value") or "",
+                "linkedin_url": "",
+                "email":        email,
                 "photo_url":    "",
-                "confidence":   e.get("confidence") or 0,
+                "confidence":   60,
             })
-        return people
-    except Exception as ex:
-        print(f"Hunter domain-search error: {ex}")
-        return []
+
+        if len(people) >= 30:
+            break
+
+    if roles:
+        people = [
+            p for p in people
+            if not p["title"] or any(r.lower() in p["title"].lower() for r in roles)
+        ]
+    return people[:50]
 
 
 def _ddgs_linkedin_search(company_name: str, roles: list) -> list:
@@ -1035,7 +1081,7 @@ def _ddgs_linkedin_search(company_name: str, roles: list) -> list:
 
 @router.post("/companies/people-search")
 async def search_company_people(payload: dict, authorization: str = Header(...)):
-    """Find people at a company — Hunter domain search first, DDGS LinkedIn fallback."""
+    """Find people at a company — Sonar site scrape + DDG LinkedIn discovery."""
     get_user_id(authorization)
 
     company_name = (payload.get("company_name") or "").strip()
@@ -1045,13 +1091,12 @@ async def search_company_people(payload: dict, authorization: str = Header(...))
     if not company_name and not domain:
         raise HTTPException(status_code=400, detail="company_name or domain required")
 
-    # 1. Hunter domain search (structured, has emails + LinkedIn)
-    people = _hunter_domain_search(domain, roles) if domain else []
+    # 1. Sonar site scrape — JSON-LD schema + email extraction from company pages
+    people = _sonar_team_scrape(domain, roles) if domain else []
 
-    # 2. DDGS LinkedIn search as fallback / supplement
+    # 2. DDG LinkedIn search — supplement with people found via search
     if len(people) < 5:
         ddgs_people = _ddgs_linkedin_search(company_name, roles)
-        # merge — deduplicate by linkedin_url
         existing_urls = {p["linkedin_url"] for p in people if p["linkedin_url"]}
         for p in ddgs_people:
             if p["linkedin_url"] not in existing_urls:
@@ -5513,7 +5558,7 @@ async def dashboard_summary(authorization: str = Header(...)):
 
 @router.post("/leads/{lead_id}/verify-email")
 async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
-    """Verify lead email deliverability via Hunter."""
+    """Verify lead email deliverability via Sonar SMTP + MX check."""
     user_id = get_user_id(authorization)
     validate_uuid(lead_id)
     lead_res = supabase.table("leads").select("email").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
@@ -5521,22 +5566,23 @@ async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
     email    = lead.get("email")
     if not email:
         raise HTTPException(status_code=422, detail="Lead has no email address")
-    hunter_key = os.environ.get("HUNTER_API_KEY", "")
-    if not hunter_key:
-        raise HTTPException(status_code=503, detail="Hunter API key not configured")
     try:
-        resp = requests.get(
-            "https://api.hunter.io/v2/email-verifier",
-            params={"email": email, "api_key": hunter_key},
-            timeout=10,
-        )
-        data = resp.json().get("data", {})
-        status     = data.get("status", "unknown")       # valid / invalid / risky / unknown
-        score      = data.get("score")                    # 0-100 deliverability score
-        disposable = data.get("disposable", False)
-        mx_found   = data.get("mx_records", False)
-        result = {"email": email, "status": status, "score": score, "disposable": disposable, "mx_found": mx_found}
-        # Store on lead
+        from .enrichment import _has_mx, _smtp_verify
+        domain   = email.split("@")[-1]
+        mx_found = _has_mx(domain)
+        if not mx_found:
+            result = {"email": email, "status": "invalid", "score": 0, "disposable": False, "mx_found": False}
+            supabase.table("leads").update({"email_status": "invalid", "email_score": 0}).eq("id", lead_id).execute()
+            return result
+        smtp_result = _smtp_verify(email)
+        if smtp_result is True:
+            status, score = "valid", 90
+        elif smtp_result is False:
+            status, score = "invalid", 5
+        else:
+            # Port 25 blocked — MX exists so domain is real, can't confirm mailbox
+            status, score = "risky", 40
+        result = {"email": email, "status": status, "score": score, "disposable": False, "mx_found": mx_found}
         supabase.table("leads").update({"email_status": status, "email_score": score}).eq("id", lead_id).execute()
         return result
     except Exception as e:
