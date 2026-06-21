@@ -4864,8 +4864,16 @@ async def process_sequence_cron(request: Request):
                         except _smtplib.SMTPRecipientsRefused as e:
                             success   = False
                             error_msg = f"Hard bounce: {e}"
-                            # Hard bounce — stop this enrollment
                             supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                            # Hard bounce often signals a job change — flag it
+                            try:
+                                supabase.table("job_change_alerts").insert({
+                                    "user_id": user_id, "lead_id": enrollment["lead_id"],
+                                    "old_title": lead_title, "old_company": lead_company,
+                                    "detected_via": "bounce",
+                                }).execute()
+                            except Exception:
+                                pass
                             processed += 1
                             continue
                         except Exception as e:
@@ -4873,6 +4881,14 @@ async def process_sequence_cron(request: Request):
                             error_msg = str(e)
                             if _is_hard_bounce(e):
                                 supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                                try:
+                                    supabase.table("job_change_alerts").insert({
+                                        "user_id": user_id, "lead_id": enrollment["lead_id"],
+                                        "old_title": lead_title, "old_company": lead_company,
+                                        "detected_via": "bounce",
+                                    }).execute()
+                                except Exception:
+                                    pass
                                 processed += 1
                                 continue
 
@@ -5055,6 +5071,74 @@ async def check_sequence_replies(request: Request):
             errors += 1
 
     return {"users_checked": checked, "replies_found": found, "errors": errors}
+
+
+# ─── JOB CHANGE ALERTS ───────────────────────────────────────────────────────
+
+@router.get("/job-change-alerts")
+async def list_job_change_alerts(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("job_change_alerts")\
+        .select("*, leads(id, name, email, company, title, profile_url)")\
+        .eq("user_id", user_id)\
+        .order("created_at", desc=True)\
+        .limit(50)\
+        .execute()
+    alerts = res.data or []
+    unseen = sum(1 for a in alerts if not a.get("seen"))
+    return {"alerts": alerts, "unseen": unseen}
+
+
+@router.post("/job-change-alerts")
+async def create_job_change_alert(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    lead_id = payload.get("lead_id", "")
+    validate_uuid(lead_id, "lead_id")
+
+    # Prevent duplicate alerts for same lead within 7 days
+    import datetime as _dt
+    week_ago = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)).isoformat()
+    existing = supabase.table("job_change_alerts")\
+        .select("id")\
+        .eq("user_id", user_id)\
+        .eq("lead_id", lead_id)\
+        .gte("created_at", week_ago)\
+        .limit(1)\
+        .execute()
+    if existing.data:
+        return {"ok": True, "duplicate": True}
+
+    row = {
+        "user_id":      user_id,
+        "lead_id":      lead_id,
+        "old_title":    payload.get("old_title"),
+        "old_company":  payload.get("old_company"),
+        "new_title":    payload.get("new_title"),
+        "new_company":  payload.get("new_company"),
+        "detected_via": payload.get("detected_via", "extension"),
+    }
+    res = supabase.table("job_change_alerts").insert(row).execute()
+    # Fire webhook
+    try:
+        _fire_webhooks(user_id, "lead.job_changed", {"lead_id": lead_id, **row})
+    except Exception:
+        pass
+    return {"ok": True, "alert": res.data[0] if res.data else row}
+
+
+@router.patch("/job-change-alerts/mark-seen")
+async def mark_all_alerts_seen(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("job_change_alerts").update({"seen": True}).eq("user_id", user_id).eq("seen", False).execute()
+    return {"ok": True}
+
+
+@router.delete("/job-change-alerts/{alert_id}")
+async def dismiss_alert(alert_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(alert_id)
+    supabase.table("job_change_alerts").delete().eq("id", alert_id).eq("user_id", user_id).execute()
+    return {"ok": True}
 
 
 # ─── UNSUBSCRIBE (public — no auth) ──────────────────────────────────────────

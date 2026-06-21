@@ -320,4 +320,9 @@ export const removeUnsubscribe = (id) => api.delete(`/unsubscribes/${id}`)
 export const getCalConfig  = () => api.get('/profile/cal')
 export const saveCalConfig = (data) => api.patch('/profile/cal', data)
 
+// ─── JOB CHANGE ALERTS ────────────────────────────────────────────
+export const listJobChangeAlerts = () => api.get('/job-change-alerts')
+export const markAllAlertsSeen   = () => api.patch('/job-change-alerts/mark-seen')
+export const dismissAlert        = (id) => api.delete(`/job-change-alerts/${id}`)
+
 export default api
