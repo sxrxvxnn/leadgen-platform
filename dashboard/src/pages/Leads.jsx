@@ -298,8 +298,14 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</span>
                 {lead.email && lead.email_provider && (
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
-                    background: lead.email_provider === 'hunter' ? 'rgba(224,99,72,0.12)' : lead.email_provider === 'apollo' ? 'rgba(0,130,243,0.12)' : 'rgba(74,124,89,0.12)',
-                    color: lead.email_provider === 'hunter' ? '#e06348' : lead.email_provider === 'apollo' ? '#0082F3' : '#4a7c59',
+                    background: lead.email_provider === 'web'  ? 'rgba(139,92,246,0.12)'
+                              : lead.email_provider === 'smtp' ? 'rgba(16,185,129,0.12)'
+                              : lead.email_provider === 'site' ? 'rgba(59,130,246,0.12)'
+                              : 'rgba(107,114,128,0.12)',
+                    color:      lead.email_provider === 'web'  ? '#8b5cf6'
+                              : lead.email_provider === 'smtp' ? '#10b981'
+                              : lead.email_provider === 'site' ? '#3b82f6'
+                              : '#6b7280',
                   }}>{lead.email_provider}</span>
                 )}
               </div>
