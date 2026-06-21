@@ -2,453 +2,284 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sonar</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:           #FFFFFF;
-      --surface:      #F9FAFB;
-      --surface2:     #F3F4F6;
-      --text:         #0A0A0A;
-      --text-soft:    #374151;
-      --text-muted:   #6B7280;
-      --border:       #E5E7EB;
-      --border-mid:   #D1D5DB;
-      --accent:       #E7000B;
-      --accent-dim:   rgba(231,0,11,0.08);
-      --accent-light: rgba(231,0,11,0.25);
-      --green:        #22C55E;
-      --red:          #EF4444;
+      --bg:      #0f0f0f;
+      --s1:      #161616;
+      --s2:      #1e1e1e;
+      --border:  #242424;
+      --b2:      #2e2e2e;
+      --text:    #ffffff;
+      --soft:    #aaaaaa;
+      --muted:   #555555;
+      --dim:     #333333;
+      --red:     #E7000B;
+      --red-dim: rgba(231,0,11,.08);
+      --red-glow:rgba(231,0,11,.22);
+      --green:   #22c55e;
+      --blue:    #60a5fa;
+      --amber:   #fbbf24;
     }
 
     body {
       width: 340px;
-      min-height: 460px;
       background: var(--bg);
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
-      border-radius: 12px;
       overflow: hidden;
     }
 
-    a { text-decoration: none; color: inherit; }
+    .screen { display: none; }
+    .screen.active { display: flex; flex-direction: column; }
 
-    /* ── Screens ───────────────────────────────────────────── */
-    .screen { display: none; padding: 0; }
-    .screen.active { display: flex; flex-direction: column; min-height: 460px; }
-
-    /* ── Header ────────────────────────────────────────────── */
-    .sl-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 18px 13px;
+    /* ── SHARED HEADER ──────────────────────────────────────── */
+    .hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 16px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
     }
-    .sl-logo {
-      width: 26px;
-      height: 26px;
-      background: var(--accent);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .logo {
+      width: 22px; height: 22px;
+      background: var(--red);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .sl-logo svg { width: 14px; height: 14px; }
-    .sl-logo svg circle { stroke: #FFFFFF !important; }
-    .sl-logo svg circle[r="1.5"] { fill: #FFFFFF !important; stroke: none !important; }
-    .sl-logo svg line { stroke: #FFFFFF !important; }
-    .sl-brand {
-      font-family: 'Arial Narrow', Arial, sans-serif;
-      font-weight: 700;
-      font-size: 14px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text);
+    .brand {
+      font-size: 12px; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--text);
     }
-    .sl-status-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--border);
-      margin-left: auto;
-      flex-shrink: 0;
-      transition: background 0.2s;
+    .online-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--dim); margin-left: auto; flex-shrink: 0; transition: background .2s;
     }
-    .sl-status-dot.online { background: var(--green); }
+    .online-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5); }
 
-    /* ── Body ──────────────────────────────────────────────── */
-    .sl-body { padding: 18px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+    /* ── LOGIN ──────────────────────────────────────────────── */
+    #loginScreen { min-height: 380px; }
+    .login-body { padding: 28px 18px 20px; flex: 1; display: flex; flex-direction: column; }
+    .login-headline {
+      font-family: 'Arial Narrow', 'Impact', Arial, sans-serif;
+      font-size: 42px; font-weight: 900; line-height: 1;
+      letter-spacing: .01em; text-transform: uppercase; color: var(--text);
+      margin-bottom: 4px;
+    }
+    .login-headline em { color: var(--red); font-style: normal; }
+    .login-sub { font-size: 10px; color: var(--muted); letter-spacing: .06em; margin-bottom: 24px; }
+    .field { margin-bottom: 11px; }
+    .lbl { display: block; font-size: 8px; font-weight: 700; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+    .inp {
+      width: 100%; padding: 9px 12px;
+      background: var(--s1); border: 1px solid var(--border); border-radius: 5px;
+      font-family: inherit; font-size: 12px; color: var(--text); outline: none;
+      transition: border-color .15s;
+    }
+    .inp::placeholder { color: var(--dim); }
+    .inp:focus { border-color: var(--red); }
+    .err-msg {
+      font-size: 10px; color: #ef4444; margin-bottom: 12px; display: none;
+      padding: 7px 10px; background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.16); border-radius: 5px;
+    }
+    .err-msg.show { display: block; }
 
-    /* Lead count strip */
-    .sl-lead-strip {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 13px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+    /* ── BUTTONS ────────────────────────────────────────────── */
+    .btn {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; padding: 10px 14px; border-radius: 6px;
+      cursor: pointer; transition: all .15s; border: none; text-align: left;
     }
-    .sl-lead-label {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-muted);
+    .btn:disabled { opacity: .3; cursor: not-allowed; }
+    .btn.pri { background: var(--red); color: #fff; }
+    .btn.pri:hover:not(:disabled) { background: #c50009; box-shadow: 0 0 18px var(--red-glow); }
+    .btn.sec { background: var(--s1); color: var(--soft); border: 1px solid var(--border); margin-top: 7px; }
+    .btn.sec:hover:not(:disabled) { border-color: var(--b2); color: var(--text); }
+    .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--border); margin-top: 7px; }
+    .btn.ghost:hover:not(:disabled) { border-color: var(--b2); color: var(--soft); }
+
+    /* ── MAIN SCREEN ────────────────────────────────────────── */
+    #mainScreen { min-height: 460px; }
+
+    /* Stats row */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      border-bottom: 1px solid var(--border);
     }
-    .sl-lead-count {
-      font-family: 'SF Mono', ui-monospace, 'Cascadia Code', monospace;
-      font-size: 13px;
-      font-weight: 400;
-      color: var(--accent);
+    .stat-cell {
+      padding: 12px 14px; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 3px;
     }
+    .stat-cell:last-child { border-right: none; }
+    .stat-val { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -.02em; line-height: 1; }
+    .stat-lbl { font-size: 8px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 
     /* Page badge */
-    .sl-page-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 5px 11px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: transparent;
-      width: fit-content;
+    .page-strip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      background: var(--s1);
     }
-    .sl-page-badge.linkedin { border-color: #0077b5; }
-    .sl-badge-dot {
-      width: 5px; height: 5px;
-      border-radius: 50%;
-      background: var(--border-mid);
-      flex-shrink: 0;
+    .page-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); flex-shrink: 0; }
+    .page-dot.li { background: #0077b5; }
+    .page-dot.ok { background: var(--green); }
+    #pageTypeLabel { font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    #pageTypeLabel.li { color: #0077b5; }
+    #pageTypeLabel.ok { color: var(--green); }
+
+    /* Profile card (shown on profile pages) */
+    .profile-card {
+      padding: 13px 16px; border-bottom: 1px solid var(--border);
+      display: none;
     }
-    .sl-page-badge.linkedin .sl-badge-dot { background: #0077b5; }
-    #pageTypeLabel {
-      font-family: 'SF Mono', ui-monospace, monospace;
-      font-size: 9px;
-      font-weight: 400;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-    }
-    .sl-page-badge.linkedin #pageTypeLabel { color: #0077b5; }
+    .profile-card.show { display: block; }
+    .pc-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .pc-sub { font-size: 10px; color: var(--muted); }
+    .pc-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+    .pc-badge { font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid; }
+    .pc-badge.in { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.25); color: var(--green); }
+    .pc-badge.stage { background: var(--s2); border-color: var(--border); color: var(--muted); }
+    .pc-badge.icp-hi { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.25); color: var(--green); }
+    .pc-badge.icp-md { background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.25); color: var(--amber); }
 
     /* Status message */
-    .sl-status-msg {
-      font-size: 12px;
-      line-height: 1.5;
-      padding: 9px 12px;
-      border-radius: 8px;
+    .status-msg {
+      font-size: 11px; line-height: 1.5; padding: 9px 12px; border-radius: 6px;
+      display: none; border: 1px solid transparent; margin: 0 16px 0; font-family: inherit;
+    }
+    .status-msg.show { display: block; }
+    .status-msg.ok { background: rgba(34,197,94,.06); border-color: rgba(34,197,94,.18); color: var(--green); }
+    .status-msg.err { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.16); color: #ef4444; }
+
+    /* Body */
+    .main-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+
+    .tip {
+      font-size: 9px; color: var(--muted); line-height: 1.65; padding: 8px 11px;
+      background: var(--s1); border-radius: 5px; border-left: 2px solid var(--border);
       display: none;
-      border: 1px solid transparent;
-    }
-    .sl-status-msg.show { display: block; }
-    .sl-status-msg.success {
-      background: rgba(34,197,94,0.07);
-      border-color: rgba(34,197,94,0.20);
-      color: var(--green);
-    }
-    .sl-status-msg.error {
-      background: rgba(239,68,68,0.07);
-      border-color: rgba(239,68,68,0.18);
-      color: var(--red);
     }
 
-    /* Tip */
-    .sl-tip {
-      display: none;
-      font-size: 11px;
-      color: var(--text-muted);
-      line-height: 1.55;
-      padding: 8px 10px;
-      background: var(--surface);
-      border-radius: 8px;
-      border-left: 2px solid var(--border-mid);
+    /* ── FOOTER ─────────────────────────────────────────────── */
+    .ft {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 16px 13px; border-top: 1px solid var(--border);
     }
+    .ft-link {
+      background: none; border: none; font-family: inherit; font-size: 10px;
+      letter-spacing: .04em; color: var(--muted); cursor: pointer; padding: 0;
+      transition: color .15s;
+    }
+    .ft-link:hover { color: var(--soft); }
 
-    /* ── Buttons ───────────────────────────────────────────── */
-
-    /* Primary — red fill */
-    .sl-btn {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-weight: 500;
-      font-size: 12px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: #FFFFFF;
-      background: var(--accent);
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.2s, transform 0.15s;
-      text-align: left;
-      animation: sl-fade-in 0.3s ease 0.15s both;
-    }
-    .sl-btn:hover:not(:disabled) {
-      background: #C50009;
-      box-shadow: 0 0 14px rgba(231,0,11,0.18);
-      transform: translateY(-1px);
-    }
-    .sl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    /* Accent — red outline */
-    .sl-btn-accent {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-weight: 500;
-      font-size: 12px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--accent);
-      background: var(--accent-dim);
-      border: 1px solid rgba(231,0,11,0.3);
-      border-radius: 8px;
-      padding: 10px 14px;
-      cursor: pointer;
-      transition: border-color 0.15s, box-shadow 0.2s, transform 0.15s;
-      text-align: left;
-    }
-    .sl-btn-accent:hover:not(:disabled) {
-      border-color: var(--accent);
-      box-shadow: 0 0 10px rgba(231,0,11,0.10);
-      transform: translateY(-1px);
-    }
-    .sl-btn-accent:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    /* Ghost */
-    .sl-btn-ghost {
-      width: 100%;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-weight: 500;
-      font-size: 12px;
-      letter-spacing: 0.04em;
-      color: var(--text-muted);
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 9px 14px;
-      cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
-      text-align: left;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .sl-btn-ghost:hover:not(:disabled) { border-color: var(--border-mid); color: var(--text-soft); }
-    .sl-btn-ghost:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    /* Text link button */
-    .sl-btn-link {
-      background: none;
-      border: none;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      color: var(--text-muted);
-      cursor: pointer;
-      padding: 0;
-      transition: color 0.15s;
-      text-align: left;
-    }
-    .sl-btn-link:hover { color: var(--text); }
-
-    /* ── Divider ───────────────────────────────────────────── */
-    .sl-divider { height: 1px; background: var(--border); }
-
-    /* ── Footer ────────────────────────────────────────────── */
-    .sl-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 11px 18px 14px;
-      border-top: 1px solid var(--border);
-    }
-
-    /* ── Login form ────────────────────────────────────────── */
-    .sl-login-body { padding: 28px 18px; flex: 1; display: flex; flex-direction: column; }
-    .sl-login-headline {
-      font-family: 'Arial Narrow', Arial, sans-serif;
-      font-weight: 700;
-      font-size: 36px;
-      line-height: 1.0;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-    .sl-login-headline span { color: var(--accent); }
-    .sl-login-sub {
-      font-size: 11px;
-      letter-spacing: 0.04em;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-    }
-    .sl-field { margin-bottom: 12px; }
-    .sl-label {
-      display: block;
-      font-family: ui-monospace, 'SF Mono', monospace;
-      font-size: 9px;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      margin-bottom: 5px;
-      text-transform: uppercase;
-    }
-    .sl-input {
-      width: 100%;
-      padding: 9px 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 13px;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .sl-input::placeholder { color: var(--text-muted); }
-    .sl-input:focus { border-color: var(--accent); }
-    .sl-error-msg {
-      font-size: 11px;
-      color: var(--red);
-      margin-bottom: 12px;
-      display: none;
-      padding: 7px 10px;
-      background: rgba(239,68,68,0.06);
-      border: 1px solid rgba(239,68,68,0.16);
-      border-radius: 8px;
-    }
-    .sl-error-msg.show { display: block; }
-
-    /* hide by default, shown via JS */
-    #enrichProfileBtn { display: none; }
-    #autoScrollBtn    { display: none; }
-    #peopleTip        { display: none; }
-
-    /* ── Animations ───────────────────────────────────────────── */
-    @keyframes sl-fade-in {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .sl-body, .sl-login-body { animation: sl-fade-in 0.25s ease both; }
-    .sl-lead-strip { animation: sl-fade-in 0.3s ease 0.05s both; }
-    .sl-page-badge { animation: sl-fade-in 0.3s ease 0.10s both; }
+    @keyframes fade-in { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+    .login-body, .main-body, .stats-row { animation: fade-in .22s ease both; }
+    .stats-row { animation-delay: .04s; }
+    .main-body { animation-delay: .08s; }
   </style>
 </head>
 <body>
 
-  <!-- ── LOGIN SCREEN ──────────────────────────────────────── -->
-  <div class="screen active" id="loginScreen">
-    <div class="sl-header">
-      <div class="sl-logo">
-        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="8" cy="8" r="7" stroke="#FFFFFF" stroke-width="1.2" opacity="0.5"/>
-          <circle cx="8" cy="8" r="4" stroke="#FFFFFF" stroke-width="1.2" opacity="0.85"/>
-          <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
-          <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <span class="sl-brand">Sonar</span>
-      <div class="sl-status-dot" id="statusDotLogin"></div>
+<!-- ── LOGIN ──────────────────────────────────────────────────── -->
+<div class="screen active" id="loginScreen">
+  <div class="hd">
+    <div class="logo">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.5"/>
+        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.85"/>
+        <circle cx="8" cy="8" r="1.5" fill="#fff"/>
+        <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
     </div>
+    <span class="brand">Sonar</span>
+    <div class="online-dot" id="loginDot"></div>
+  </div>
 
-    <div class="sl-login-body">
-      <h1 class="sl-login-headline">Sign<br /><span>in.</span></h1>
-      <p class="sl-login-sub">Connect to your Sonar dashboard</p>
+  <div class="login-body">
+    <h1 class="login-headline">Sign<br/><em>in.</em></h1>
+    <p class="login-sub">Connect to your Sonar pipeline</p>
+    <div class="err-msg" id="loginError"></div>
+    <div class="field"><label class="lbl">Email</label><input class="inp" type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email" /></div>
+    <div class="field"><label class="lbl">Password</label><input class="inp" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" /></div>
+    <button class="btn pri" id="loginBtn" style="margin-top:10px"><span>Sign in</span><span>→</span></button>
+  </div>
+</div>
 
-      <div class="sl-error-msg" id="loginError"></div>
+<!-- ── MAIN ───────────────────────────────────────────────────── -->
+<div class="screen" id="mainScreen">
+  <div class="hd">
+    <div class="logo">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.5"/>
+        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.85"/>
+        <circle cx="8" cy="8" r="1.5" fill="#fff"/>
+        <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="brand">Sonar</span>
+    <div class="online-dot" id="onlineDot"></div>
+  </div>
 
-      <div class="sl-field">
-        <label class="sl-label" for="loginEmail">Email</label>
-        <input class="sl-input" type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email" />
-      </div>
-      <div class="sl-field">
-        <label class="sl-label" for="loginPassword">Password</label>
-        <input class="sl-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
-      </div>
-
-      <button class="sl-btn" id="loginBtn" style="margin-top: 8px;">
-        <span>Sign in</span>
-        <span>→</span>
-      </button>
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-cell">
+      <span class="stat-val" id="statLeads">—</span>
+      <span class="stat-lbl">Leads</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-val" id="statCompanies">—</span>
+      <span class="stat-lbl">Companies</span>
+    </div>
+    <div class="stat-cell">
+      <span class="stat-val" id="statSeqs">—</span>
+      <span class="stat-lbl">Sequences</span>
     </div>
   </div>
 
-  <!-- ── MAIN SCREEN ───────────────────────────────────────── -->
-  <div class="screen" id="mainScreen">
-    <div class="sl-header">
-      <div class="sl-logo">
-        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="8" cy="8" r="7" stroke="#FFFFFF" stroke-width="1.2" opacity="0.5"/>
-          <circle cx="8" cy="8" r="4" stroke="#FFFFFF" stroke-width="1.2" opacity="0.85"/>
-          <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
-          <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <span class="sl-brand">Sonar</span>
-      <div class="sl-status-dot" id="statusDot"></div>
-    </div>
-
-    <div class="sl-body">
-
-      <!-- Lead count -->
-      <div class="sl-lead-strip">
-        <span class="sl-lead-label">Leads synced</span>
-        <span class="sl-lead-count" id="leadCount">—</span>
-      </div>
-
-      <!-- Page detection badge -->
-      <div class="sl-page-badge" id="pageBadge">
-        <div class="sl-badge-dot"></div>
-        <span id="pageTypeLabel">DETECTING PAGE…</span>
-      </div>
-
-      <!-- Status messages -->
-      <div class="sl-status-msg" id="statusMsg"></div>
-
-      <!-- People page tip -->
-      <p class="sl-tip" id="peopleTip">
-        Visit the company page first to capture size &amp; followers, then return here to extract people.
-      </p>
-
-      <!-- Update existing lead (shown only on a profile that's already a lead) -->
-      <button class="sl-btn-accent" id="enrichProfileBtn">
-        <span>Update this lead with full profile</span>
-        <span>↑</span>
-      </button>
-
-      <!-- Auto-scroll (company people pages only) -->
-      <button class="sl-btn-ghost" id="autoScrollBtn">
-        <span>Auto-scroll to load all profiles</span>
-        <span>↓</span>
-      </button>
-
-      <!-- Main extract -->
-      <button class="sl-btn" id="extractBtn" disabled>
-        <span>Extract leads from page</span>
-        <span>→</span>
-      </button>
-
-    </div>
-
-    <div class="sl-footer">
-      <button class="sl-btn-link" id="dashboardBtn">Open dashboard →</button>
-      <button class="sl-btn-link" id="logoutBtn">Sign out</button>
-    </div>
+  <!-- Page detection -->
+  <div class="page-strip">
+    <div class="page-dot" id="pageDot"></div>
+    <span id="pageTypeLabel">Detecting page…</span>
   </div>
 
-  <script src="config.js"></script>
-  <script src="popup.js"></script>
+  <!-- Profile card (shown on profile pages) -->
+  <div class="profile-card" id="profileCard">
+    <div class="pc-name" id="pcName">—</div>
+    <div class="pc-sub" id="pcSub"></div>
+    <div class="pc-badges" id="pcBadges"></div>
+  </div>
+
+  <!-- Status messages -->
+  <div style="padding:0 0 0 0">
+    <div class="status-msg" id="statusMsg"></div>
+  </div>
+
+  <!-- Body -->
+  <div class="main-body">
+    <p class="tip" id="peopleTip">Visit the company page first to capture size &amp; followers, then come back to extract people.</p>
+
+    <button class="btn sec" id="enrichProfileBtn" style="display:none">
+      <span>Sync full profile data</span><span>↑</span>
+    </button>
+    <button class="btn ghost" id="autoScrollBtn" style="display:none">
+      <span>Auto-scroll to load all profiles</span><span>↓</span>
+    </button>
+    <button class="btn pri" id="extractBtn" disabled>
+      <span>Extract leads from page</span><span>→</span>
+    </button>
+  </div>
+
+  <div class="ft">
+    <button class="ft-link" id="dashboardBtn">Open dashboard →</button>
+    <button class="ft-link" id="logoutBtn">Sign out</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="popup.js"></script>
 </body>
 </html>

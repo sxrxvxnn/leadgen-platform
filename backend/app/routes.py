@@ -179,6 +179,25 @@ async def get_leads(authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/leads/check-urls")
+async def check_urls_batch(payload: dict, authorization: str = Header(...)):
+    """Batch check multiple LinkedIn URLs — returns pipeline status for each. Used by Chrome extension search overlay."""
+    user_id = get_user_id(authorization)
+    urls = payload.get("urls", [])
+    if not urls or len(urls) > 50:
+        raise HTTPException(status_code=400, detail="1-50 URLs required")
+    results = {}
+    for url in urls:
+        clean = url.split('?')[0].split('#')[0].rstrip('/')
+        res = supabase.table("leads")\
+            .select("id, name, title, company, stage, icp_score, email")\
+            .eq("user_id", user_id)\
+            .or_(f"profile_url.eq.{clean},profile_url.eq.{clean}/")\
+            .limit(1).execute()
+        results[url] = {"found": bool(res.data), "lead": res.data[0] if res.data else None}
+    return {"results": results}
+
+
 @router.get("/leads/by-profile-url")
 async def get_lead_by_profile_url(url: str, authorization: str = Header(...)):
     """Used by the Chrome extension to check if a LinkedIn profile is already a lead."""
