@@ -5,14 +5,16 @@ import { invalidateCache } from '../services/api'
 const SANS = "var(--font-sans,'Host Grotesk',sans-serif)"
 const MONO = "var(--font-mono,'IBM Plex Mono',monospace)"
 
+// PDL's exact company size bucket strings
 const SIZE_OPTIONS = [
-  { label: '1–10',      value: '1,10' },
-  { label: '11–50',     value: '11,50' },
-  { label: '51–200',    value: '51,200' },
-  { label: '201–500',   value: '201,500' },
-  { label: '501–1k',    value: '501,1000' },
-  { label: '1k–5k',     value: '1001,5000' },
-  { label: '5k+',       value: '5001,100000' },
+  { label: '1–10',    value: '1-10' },
+  { label: '11–50',   value: '11-50' },
+  { label: '51–200',  value: '51-200' },
+  { label: '201–500', value: '201-500' },
+  { label: '501–1k',  value: '501-1000' },
+  { label: '1k–5k',   value: '1001-5000' },
+  { label: '5k–10k',  value: '5001-10000' },
+  { label: '10k+',    value: '10001+' },
 ]
 
 const TITLE_SUGGESTIONS = [
@@ -84,10 +86,20 @@ function PersonRow({ person, onAdd, addedIds }) {
   const [revealedEmail, setRevealedEmail] = useState(null)
   const isAdded = addedIds.has(person.id)
 
+  // PDL field names
+  const name     = person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim() || '—'
+  const title    = person.job_title || ''
+  const company  = person.job_company_name || ''
+  const city     = person.location_city || ''
+  const country  = person.location_country || ''
+  const liUrl    = person.linkedin_url ? (person.linkedin_url.startsWith('http') ? person.linkedin_url : `https://${person.linkedin_url}`) : null
+  const workEmail = person.work_email || (person.emails || [])[0]?.address || null
+
   async function revealEmail() {
+    if (workEmail) { setRevealedEmail(workEmail); return }
     setRevealing(true)
     try {
-      const res = await api.post('/prospect/reveal-email', { person_id: person.id })
+      const res = await api.post('/prospect/reveal-email', { linkedin_url: person.linkedin_url, person_id: person.id })
       setRevealedEmail(res.data.email || '—')
     } catch {
       setRevealedEmail('Not found')
@@ -96,38 +108,37 @@ function PersonRow({ person, onAdd, addedIds }) {
     }
   }
 
-  const initials = (person.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const hue = (person.name || '').charCodeAt(0) % 360
+  const initials = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
+  const hue = name.charCodeAt(0) % 360
+  const displayEmail = workEmail || revealedEmail
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 160px 160px', gap: 12, alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 190px 150px', gap: 12, alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid var(--border)', transition: 'background 0.1s' }}
       onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
 
       {/* Name + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         <div style={{ width: 34, height: 34, borderRadius: '50%', background: `hsl(${hue},45%,25%)`, border: `1px solid hsl(${hue},45%,35%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {person.photo_url
-            ? <img src={person.photo_url} style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }} alt="" onError={e => e.target.style.display = 'none'} />
-            : <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: `hsl(${hue},70%,70%)` }}>{initials}</span>}
+          <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: `hsl(${hue},70%,70%)` }}>{initials}</span>
         </div>
         <div style={{ minWidth: 0 }}>
-          <p style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{person.name || '—'}</p>
+          <p style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
           <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {[person.title, person.organization_name].filter(Boolean).join(' · ') || '—'}
+            {[title, company].filter(Boolean).join(' · ') || '—'}
           </p>
         </div>
       </div>
 
       {/* Location */}
       <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {[person.city, person.country].filter(Boolean).join(', ') || '—'}
+        {[city, country].filter(Boolean).join(', ') || '—'}
       </p>
 
       {/* Email */}
       <div>
-        {revealedEmail
-          ? <p style={{ fontFamily: MONO, fontSize: 11, color: revealedEmail === '—' || revealedEmail === 'Not found' ? 'var(--text-muted)' : 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{revealedEmail}</p>
+        {displayEmail
+          ? <p style={{ fontFamily: MONO, fontSize: 11, color: displayEmail === '—' || displayEmail === 'Not found' ? 'var(--text-muted)' : 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayEmail}</p>
           : <button onClick={revealEmail} disabled={revealing}
               style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, padding: '4px 10px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, cursor: revealing ? 'default' : 'pointer', letterSpacing: '0.06em' }}>
               {revealing ? 'Finding…' : 'Reveal email'}
@@ -137,9 +148,8 @@ function PersonRow({ person, onAdd, addedIds }) {
 
       {/* Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {person.linkedin_url && (
-          <a href={person.linkedin_url.startsWith('http') ? person.linkedin_url : `https://${person.linkedin_url}`}
-            target="_blank" rel="noopener noreferrer"
+        {liUrl && (
+          <a href={liUrl} target="_blank" rel="noopener noreferrer"
             style={{ fontFamily: MONO, fontSize: 10, color: 'var(--accent)', textDecoration: 'none', padding: '4px 8px', border: '1px solid rgba(231,0,11,0.3)', borderRadius: 5 }}>
             LI
           </a>
@@ -209,7 +219,7 @@ export default function Prospect() {
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontFamily: SANS, fontSize: 26, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Prospect Search</h1>
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          Search 210M+ contacts — find the right people, add them to your leads in one click.
+          Search 800M+ verified contacts from People Data Labs — find the right people, add them in one click.
         </p>
       </div>
 
