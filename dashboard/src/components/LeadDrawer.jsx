@@ -53,6 +53,58 @@ function SectionLabel({ children }) {
   return <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12, marginTop: 0, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>{children}</p>
 }
 
+function DealValueSection({ lead, onUpdate }) {
+  const [value, setValue]   = useState(lead.deal_value || '')
+  const [date, setDate]     = useState(lead.expected_close_date || '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      await updateLead(lead.id, {
+        deal_value: value ? parseFloat(value) : null,
+        expected_close_date: date || null,
+      })
+      onUpdate?.({ deal_value: value ? parseFloat(value) : null, expected_close_date: date || null })
+      setSaved(true); setTimeout(() => setSaved(false), 2000)
+    } catch (e) { console.error(e) } finally { setSaving(false) }
+  }
+
+  return (
+    <div>
+      <SectionLabel>Deal Value</SectionLabel>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Amount ($)</p>
+          <input
+            type="number"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            placeholder="e.g. 25000"
+            style={{ width: '100%', fontFamily: MONO, fontSize: 13, padding: '7px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Expected Close</p>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            style={{ width: '100%', fontFamily: MONO, fontSize: 12, padding: '7px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        <button
+          onClick={save} disabled={saving}
+          style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, padding: '7px 12px', background: saved ? 'rgba(74,124,89,0.15)' : 'var(--surface)', border: `1px solid ${saved ? 'rgba(74,124,89,0.4)' : 'var(--border)'}`, borderRadius: 5, color: saved ? '#4a7c59' : 'var(--text-muted)', cursor: saving ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+        >
+          {saved ? 'Saved' : saving ? '…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [scoring, setScoring]     = useState(false)
   const [drafting, setDrafting]   = useState(false)
@@ -305,6 +357,9 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
               )}
             </div>
           )}
+
+          {/* Deal Value */}
+          <DealValueSection lead={L} onUpdate={(data) => { setLocalLead(prev => ({ ...prev, ...data })); onUpdate?.(L.id, data) }} />
 
           {/* Buying Signals */}
           {(L.company || signalCompanyId) && (
