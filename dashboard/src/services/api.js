@@ -288,6 +288,8 @@ export const listSequences       = () => api.get('/sequences')
 export const enrollInSequence    = (seqId, leadIds) => api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
 export const listEnrollments     = (seqId) => api.get(`/sequences/${seqId}/enrollments`)
 export const unenrollLead        = (seqId, enrollmentId) => api.delete(`/sequences/${seqId}/enrollments/${enrollmentId}`)
+export const markReplied         = (seqId, enrollmentId) => api.patch(`/sequences/${seqId}/enrollments/${enrollmentId}/reply`)
+export const getSequenceAnalytics= (seqId) => api.get(`/sequences/${seqId}/analytics`)
 
 // ─── PROFILE SMTP CONFIG ──────────────────────────────────────────
 export const getSmtpConfig    = () => api.get('/profile/smtp-config')

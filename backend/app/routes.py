@@ -1262,6 +1262,12 @@ async def track_click(tracking_id: str, url: str):
             "url": url,
             "clicked_at": now,
         }).execute()
+        # Increment click_count on email_tracking
+        row = supabase.table("email_tracking").select("click_count").eq("tracking_id", tracking_id).maybe_single().execute()
+        if row.data is not None:
+            supabase.table("email_tracking").update({
+                "click_count": (row.data.get("click_count") or 0) + 1
+            }).eq("tracking_id", tracking_id).execute()
     except Exception:
         pass
     return RedirectResponse(url=url, status_code=302)
@@ -4444,73 +4450,112 @@ async def process_sequence_cron(request: Request):
     """Cron endpoint — processes all due sequence enrollments."""
     import datetime as _dt
     import smtplib as _smtplib
+    import urllib.parse as _urlparse
     from email.mime.text import MIMEText as _MIMEText
     from email.mime.multipart import MIMEMultipart as _MIMEMultipart
-    # Verify cron secret
+
     cron_secret = os.environ.get("CRON_SECRET", "")
     auth_header = request.headers.get("authorization", "")
     provided = auth_header.replace("Bearer ", "").strip()
     if cron_secret and provided != cron_secret:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     now = _dt.datetime.now(_dt.timezone.utc)
     now_iso = now.isoformat()
-    # Query all active enrollments that are due
+
     due_res = supabase.table("sequence_enrollments").select(
         "id, sequence_id, lead_id, user_id, status, current_step, leads(name, email, company, title)"
     ).eq("status", "active").lte("next_run_at", now_iso).limit(50).execute()
     due = due_res.data or []
     processed = 0
     errors = 0
+
+    def _personalize(text, name, first, company, title):
+        return (text or "").replace("{{name}}", name).replace("{{first_name}}", first).replace("{{company}}", company).replace("{{title}}", title)
+
+    def _wrap_links(text, tracking_id):
+        def _sub(m):
+            raw = m.group(0)
+            if "track/open" in raw or "unsubscribe" in raw:
+                return raw
+            encoded = _urlparse.quote(raw, safe='')
+            return f"{_API_BASE}/track/click/{tracking_id}?url={encoded}"
+        return _re.sub(r'https?://[^\s\)\"\'<>\]]+', _sub, text)
+
+    def _is_hard_bounce(exc):
+        msg = str(exc).lower()
+        return any(k in msg for k in ("550", "551", "552", "553", "554", "user unknown", "no such user", "does not exist", "invalid address", "mailbox not found"))
+
     for enrollment in due:
-        enr_id = enrollment["id"]
-        seq_id = enrollment["sequence_id"]
-        user_id = enrollment["user_id"]
-        current_step_num = enrollment["current_step"]
-        lead = enrollment.get("leads") or {}
-        lead_name = lead.get("name") or ""
+        enr_id     = enrollment["id"]
+        seq_id     = enrollment["sequence_id"]
+        user_id    = enrollment["user_id"]
+        step_num   = enrollment["current_step"]
+        lead       = enrollment.get("leads") or {}
+        lead_name  = lead.get("name") or ""
         lead_first = lead_name.split()[0] if lead_name else ""
         lead_email = lead.get("email") or ""
         lead_company = lead.get("company") or ""
         lead_title = lead.get("title") or ""
+
         try:
-            # Get all steps for this sequence
             steps_res = supabase.table("sequence_steps").select("*").eq("sequence_id", seq_id).order("step_number").execute()
             steps = steps_res.data or []
-            current_step = next((s for s in steps if s["step_number"] == current_step_num), None)
+            current_step = next((s for s in steps if s["step_number"] == step_num), None)
+
             if not current_step:
-                # No matching step — complete the enrollment
-                supabase.table("sequence_enrollments").update({
-                    "status": "completed", "completed_at": now_iso
-                }).eq("id", enr_id).execute()
+                supabase.table("sequence_enrollments").update({"status": "completed", "completed_at": now_iso}).eq("id", enr_id).execute()
                 processed += 1
                 continue
+
             step_type = current_step.get("type", "email")
-            success = True
+            success   = True
             error_msg = None
+
             if step_type == "email":
                 if not lead_email:
-                    error_msg = "Lead has no email address"
-                    success = False
+                    error_msg = "Lead has no email"
+                    success   = False
                 else:
-                    # Load user SMTP config
+                    # Check unsubscribe
+                    unsub = supabase.table("unsubscribes").select("id").eq("user_id", user_id).eq("email", lead_email).maybe_single().execute()
+                    if unsub.data:
+                        supabase.table("sequence_enrollments").update({"status": "unsubscribed", "last_error": "Unsubscribed"}).eq("id", enr_id).execute()
+                        processed += 1
+                        continue
+
                     profile_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
                     smtp = (profile_res.data or {}).get("smtp_config") or {}
+
                     if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
-                        error_msg = "No SMTP credentials saved for automation. Go to Settings → Sequence Automation."
-                        success = False
+                        error_msg = "No SMTP credentials saved. Go to Settings → Sequence Automation."
+                        success   = False
                     else:
-                        def _personalize(text):
-                            return (text or "").replace("{{name}}", lead_name).replace("{{first_name}}", lead_first).replace("{{company}}", lead_company).replace("{{title}}", lead_title)
-                        subject = _personalize(current_step.get("subject") or "")
-                        body = _personalize(current_step.get("body") or "")
+                        subject = _personalize(current_step.get("subject") or "", lead_name, lead_first, lead_company, lead_title)
+                        body    = _personalize(current_step.get("body") or "", lead_name, lead_first, lead_company, lead_title)
+
+                        # Generate tracking id & build pixel + unsubscribe token
+                        tracking_id = secrets.token_urlsafe(20)
+                        unsub_token = secrets.token_urlsafe(24)
+                        pixel_url   = f"{_API_BASE}/track/open/{tracking_id}"
+                        unsub_url   = f"{_API_BASE}/unsubscribe?token={unsub_token}&uid={user_id}&email={_urlparse.quote(lead_email)}"
+
+                        # Wrap links for click tracking, append pixel + unsubscribe footer
+                        tracked_body = _wrap_links(body, tracking_id)
+                        tracked_body += f"\n\n---\nTo unsubscribe, click here: {unsub_url}"
+                        tracked_body_html = tracked_body + f'\n<img src="{pixel_url}" width="1" height="1" alt="" style="display:none">'
+
                         try:
+                            from_email = smtp.get("from_email") or smtp["smtp_user"]
+                            from_name  = smtp.get("from_name") or ""
                             msg = _MIMEMultipart("alternative")
                             msg["Subject"] = subject
-                            from_email = smtp.get("from_email") or smtp["smtp_user"]
-                            from_name = smtp.get("from_name") or ""
-                            msg["From"] = f"{from_name} <{from_email}>" if from_name else from_email
-                            msg["To"] = lead_email
-                            msg.attach(_MIMEText(body, "plain"))
+                            msg["From"]    = f"{from_name} <{from_email}>" if from_name else from_email
+                            msg["To"]      = lead_email
+                            msg["X-Unsubscribe-Token"] = unsub_token
+                            msg["List-Unsubscribe"]    = f"<{unsub_url}>"
+                            msg.attach(_MIMEText(tracked_body, "plain"))
+
                             smtp_host = smtp.get("smtp_host", "smtp.gmail.com")
                             smtp_port = int(smtp.get("smtp_port", 587))
                             with _smtplib.SMTP(smtp_host, smtp_port, timeout=15) as srv:
@@ -4518,52 +4563,187 @@ async def process_sequence_cron(request: Request):
                                 srv.starttls()
                                 srv.login(smtp["smtp_user"], smtp["smtp_pass"])
                                 srv.sendmail(from_email, lead_email, msg.as_string())
+
+                            # Record in email_tracking for analytics
+                            supabase.table("email_tracking").insert({
+                                "user_id":       user_id,
+                                "lead_id":       enrollment["lead_id"],
+                                "tracking_id":   tracking_id,
+                                "subject":       subject,
+                                "body_preview":  body[:120],
+                                "sequence_id":   seq_id,
+                                "enrollment_id": enr_id,
+                                "step_number":   step_num,
+                            }).execute()
+
                             # Log activity
                             supabase.table("lead_activity").insert({
-                                "lead_id": enrollment["lead_id"],
-                                "user_id": user_id,
+                                "lead_id":    enrollment["lead_id"],
+                                "user_id":    user_id,
                                 "event_type": "email_sent",
-                                "data": {"subject": subject, "to": lead_email, "via": "sequence", "sequence_id": seq_id, "step": current_step_num}
+                                "data":       {"subject": subject, "to": lead_email, "via": "sequence", "sequence_id": seq_id, "step": step_num, "tracking_id": tracking_id},
                             }).execute()
+
+                        except _smtplib.SMTPRecipientsRefused as e:
+                            success   = False
+                            error_msg = f"Hard bounce: {e}"
+                            # Hard bounce — stop this enrollment
+                            supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                            processed += 1
+                            continue
                         except Exception as e:
-                            success = False
+                            success   = False
                             error_msg = str(e)
+                            if _is_hard_bounce(e):
+                                supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                                processed += 1
+                                continue
+
             elif step_type in ("linkedin", "call", "task"):
-                # Create a manual task for the user
                 try:
                     supabase.table("tasks").insert({
-                        "lead_id": enrollment["lead_id"],
-                        "user_id": user_id,
-                        "title": f"[Sequence] {step_type.title()}: {lead_name or 'Lead'}",
-                        "body": current_step.get("body") or "",
-                        "due_date": now_iso,
-                        "priority": "high",
+                        "lead_id":   enrollment["lead_id"],
+                        "user_id":   user_id,
+                        "title":     f"[Sequence] {step_type.title()}: {lead_name or 'Lead'}",
+                        "body":      current_step.get("body") or "",
+                        "due_date":  now_iso,
+                        "priority":  "high",
                         "completed": False,
                     }).execute()
                 except Exception:
                     pass
-            # Advance to next step
-            next_steps = [s for s in steps if s["step_number"] > current_step_num]
+
+            # Advance or complete
+            next_steps = [s for s in steps if s["step_number"] > step_num]
             if next_steps:
-                next_step = next_steps[0]
-                next_delay = next_step.get("delay_days") or 1
-                next_run = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=next_delay)).isoformat()
-                update = {"current_step": next_step["step_number"], "next_run_at": next_run}
+                ns         = next_steps[0]
+                next_delay = ns.get("delay_days") or 1
+                next_run   = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=next_delay)).isoformat()
+                upd        = {"current_step": ns["step_number"], "next_run_at": next_run}
                 if not success and error_msg:
-                    update["last_error"] = error_msg
-                supabase.table("sequence_enrollments").update(update).eq("id", enr_id).execute()
+                    upd["last_error"] = error_msg
+                supabase.table("sequence_enrollments").update(upd).eq("id", enr_id).execute()
             else:
-                supabase.table("sequence_enrollments").update({
-                    "status": "completed", "completed_at": now_iso
-                }).eq("id", enr_id).execute()
+                supabase.table("sequence_enrollments").update({"status": "completed", "completed_at": now_iso}).eq("id", enr_id).execute()
+
             processed += 1
+
         except Exception as ex:
             errors += 1
             try:
                 supabase.table("sequence_enrollments").update({"last_error": str(ex)}).eq("id", enr_id).execute()
             except Exception:
                 pass
+
     return {"processed": processed, "errors": errors, "total_due": len(due)}
+
+
+# ─── UNSUBSCRIBE (public — no auth) ──────────────────────────────────────────
+
+@router.get("/unsubscribe")
+async def handle_unsubscribe(token: str = None, uid: str = None, email: str = None):
+    """One-click unsubscribe link from sequence emails."""
+    import urllib.parse as _up
+    if not uid or not email:
+        return Response(content="<html><body style='font-family:sans-serif;text-align:center;padding:60px'><h2>Invalid unsubscribe link.</h2></body></html>", media_type="text/html")
+    email_decoded = _up.unquote(email)
+    try:
+        supabase.table("unsubscribes").upsert({"user_id": uid, "email": email_decoded}, on_conflict="user_id,email").execute()
+        # Pause any active enrollments for this email
+        lead_res = supabase.table("leads").select("id").eq("email", email_decoded).execute()
+        lead_ids = [r["id"] for r in (lead_res.data or [])]
+        for lid in lead_ids:
+            supabase.table("sequence_enrollments").update({"status": "unsubscribed"}).eq("lead_id", lid).eq("user_id", uid).eq("status", "active").execute()
+    except Exception:
+        pass
+    html = """<html><body style='font-family:sans-serif;text-align:center;padding:80px;background:#0a0a0a;color:#e5e5e5'>
+<h2 style='font-weight:400'>You've been unsubscribed.</h2>
+<p style='color:#888;font-size:14px'>You won't receive any more emails from this sender via Sonar.</p>
+</body></html>"""
+    return Response(content=html, media_type="text/html")
+
+
+# ─── SEQUENCE ANALYTICS ──────────────────────────────────────────────────────
+
+@router.get("/sequences/{seq_id}/analytics")
+async def get_sequence_analytics(seq_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(seq_id)
+
+    # Enrollment counts by status
+    enr_res = supabase.table("sequence_enrollments").select("id, status, current_step").eq("sequence_id", seq_id).eq("user_id", user_id).execute()
+    enrollments = enr_res.data or []
+    total      = len(enrollments)
+    active     = sum(1 for e in enrollments if e["status"] == "active")
+    completed  = sum(1 for e in enrollments if e["status"] == "completed")
+    bounced    = sum(1 for e in enrollments if e["status"] == "bounced")
+    replied    = sum(1 for e in enrollments if e["status"] == "replied" or e.get("replied_at"))
+    unsubbed   = sum(1 for e in enrollments if e["status"] == "unsubscribed")
+
+    # Email tracking aggregates for this sequence
+    tracking_res = supabase.table("email_tracking").select("open_count, click_count, step_number").eq("sequence_id", seq_id).execute()
+    tracking = tracking_res.data or []
+    emails_sent = len(tracking)
+    total_opens  = sum((r.get("open_count") or 0) for r in tracking)
+    total_clicks = sum((r.get("click_count") or 0) for r in tracking)
+    unique_opens = sum(1 for r in tracking if (r.get("open_count") or 0) > 0)
+    unique_clicks= sum(1 for r in tracking if (r.get("click_count") or 0) > 0)
+
+    open_rate    = round(unique_opens  / emails_sent * 100) if emails_sent else 0
+    click_rate   = round(unique_clicks / emails_sent * 100) if emails_sent else 0
+    reply_rate   = round(replied       / total       * 100) if total else 0
+    bounce_rate  = round(bounced       / total       * 100) if total else 0
+
+    # Per-step breakdown
+    steps_res = supabase.table("sequence_steps").select("step_number, type, subject").eq("sequence_id", seq_id).order("step_number").execute()
+    steps = steps_res.data or []
+    step_stats = []
+    for step in steps:
+        sn = step["step_number"]
+        step_tracking = [t for t in tracking if t.get("step_number") == sn]
+        s_sent   = len(step_tracking)
+        s_opens  = sum(1 for t in step_tracking if (t.get("open_count") or 0) > 0)
+        s_clicks = sum(1 for t in step_tracking if (t.get("click_count") or 0) > 0)
+        step_stats.append({
+            "step_number": sn,
+            "type":        step["type"],
+            "subject":     step.get("subject") or "",
+            "sent":        s_sent,
+            "opens":       s_opens,
+            "clicks":      s_clicks,
+            "open_rate":   round(s_opens / s_sent * 100) if s_sent else 0,
+            "click_rate":  round(s_clicks / s_sent * 100) if s_sent else 0,
+        })
+
+    return {
+        "total_enrolled": total,
+        "active": active,
+        "completed": completed,
+        "bounced": bounced,
+        "replied": replied,
+        "unsubscribed": unsubbed,
+        "emails_sent": emails_sent,
+        "unique_opens": unique_opens,
+        "unique_clicks": unique_clicks,
+        "open_rate": open_rate,
+        "click_rate": click_rate,
+        "reply_rate": reply_rate,
+        "bounce_rate": bounce_rate,
+        "steps": step_stats,
+    }
+
+
+@router.patch("/sequences/{seq_id}/enrollments/{enrollment_id}/reply")
+async def mark_enrollment_replied(seq_id: str, enrollment_id: str, authorization: str = Header(...)):
+    """Manually mark a lead as having replied — pauses further steps."""
+    import datetime as _dt
+    user_id = get_user_id(authorization)
+    validate_uuid(enrollment_id)
+    now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    supabase.table("sequence_enrollments").update({
+        "status": "replied", "replied_at": now
+    }).eq("id", enrollment_id).eq("user_id", user_id).execute()
+    return {"ok": True}
 
 
 # ─── PROFILE SMTP CONFIG ──────────────────────────────────────────────────────
