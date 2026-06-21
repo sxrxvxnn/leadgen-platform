@@ -112,6 +112,7 @@ function detectPage(token) {
     const card   = document.getElementById('profileCard')
 
     const TYPE_LABELS = {
+      'gmail':              'Gmail — Sidebar Active',
       'salenav-companies':  'Sales Nav Accounts',
       'salenav-people':     'Sales Nav People',
       'salenav-company':    'Sales Nav Company',
@@ -128,6 +129,15 @@ function detectPage(token) {
     tip.style.display = 'none'
     if (card) card.className = 'profile-card'
     clearStatus()
+
+    if (type === 'gmail') {
+      label.textContent = TYPE_LABELS['gmail']
+      label.className = 'ok'
+      if (dotEl) dotEl.className = 'page-dot ok'
+      extBtn.disabled = true
+      extBtn.querySelector('span').textContent = 'Open email to activate sidebar'
+      return
+    }
 
     if (type === 'unknown') {
       label.textContent = 'Not a LinkedIn page'
@@ -153,6 +163,7 @@ function detectPage(token) {
 
 function detectPageType(url) {
   if (!url) return 'unknown'
+  if (url.includes('mail.google.com')) return 'gmail'
   if (url.includes('linkedin.com/sales/search/company')) return 'salenav-companies'
   if (url.includes('linkedin.com/sales/search/people')) return 'salenav-people'
   if (url.includes('linkedin.com/sales/company/')) return 'salenav-company'
