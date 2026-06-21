@@ -4737,8 +4737,30 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
 
 # ─── PROSPECT SEARCH (People Data Labs — 800M+ profiles) ───────────────────────
 
-_PDL_KEY = os.environ.get("PDL_API_KEY", "")
+_PDL_KEY  = os.environ.get("PDL_API_KEY", "")
 _PDL_BASE = "https://api.peopledatalabs.com/v5"
+
+# In-memory cache: key → {data, ts}  (1-hour TTL, never charges credits twice for same query)
+import hashlib as _hashlib
+import json as _json
+_pdl_cache: dict = {}
+_PDL_CACHE_TTL = 3600  # seconds
+
+def _pdl_cache_key(payload: dict, page: int, per_page: int) -> str:
+    blob = _json.dumps({k: payload.get(k) for k in ("keywords","titles","companies","locations","sizes")}, sort_keys=True)
+    return _hashlib.md5(f"{blob}|{page}|{per_page}".encode()).hexdigest()
+
+def _pdl_cache_get(key: str):
+    import time
+    entry = _pdl_cache.get(key)
+    if entry and time.time() - entry["ts"] < _PDL_CACHE_TTL:
+        return entry["data"]
+    _pdl_cache.pop(key, None)
+    return None
+
+def _pdl_cache_set(key: str, data: dict):
+    import time
+    _pdl_cache[key] = {"data": data, "ts": time.time()}
 
 def _build_pdl_query(payload: dict) -> dict:
     must: list = []
@@ -4772,8 +4794,14 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
     if not _PDL_KEY:
         raise HTTPException(status_code=503, detail="Prospect search not configured — add PDL_API_KEY to Vercel env vars.")
     page     = max(1, int(payload.get("page", 1)))
-    per_page = 25
+    per_page = 10  # conservative — 10 credits per search instead of 25
     from_    = (page - 1) * per_page
+
+    cache_key = _pdl_cache_key(payload, page, per_page)
+    cached = _pdl_cache_get(cache_key)
+    if cached:
+        return cached
+
     body = {
         "query":   _build_pdl_query(payload),
         "size":    per_page,
@@ -4794,7 +4822,9 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
         total = data.get("total", 0)
         people = data.get("data", [])
         total_pages = max(1, (total + per_page - 1) // per_page)
-        return {"people": people, "total": total, "page": page, "total_pages": min(total_pages, 40)}
+        result = {"people": people, "total": total, "page": page, "total_pages": min(total_pages, 40), "cached": False}
+        _pdl_cache_set(cache_key, {**result, "cached": True})
+        return result
     except HTTPException:
         raise
     except Exception as e:
