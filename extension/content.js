@@ -517,6 +517,116 @@ function autoScrollPeoplePage(callback) {
   scrollStep()
 }
 
+// ─── IN-PIPELINE BADGE ───────────────────────────────────────
+
+const BADGE_ID = 'sonar-pipeline-badge'
+const API_BASE = 'https://leadgenengineplatform-api.vercel.app/api'
+
+function removeBadge() {
+  const existing = document.getElementById(BADGE_ID)
+  if (existing) existing.remove()
+}
+
+function injectBadge(lead) {
+  removeBadge()
+  const badge = document.createElement('div')
+  badge.id = BADGE_ID
+
+  const stageLabel = lead.stage ? lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1) : 'Pipeline'
+  const scoreText = lead.icp_score != null ? ` · ICP ${lead.icp_score}%` : ''
+  const seqText = lead.in_sequence ? ' · In sequence' : ''
+
+  badge.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
+      <span style="font-weight:700;font-size:13px;color:#fff;">In Sonar</span>
+      <span style="font-size:12px;color:rgba(255,255,255,0.75);">${stageLabel}${scoreText}${seqText}</span>
+      <button id="sonar-badge-close" style="margin-left:4px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:16px;line-height:1;cursor:pointer;padding:0 2px;">&times;</button>
+    </div>
+  `
+
+  Object.assign(badge.style, {
+    position: 'fixed',
+    top: '72px',
+    right: '20px',
+    zIndex: '99999',
+    background: 'rgba(18,18,18,0.95)',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderLeft: '3px solid #E7000B',
+    borderRadius: '10px',
+    padding: '10px 14px',
+    fontFamily: '"IBM Plex Mono", monospace, sans-serif',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+    backdropFilter: 'blur(10px)',
+    cursor: 'default',
+    userSelect: 'none',
+    minWidth: '220px',
+  })
+
+  document.body.appendChild(badge)
+
+  document.getElementById('sonar-badge-close').addEventListener('click', (e) => {
+    e.stopPropagation()
+    removeBadge()
+  })
+
+  // Auto-dismiss after 8 seconds
+  setTimeout(() => {
+    const el = document.getElementById(BADGE_ID)
+    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.4s'; setTimeout(() => el.remove(), 400) }
+  }, 8000)
+}
+
+function checkPipelineStatus() {
+  if (getPageType() !== 'profile') return
+  const profileUrl = cleanUrl(window.location.href)
+
+  chrome.storage.local.get(['token'], (stored) => {
+    const token = stored.token
+    if (!token) return
+
+    fetch(`${API_BASE}/leads/by-profile-url?url=${encodeURIComponent(profileUrl)}`, {
+      headers: { Authorization: 'Bearer ' + token }
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.lead) injectBadge(data.lead)
+      })
+      .catch(() => {})
+  })
+}
+
+// Run on profile pages — wait for DOM to stabilize
+let _badgeCheckTimer = null
+function scheduleBadgeCheck() {
+  if (getPageType() !== 'profile') return
+  clearTimeout(_badgeCheckTimer)
+  removeBadge()
+  _badgeCheckTimer = setTimeout(checkPipelineStatus, 1800)
+}
+
+// LinkedIn is a SPA — watch for URL changes
+let _lastCheckedUrl = ''
+const _urlObserver = new MutationObserver(() => {
+  const current = window.location.href
+  if (current !== _lastCheckedUrl) {
+    _lastCheckedUrl = current
+    scheduleBadgeCheck()
+  }
+})
+_urlObserver.observe(document.body, { childList: true, subtree: true })
+
+// Initial check
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  _lastCheckedUrl = window.location.href
+  scheduleBadgeCheck()
+} else {
+  document.addEventListener('DOMContentLoaded', () => {
+    _lastCheckedUrl = window.location.href
+    scheduleBadgeCheck()
+  })
+}
+
 // ─── MESSAGE LISTENER ─────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

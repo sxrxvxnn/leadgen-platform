@@ -282,12 +282,44 @@ function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
 
 const BLANK_STEP = { type: 'email', delay_days: 0, subject: '', body: '' }
 
+const SEQUENCE_TEMPLATES = [
+  {
+    name: 'Cold Outreach (3-touch)',
+    description: 'Classic cold email sequence with follow-ups',
+    steps: [
+      { type: 'email', delay_days: 0, subject: 'Quick question, {{first_name}}', body: 'Hi {{first_name}},\n\nI came across {{company}} and was impressed by what you\'re building.\n\nWe help companies like yours [key benefit]. I\'d love to show you how we\'ve helped similar teams.\n\nWould you be open to a quick 15-minute call this week?\n\nBest,\n[Your name]' },
+      { type: 'email', delay_days: 3, subject: 'Re: Quick question, {{first_name}}', body: 'Hi {{first_name}},\n\nJust following up on my previous email — did this land in the right place?\n\nI know you\'re busy, so I\'ll keep it short: [one-line value prop].\n\nWorth a 15-minute conversation?\n\n[Your name]' },
+      { type: 'email', delay_days: 7, subject: 'Closing the loop', body: 'Hi {{first_name}},\n\nI\'ve reached out a couple of times about [topic] and haven\'t heard back — I completely understand if the timing isn\'t right.\n\nIf you\'d ever like to revisit this in the future, feel free to reach out. I\'ll leave you alone for now!\n\n[Your name]' },
+    ],
+  },
+  {
+    name: 'SaaS Demo Request (5-touch)',
+    description: 'Nurture sequence to book a demo',
+    steps: [
+      { type: 'email', delay_days: 0, subject: 'How {{company}} can [outcome]', body: 'Hi {{first_name}},\n\nI noticed {{company}} is [observation about their business]. Companies in your space typically struggle with [pain point].\n\nWe built [product] specifically to solve this — [key metric/result].\n\nI\'d love to show you a quick demo tailored to {{company}}. Are you free for 20 minutes this week?\n\n[Your name]' },
+      { type: 'email', delay_days: 2, subject: 'Case study: [Company] achieved [result]', body: 'Hi {{first_name}},\n\nFollowing up with something concrete — [similar company] used [product] to achieve [specific result] in [timeframe].\n\nI think we could do the same for {{company}}.\n\nHappy to send over the full case study — want me to?\n\n[Your name]' },
+      { type: 'linkedin', delay_days: 4, subject: '', body: 'Hi {{first_name}}, sent you an email about [topic]. Would love to connect here too.' },
+      { type: 'email', delay_days: 7, subject: 'Still thinking about it?', body: 'Hi {{first_name}},\n\nI know decisions like this take time. A few things that might help:\n\n• [Benefit 1]\n• [Benefit 2]\n• [Benefit 3]\n\nHappy to answer any questions or set up a no-pressure call.\n\n[Your name]' },
+      { type: 'email', delay_days: 5, subject: 'Last one from me', body: 'Hi {{first_name}},\n\nI\'ll make this my last email so I\'m not cluttering your inbox.\n\nIf [problem] is ever a priority and you\'d like to see how [product] can help, my calendar is always open: [link]\n\nWishing {{company}} all the best,\n[Your name]' },
+    ],
+  },
+  {
+    name: 'Re-engagement (2-touch)',
+    description: 'Win back cold or inactive leads',
+    steps: [
+      { type: 'email', delay_days: 0, subject: 'Checking in, {{first_name}}', body: 'Hi {{first_name}},\n\nWe spoke a while back about [topic] and I wanted to check in.\n\nA lot has changed on our end — [new feature/development]. Given what you\'re building at {{company}}, I think the timing might be better now.\n\nWould you be open to a quick reconnect?\n\n[Your name]' },
+      { type: 'email', delay_days: 5, subject: 'Worth another look?', body: 'Hi {{first_name}},\n\nJust following up one last time. If the timing isn\'t right, completely fine — I just wanted to make sure you had a chance to see [specific update].\n\nIf things ever change at {{company}}, I\'m here.\n\n[Your name]' },
+    ],
+  },
+]
+
 export default function Sequences() {
   const { token } = useAuth()
   const navigate = useNavigate()
   const [sequences, setSequences] = useState([])
   const [loading, setLoading] = useState(true)
   const [showBuilder, setShowBuilder] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ name: '', description: '', steps: [{ ...BLANK_STEP }] })
   const [saving, setSaving] = useState(false)
@@ -379,10 +411,55 @@ export default function Sequences() {
     return (
       <div style={s.page}>
         <div style={{ ...s.inner, maxWidth: 700 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
-            <button onClick={() => setShowBuilder(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'pointer', padding: 0 }}>← Back</button>
-            <h1 style={{ ...s.title, margin: 0 }}>{editing ? 'Edit Sequence' : 'New Sequence'}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button onClick={() => setShowBuilder(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'pointer', padding: 0 }}>← Back</button>
+              <h1 style={{ ...s.title, margin: 0 }}>{editing ? 'Edit Sequence' : 'New Sequence'}</h1>
+            </div>
+            {!editing && (
+              <button type="button" onClick={() => setShowTemplateModal(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                Start from template
+              </button>
+            )}
           </div>
+
+          {showTemplateModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={e => { if (e.target === e.currentTarget) setShowTemplateModal(false) }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 540, maxHeight: '80vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Templates</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Select a template to pre-fill your sequence</div>
+                  </div>
+                  <button onClick={() => setShowTemplateModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {SEQUENCE_TEMPLATES.map((tpl, i) => (
+                    <button key={i} type="button" onClick={() => {
+                      setForm({ name: tpl.name, description: tpl.description, steps: tpl.steps.map(s => ({ ...s })) })
+                      setShowTemplateModal(false)
+                    }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, padding: '16px 18px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{tpl.name}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>{tpl.steps.length} steps</span>
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{tpl.description}</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        {tpl.steps.map((step, si) => (
+                          <span key={si} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 6px', borderRadius: 4, background: step.type === 'email' ? 'rgba(231,0,11,0.1)' : step.type === 'linkedin' ? 'rgba(0,119,181,0.12)' : 'rgba(180,180,180,0.12)', color: step.type === 'email' ? '#E7000B' : step.type === 'linkedin' ? '#0077B5' : 'var(--text-muted)' }}>
+                            {step.type === 'email' ? 'Email' : step.type === 'linkedin' ? 'LinkedIn' : 'Call'}{si > 0 ? ` +${step.delay_days}d` : ' Day 0'}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div style={{ display: 'flex', gap: 16 }}>

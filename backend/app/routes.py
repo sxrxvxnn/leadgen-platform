@@ -185,24 +185,30 @@ async def get_lead_by_profile_url(url: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     try:
         clean = url.split('?')[0].split('#')[0].rstrip('/')
-        res = supabase.table("leads")\
-            .select("id, name, title, company")\
+        variants = [clean, clean + "/"]
+        lead_row = None
+        for variant in variants:
+            res = supabase.table("leads")\
+                .select("id, name, title, company, stage, email_score, email_status, icp_score")\
+                .eq("user_id", user_id)\
+                .eq("profile_url", variant)\
+                .limit(1)\
+                .execute()
+            if res.data:
+                lead_row = res.data[0]
+                break
+        if not lead_row:
+            return {"lead": None}
+        # Check active sequence enrollments
+        enroll_res = supabase.table("sequence_enrollments")\
+            .select("id, status, sequence_id")\
             .eq("user_id", user_id)\
-            .eq("profile_url", clean)\
+            .eq("lead_id", lead_row["id"])\
+            .in_("status", ["active", "paused"])\
             .limit(1)\
             .execute()
-        if res.data:
-            return {"lead": res.data[0]}
-        # Also try with trailing slash variant
-        res2 = supabase.table("leads")\
-            .select("id, name, title, company")\
-            .eq("user_id", user_id)\
-            .eq("profile_url", clean + "/")\
-            .limit(1)\
-            .execute()
-        if res2.data:
-            return {"lead": res2.data[0]}
-        return {"lead": None}
+        lead_row["in_sequence"] = len(enroll_res.data) > 0
+        return {"lead": lead_row}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -231,7 +237,9 @@ async def create_lead(lead: LeadCreate, authorization: str = Header(...)):
             "has_email": bool(data.get("email")),
             "has_company": bool(data.get("company")),
         })
-        return {"lead": response.data[0]}
+        inserted = response.data[0] if response.data else {}
+        _fire_webhooks(user_id, "lead.created", {"id": inserted.get("id"), "name": inserted.get("name"), "email": inserted.get("email"), "company": inserted.get("company")})
+        return {"lead": inserted}
     except HTTPException:
         raise
     except Exception as e:
@@ -4740,9 +4748,17 @@ async def mark_enrollment_replied(seq_id: str, enrollment_id: str, authorization
     user_id = get_user_id(authorization)
     validate_uuid(enrollment_id)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+    enroll = supabase.table("sequence_enrollments").select("lead_id, sequence_id").eq("id", enrollment_id).eq("user_id", user_id).maybe_single().execute()
     supabase.table("sequence_enrollments").update({
         "status": "replied", "replied_at": now
     }).eq("id", enrollment_id).eq("user_id", user_id).execute()
+    if enroll.data:
+        lead = supabase.table("leads").select("name, email, company").eq("id", enroll.data["lead_id"]).maybe_single().execute()
+        _fire_webhooks(user_id, "sequence.replied", {
+            "enrollment_id": enrollment_id,
+            "sequence_id": enroll.data.get("sequence_id"),
+            "lead": lead.data or {},
+        })
     return {"ok": True}
 
 
@@ -4779,6 +4795,98 @@ async def delete_smtp_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     supabase.table("profiles").update({"smtp_config": None}).eq("id", user_id).execute()
     return {"ok": True}
+
+
+# ─── DASHBOARD SUMMARY ───────────────────────────────────────────────────────
+
+@router.get("/dashboard/summary")
+async def dashboard_summary(authorization: str = Header(...)):
+    import datetime as _dt
+    user_id = get_user_id(authorization)
+    now     = _dt.datetime.now(_dt.timezone.utc)
+    week_ago       = (now - _dt.timedelta(days=7)).isoformat()
+    two_weeks_ago  = (now - _dt.timedelta(days=14)).isoformat()
+    today_end      = now.replace(hour=23, minute=59, second=59).isoformat()
+
+    leads_res      = supabase.table("leads").select("id,status,icp_score,created_at").eq("user_id", user_id).execute()
+    leads          = leads_res.data or []
+    companies_res  = supabase.table("companies").select("id,created_at").eq("user_id", user_id).execute()
+    companies      = companies_res.data or []
+    seq_res        = supabase.table("sequences").select("id,name,status").eq("user_id", user_id).execute()
+    sequences      = seq_res.data or []
+    enr_res        = supabase.table("sequence_enrollments").select("id,status").eq("user_id", user_id).execute()
+    enrollments    = enr_res.data or []
+    tracking_res   = supabase.table("email_tracking").select("open_count,click_count").eq("user_id", user_id).execute()
+    tracking       = tracking_res.data or []
+    tasks_res      = supabase.table("tasks").select("id,title,due_date,completed,priority,leads(name,company)").eq("user_id", user_id).eq("completed", False).lte("due_date", today_end).order("due_date").limit(8).execute()
+    activity_res   = supabase.table("lead_activity").select("id,event_type,data,created_at,leads(name,company)").eq("user_id", user_id).order("created_at", desc=True).limit(15).execute()
+
+    emails_sent    = len(tracking)
+    unique_opens   = sum(1 for t in tracking if (t.get("open_count") or 0) > 0)
+    unique_clicks  = sum(1 for t in tracking if (t.get("click_count") or 0) > 0)
+    scored_leads   = [l for l in leads if l.get("icp_score") is not None]
+
+    return {
+        "leads": {
+            "total":       len(leads),
+            "new":         sum(1 for l in leads if l.get("status") == "new"),
+            "contacted":   sum(1 for l in leads if l.get("status") == "contacted"),
+            "qualified":   sum(1 for l in leads if l.get("status") == "qualified"),
+            "this_week":   sum(1 for l in leads if (l.get("created_at") or "") >= week_ago),
+            "last_week":   sum(1 for l in leads if two_weeks_ago <= (l.get("created_at") or "") < week_ago),
+            "avg_score":   round(sum(l["icp_score"] for l in scored_leads) / len(scored_leads)) if scored_leads else None,
+        },
+        "companies": {"total": len(companies)},
+        "sequences": {
+            "total":              len(sequences),
+            "active":             sum(1 for s in sequences if s.get("status") == "active"),
+            "active_enrollments": sum(1 for e in enrollments if e.get("status") == "active"),
+            "completed":          sum(1 for e in enrollments if e.get("status") == "completed"),
+            "bounced":            sum(1 for e in enrollments if e.get("status") == "bounced"),
+            "replied":            sum(1 for e in enrollments if e.get("status") == "replied"),
+            "emails_sent":        emails_sent,
+            "unique_opens":       unique_opens,
+            "unique_clicks":      unique_clicks,
+            "avg_open_rate":      round(unique_opens / emails_sent * 100) if emails_sent else 0,
+            "avg_click_rate":     round(unique_clicks / emails_sent * 100) if emails_sent else 0,
+        },
+        "tasks_due_today": tasks_res.data or [],
+        "recent_activity":  activity_res.data or [],
+    }
+
+
+# ─── EMAIL VERIFICATION ───────────────────────────────────────────────────────
+
+@router.post("/leads/{lead_id}/verify-email")
+async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
+    """Verify lead email deliverability via Hunter."""
+    user_id = get_user_id(authorization)
+    validate_uuid(lead_id)
+    lead_res = supabase.table("leads").select("email").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
+    lead     = lead_res.data or {}
+    email    = lead.get("email")
+    if not email:
+        raise HTTPException(status_code=422, detail="Lead has no email address")
+    hunter_key = os.environ.get("HUNTER_API_KEY", "")
+    if not hunter_key:
+        raise HTTPException(status_code=503, detail="Hunter API key not configured")
+    try:
+        resp = requests.get(
+            "https://api.hunter.io/v2/email-verifier",
+            params={"email": email, "api_key": hunter_key},
+            timeout=10,
+        )
+        data = resp.json().get("data", {})
+        status     = data.get("status", "unknown")       # valid / invalid / risky / unknown
+        score      = data.get("score")                    # 0-100 deliverability score
+        disposable = data.get("disposable", False)
+        mx_found   = data.get("mx_records", False)
+        result = {"email": email, "status": status, "score": score, "disposable": disposable, "mx_found": mx_found}
+        # Store on lead
+        supabase.table("leads").update({"email_status": status, "email_score": score}).eq("id", lead_id).execute()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ─── PHASE 1: ANALYTICS ──────────────────────────────────────────────────────
@@ -4835,12 +4943,11 @@ async def get_analytics(authorization: str = Header(...)):
         else:                  score_dist["low"] += 1
 
     # Email tracking stats
-    et_res = supabase.table("email_tracking").select("tracking_id, open_count, first_opened_at").eq("user_id", user_id).execute().data or []
+    et_res = supabase.table("email_tracking").select("tracking_id, open_count, first_opened_at, created_at, click_count").eq("user_id", user_id).execute().data or []
     emails_sent   = len(et_res)
     emails_opened = len([e for e in et_res if (e.get("open_count") or 0) > 0])
     open_rate     = round(emails_opened / emails_sent * 100) if emails_sent else 0
-    clicks_res    = supabase.table("email_clicks").select("tracking_id", count="exact").in_("tracking_id", [e["tracking_id"] for e in et_res] or ["__none__"]).execute()
-    total_clicks  = clicks_res.count or 0
+    total_clicks  = sum((e.get("click_count") or 0) for e in et_res)
     click_rate    = round(total_clicks / emails_sent * 100) if emails_sent else 0
 
     # Tasks stats
@@ -4852,6 +4959,49 @@ async def get_analytics(authorization: str = Header(...)):
     tasks_overdue   = len([t for t in tasks_res if not t.get("completed") and t.get("due_date") and t["due_date"] < today_str])
     tasks_done_week = len([t for t in tasks_res if t.get("completed") and t.get("completed_at") and t["completed_at"][:10] >= week_ago])
 
+    # Activity heatmap — last 84 days (12 weeks)
+    day_counts = {}
+    for l in leads_full:
+        d = (l.get("created_at") or "")[:10]
+        if d:
+            day_counts[d] = day_counts.get(d, 0) + 1
+    for e in et_res:
+        d = (e.get("created_at") or "")[:10]
+        if d:
+            day_counts[d] = day_counts.get(d, 0) + 1
+    heatmap = []
+    for i in range(83, -1, -1):
+        day = (_dt.date.today() - _dt.timedelta(days=i)).isoformat()
+        heatmap.append({"date": day, "count": day_counts.get(day, 0)})
+
+    # Weekly lead trend — last 8 weeks
+    weekly_trend = []
+    for w in range(7, -1, -1):
+        week_start = (_dt.date.today() - _dt.timedelta(days=_dt.date.today().weekday() + 7 * w)).isoformat()
+        week_end   = (_dt.date.today() - _dt.timedelta(days=_dt.date.today().weekday() + 7 * w - 6)).isoformat()
+        count = len([l for l in leads_full if week_start <= (l.get("created_at") or "")[:10] <= week_end])
+        weekly_trend.append({"week_start": week_start, "count": count})
+
+    # Sequence per-step funnel
+    for seq in sequences:
+        seq_steps_res = supabase.table("sequence_steps").select("id, step_number, type").eq("sequence_id", seq["id"]).order("step_number").execute().data or []
+        step_funnel = []
+        for step in seq_steps_res:
+            sent = supabase.table("email_tracking").select("id", count="exact")\
+                .eq("user_id", user_id).eq("sequence_id", seq["id"])\
+                .eq("step_number", step["step_number"]).execute().count or 0
+            opened = supabase.table("email_tracking").select("id", count="exact")\
+                .eq("user_id", user_id).eq("sequence_id", seq["id"])\
+                .eq("step_number", step["step_number"]).gt("open_count", 0).execute().count or 0
+            step_funnel.append({
+                "step_number": step["step_number"],
+                "type": step["type"],
+                "sent": sent,
+                "opened": opened,
+                "open_rate": round(opened / sent * 100) if sent else 0,
+            })
+        seq["step_funnel"] = step_funnel
+
     return {
         "leads": {
             "total": len(leads),
@@ -4861,6 +5011,7 @@ async def get_analytics(authorization: str = Header(...)):
             "starred": starred_count,
             "by_status": pipeline_by_status,
             "score_distribution": score_dist,
+            "weekly_trend": weekly_trend,
         },
         "companies": {
             "total": len(companies),
@@ -4890,6 +5041,7 @@ async def get_analytics(authorization: str = Header(...)):
             "total_value": total_pipeline_value,
             "valued_deals": len(valued),
         },
+        "activity_heatmap": heatmap,
     }
 
 
@@ -5261,3 +5413,120 @@ async def prospect_add_lead(payload: dict, authorization: str = Header(...)):
     res = supabase.table("leads").insert(lead_data).execute()
     inserted = res.data[0] if res.data else {}
     return {"added": True, "lead_id": inserted.get("id")}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# WEBHOOKS
+# ═══════════════════════════════════════════════════════════════════
+
+import hashlib as _hashlib
+import hmac as _hmac
+
+WEBHOOK_EVENTS = [
+    "lead.created",
+    "lead.status_changed",
+    "sequence.replied",
+    "sequence.completed",
+    "email.opened",
+]
+
+def _fire_webhooks(user_id: str, event: str, payload: dict):
+    """Fire webhooks for a user event. Best-effort, non-blocking."""
+    try:
+        hooks = supabase.table("webhooks")\
+            .select("id, url, secret")\
+            .eq("user_id", user_id)\
+            .eq("active", True)\
+            .contains("events", [event])\
+            .execute().data or []
+        for hook in hooks:
+            body = json.dumps({"event": event, "data": payload, "timestamp": datetime.utcnow().isoformat() + "Z"})
+            headers = {"Content-Type": "application/json", "X-Sonar-Event": event}
+            if hook.get("secret"):
+                sig = _hmac.new(hook["secret"].encode(), body.encode(), _hashlib.sha256).hexdigest()
+                headers["X-Sonar-Signature"] = f"sha256={sig}"
+            try:
+                r = requests.post(hook["url"], data=body, headers=headers, timeout=6)
+                ok = r.status_code < 400
+            except Exception:
+                ok = False
+            supabase.table("webhooks").update({
+                "last_triggered_at": datetime.utcnow().isoformat(),
+                "delivery_count": supabase.table("webhooks").select("delivery_count").eq("id", hook["id"]).execute().data[0]["delivery_count"] + 1,
+                **({"error_count": supabase.table("webhooks").select("error_count").eq("id", hook["id"]).execute().data[0]["error_count"] + 1} if not ok else {}),
+            }).eq("id", hook["id"]).execute()
+    except Exception:
+        pass
+
+
+@router.get("/webhooks")
+async def list_webhooks(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("webhooks").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    return {"webhooks": res.data or []}
+
+
+@router.post("/webhooks")
+async def create_webhook(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    url = (payload.get("url") or "").strip()
+    name = (payload.get("name") or "").strip()
+    events = payload.get("events") or []
+    if not url or not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Valid URL required")
+    if not events:
+        raise HTTPException(status_code=400, detail="At least one event required")
+    unknown = [e for e in events if e not in WEBHOOK_EVENTS]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown events: {unknown}")
+    secret = payload.get("secret") or None
+    res = supabase.table("webhooks").insert({
+        "user_id": user_id,
+        "name": name or url,
+        "url": url,
+        "events": events,
+        "secret": secret,
+        "active": True,
+    }).execute()
+    return {"webhook": res.data[0] if res.data else {}}
+
+
+@router.patch("/webhooks/{webhook_id}")
+async def update_webhook(webhook_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(webhook_id)
+    updates = {k: v for k, v in payload.items() if k in ("name", "url", "events", "secret", "active")}
+    res = supabase.table("webhooks").update(updates).eq("id", webhook_id).eq("user_id", user_id).execute()
+    return {"webhook": res.data[0] if res.data else {}}
+
+
+@router.delete("/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(webhook_id)
+    supabase.table("webhooks").delete().eq("id", webhook_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@router.post("/webhooks/{webhook_id}/test")
+async def test_webhook(webhook_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(webhook_id)
+    hook = supabase.table("webhooks").select("*").eq("id", webhook_id).eq("user_id", user_id).single().execute()
+    if not hook.data:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    h = hook.data
+    body = json.dumps({
+        "event": "test",
+        "data": {"message": "This is a test payload from Sonar.", "webhook_id": webhook_id},
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
+    headers = {"Content-Type": "application/json", "X-Sonar-Event": "test"}
+    if h.get("secret"):
+        sig = _hmac.new(h["secret"].encode(), body.encode(), _hashlib.sha256).hexdigest()
+        headers["X-Sonar-Signature"] = f"sha256={sig}"
+    try:
+        r = requests.post(h["url"], data=body, headers=headers, timeout=8)
+        return {"ok": r.status_code < 400, "status_code": r.status_code}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}

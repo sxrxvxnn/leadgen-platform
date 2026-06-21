@@ -1,14 +1,25 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig } from '../services/api'
+import api from '../services/api'
 
 const SECTIONS = [
   { id: 'profile',    num: '01', label: 'Profile' },
   { id: 'email',      num: '02', label: 'Email Sending' },
   { id: 'automation', num: '03', label: 'Sequence Automation' },
-  { id: 'privacy',    num: '04', label: 'Privacy' },
-  { id: 'terms',      num: '05', label: 'Terms' },
+  { id: 'webhooks',   num: '04', label: 'Webhooks' },
+  { id: 'privacy',    num: '05', label: 'Privacy' },
+  { id: 'terms',      num: '06', label: 'Terms' },
 ]
+
+const WEBHOOK_EVENT_LABELS = {
+  'lead.created':       'Lead created',
+  'lead.status_changed':'Lead status changed',
+  'sequence.replied':   'Sequence replied',
+  'sequence.completed': 'Sequence completed',
+  'email.opened':       'Email opened',
+}
+const ALL_WEBHOOK_EVENTS = Object.keys(WEBHOOK_EVENT_LABELS)
 
 export default function Settings() {
   const [fullName,    setFullName]    = useState(localStorage.getItem('fullName') || '')
@@ -77,8 +88,62 @@ export default function Settings() {
     profile:    useRef(null),
     email:      useRef(null),
     automation: useRef(null),
+    webhooks:   useRef(null),
     privacy:    useRef(null),
     terms:      useRef(null),
+  }
+
+  // Webhooks state
+  const [webhooks, setWebhooks] = useState([])
+  const [whForm, setWhForm] = useState({ name: '', url: '', events: ['lead.created'], secret: '' })
+  const [whAdding, setWhAdding] = useState(false)
+  const [whShowForm, setWhShowForm] = useState(false)
+  const [whTesting, setWhTesting] = useState({})
+  const [whTestResult, setWhTestResult] = useState({})
+
+  useEffect(() => {
+    api.get('/webhooks').then(r => setWebhooks(r.data.webhooks || [])).catch(() => {})
+  }, [])
+
+  async function addWebhook() {
+    if (!whForm.url || !whForm.events.length) return
+    setWhAdding(true)
+    try {
+      const r = await api.post('/webhooks', whForm)
+      setWebhooks(h => [r.data.webhook, ...h])
+      setWhForm({ name: '', url: '', events: ['lead.created'], secret: '' })
+      setWhShowForm(false)
+    } catch (e) {
+      alert('Failed: ' + (e?.response?.data?.detail || e.message))
+    } finally {
+      setWhAdding(false)
+    }
+  }
+
+  async function deleteWebhook(id) {
+    if (!confirm('Delete this webhook?')) return
+    await api.delete(`/webhooks/${id}`)
+    setWebhooks(h => h.filter(w => w.id !== id))
+  }
+
+  async function testWebhook(id) {
+    setWhTesting(t => ({ ...t, [id]: true }))
+    try {
+      const r = await api.post(`/webhooks/${id}/test`)
+      setWhTestResult(t => ({ ...t, [id]: r.data.ok ? 'ok' : `fail (${r.data.status_code || r.data.error})` }))
+    } catch {
+      setWhTestResult(t => ({ ...t, [id]: 'error' }))
+    } finally {
+      setWhTesting(t => ({ ...t, [id]: false }))
+      setTimeout(() => setWhTestResult(t => { const n = { ...t }; delete n[id]; return n }), 4000)
+    }
+  }
+
+  function toggleWhEvent(ev) {
+    setWhForm(f => ({
+      ...f,
+      events: f.events.includes(ev) ? f.events.filter(e => e !== ev) : [...f.events, ev],
+    }))
   }
 
   function handleSave() {
@@ -259,9 +324,102 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 04 — Privacy */}
+          {/* 04 — Webhooks */}
+          <section ref={sectionRefs.webhooks} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="04" title="Webhooks" />
+            <p style={s.sectionHint}>Send real-time HTTP POST notifications to your endpoints when key events happen in Sonar. Compatible with Zapier, Make, n8n, or any custom integration.</p>
+
+            {webhooks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {webhooks.map(wh => (
+                  <div key={wh.id} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{wh.name || wh.url}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 7px', borderRadius: 4, background: wh.active ? 'rgba(74,124,89,0.15)' : 'rgba(180,180,180,0.1)', color: wh.active ? '#4a7c59' : 'var(--text-muted)' }}>
+                          {wh.active ? 'ACTIVE' : 'PAUSED'}
+                        </span>
+                      </div>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: '0 0 6px', wordBreak: 'break-all' }}>{wh.url}</p>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {(wh.events || []).map(ev => (
+                          <span key={ev} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 4, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                            {WEBHOOK_EVENT_LABELS[ev] || ev}
+                          </span>
+                        ))}
+                      </div>
+                      {wh.delivery_count > 0 && (
+                        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                          {wh.delivery_count} deliveries · {wh.error_count || 0} errors
+                          {wh.last_triggered_at && ` · last fired ${new Date(wh.last_triggered_at).toLocaleDateString()}`}
+                        </p>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => testWebhook(wh.id)} disabled={whTesting[wh.id]} style={{ padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: whTestResult[wh.id] === 'ok' ? '#4a7c59' : whTestResult[wh.id] ? '#E7000B' : 'var(--text)', cursor: 'pointer' }}>
+                        {whTesting[wh.id] ? '…' : whTestResult[wh.id] || 'Test'}
+                      </button>
+                      <button onClick={() => deleteWebhook(wh.id)} style={{ padding: '5px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {whShowForm ? (
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={s.label}>Name (optional)</label>
+                    <input value={whForm.name} onChange={e => setWhForm(f => ({ ...f, name: e.target.value }))} placeholder="My Zapier webhook" style={s.input} />
+                  </div>
+                  <div style={{ flex: 2 }}>
+                    <label style={s.label}>Endpoint URL</label>
+                    <input value={whForm.url} onChange={e => setWhForm(f => ({ ...f, url: e.target.value }))} placeholder="https://hooks.zapier.com/hooks/catch/…" style={s.input} />
+                  </div>
+                </div>
+                <div>
+                  <label style={s.label}>Events to subscribe</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                    {ALL_WEBHOOK_EVENTS.map(ev => (
+                      <button key={ev} type="button" onClick={() => toggleWhEvent(ev)} style={{ padding: '5px 10px', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, cursor: 'pointer', border: '1px solid', borderColor: whForm.events.includes(ev) ? '#E7000B' : 'var(--border)', background: whForm.events.includes(ev) ? 'rgba(231,0,11,0.1)' : 'var(--surface)', color: whForm.events.includes(ev) ? '#E7000B' : 'var(--text-muted)' }}>
+                        {WEBHOOK_EVENT_LABELS[ev]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label style={s.label}>Signing secret (optional — for HMAC verification)</label>
+                  <input value={whForm.secret} onChange={e => setWhForm(f => ({ ...f, secret: e.target.value }))} placeholder="Leave blank to skip signature" style={s.input} />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={addWebhook} disabled={whAdding || !whForm.url || !whForm.events.length} style={{ ...s.saveBtn, opacity: (whAdding || !whForm.url) ? 0.6 : 1 }}>
+                    {whAdding ? 'Adding…' : 'Add webhook'}
+                  </button>
+                  <button onClick={() => setWhShowForm(false)} style={{ ...s.saveBtn, background: 'var(--surface)', color: 'var(--text)' }}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setWhShowForm(true)} style={{ ...s.saveBtn, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                + Add webhook
+              </button>
+            )}
+
+            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 6px', letterSpacing: '0.08em' }}>HOW TO USE WITH ZAPIER</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
+                1. Create a Zap → Trigger: Webhooks by Zapier → Catch Hook → copy the URL above.<br />
+                2. Select events you want (e.g. <code style={{ color: 'var(--text)' }}>lead.created</code>).<br />
+                3. Click Test in Sonar to send a sample payload and activate your Zap.
+              </p>
+            </div>
+          </section>
+
+          {/* 05 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section }}>
-            <SectionHeader num="04" title="Privacy Policy" />
+            <SectionHeader num="05" title="Privacy Policy" />
             <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
@@ -299,9 +457,9 @@ export default function Settings() {
             />
           </section>
 
-          {/* 05 — Terms */}
+          {/* 06 — Terms */}
           <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="05" title="Terms of Service" />
+            <SectionHeader num="06" title="Terms of Service" />
             <p style={s.sectionHint}>The rules governing your use of Sonar. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
@@ -463,6 +621,8 @@ const s = {
   section:      { paddingBottom: '48px', marginBottom: '48px', borderBottom: '1px solid var(--border)' },
   sectionHint:  { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '24px', lineHeight: 1.7 },
   input:        { width: '100%', padding: '11px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, fontSize: '13px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s' },
+  label:        { fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 6 },
+  saveBtn:      { padding: '10px 20px', background: '#E7000B', border: 'none', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer' },
   legalHeading: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '700', letterSpacing: '0.12em', color: 'var(--text)', textTransform: 'uppercase', marginBottom: '4px' },
   legalMeta:    { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginBottom: '18px', letterSpacing: '0.02em' },
   legalSubhead: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.08em', color: 'var(--text)', textTransform: 'uppercase', marginTop: '18px', marginBottom: '6px' },

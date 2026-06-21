@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate, enrichLeadLinkedIn, sendLeadEmail } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate, enrichLeadLinkedIn, sendLeadEmail, verifyLeadEmail } from '../services/api'
 import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
 import ActivityFeed from './ActivityFeed'
@@ -128,6 +128,8 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [sendResult, setSendResult]     = useState(null)
   const [enrichingLI, setEnrichingLI]   = useState(false)
   const [liEnrichResult, setLiEnrichResult] = useState(null)
+  const [verifying, setVerifying]       = useState(false)
+  const [verifyResult, setVerifyResult] = useState(lead?.email_status ? { status: lead.email_status, score: lead.email_score } : null)
   const activityRef = useRef(null)
 
   useEffect(() => {
@@ -375,12 +377,34 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
           <div>
             <SectionLabel>Contact</SectionLabel>
             {L.email && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>Email</p>
-                  <p style={{ fontFamily: MONO, fontSize: 13, color: 'var(--text)', margin: 0 }}>{L.email}</p>
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>Email</p>
+                    <p style={{ fontFamily: MONO, fontSize: 13, color: 'var(--text)', margin: 0 }}>{L.email}</p>
+                  </div>
+                  <CopyButton text={L.email} />
+                  <button
+                    onClick={async () => {
+                      setVerifying(true)
+                      try {
+                        const res = await verifyLeadEmail(L.id)
+                        setVerifyResult(res.data)
+                      } catch (e) {
+                        setVerifyResult({ status: 'error', error: e?.response?.data?.detail || 'Failed' })
+                      } finally { setVerifying(false) }
+                    }}
+                    disabled={verifying}
+                    style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', padding: '4px 9px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-muted)', cursor: verifying ? 'default' : 'pointer', flexShrink: 0 }}>
+                    {verifying ? 'Checking…' : 'Verify'}
+                  </button>
                 </div>
-                <CopyButton text={L.email} />
+                {verifyResult && (() => {
+                  const s = verifyResult.status
+                  const color = s === 'valid' ? '#4a7c59' : s === 'risky' ? '#b07d2e' : s === 'invalid' ? '#e07070' : '#888'
+                  const label = s === 'valid' ? `Valid · ${verifyResult.score || 0}% deliverability` : s === 'risky' ? `Risky · ${verifyResult.score || 0}% — send with caution` : s === 'invalid' ? 'Invalid — likely to bounce' : verifyResult.error || s
+                  return <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color, margin: '4px 0 0', letterSpacing: '0.04em' }}>● {label}</p>
+                })()}
               </div>
             )}
             {!L.email && <p style={{ fontFamily: SANS, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>No email — use Email button in the table to find one</p>}
