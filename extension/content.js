@@ -1,3 +1,10 @@
+// ─── CONFIG ──────────────────────────────────────────────────────
+const API_BASE = 'https://leadgenengineplatform-api.vercel.app/api'
+const PANEL_ROOT_ID = 'sonar-panel-root'
+const DASHBOARD_URL = 'https://leadgenengineplatform.vercel.app'
+
+// ─── UTILITIES ───────────────────────────────────────────────────
+
 function getPageType() {
   const url = window.location.href
   if (url.includes('linkedin.com/sales/search/company')) return 'salenav-companies'
@@ -12,657 +19,752 @@ function getPageType() {
   return 'unknown'
 }
 
-function cleanUrl(url) {
-  return url.split('?')[0].split('#')[0]
+function cleanUrl(url) { return url.split('?')[0].split('#')[0].rstrip ? url.split('?')[0].split('#')[0] : url.split('?')[0].split('#')[0] }
+
+function getTokenFromStorage() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['token'], (s) => { s.token ? resolve(s.token) : reject(new Error('not_logged_in')) })
+  })
+}
+
+async function fetchAPI(path, method = 'GET', body = null, token) {
+  const opts = { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token } }
+  if (body && method !== 'GET') opts.body = JSON.stringify(body)
+  const r = await fetch(API_BASE + path, opts)
+  if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status })
+  return r.json()
 }
 
 function detectAppointment() {
-  const bookingPatterns = [
-    /calendly\.com/i, /cal\.com/i, /topmate\.io/i, /tidycal\.com/i,
-    /savvycal\.com/i, /zcal\.co/i, /hubspot.*meetings/i,
-    /youcanbook/i, /acuityscheduling/i, /setmore/i, /doodle\.com/i,
-  ]
+  const patterns = [/calendly\.com/i, /cal\.com/i, /topmate\.io/i, /tidycal\.com/i, /savvycal\.com/i, /zcal\.co/i, /hubspot.*meetings/i, /youcanbook/i, /acuityscheduling/i, /setmore/i]
   const allLinks = Array.from(document.querySelectorAll('a[href]'))
-  const hasBookingLink = allLinks.some(link => bookingPatterns.some(p => p.test(link.href || '')))
-  const pageText = document.body.innerText
-  const hasBookingText = bookingPatterns.some(p => p.test(pageText))
-  return (hasBookingLink || hasBookingText) ? 'Yes' : 'No'
+  const hasBookingLink = allLinks.some(link => patterns.some(p => p.test(link.href || '')))
+  return (hasBookingLink || patterns.some(p => p.test(document.body.innerText))) ? 'Yes' : 'No'
 }
 
+// ─── SCRAPERS (unchanged from v1.2) ──────────────────────────────
+
 function scrapeCompanyPage() {
-  const data = {
-    type: 'company', name: '', industry: '', size: '', website: '',
-    headquarters: '', description: '', followers: '',
-    url: cleanUrl(window.location.href),
-    scrapedAt: new Date().toISOString()
-  }
-  const nameSelectors = ['h1.org-top-card-summary__title', '.org-top-card-summary__title', 'h1[class*="org-top-card"]', 'h1']
-  for (const sel of nameSelectors) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break }
-  }
-  let infoItems = document.querySelectorAll('.org-top-card-summary-info-list__info-item')
-  infoItems.forEach((item, index) => {
-    const text = item.innerText.trim()
-    if (index === 0) data.industry = text
-    if (index === 1) data.size = text
-    if (index === 2) data.headquarters = text
-  })
-  if (!data.industry) {
-    const dts = document.querySelectorAll('.artdeco-def-list__item dt')
-    const dds = document.querySelectorAll('.artdeco-def-list__item dd')
-    dts.forEach((dt, i) => {
-      const key = dt.innerText.trim().toLowerCase()
-      const val = dds[i] ? dds[i].innerText.trim() : ''
-      if (key.includes('industry')) data.industry = val
-      if (key.includes('size') || key.includes('employees')) data.size = val
-      if (key.includes('headquarter')) data.headquarters = val
-      if (key.includes('website')) data.website = val
-    })
-  }
-  for (const sel of ['a[data-control-name="topbox_website"]']) {
-    const el = document.querySelector(sel)
-    if (el && el.href && !el.href.includes('linkedin')) { data.website = el.href; break }
-  }
-  for (const sel of ['p.org-top-card-summary__tagline', '.org-about-us-organization-description__text']) {
-    const el = document.querySelector(sel)
-    if (el && el.innerText.trim()) { data.description = el.innerText.trim(); break }
-  }
-  const allText = document.body.innerText
-  const followersMatch = allText.match(/(\d[\d,KkMm]*)\s*followers?/i)
-  if (followersMatch) data.followers = followersMatch[0].trim()
+  const data = { type: 'company', name: '', industry: '', size: '', website: '', headquarters: '', description: '', followers: '', url: cleanUrl(window.location.href), scrapedAt: new Date().toISOString() }
+  for (const sel of ['h1.org-top-card-summary__title', '.org-top-card-summary__title', 'h1']) { const el = document.querySelector(sel); if (el && el.innerText.trim()) { data.name = el.innerText.trim(); break } }
+  document.querySelectorAll('.org-top-card-summary-info-list__info-item').forEach((item, i) => { const t = item.innerText.trim(); if (i === 0) data.industry = t; if (i === 1) data.size = t; if (i === 2) data.headquarters = t })
+  if (!data.industry) { document.querySelectorAll('.artdeco-def-list__item dt').forEach((dt, i) => { const key = dt.innerText.trim().toLowerCase(); const val = document.querySelectorAll('.artdeco-def-list__item dd')[i]?.innerText.trim() || ''; if (key.includes('industry')) data.industry = val; if (key.includes('size') || key.includes('employees')) data.size = val; if (key.includes('headquarter')) data.headquarters = val; if (key.includes('website')) data.website = val }) }
+  for (const sel of ['a[data-control-name="topbox_website"]']) { const el = document.querySelector(sel); if (el && el.href && !el.href.includes('linkedin')) { data.website = el.href; break } }
+  for (const sel of ['p.org-top-card-summary__tagline', '.org-about-us-organization-description__text']) { const el = document.querySelector(sel); if (el) { data.description = el.innerText.trim(); break } }
+  const m = document.body.innerText.match(/(\d[\d,KkMm]*)\s*followers?/i); if (m) data.followers = m[0].trim()
   return data
 }
 
 function scrapeCompanyPeoplePage() {
-  let companyName = ''
-  let companyFollowers = ''
-  let companySize = ''
-
+  let companyName = '', companyFollowers = '', companySize = ''
   const titleTag = document.title
-  if (titleTag) {
-    companyName = titleTag.split('|')[0]
-      .replace(/people/gi, '')
-      .replace(/:/g, '')
-      .replace(/^\s*\(\d+\)\s*/, '')
-      .replace(/\s*\(\d+\)\s*$/, '')
-      .trim()
-  }
-
+  if (titleTag) companyName = titleTag.split('|')[0].replace(/people/gi, '').replace(/:/g, '').replace(/^\s*\(\d+\)\s*/, '').replace(/\s*\(\d+\)\s*$/, '').trim()
   const pageLines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  pageLines.forEach(line => {
-    if (/^\d+[\d,.KkMm]*\s*followers?$/i.test(line) && !companyFollowers) companyFollowers = line
-    if (/employees? on linkedin/i.test(line)) companySize = line.replace(/employees? on linkedin/i, '').trim()
-    if (/associated member/i.test(line)) {
-      const match = line.match(/(\d+)\s*associated/i)
-      if (match && !companySize) companySize = match[1]
-    }
-  })
-
-  const leads = []
-  const seen = new Set()
-  const profileLinks = document.querySelectorAll('a[href*="linkedin.com/in/"]')
-
-  profileLinks.forEach(link => {
+  pageLines.forEach(line => { if (/^\d+[\d,.KkMm]*\s*followers?$/i.test(line) && !companyFollowers) companyFollowers = line; if (/employees? on linkedin/i.test(line)) companySize = line.replace(/employees? on linkedin/i, '').trim() })
+  const leads = [], seen = new Set()
+  document.querySelectorAll('a[href*="linkedin.com/in/"]').forEach(link => {
     const url = cleanUrl(link.href)
     if (!url || seen.has(url)) return
     if (/\/in\/[^/]+\/(detail|overlay|edit|recent-activity|posts|pulse)/.test(url)) return
     seen.add(url)
-
-    const lead = {
-      type: 'profile', name: '', title: '', company: companyName,
-      location: '', profileUrl: url, followers: companyFollowers,
-      employeeCount: companySize, appointment: 'No',
-      scrapedAt: new Date().toISOString()
-    }
-
-    const isSkipLine = (l) => {
-      return /^(1st|2nd|3rd\+?|connect|follow|message|linkedin member|pending|withdraw|view full profile|view profile|add|skip|close|next|previous|more)$/i.test(l) ||
-        /degree connection/i.test(l) ||
-        /\d+(st|nd|rd|th)\+?\s*degree/i.test(l) ||
-        /mutual connection/i.test(l) ||
-        /^\d+\s*(connection|follower|following)/i.test(l) ||
-        l.startsWith('·') || l.startsWith('•') || l.length < 2
-    }
-
+    const lead = { type: 'profile', name: '', title: '', company: companyName, location: '', profileUrl: url, followers: companyFollowers, employeeCount: companySize, appointment: 'No', scrapedAt: new Date().toISOString() }
+    const isSkip = (l) => /^(1st|2nd|3rd\+?|connect|follow|message|linkedin member|pending|withdraw|view full profile|view profile|add|skip|close|next|previous|more)$/i.test(l) || /degree connection/i.test(l) || /mutual connection/i.test(l) || /^\d+\s*(connection|follower|following)/i.test(l) || l.startsWith('·') || l.length < 2
     let card = link.parentElement
     for (let i = 0; i < 6; i++) {
       if (!card) break
       const parent = card.parentElement
       if (parent && parent.children.length >= 2) {
-        const text = (card.innerText || '').trim()
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1)
-        if (lines.length >= 2) {
-          const validLines = lines.filter(l => !isSkipLine(l))
-          if (validLines.length > 0) lead.name = validLines[0]
-          if (validLines.length > 1) {
-            const potentialTitle = validLines[1]
-            if (potentialTitle.toLowerCase() !== companyName.toLowerCase()) {
-              lead.title = potentialTitle.length > 80 ? potentialTitle.substring(0, 77) + '...' : potentialTitle
-            }
-          }
-          const locationPattern = /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai)/i
-          for (let j = 2; j < validLines.length; j++) {
-            if (locationPattern.test(validLines[j]) && validLines[j].length < 60) {
-              lead.location = validLines[j]; break
-            }
-          }
-          break
-        }
+        const lines = (card.innerText || '').trim().split('\n').map(l => l.trim()).filter(l => l.length > 1).filter(l => !isSkip(l))
+        if (lines.length >= 2) { lead.name = lines[0]; if (lines[1]?.toLowerCase() !== companyName.toLowerCase()) lead.title = lines[1]?.length > 80 ? lines[1].substring(0, 77) + '...' : lines[1]; break }
       }
       card = card.parentElement
     }
-
-    if (!lead.name || lead.name.toLowerCase() === 'linkedin member' || isSkipLine(lead.name)) {
-      const slugMatch = url.match(/\/in\/([^/]+)/)
-      if (slugMatch) {
-        lead.name = slugMatch[1].replace(/-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-      }
-    }
-
-    if (lead.name && lead.name.length > 1 && !isSkipLine(lead.name)) leads.push(lead)
+    if (!lead.name || lead.name.toLowerCase() === 'linkedin member' || isSkip(lead.name)) { const m = url.match(/\/in\/([^/]+)/); if (m) lead.name = m[1].replace(/-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) }
+    if (lead.name && lead.name.length > 1 && !isSkip(lead.name)) leads.push(lead)
   })
-
   return { type: 'search', leads, companyName, companyFollowers, companySize, scrapedAt: new Date().toISOString() }
 }
 
 function scrapeProfilePage() {
-  const data = {
-    type: 'profile', name: '', title: '', company: '', location: '',
-    profileUrl: cleanUrl(window.location.href), followers: '', connections: '',
-    about: '', experiences: [],
-    appointment: 'No', scrapedAt: new Date().toISOString()
-  }
-
-  const pageTitle = document.title
-  if (pageTitle) data.name = pageTitle.split('|')[0].trim()
-
-  const skipLine = (line) => {
-    const patterns = [
-      /^(1st|2nd|3rd|connect|follow|message|linkedin|pending|withdraw)$/i,
-      /degree connection/i, /mutual connection/i,
-      /^(view|open to|highlights|about|experience|education|skills|activity|featured|interests|recommendations|show all)$/i,
-      /^(notification|search|home|my network|jobs|messaging)$/i,
-      /newsletter/i, /^\d+\s*(followers|connections|following)/i,
-      /^(she\/her|he\/him|they\/them)$/i, /^\d+$/,
-      /^(save|share|more|report|block|remove|unfollow|following)$/i,
-    ]
-    return patterns.some(p => p.test(line))
-  }
-
-  const isDuration = (line) =>
-    (/\d{4}/.test(line) && /present|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) ||
-    /\d+\s*(yr|mo|year|month)/i.test(line)
-
-  const isEmploymentType = (line) =>
-    /^(full-time|part-time|contract|freelance|internship|self-employed|apprenticeship|seasonal|on-site|remote|hybrid)$/i.test(line)
-
-  const isLocation = (line) => line.length < 60 && (
-    /,/.test(line) ||
-    /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|asia|california|texas|florida|washington|new jersey|illinois)/i.test(line)
-  )
-
+  const data = { type: 'profile', name: '', title: '', company: '', location: '', profileUrl: cleanUrl(window.location.href), followers: '', connections: '', about: '', experiences: [], appointment: 'No', scrapedAt: new Date().toISOString() }
+  const pageTitle = document.title; if (pageTitle) data.name = pageTitle.split('|')[0].trim()
+  const skipLine = (l) => [/^(1st|2nd|3rd|connect|follow|message|linkedin|pending|withdraw)$/i, /degree connection/i, /mutual connection/i, /^(view|open to|highlights|about|experience|education|skills|activity|featured|interests|recommendations|show all)$/i, /^(notification|search|home|my network|jobs|messaging)$/i, /newsletter/i, /^\d+\s*(followers|connections|following)/i, /^(she\/her|he\/him|they\/them)$/i, /^\d+$/, /^(save|share|more|report|block|remove|unfollow|following)$/i].some(p => p.test(l))
+  const isDuration = (l) => (/\d{4}/.test(l) && /present|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(l)) || /\d+\s*(yr|mo|year|month)/i.test(l)
+  const isLocation = (l) => l.length < 60 && (l.includes(',') || /(india|usa|uk|singapore|australia|canada|germany|uae|kerala|bangalore|mumbai|delhi|hyderabad|chennai|remote|london|new york|dubai|europe|california)/i.test(l))
+  const isEmploymentType = (l) => /^(full-time|part-time|contract|freelance|internship|self-employed|remote|hybrid|on-site)$/i.test(l)
   const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l.length > 1)
-
-  let followersFound = false
-  lines.forEach(line => {
-    if (!followersFound && /^\d[\d,]*\+?\s*followers?$/i.test(line)) {
-      data.followers = line
-      followersFound = true
-    }
-    if (/^\d[\d,]*\+?\s*connections?$/i.test(line) && !data.connections) {
-      data.connections = line
-    }
-  })
-
-  const nameIndex = lines.findIndex(l => data.name && (l === data.name || l.startsWith(data.name)))
-
-  if (nameIndex !== -1) {
-    let titleFound = false
-    let companyFound = false
-
-    for (let i = nameIndex + 1; i < Math.min(nameIndex + 20, lines.length); i++) {
-      const line = lines[i]
-      if (skipLine(line) || line === data.name) continue
-      if (line.startsWith('·')) continue
-
-      if (!titleFound && line.length > 3) {
-        const rawTitle = line.split('|')[0].trim()
-        data.title = rawTitle.length > 80 ? rawTitle.substring(0, 77) + '...' : rawTitle
-        titleFound = true
-        continue
-      }
-
-      if (titleFound && !companyFound && line.includes('·') && line.length < 100 && !isLocation(line)) {
-        data.company = line.split('·')[0].trim()
-        companyFound = true
-        continue
-      }
-
-      if (titleFound && !data.location && isLocation(line)) {
-        data.location = line
-        if (companyFound) break
-      }
-
-      if (titleFound && companyFound && data.location) break
-    }
-  }
-
-  // ── About section ────────────────────────────────────────────
-  const aboutIdx = lines.findIndex(l => /^about$/i.test(l))
-  if (aboutIdx !== -1) {
-    const sectionBoundaries = /^(experience|education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages|honors|awards|publications|volunteering|contact info)$/i
-    const aboutLines = []
-    for (let i = aboutIdx + 1; i < Math.min(aboutIdx + 30, lines.length); i++) {
-      const line = lines[i]
-      if (sectionBoundaries.test(line)) break
-      if (skipLine(line)) continue
-      if (line.length > 5) aboutLines.push(line)
-    }
-    data.about = aboutLines.join(' ').trim().substring(0, 1200)
-  }
-
-  // ── Experience section ───────────────────────────────────────
-  const expIdx = lines.findIndex(l => /^experience$/i.test(l))
-  if (expIdx !== -1) {
-    const expBoundary = /^(education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages|honors|awards|publications|volunteering|contact info|courses)$/i
-    const experiences = []
-    let i = expIdx + 1
-    while (i < Math.min(expIdx + 80, lines.length) && experiences.length < 8) {
-      const line = lines[i]
-      if (expBoundary.test(line)) break
-      if (!line || line.length < 2 || skipLine(line) || isDuration(line) || isEmploymentType(line) || isLocation(line)) {
-        i++; continue
-      }
-      // A title line is typically followed by company info or duration within a few lines
-      if (line.length > 3 && line.length < 120) {
-        const exp = { title: line, company: '', duration: '' }
-        // Look ahead for company name and duration
-        for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-          const next = lines[j]
-          if (expBoundary.test(next)) break
-          if (isDuration(next) && !exp.duration) { exp.duration = next; continue }
-          if (!isEmploymentType(next) && !isDuration(next) && !skipLine(next) && !exp.company && next.length > 1 && next.length < 80) {
-            exp.company = next.split(' · ')[0].trim()
-          }
-        }
-        // Only push if it looks like a real job entry (has a company or followed by duration)
-        if (exp.company || exp.duration) experiences.push(exp)
-        i += 3
-        continue
-      }
-      i++
-    }
-    data.experiences = experiences
-  }
-
-  if (!data.company) {
-    const expIndex = lines.findIndex(l => l === 'Experience')
-    if (expIndex !== -1) {
-      let expLinesFound = 0
-      for (let i = expIndex + 1; i < Math.min(expIndex + 10, lines.length); i++) {
-        const line = lines[i]
-        if (line.length > 2 && line.length < 100 &&
-          !line.includes('Full-time') && !line.includes('Part-time') &&
-          !line.includes('Contract') && !/^\d{4}/.test(line) &&
-          !line.includes(' yr') && !line.includes(' mo') &&
-          !line.includes('Present') && !line.includes('On-site') &&
-          !line.includes('Remote') && !line.includes('Hybrid') && !isLocation(line)) {
-          if (expLinesFound === 1) {
-            data.company = line.split('·')[0].trim(); break
-          }
-          expLinesFound++
-        }
-      }
-    }
-  }
-
-  // Pull company from first experience if still missing
-  if (!data.company && data.experiences.length > 0 && data.experiences[0].company) {
-    data.company = data.experiences[0].company
-  }
-
+  lines.forEach(l => { if (!data.followers && /^\d[\d,]*\+?\s*followers?$/i.test(l)) data.followers = l; if (/^\d[\d,]*\+?\s*connections?$/i.test(l) && !data.connections) data.connections = l })
+  const ni = lines.findIndex(l => data.name && (l === data.name || l.startsWith(data.name)))
+  if (ni !== -1) { let tf = false, cf = false; for (let i = ni + 1; i < Math.min(ni + 20, lines.length); i++) { const l = lines[i]; if (skipLine(l) || l === data.name || l.startsWith('·')) continue; if (!tf && l.length > 3) { data.title = l.split('|')[0].trim().substring(0, 80); tf = true; continue } if (tf && !cf && l.includes('·') && l.length < 100 && !isLocation(l)) { data.company = l.split('·')[0].trim(); cf = true; continue } if (tf && !data.location && isLocation(l)) { data.location = l; if (cf) break } if (tf && cf && data.location) break } }
+  const aboutIdx = lines.findIndex(l => /^about$/i.test(l)); if (aboutIdx !== -1) { const boundary = /^(experience|education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages|honors|awards)$/i; const al = []; for (let i = aboutIdx + 1; i < Math.min(aboutIdx + 30, lines.length); i++) { if (boundary.test(lines[i])) break; if (!skipLine(lines[i]) && lines[i].length > 5) al.push(lines[i]) }; data.about = al.join(' ').substring(0, 1200) }
+  const expIdx = lines.findIndex(l => /^experience$/i.test(l)); if (expIdx !== -1) { const eb = /^(education|skills|activity|featured|interests|recommendations|licenses|certifications|projects|languages)$/i; let i = expIdx + 1; while (i < Math.min(expIdx + 80, lines.length) && data.experiences.length < 8) { const l = lines[i]; if (eb.test(l)) break; if (!l || l.length < 2 || skipLine(l) || isDuration(l) || isEmploymentType(l) || isLocation(l)) { i++; continue }; if (l.length > 3 && l.length < 120) { const exp = { title: l, company: '', duration: '' }; for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) { const n = lines[j]; if (eb.test(n)) break; if (isDuration(n) && !exp.duration) { exp.duration = n; continue } if (!isEmploymentType(n) && !isDuration(n) && !skipLine(n) && !exp.company && n.length > 1 && n.length < 80) exp.company = n.split(' · ')[0].trim() }; if (exp.company || exp.duration) data.experiences.push(exp); i += 3; continue }; i++ } }
+  if (!data.company && data.experiences.length > 0) data.company = data.experiences[0].company
   data.appointment = detectAppointment()
   return data
 }
 
 function scrapeSearchPage() {
   const leads = []
-  const cards = document.querySelectorAll('li.reusable-search__result-container')
-  cards.forEach(card => {
+  document.querySelectorAll('li.reusable-search__result-container').forEach(card => {
     const lead = { type: 'profile', name: '', title: '', company: '', location: '', profileUrl: '', scrapedAt: new Date().toISOString() }
-    const nameEl = card.querySelector('span.entity-result__title-text a span[aria-hidden="true"]')
-    if (nameEl) lead.name = nameEl.innerText.trim()
-    const titleEl = card.querySelector('.entity-result__primary-subtitle')
-    if (titleEl) { const t = titleEl.innerText.trim(); lead.title = t.length > 80 ? t.substring(0, 77) + '...' : t }
-    const companyEl = card.querySelector('.entity-result__secondary-subtitle')
-    if (companyEl) lead.company = companyEl.innerText.trim()
-    const locationEl = card.querySelector('.entity-result__tertiary-subtitle')
-    if (locationEl) lead.location = locationEl.innerText.trim()
-    const linkEl = card.querySelector('a.app-aware-link')
-    if (linkEl) lead.profileUrl = cleanUrl(linkEl.href)
+    const nameEl = card.querySelector('span.entity-result__title-text a span[aria-hidden="true"]'); if (nameEl) lead.name = nameEl.innerText.trim()
+    const titleEl = card.querySelector('.entity-result__primary-subtitle'); if (titleEl) lead.title = titleEl.innerText.trim().substring(0, 80)
+    const companyEl = card.querySelector('.entity-result__secondary-subtitle'); if (companyEl) lead.company = companyEl.innerText.trim()
+    const locationEl = card.querySelector('.entity-result__tertiary-subtitle'); if (locationEl) lead.location = locationEl.innerText.trim()
+    const linkEl = card.querySelector('a.app-aware-link'); if (linkEl) lead.profileUrl = cleanUrl(linkEl.href)
     if (lead.name) leads.push(lead)
   })
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
 function scrapeLinkedInCompanySearch() {
-  const companies = []
-  const seen = new Set()
-  const companyLinks = document.querySelectorAll('a[href*="linkedin.com/company/"]')
-
-  companyLinks.forEach(link => {
-    const href = cleanUrl(link.href)
-    const slugMatch = href.match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)\/?$/)
-    if (!slugMatch) return
-    const slug = slugMatch[1]
-    if (['linkedin', 'company', 'school', 'showcase'].includes(slug)) return
-    if (seen.has(slug)) return
-    seen.add(slug)
-
-    // Name is first line of link text
-    const rawName = link.innerText.trim()
-    const name = rawName.split('\n')[0].trim()
-    if (!name || name.length < 2 || name.length > 100) return
-    if (/^(follow|following|connect|sign up|visit website|reactivate)$/i.test(name)) return
-    if (/online event|your local time|\d{1,2}:\d{2}/.test(name)) return
-
-    const company = {
-      type: 'company', name, industry: '', headquarters: '',
-      followers: '', description: '', linkedinUrl: href,
-      scrapedAt: new Date().toISOString()
-    }
-
-    // Parse from link innerText — most reliable source
-    // Format: "Name\n\nIndustry\n\nLocation"
-    const linkParts = link.innerText.split('\n').map(p => p.trim()).filter(p => p.length > 0)
-    // linkParts[0] = name, [1] = industry, [2] = location
-    if (linkParts.length > 1) company.industry = linkParts[1]
-    if (linkParts.length > 2) {
-      const potentialHQ = linkParts[2]
-      // Only use as HQ if it's not a followers count
-      if (!/follower/i.test(potentialHQ)) {
-        company.headquarters = potentialHQ
-      }
-    }
-
-    // Get followers and description from card container
-    let card = link
-    for (let i = 0; i < 6; i++) {
-      card = card.parentElement
-      if (!card) break
-      const cardLines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0)
-      if (cardLines.length >= 4) {
-        // Followers — line with "follower" text
-        const followersLine = cardLines.find(l => /\d[\d,KkMm]*\s*followers?/i.test(l))
-        if (followersLine) company.followers = followersLine
-
-        // Description — long line, not name, not followers, not UI text
-        const descLine = cardLines.find(l =>
-          l.length > 40 &&
-          !l.includes(name) &&
-          !/follower|follow|sign up|visit website|get the linkedin/i.test(l) &&
-          !l.match(/^\d+/)
-        )
-        if (descLine) company.description = descLine.substring(0, 200)
-        break
-      }
-    }
-
+  const companies = [], seen = new Set()
+  document.querySelectorAll('a[href*="linkedin.com/company/"]').forEach(link => {
+    const href = cleanUrl(link.href); const m = href.match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)\/?$/); if (!m) return; const slug = m[1]; if (['linkedin', 'company', 'school', 'showcase'].includes(slug) || seen.has(slug)) return; seen.add(slug)
+    const name = link.innerText.split('\n')[0].trim(); if (!name || name.length < 2 || name.length > 100 || /^(follow|following|connect|sign up|visit website)$/i.test(name)) return
+    const company = { type: 'company', name, industry: '', headquarters: '', followers: '', description: '', linkedinUrl: href, scrapedAt: new Date().toISOString() }
+    const parts = link.innerText.split('\n').map(p => p.trim()).filter(p => p.length > 0); if (parts.length > 1) company.industry = parts[1]; if (parts.length > 2 && !/follower/i.test(parts[2])) company.headquarters = parts[2]
+    let card = link; for (let i = 0; i < 6; i++) { card = card.parentElement; if (!card) break; const cardLines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0); if (cardLines.length >= 4) { const fl = cardLines.find(l => /\d[\d,KkMm]*\s*followers?/i.test(l)); if (fl) company.followers = fl; const dl = cardLines.find(l => l.length > 40 && !l.includes(name) && !/follower|follow|sign up/i.test(l) && !l.match(/^\d+/)); if (dl) company.description = dl.substring(0, 200); break } }
     companies.push(company)
   })
-
   return { type: 'company-list', source: 'linkedin-search', companies, total: companies.length, scrapedAt: new Date().toISOString() }
 }
 
 function scrapeSalesNavCompanies() {
-  const companies = []
-  const seen = new Set()
-  let cards = []
-  for (const sel of ['[data-x-search-result="ACCOUNT"]', '.search-results__result-item', '.artdeco-list__item']) {
-    cards = Array.from(document.querySelectorAll(sel))
-    if (cards.length > 0) break
-  }
-  if (cards.length === 0) {
-    document.querySelectorAll('a[href*="/sales/company/"]').forEach(link => {
-      const card = link.closest('li') || link.closest('[class*="result"]')
-      if (card && !cards.includes(card)) cards.push(card)
-    })
-  }
+  const companies = [], seen = new Set(); let cards = []
+  for (const sel of ['[data-x-search-result="ACCOUNT"]', '.search-results__result-item', '.artdeco-list__item']) { cards = Array.from(document.querySelectorAll(sel)); if (cards.length > 0) break }
+  if (cards.length === 0) { document.querySelectorAll('a[href*="/sales/company/"]').forEach(link => { const card = link.closest('li') || link.closest('[class*="result"]'); if (card && !cards.includes(card)) cards.push(card) }) }
   cards.forEach(card => {
     const company = { type: 'company', name: '', industry: '', size: '', headquarters: '', followers: '', description: '', linkedinUrl: '', salesNavUrl: '', scrapedAt: new Date().toISOString() }
-    for (const sel of ['[data-anonymize="company-name"]', '.result-lockup__name', 'a[href*="/sales/company/"]']) {
-      const el = card.querySelector(sel)
-      if (el && el.innerText.trim()) { company.name = el.innerText.trim(); break }
-    }
-    const salesLink = card.querySelector('a[href*="/sales/company/"]')
-    if (salesLink) company.salesNavUrl = salesLink.href
+    for (const sel of ['[data-anonymize="company-name"]', '.result-lockup__name', 'a[href*="/sales/company/"]']) { const el = card.querySelector(sel); if (el && el.innerText.trim()) { company.name = el.innerText.trim(); break } }
+    const salesLink = card.querySelector('a[href*="/sales/company/"]'); if (salesLink) company.salesNavUrl = salesLink.href
     if (company.name && !seen.has(company.name)) { seen.add(company.name); companies.push(company) }
   })
   return { type: 'company-list', source: 'sales-navigator', companies, total: companies.length, scrapedAt: new Date().toISOString() }
 }
 
 function scrapeSalesNavPeople() {
-  const leads = []
-  const seen = new Set()
-  let cards = []
-  for (const sel of ['[data-x-search-result="LEAD"]', '.search-results__result-item', '.artdeco-list__item']) {
-    cards = Array.from(document.querySelectorAll(sel))
-    if (cards.length > 0) break
-  }
+  const leads = [], seen = new Set(); let cards = []
+  for (const sel of ['[data-x-search-result="LEAD"]', '.search-results__result-item', '.artdeco-list__item']) { cards = Array.from(document.querySelectorAll(sel)); if (cards.length > 0) break }
   cards.forEach(card => {
     const lead = { type: 'profile', name: '', title: '', company: '', location: '', profileUrl: '', scrapedAt: new Date().toISOString() }
-    for (const sel of ['[data-anonymize="person-name"]', '.result-lockup__name a', 'a[href*="/sales/lead/"]']) {
-      const el = card.querySelector(sel)
-      if (el && el.innerText.trim()) { lead.name = el.innerText.trim(); break }
-    }
-    const profileLink = card.querySelector('a[href*="/sales/lead/"]') || card.querySelector('a[href*="/in/"]')
-    if (profileLink) lead.profileUrl = cleanUrl(profileLink.href)
+    for (const sel of ['[data-anonymize="person-name"]', '.result-lockup__name a', 'a[href*="/sales/lead/"]']) { const el = card.querySelector(sel); if (el && el.innerText.trim()) { lead.name = el.innerText.trim(); break } }
+    const profileLink = card.querySelector('a[href*="/sales/lead/"]') || card.querySelector('a[href*="/in/"]'); if (profileLink) lead.profileUrl = cleanUrl(profileLink.href)
     if (lead.name && !seen.has(lead.name)) { seen.add(lead.name); leads.push(lead) }
   })
   return { type: 'search', leads, scrapedAt: new Date().toISOString() }
 }
 
-// ─── AUTO SCROLL ─────────────────────────────────────────────
-
 function autoScrollPeoplePage(callback) {
-  let lastCount = 0
-  let unchangedRounds = 0
-  let totalScrolls = 0
-  const maxScrolls = 30
-
-  function getUniqueProfileCount() {
-    const links = document.querySelectorAll('a[href*="linkedin.com/in/"]')
-    const unique = new Set(Array.from(links).map(l => l.href.split('?')[0]))
-    return unique.size
-  }
-
-  function findAndClickShowMore() {
-    const buttons = Array.from(document.querySelectorAll('button'))
-    for (const btn of buttons) {
-      const text = (btn.innerText || btn.textContent || '').trim()
-      if (text === 'Show more results' || text === 'Load more results' || text === 'See more' || text === 'Show more') {
-        const rect = btn.getBoundingClientRect()
-        if (rect.width > 0 && rect.height > 0) {
-          btn.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          setTimeout(() => { btn.click() }, 600)
-          return true
-        }
-      }
-    }
-    return false
-  }
-
-  function scrollStep() {
-    const currentCount = getUniqueProfileCount()
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
-    totalScrolls++
-    setTimeout(() => { findAndClickShowMore() }, 1500)
-
-    if (currentCount === lastCount) {
-      unchangedRounds++
-    } else {
-      unchangedRounds = 0
-      lastCount = currentCount
-    }
-
-    if (unchangedRounds >= 4 || totalScrolls >= maxScrolls) {
-      setTimeout(() => { callback(getUniqueProfileCount()) }, 2500)
-      return
-    }
-    setTimeout(scrollStep, 3500)
-  }
-
-  lastCount = getUniqueProfileCount()
-  scrollStep()
+  let lastCount = 0, unchangedRounds = 0, totalScrolls = 0; const maxScrolls = 30
+  const getCount = () => new Set(Array.from(document.querySelectorAll('a[href*="linkedin.com/in/"]')).map(l => l.href.split('?')[0])).size
+  const clickShowMore = () => { for (const btn of document.querySelectorAll('button')) { const t = (btn.innerText || '').trim(); if (['Show more results', 'Load more results', 'See more', 'Show more'].includes(t)) { const r = btn.getBoundingClientRect(); if (r.width > 0) { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => btn.click(), 600); return true } } }; return false }
+  function step() { const current = getCount(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); totalScrolls++; setTimeout(() => clickShowMore(), 1500); if (current === lastCount) unchangedRounds++; else { unchangedRounds = 0; lastCount = current }; if (unchangedRounds >= 4 || totalScrolls >= maxScrolls) { setTimeout(() => callback(getCount()), 2500); return }; setTimeout(step, 3500) }
+  lastCount = getCount(); step()
 }
 
-// ─── IN-PIPELINE BADGE ───────────────────────────────────────
+// ─── PANEL STYLES ────────────────────────────────────────────────
 
-const BADGE_ID = 'sonar-pipeline-badge'
-const API_BASE = 'https://leadgenengineplatform-api.vercel.app/api'
+function injectPanelStyles() {
+  if (document.getElementById('sonar-panel-styles')) return
+  const style = document.createElement('style')
+  style.id = 'sonar-panel-styles'
+  style.textContent = `
+    #sonar-root *, #sonar-root *::before, #sonar-root *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace; }
+    #sonar-tab { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:2147483646; width:30px; height:76px; background:#111; border:1px solid #2a2a2a; border-right:none; border-radius:8px 0 0 8px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, width .15s; }
+    #sonar-tab:hover { background:#1c1c1c; width:34px; }
+    #sonar-tab svg { display:block; }
+    #sonar-panel { position:fixed; right:-304px; top:0; height:100vh; width:304px; background:#0f0f0f; border-left:1px solid #222; z-index:2147483647; transition:right .28s cubic-bezier(.22,1,.36,1); overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scrollbar-width:thin; scrollbar-color:#2a2a2a transparent; }
+    #sonar-panel::-webkit-scrollbar { width:4px; }
+    #sonar-panel::-webkit-scrollbar-track { background:transparent; }
+    #sonar-panel::-webkit-scrollbar-thumb { background:#2a2a2a; border-radius:2px; }
+    #sonar-panel.open { right:0; }
+    .sp-hd { display:flex; align-items:center; justify-content:space-between; padding:13px 14px; border-bottom:1px solid #1e1e1e; flex-shrink:0; }
+    .sp-brand { display:flex; align-items:center; gap:8px; }
+    .sp-logo { width:20px; height:20px; background:#E7000B; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .sp-name-text { font-size:12px; font-weight:700; letter-spacing:.12em; color:#fff; text-transform:uppercase; }
+    .sp-x { background:none; border:none; color:#444; font-size:18px; cursor:pointer; padding:0; line-height:1; transition:color .15s; }
+    .sp-x:hover { color:#fff; }
+    .sp-sec { padding:13px 14px; border-bottom:1px solid #181818; flex-shrink:0; }
+    .sp-sec:last-child { border-bottom:none; }
+    .sp-lbl { font-size:8px; font-weight:700; letter-spacing:.16em; color:#444; text-transform:uppercase; margin-bottom:8px; display:block; }
+    .sp-person-name { font-size:14px; font-weight:700; color:#fff; margin-bottom:3px; line-height:1.25; }
+    .sp-person-sub { font-size:10px; color:#888; margin-bottom:2px; line-height:1.4; }
+    .sp-status-row { display:flex; align-items:center; gap:7px; margin-bottom:9px; }
+    .sp-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .sp-dot.in { background:#22c55e; box-shadow:0 0 7px rgba(34,197,94,.45); }
+    .sp-dot.out { background:#3a3a3a; }
+    .sp-status-label { font-size:11px; font-weight:700; color:#fff; }
+    .sp-chips { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:4px; }
+    .sp-chip { display:inline-block; font-size:8px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
+    .sp-chip.stage { background:rgba(255,255,255,.04); border-color:#2a2a2a; color:#666; }
+    .sp-chip.icp-hi { background:rgba(34,197,94,.1); border-color:rgba(34,197,94,.3); color:#22c55e; }
+    .sp-chip.icp-md { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.25); color:#fbbf24; }
+    .sp-chip.icp-lo { background:rgba(100,100,100,.08); border-color:#2a2a2a; color:#555; }
+    .sp-chip.ok { background:rgba(34,197,94,.08); border-color:rgba(34,197,94,.25); color:#22c55e; }
+    .sp-chip.warn { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.25); color:#fbbf24; }
+    .sp-chip.bad { background:rgba(239,68,68,.08); border-color:rgba(239,68,68,.25); color:#ef4444; }
+    .sp-chip.seq { background:rgba(96,165,250,.08); border-color:rgba(96,165,250,.2); color:#60a5fa; }
+    .sp-email-row { display:flex; align-items:center; gap:8px; }
+    .sp-email-addr { font-size:11px; color:#ddd; flex:1; word-break:break-all; }
+    .sp-copy { background:none; border:1px solid #2a2a2a; border-radius:3px; color:#555; font-size:9px; padding:3px 7px; cursor:pointer; font-family:inherit; flex-shrink:0; transition:border-color .15s,color .15s; }
+    .sp-copy:hover { border-color:#444; color:#aaa; }
+    .sp-btn { display:flex; align-items:center; justify-content:space-between; width:100%; padding:9px 13px; border-radius:6px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; margin-bottom:6px; border:none; }
+    .sp-btn:last-child { margin-bottom:0; }
+    .sp-btn:disabled { opacity:.35; cursor:not-allowed; }
+    .sp-btn.pri { background:#E7000B; color:#fff; }
+    .sp-btn.pri:hover:not(:disabled) { background:#c50009; box-shadow:0 0 18px rgba(231,0,11,.28); }
+    .sp-btn.sec { background:#161616; color:#888; border:1px solid #252525; }
+    .sp-btn.sec:hover:not(:disabled) { border-color:#3a3a3a; color:#ddd; }
+    .sp-btn.ok { background:rgba(34,197,94,.08); color:#22c55e; border:1px solid rgba(34,197,94,.2); }
+    .sp-btn.warn { background:rgba(251,191,36,.08); color:#fbbf24; border:1px solid rgba(251,191,36,.2); }
+    .sp-seq-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #181818; }
+    .sp-seq-row:last-child { border-bottom:none; }
+    .sp-seq-nm { font-size:10px; color:#999; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; }
+    .sp-enroll { font-size:8px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:rgba(231,0,11,.08); border:1px solid rgba(231,0,11,.2); color:#E7000B; border-radius:3px; padding:4px 8px; cursor:pointer; font-family:inherit; transition:background .15s; flex-shrink:0; }
+    .sp-enroll:hover { background:rgba(231,0,11,.18); }
+    .sp-enroll:disabled { opacity:.35; cursor:not-allowed; }
+    .sp-load { display:flex; align-items:center; justify-content:center; padding:24px; color:#333; font-size:9px; letter-spacing:.1em; gap:8px; }
+    .sp-note { font-size:9px; color:#444; line-height:1.6; }
+    .sp-divider { height:1px; background:#1a1a1a; margin:8px 0; }
+    .sp-ft { margin-top:auto; padding:11px 14px; border-top:1px solid #181818; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .sp-ft a { font-size:9px; color:#444; text-decoration:none; letter-spacing:.06em; transition:color .15s; }
+    .sp-ft a:hover { color:#888; }
+    .sp-ft-v { font-size:8px; color:#2a2a2a; letter-spacing:.04em; }
+    @keyframes sp-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    .sp-spinner { display:inline-block; width:10px; height:10px; border:1.5px solid #2a2a2a; border-top-color:#E7000B; border-radius:50%; animation:sp-spin .75s linear infinite; }
 
-function removeBadge() {
-  const existing = document.getElementById(BADGE_ID)
-  if (existing) existing.remove()
+    /* Search results inline */
+    .snr-btn { display:inline-flex; align-items:center; gap:3px; padding:4px 9px; border-radius:4px; font-family:'SF Mono',ui-monospace,monospace; font-size:10px; font-weight:600; letter-spacing:.04em; cursor:pointer; transition:all .15s; border:1px solid; white-space:nowrap; vertical-align:middle; }
+    .snr-btn.add { color:#E7000B; border-color:rgba(231,0,11,.3); background:rgba(231,0,11,.06); }
+    .snr-btn.add:hover { background:rgba(231,0,11,.14); border-color:#E7000B; }
+    .snr-btn.in { color:#22c55e; border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.06); cursor:default; pointer-events:none; }
+    .snr-btn.load { color:#2a2a2a; border-color:#2a2a2a; background:none; cursor:wait; }
+
+    /* Company page quick-add */
+    #sonar-company-btn { position:fixed; bottom:24px; right:24px; z-index:2147483646; display:flex; align-items:center; gap:8px; padding:11px 18px; background:#0f0f0f; border:1px solid #2a2a2a; border-radius:8px; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:#fff; letter-spacing:.06em; box-shadow:0 4px 24px rgba(0,0,0,.5); transition:border-color .15s,box-shadow .15s; }
+    #sonar-company-btn:hover { border-color:#444; box-shadow:0 4px 32px rgba(0,0,0,.7); }
+    #sonar-company-btn.added { color:#22c55e; border-color:rgba(34,197,94,.3); }
+  `
+  document.head.appendChild(style)
 }
 
-function injectBadge(lead) {
-  removeBadge()
-  const badge = document.createElement('div')
-  badge.id = BADGE_ID
+// ─── PANEL DOM ───────────────────────────────────────────────────
 
-  const stageLabel = lead.stage ? lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1) : 'Pipeline'
-  const scoreText = lead.icp_score != null ? ` · ICP ${lead.icp_score}%` : ''
-  const seqText = lead.in_sequence ? ' · In sequence' : ''
+function createPanel() {
+  if (document.getElementById(PANEL_ROOT_ID)) return
+  injectPanelStyles()
 
-  badge.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-      <span style="font-weight:700;font-size:13px;color:#fff;">In Sonar</span>
-      <span style="font-size:12px;color:rgba(255,255,255,0.75);">${stageLabel}${scoreText}${seqText}</span>
-      <button id="sonar-badge-close" style="margin-left:4px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:16px;line-height:1;cursor:pointer;padding:0 2px;">&times;</button>
+  const root = document.createElement('div')
+  root.id = PANEL_ROOT_ID
+  root.innerHTML = `
+    <div id="sonar-tab" title="Open Sonar">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="#E7000B" stroke-width="1.3" opacity="0.45"/>
+        <circle cx="8" cy="8" r="4" stroke="#E7000B" stroke-width="1.3" opacity="0.8"/>
+        <circle cx="8" cy="8" r="1.5" fill="#E7000B"/>
+        <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#E7000B" stroke-width="1.3" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div id="sonar-panel">
+      <div class="sp-hd">
+        <div class="sp-brand">
+          <div class="sp-logo">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.5"/>
+              <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.85"/>
+              <circle cx="8" cy="8" r="1.5" fill="#fff"/>
+              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="sp-name-text">Sonar</span>
+        </div>
+        <button class="sp-x" id="sonar-close">×</button>
+      </div>
+      <div id="sonar-body"><div class="sp-load"><span class="sp-spinner"></span> <span>Loading…</span></div></div>
+      <div class="sp-ft">
+        <a href="${DASHBOARD_URL}" target="_blank">Open dashboard →</a>
+        <span class="sp-ft-v">v1.3</span>
+      </div>
     </div>
   `
-
-  Object.assign(badge.style, {
-    position: 'fixed',
-    top: '72px',
-    right: '20px',
-    zIndex: '99999',
-    background: 'rgba(18,18,18,0.95)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderLeft: '3px solid #E7000B',
-    borderRadius: '10px',
-    padding: '10px 14px',
-    fontFamily: '"IBM Plex Mono", monospace, sans-serif',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-    backdropFilter: 'blur(10px)',
-    cursor: 'default',
-    userSelect: 'none',
-    minWidth: '220px',
-  })
-
-  document.body.appendChild(badge)
-
-  document.getElementById('sonar-badge-close').addEventListener('click', (e) => {
-    e.stopPropagation()
-    removeBadge()
-  })
-
-  // Auto-dismiss after 8 seconds
-  setTimeout(() => {
-    const el = document.getElementById(BADGE_ID)
-    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.4s'; setTimeout(() => el.remove(), 400) }
-  }, 8000)
+  document.body.appendChild(root)
+  document.getElementById('sonar-tab').addEventListener('click', togglePanel)
+  document.getElementById('sonar-close').addEventListener('click', hidePanel)
 }
 
-function checkPipelineStatus() {
+let _panelOpen = false
+
+function showPanel() { document.getElementById('sonar-panel')?.classList.add('open'); document.getElementById('sonar-tab').style.display = 'none'; _panelOpen = true }
+function hidePanel() { document.getElementById('sonar-panel')?.classList.remove('open'); const t = document.getElementById('sonar-tab'); if (t) t.style.display = ''; _panelOpen = false }
+function togglePanel() { _panelOpen ? hidePanel() : showPanel() }
+function setBody(html) { const b = document.getElementById('sonar-body'); if (b) b.innerHTML = html }
+
+// ─── PANEL CONTENT ───────────────────────────────────────────────
+
+function buildIcpChip(score) {
+  if (score == null) return ''
+  const cls = score >= 70 ? 'icp-hi' : score >= 40 ? 'icp-md' : 'icp-lo'
+  return `<span class="sp-chip ${cls}">ICP ${score}</span>`
+}
+
+function buildEmailChip(status) {
+  if (!status) return ''
+  const map = { valid: ['ok', '✓ valid'], risky: ['warn', '⚠ risky'], invalid: ['bad', '✕ invalid'] }
+  const [cls, lbl] = map[status] || ['', '']
+  return cls ? `<span class="sp-chip ${cls}">${lbl}</span>` : ''
+}
+
+async function loadPanel() {
   if (getPageType() !== 'profile') return
-  const profileUrl = cleanUrl(window.location.href)
 
-  chrome.storage.local.get(['token'], (stored) => {
-    const token = stored.token
-    if (!token) return
+  const url = window.location.href.split('?')[0].split('#')[0]
+  setBody('<div class="sp-load"><span class="sp-spinner"></span> <span>Checking pipeline…</span></div>')
 
-    fetch(`${API_BASE}/leads/by-profile-url?url=${encodeURIComponent(profileUrl)}`, {
-      headers: { Authorization: 'Bearer ' + token }
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && data.lead) injectBadge(data.lead)
-      })
-      .catch(() => {})
-  })
-}
-
-// Run on profile pages — wait for DOM to stabilize
-let _badgeCheckTimer = null
-function scheduleBadgeCheck() {
-  if (getPageType() !== 'profile') return
-  clearTimeout(_badgeCheckTimer)
-  removeBadge()
-  _badgeCheckTimer = setTimeout(checkPipelineStatus, 1800)
-}
-
-// LinkedIn is a SPA — watch for URL changes
-let _lastCheckedUrl = ''
-const _urlObserver = new MutationObserver(() => {
-  const current = window.location.href
-  if (current !== _lastCheckedUrl) {
-    _lastCheckedUrl = current
-    scheduleBadgeCheck()
+  let token
+  try { token = await getTokenFromStorage() } catch {
+    setBody(`
+      <div class="sp-sec">
+        <span class="sp-lbl">Status</span>
+        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#555">Not signed in</span></div>
+        <p class="sp-note">Open the Sonar extension popup to sign in, then refresh this page.</p>
+      </div>`)
+    return
   }
-})
-_urlObserver.observe(document.body, { childList: true, subtree: true })
 
-// Initial check
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  _lastCheckedUrl = window.location.href
-  scheduleBadgeCheck()
-} else {
-  document.addEventListener('DOMContentLoaded', () => {
-    _lastCheckedUrl = window.location.href
-    scheduleBadgeCheck()
+  try {
+    const [pipeRes, seqRes] = await Promise.all([
+      fetchAPI(`/leads/by-profile-url?url=${encodeURIComponent(url)}`, 'GET', null, token),
+      fetchAPI('/sequences', 'GET', null, token),
+    ])
+
+    const pageData = scrapeProfilePage()
+    const lead = pipeRes.lead || null
+    const sequences = (seqRes.sequences || []).filter(s => s.status === 'active')
+
+    let html = ''
+
+    // ── Person info
+    html += `<div class="sp-sec">
+      <span class="sp-lbl">Profile</span>
+      <div class="sp-person-name">${pageData.name || '—'}</div>
+      ${pageData.title ? `<div class="sp-person-sub">${pageData.title}</div>` : ''}
+      ${pageData.company ? `<div class="sp-person-sub" style="color:#666">${pageData.company}</div>` : ''}
+      ${pageData.location ? `<div class="sp-person-sub" style="color:#444;margin-top:2px">${pageData.location}</div>` : ''}
+    </div>`
+
+    if (lead) {
+      // ── Pipeline status
+      html += `<div class="sp-sec">
+        <span class="sp-lbl">Pipeline</span>
+        <div class="sp-status-row"><div class="sp-dot in"></div><span class="sp-status-label">In Sonar</span></div>
+        <div class="sp-chips">
+          ${lead.stage ? `<span class="sp-chip stage">${lead.stage}</span>` : ''}
+          ${buildIcpChip(lead.icp_score)}
+          ${buildEmailChip(lead.email_status)}
+          ${lead.in_sequence ? '<span class="sp-chip seq">In sequence</span>' : ''}
+        </div>
+      </div>`
+
+      // ── Email
+      const email = lead.email
+      if (email) {
+        html += `<div class="sp-sec">
+          <span class="sp-lbl">Email</span>
+          <div class="sp-email-row">
+            <span class="sp-email-addr">${email}</span>
+            <button class="sp-copy" data-copy="${email}">Copy</button>
+          </div>
+        </div>`
+      }
+
+      // ── Actions
+      html += `<div class="sp-sec">
+        <button class="sp-btn sec" id="sp-view" data-id="${lead.id}"><span>View in Sonar</span><span>→</span></button>
+        <button class="sp-btn sec" id="sp-update" data-id="${lead.id}"><span>Sync profile data</span><span>↑</span></button>
+        ${!email ? `<button class="sp-btn sec" id="sp-find-email" data-id="${lead.id}"><span>Find email</span><span>◎</span></button>` : ''}
+        ${lead.email && lead.email_status !== 'valid' ? `<button class="sp-btn sec" id="sp-verify" data-id="${lead.id}"><span>Verify email</span><span>✓</span></button>` : ''}
+        <button class="sp-btn sec" id="sp-draft" data-id="${lead.id}" data-name="${pageData.name}" data-company="${pageData.company || ''}"><span>Draft email with AI</span><span>✉</span></button>
+      </div>`
+    } else {
+      // ── Not in pipeline
+      html += `<div class="sp-sec">
+        <span class="sp-lbl">Pipeline</span>
+        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#555">Not in Sonar</span></div>
+        <button class="sp-btn pri" id="sp-add"><span>Add to pipeline</span><span>+</span></button>
+        <button class="sp-btn sec" id="sp-find-email"><span>Find email</span><span>◎</span></button>
+      </div>`
+    }
+
+    // ── Email reveal placeholder (populated dynamically)
+    html += `<div id="sp-email-reveal"></div>`
+
+    // ── AI draft result placeholder
+    html += `<div id="sp-draft-result"></div>`
+
+    // ── Sequences
+    if (sequences.length > 0) {
+      html += `<div class="sp-sec">
+        <span class="sp-lbl">Enroll in sequence</span>
+        ${sequences.slice(0, 6).map(seq => `
+          <div class="sp-seq-row">
+            <span class="sp-seq-nm">${seq.name}</span>
+            <button class="sp-enroll" data-seq="${seq.id}" data-lid="${lead?.id || ''}" ${!lead ? 'data-needadd="1"' : ''}>Enroll</button>
+          </div>`).join('')}
+      </div>`
+    }
+
+    // ── Connections + followers
+    if (pageData.connections || pageData.followers) {
+      html += `<div class="sp-sec">
+        <span class="sp-lbl">LinkedIn</span>
+        <div style="display:flex;gap:16px">
+          ${pageData.connections ? `<div><div style="font-size:11px;color:#ddd;font-weight:700">${pageData.connections}</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Connections</div></div>` : ''}
+          ${pageData.followers ? `<div><div style="font-size:11px;color:#ddd;font-weight:700">${pageData.followers}</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Followers</div></div>` : ''}
+          ${pageData.appointment === 'Yes' ? `<div><div style="font-size:11px;color:#22c55e;font-weight:700">Yes</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Booking link</div></div>` : ''}
+        </div>
+      </div>`
+    }
+
+    setBody(html)
+    wirePanelHandlers(pageData, lead, token)
+
+  } catch (e) {
+    setBody(`<div class="sp-load" style="color:#E7000B">Failed to load. Refresh and try again.</div>`)
+  }
+}
+
+function wirePanelHandlers(pageData, lead, token) {
+  // Copy buttons
+  document.querySelectorAll('.sp-copy[data-copy]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.copy).catch(() => {})
+      const orig = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = orig, 1500)
+    })
+  })
+
+  // View in Sonar
+  document.getElementById('sp-view')?.addEventListener('click', () => {
+    window.open(`${DASHBOARD_URL}/leads`, '_blank')
+  })
+
+  // Sync profile data
+  document.getElementById('sp-update')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.querySelector('span').textContent = 'Syncing…'
+    try {
+      const d = scrapeProfilePage()
+      const patch = {}; if (d.name) patch.name = d.name; if (d.title) patch.title = d.title; if (d.company) patch.company = d.company; if (d.location) patch.location = d.location; if (d.about) patch.about = d.about; if (d.experiences?.length) patch.experience = d.experiences
+      await fetchAPI(`/leads/${lead.id}`, 'PATCH', patch, token)
+      btn.className = 'sp-btn ok'; btn.querySelector('span').textContent = '✓ Synced'
+    } catch { btn.querySelector('span').textContent = 'Failed'; btn.disabled = false }
+  })
+
+  // Add to pipeline
+  document.getElementById('sp-add')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.querySelector('span').textContent = 'Adding…'
+    try {
+      const d = scrapeProfilePage()
+      const url = window.location.href.split('?')[0].split('#')[0]
+      await fetchAPI('/leads', 'POST', { name: d.name, title: d.title, company: d.company, location: d.location, about: d.about, profile_url: url, linkedin_url: url, source: 'chrome_extension' }, token)
+      btn.className = 'sp-btn ok'; btn.querySelector('span').textContent = '✓ Added to pipeline'
+      setTimeout(() => loadPanel(), 900)
+    } catch (err) {
+      if (err.status === 409) { btn.className = 'sp-btn warn'; btn.querySelector('span').textContent = 'Already in Sonar' }
+      else { btn.querySelector('span').textContent = 'Failed'; btn.disabled = false }
+    }
+  })
+
+  // Find email
+  document.getElementById('sp-find-email')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.querySelector('span').textContent = 'Searching…'
+    try {
+      const d = scrapeProfilePage()
+      const res = await fetchAPI('/prospect/people-search', 'POST', { query: { name: d.name, company: d.company }, page: 1, limit: 1 }, token)
+      const person = (res.results || [])[0]
+      const email = person?.work_email || person?.email
+      if (email) {
+        const section = document.getElementById('sp-email-reveal')
+        if (section) section.innerHTML = `<div class="sp-sec"><span class="sp-lbl">Found email</span><div class="sp-email-row"><span class="sp-email-addr">${email}</span><button class="sp-copy" data-copy="${email}">Copy</button></div></div>`
+        document.querySelectorAll('.sp-copy[data-copy]').forEach(b => { b.addEventListener('click', () => { navigator.clipboard.writeText(b.dataset.copy).catch(() => {}); const o = b.textContent; b.textContent = 'Copied!'; setTimeout(() => b.textContent = o, 1500) }) })
+        btn.className = 'sp-btn ok'; btn.querySelector('span').textContent = '✓ Found'
+      } else {
+        btn.querySelector('span').textContent = 'Not found'; btn.disabled = false
+      }
+    } catch { btn.querySelector('span').textContent = 'Failed'; btn.disabled = false }
+  })
+
+  // Verify email
+  document.getElementById('sp-verify')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.querySelector('span').textContent = 'Verifying…'
+    try {
+      const res = await fetchAPI(`/leads/${lead.id}/verify-email`, 'POST', {}, token)
+      const good = res.status === 'valid'
+      btn.className = `sp-btn ${good ? 'ok' : 'warn'}`
+      btn.querySelector('span').textContent = `${good ? '✓ Valid' : res.status === 'risky' ? '⚠ Risky' : '✕ Invalid'} · ${res.score || 0}% deliverability`
+    } catch { btn.querySelector('span').textContent = 'Failed'; btn.disabled = false }
+  })
+
+  // AI email draft
+  document.getElementById('sp-draft')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget; btn.disabled = true; btn.querySelector('span').textContent = 'Drafting…'
+    try {
+      const res = await fetchAPI(`/leads/${lead.id}/draft-email`, 'POST', {}, token)
+      const section = document.getElementById('sp-draft-result')
+      if (section && res.subject && res.body) {
+        section.innerHTML = `<div class="sp-sec"><span class="sp-lbl">AI Draft</span><div style="font-size:10px;color:#E7000B;margin-bottom:6px">${res.subject}</div><div style="font-size:9px;color:#888;line-height:1.6;white-space:pre-wrap">${res.body.substring(0, 300)}${res.body.length > 300 ? '…' : ''}</div><button class="sp-copy" data-copy="${encodeURIComponent(res.subject + '\n\n' + res.body)}" style="margin-top:8px">Copy draft</button></div>`
+        document.querySelectorAll('.sp-copy[data-copy]').forEach(b => {
+          b.addEventListener('click', () => { navigator.clipboard.writeText(decodeURIComponent(b.dataset.copy)).catch(() => {}); const o = b.textContent; b.textContent = 'Copied!'; setTimeout(() => b.textContent = o, 1500) })
+        })
+      }
+      btn.className = 'sp-btn ok'; btn.querySelector('span').textContent = '✓ Draft ready'
+    } catch { btn.querySelector('span').textContent = 'Failed'; btn.disabled = false }
+  })
+
+  // Sequence enrollment
+  document.querySelectorAll('.sp-enroll').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = '…'
+      try {
+        let leadId = btn.dataset.lid
+        if (!leadId || btn.dataset.needadd === '1') {
+          const d = scrapeProfilePage()
+          const url = window.location.href.split('?')[0].split('#')[0]
+          const res = await fetchAPI('/leads', 'POST', { name: d.name, title: d.title, company: d.company, profile_url: url, linkedin_url: url, source: 'chrome_extension' }, token)
+          leadId = res.lead?.id
+        }
+        await fetchAPI(`/sequences/${btn.dataset.seq}/enroll`, 'POST', { lead_ids: [leadId] }, token)
+        btn.textContent = '✓'; btn.style.cssText += ';background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e'
+      } catch { btn.textContent = '!'; btn.disabled = false }
+    })
   })
 }
 
-// ─── MESSAGE LISTENER ─────────────────────────────────────────
+// ─── SEARCH RESULTS INLINE BUTTONS ───────────────────────────────
+
+const _taggedCards = new WeakSet()
+
+async function injectSearchButtons() {
+  let token
+  try { token = await getTokenFromStorage() } catch { return }
+
+  const cards = document.querySelectorAll('li.reusable-search__result-container')
+  const batch = []
+
+  cards.forEach(card => {
+    if (_taggedCards.has(card)) return
+    _taggedCards.add(card)
+
+    const link = card.querySelector('a.app-aware-link[href*="/in/"]')
+    if (!link) return
+    const url = link.href.split('?')[0].split('#')[0]
+
+    // Find action area — add button after entity title
+    const titleEl = card.querySelector('.entity-result__title-actions') || card.querySelector('.entity-result__actions') || card.querySelector('.entity-result__title-text')
+    if (!titleEl) return
+
+    const wrap = document.createElement('span')
+    wrap.style.cssText = 'display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle'
+    const btn = document.createElement('button')
+    btn.className = 'snr-btn load'
+    btn.innerHTML = '<span class="sp-spinner" style="width:8px;height:8px;border-width:1.5px"></span>'
+    btn.dataset.url = url
+    wrap.appendChild(btn)
+    titleEl.appendChild(wrap)
+
+    batch.push({ url, btn, card })
+  })
+
+  if (!batch.length) return
+
+  try {
+    const res = await fetchAPI('/leads/check-urls', 'POST', { urls: batch.map(b => b.url) }, token)
+    const results = res.results || {}
+
+    batch.forEach(({ url, btn, card }) => {
+      const hit = results[url]
+      if (hit?.found) {
+        btn.className = 'snr-btn in'
+        btn.innerHTML = '✓ In Sonar'
+        if (hit.lead?.icp_score != null) {
+          const score = hit.lead.icp_score
+          const color = score >= 70 ? '#22c55e' : score >= 40 ? '#fbbf24' : '#666'
+          btn.innerHTML += ` <span style="opacity:.7;color:${color}">· ICP ${score}</span>`
+        }
+      } else {
+        btn.className = 'snr-btn add'
+        btn.innerHTML = '+ Add'
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation()
+          btn.className = 'snr-btn load'; btn.innerHTML = '<span class="sp-spinner" style="width:8px;height:8px;border-width:1.5px"></span>'
+          try {
+            const t = await getTokenFromStorage()
+            const nameEl = card.querySelector('span.entity-result__title-text a span[aria-hidden="true"]')
+            const titleEl2 = card.querySelector('.entity-result__primary-subtitle')
+            const companyEl = card.querySelector('.entity-result__secondary-subtitle')
+            await fetchAPI('/leads', 'POST', {
+              name: nameEl?.innerText.trim() || '',
+              title: titleEl2?.innerText.trim() || '',
+              company: companyEl?.innerText.trim() || '',
+              profile_url: url, linkedin_url: url, source: 'chrome_extension_search'
+            }, t)
+            btn.className = 'snr-btn in'; btn.innerHTML = '✓ Added'
+          } catch (err) {
+            if (err.status === 409) { btn.className = 'snr-btn in'; btn.innerHTML = '✓ In Sonar' }
+            else { btn.className = 'snr-btn add'; btn.innerHTML = '+ Add' }
+          }
+        })
+      }
+    })
+  } catch {
+    batch.forEach(({ btn }) => { btn.className = 'snr-btn add'; btn.innerHTML = '+ Add' })
+  }
+}
+
+// ─── COMPANY PAGE QUICK-ADD ───────────────────────────────────────
+
+async function injectCompanyButton() {
+  if (document.getElementById('sonar-company-btn')) return
+  injectPanelStyles()
+
+  let token
+  try { token = await getTokenFromStorage() } catch { return }
+
+  const companyData = scrapeCompanyPage()
+  if (!companyData.name) return
+
+  const btn = document.createElement('button')
+  btn.id = 'sonar-company-btn'
+  btn.innerHTML = `
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7" stroke="#E7000B" stroke-width="1.3" opacity="0.5"/>
+      <circle cx="8" cy="8" r="4" stroke="#E7000B" stroke-width="1.3" opacity="0.85"/>
+      <circle cx="8" cy="8" r="1.5" fill="#E7000B"/>
+      <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#E7000B" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>
+    <span>Add company to Sonar</span>
+  `
+
+  document.body.appendChild(btn)
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    const spanEl = btn.querySelector('span'); spanEl.textContent = 'Adding…'
+    try {
+      await fetchAPI('/companies', 'POST', {
+        name: companyData.name,
+        industry: companyData.industry || '',
+        size: companyData.size || '',
+        headquarters: companyData.headquarters || '',
+        description: companyData.description || '',
+        linkedin_url: companyData.url,
+        followers: companyData.followers || '',
+      }, token)
+      btn.classList.add('added'); spanEl.textContent = '✓ Added to Sonar'
+    } catch (err) {
+      if (err.status === 409) { btn.classList.add('added'); spanEl.textContent = '✓ Already in Sonar' }
+      else { spanEl.textContent = 'Failed'; btn.disabled = false }
+    }
+  })
+}
+
+// ─── SPA NAVIGATION ──────────────────────────────────────────────
+
+let _lastUrl = location.href
+
+function handleNavChange() {
+  const type = getPageType()
+
+  // Remove old panel tab if we left a profile page
+  const root = document.getElementById(PANEL_ROOT_ID)
+
+  if (type === 'profile') {
+    if (!root) createPanel()
+    else { setBody('<div class="sp-load"><span class="sp-spinner"></span> <span>Checking pipeline…</span></div>') }
+    _panelOpen = false
+    const panel = document.getElementById('sonar-panel'); if (panel) panel.classList.remove('open')
+    const tab = document.getElementById('sonar-tab'); if (tab) tab.style.display = ''
+    setTimeout(() => loadPanel(), 1600)
+  } else {
+    if (root) { root.remove(); _panelOpen = false }
+  }
+
+  if (type === 'search' || type === 'linkedin-all-search') {
+    setTimeout(() => injectSearchButtons(), 2000)
+  }
+
+  if (type === 'company') {
+    const oldBtn = document.getElementById('sonar-company-btn'); if (oldBtn) oldBtn.remove()
+    setTimeout(() => injectCompanyButton(), 1800)
+  }
+}
+
+const _navObserver = new MutationObserver(() => {
+  const cur = location.href
+  if (cur !== _lastUrl) { _lastUrl = cur; handleNavChange() }
+})
+
+// Watch for new search results (infinite scroll)
+let _searchObserver = null
+function watchSearchResults() {
+  if (_searchObserver) { _searchObserver.disconnect(); _searchObserver = null }
+  const container = document.querySelector('.search-results-container') || document.querySelector('main')
+  if (!container) return
+  _searchObserver = new MutationObserver(() => {
+    if (getPageType() === 'search' || getPageType() === 'linkedin-all-search') {
+      clearTimeout(_searchObserver._timer)
+      _searchObserver._timer = setTimeout(() => injectSearchButtons(), 800)
+    }
+  })
+  _searchObserver.observe(container, { childList: true, subtree: true })
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────
+
+;(function init() {
+  _navObserver.observe(document.body, { childList: true, subtree: true })
+
+  const type = getPageType()
+
+  if (type === 'profile') {
+    createPanel()
+    setTimeout(() => loadPanel(), 1800)
+  }
+
+  if (type === 'search' || type === 'linkedin-all-search') {
+    setTimeout(() => { injectSearchButtons(); watchSearchResults() }, 2200)
+  }
+
+  if (type === 'company') {
+    setTimeout(() => injectCompanyButton(), 1800)
+  }
+})()
+
+// ─── MESSAGE LISTENER (popup communication) ───────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scrape') {
-    const pageType = getPageType()
+    const type = getPageType()
     let result = null
-    if (pageType === 'salenav-companies') result = scrapeSalesNavCompanies()
-    else if (pageType === 'salenav-people') result = scrapeSalesNavPeople()
-    else if (pageType === 'linkedin-companies') result = scrapeLinkedInCompanySearch()
-    else if (pageType === 'linkedin-all-search') result = scrapeLinkedInCompanySearch()
-    else if (pageType === 'company-people') result = scrapeCompanyPeoplePage()
-    else if (pageType === 'company') result = scrapeCompanyPage()
-    else if (pageType === 'profile') result = scrapeProfilePage()
-    else if (pageType === 'search') result = scrapeSearchPage()
+    if (type === 'salenav-companies') result = scrapeSalesNavCompanies()
+    else if (type === 'salenav-people') result = scrapeSalesNavPeople()
+    else if (type === 'linkedin-companies' || type === 'linkedin-all-search') result = scrapeLinkedInCompanySearch()
+    else if (type === 'company-people') result = scrapeCompanyPeoplePage()
+    else if (type === 'company') result = scrapeCompanyPage()
+    else if (type === 'profile') result = scrapeProfilePage()
+    else if (type === 'search') result = scrapeSearchPage()
     else result = { error: 'Navigate to a LinkedIn page to extract leads or companies.' }
-    chrome.storage.local.get({ leads: [] }, (existing) => {
-      if (result && !result.error) {
-        const updated = [...existing.leads, result]
-        chrome.storage.local.set({ leads: updated })
-      }
-    })
+    chrome.storage.local.get({ leads: [] }, (existing) => { if (result && !result.error) chrome.storage.local.set({ leads: [...existing.leads, result] }) })
     sendResponse({ success: true, data: result })
   }
 
   if (message.action === 'autoScroll') {
-    const pageType = getPageType()
-    if (pageType !== 'company-people') {
-      sendResponse({ success: false, error: 'Not on a people page' })
-      return true
-    }
-    autoScrollPeoplePage((count) => { sendResponse({ success: true, count }) })
+    if (getPageType() !== 'company-people') { sendResponse({ success: false, error: 'Not on a people page' }); return true }
+    autoScrollPeoplePage((count) => sendResponse({ success: true, count }))
     return true
   }
 
   if (message.action === 'getLeads') {
-    chrome.storage.local.get({ leads: [] }, (data) => { sendResponse({ leads: data.leads }) })
+    chrome.storage.local.get({ leads: [] }, (data) => sendResponse({ leads: data.leads }))
     return true
   }
 
