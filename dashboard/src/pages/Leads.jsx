@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, scoreLeadICP, draftEmail } from '../services/api'
-import Navbar from '../components/Navbar'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
 import LeadDrawer from '../components/LeadDrawer'
@@ -516,8 +515,6 @@ export default function Leads() {
 
   return (
     <div style={s.page}>
-      <Navbar />
-
       <motion.div style={s.hero} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Lead Intelligence</p>

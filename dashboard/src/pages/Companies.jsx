@@ -8,7 +8,6 @@ import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
 import BulkAddModal from '../components/BulkAddModal'
 import CompaniesSpreadsheet from '../components/CompaniesSpreadsheet'
-import Navbar from '../components/Navbar'
 import { SkeletonCard } from '../components/Skeleton'
 import AIFeatureCards from '../components/AIFeatureCards'
 import { CardContainer, CardBody, CardItem } from '../components/ThreeDCard'
@@ -1023,8 +1022,6 @@ export default function Companies() {
 
   return (
     <div style={s.page}>
-      <Navbar />
-
       <motion.div style={{ ...s.hero, position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
           <p style={s.eyebrow}>Company Intelligence</p>

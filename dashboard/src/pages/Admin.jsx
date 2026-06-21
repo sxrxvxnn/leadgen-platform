@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
@@ -135,7 +134,6 @@ export default function Admin() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <Navbar />
 
       <div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }}>
         <div style={{ position: 'relative' }}>
