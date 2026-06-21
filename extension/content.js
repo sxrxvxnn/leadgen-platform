@@ -1,7 +1,7 @@
 // ─── CONFIG ──────────────────────────────────────────────────────
 const API_BASE = 'https://leadgenengineplatform-api.vercel.app/api'
 const PANEL_ROOT_ID = 'sonar-panel-root'
-const DASHBOARD_URL = 'https://leadgenengineplatform.vercel.app'
+const DASHBOARD_URL = 'https://sonarleads.vercel.app'
 
 // ─── UTILITIES ───────────────────────────────────────────────────
 

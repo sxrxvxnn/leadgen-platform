@@ -380,7 +380,7 @@ function saveCompany(data, token) {
 // ─── NAV ─────────────────────────────────────────────────────
 
 document.getElementById('dashboardBtn').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'https://leadgenengineplatform.vercel.app' })
+  chrome.tabs.create({ url: 'https://sonarleads.vercel.app' })
 })
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
