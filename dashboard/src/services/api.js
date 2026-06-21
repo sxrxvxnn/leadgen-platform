@@ -249,4 +249,8 @@ export const getLeadSignals     = (id) => api.get(`/leads/${id}/signals`)
 export const trackEmail    = (id, subject, body) => api.post(`/leads/${id}/track-email`, { subject, body })
 export const getEmailOpens = (id) => api.get(`/leads/${id}/email-opens`)
 
+// ─── ACTIVITY TIMELINE ────────────────────────────────────────────
+export const logActivity  = (id, event_type, data = {}) => api.post(`/leads/${id}/activity`, { event_type, data })
+export const getActivity  = (id) => api.get(`/leads/${id}/activity`)
+
 export default api

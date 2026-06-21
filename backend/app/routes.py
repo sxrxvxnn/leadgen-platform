@@ -1267,6 +1267,42 @@ async def track_click(tracking_id: str, url: str):
     return RedirectResponse(url=url, status_code=302)
 
 
+# ─── ACTIVITY TIMELINE ───────────────────────────────────────────
+
+@router.post("/leads/{lead_id}/activity")
+async def log_activity(lead_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    event_type = payload.get("event_type")
+    valid = {"created","scored","email_drafted","email_sent","status_changed",
+             "connection_changed","note_saved","signal_detected","enriched"}
+    if event_type not in valid:
+        raise HTTPException(status_code=400, detail="Invalid event_type")
+    row = supabase.table("lead_activity").insert({
+        "user_id": user_id,
+        "lead_id": lead_id,
+        "event_type": event_type,
+        "data": payload.get("data", {}),
+    }).execute()
+    return {"activity": row.data[0] if row.data else {}}
+
+
+@router.get("/leads/{lead_id}/activity")
+async def get_activity(lead_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    rows = (
+        supabase.table("lead_activity")
+        .select("*")
+        .eq("lead_id", lead_id)
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+    return {"activity": rows.data}
+
+
 # ─── TECHNOPARK DIRECTORY ────────────────────────────────────────
 
 _TECHNOPARK_DISK_CACHE = os.path.join(
