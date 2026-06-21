@@ -1,16 +1,17 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig } from '../services/api'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, getEnrichmentConfig, saveEnrichmentConfig } from '../services/api'
 import api from '../services/api'
 
 const SECTIONS = [
-  { id: 'profile',    num: '01', label: 'Profile' },
-  { id: 'email',      num: '02', label: 'Email Sending' },
-  { id: 'automation', num: '03', label: 'Sequence Automation' },
-  { id: 'scheduler',  num: '04', label: 'Meeting Scheduler' },
-  { id: 'webhooks',   num: '05', label: 'Webhooks' },
-  { id: 'privacy',    num: '06', label: 'Privacy' },
-  { id: 'terms',      num: '07', label: 'Terms' },
+  { id: 'profile',     num: '01', label: 'Profile' },
+  { id: 'email',       num: '02', label: 'Email Sending' },
+  { id: 'automation',  num: '03', label: 'Sequence Automation' },
+  { id: 'scheduler',   num: '04', label: 'Meeting Scheduler' },
+  { id: 'enrichment',  num: '05', label: 'Enrichment' },
+  { id: 'webhooks',    num: '06', label: 'Webhooks' },
+  { id: 'privacy',     num: '07', label: 'Privacy' },
+  { id: 'terms',       num: '08', label: 'Terms' },
 ]
 
 const WEBHOOK_EVENT_LABELS = {
@@ -90,6 +91,7 @@ export default function Settings() {
     email:      useRef(null),
     automation: useRef(null),
     scheduler:  useRef(null),
+    enrichment: useRef(null),
     webhooks:   useRef(null),
     privacy:    useRef(null),
     terms:      useRef(null),
@@ -108,6 +110,31 @@ export default function Settings() {
       setCalSlug(r.data.cal_slug || '')
     }).catch(() => {})
   }, [])
+
+  // Enrichment config state
+  const [enrichCfg,     setEnrichCfg]     = useState({ hunter_key: '', apollo_key: '', hunter_key_set: false, apollo_key_set: false })
+  const [enrichSaving,  setEnrichSaving]  = useState(false)
+  const [enrichSaved,   setEnrichSaved]   = useState(false)
+  const [enrichError,   setEnrichError]   = useState('')
+
+  useEffect(() => {
+    getEnrichmentConfig().then(r => setEnrichCfg(r.data)).catch(() => {})
+  }, [])
+
+  async function handleSaveEnrichment() {
+    setEnrichError('')
+    setEnrichSaving(true)
+    try {
+      await saveEnrichmentConfig({ hunter_key: enrichCfg.hunter_key, apollo_key: enrichCfg.apollo_key })
+      setEnrichSaved(true)
+      setTimeout(() => setEnrichSaved(false), 3000)
+      getEnrichmentConfig().then(r => setEnrichCfg(r.data)).catch(() => {})
+    } catch (e) {
+      setEnrichError(e?.response?.data?.detail || 'Failed to save.')
+    } finally {
+      setEnrichSaving(false)
+    }
+  }
 
   // Webhooks state
   const [webhooks, setWebhooks] = useState([])
@@ -418,7 +445,59 @@ export default function Settings() {
             )}
           </section>
 
-          {/* 05 — Webhooks */}
+          {/* 05 — Enrichment */}
+          <section ref={sectionRefs.enrichment} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="05" title="Enrichment" />
+            <p style={s.sectionHint}>
+              Sonar tries providers in order — Hunter → Apollo → email pattern — and stops at the first match.
+              Add your own API keys to increase hit rate. Keys stored on server, never in browser.
+            </p>
+
+            {/* Waterfall order display */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+              {[
+                { id: 'hunter',  label: 'Hunter.io',  set: enrichCfg.hunter_key_set, color: '#e06348' },
+                { id: 'arrow',   label: '→',           set: true,                     color: 'var(--text-muted)' },
+                { id: 'apollo',  label: 'Apollo',      set: enrichCfg.apollo_key_set, color: '#0082F3' },
+                { id: 'arrow2',  label: '→',           set: true,                     color: 'var(--text-muted)' },
+                { id: 'pattern', label: 'Pattern+MX',  set: true,                     color: '#4a7c59' },
+              ].map(p => p.id.startsWith('arrow')
+                ? <span key={p.id} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: p.color }}>{p.label}</span>
+                : <span key={p.id} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 4, background: p.set ? p.color + '18' : 'var(--surface)', border: `1px solid ${p.set ? p.color + '40' : 'var(--border)'}`, color: p.set ? p.color : 'var(--text-muted)' }}>
+                    {p.set ? '✓ ' : ''}{p.label}
+                  </span>
+              )}
+            </div>
+
+            <Field label="Hunter.io API key" hint="Get from hunter.io → Settings → API">
+              <KeyInput value={enrichCfg.hunter_key} onChange={v => setEnrichCfg(c => ({ ...c, hunter_key: v }))} placeholder="Enter Hunter API key" set={enrichCfg.hunter_key_set && enrichCfg.hunter_key === '••••••••'} />
+            </Field>
+
+            <Field label="Apollo.io API key" hint="Get from app.apollo.io → Settings → API keys">
+              <KeyInput value={enrichCfg.apollo_key} onChange={v => setEnrichCfg(c => ({ ...c, apollo_key: v }))} placeholder="Enter Apollo API key" set={enrichCfg.apollo_key_set && enrichCfg.apollo_key === '••••••••'} />
+            </Field>
+
+            {enrichError && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#ef4444', marginTop: 4 }}>{enrichError}</p>}
+
+            <button onClick={handleSaveEnrichment} disabled={enrichSaving} style={{
+              fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '10px 20px',
+              background: enrichSaved ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none',
+              borderRadius: 3, cursor: enrichSaving ? 'default' : 'pointer', letterSpacing: '0.04em',
+            }}>
+              {enrichSaving ? 'Saving…' : enrichSaved ? 'Saved' : 'Save API keys'}
+            </button>
+
+            <div style={{ marginTop: 16, padding: '14px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>How the waterfall works</p>
+              <ol style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8, paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <li><span style={{ color: '#e06348' }}>Hunter.io</span> — email-finder by name + company domain (highest confidence)</li>
+                <li><span style={{ color: '#0082F3' }}>Apollo</span> — people match by name + company name or domain</li>
+                <li><span style={{ color: '#4a7c59' }}>Pattern + MX</span> — constructs likely patterns (first.last@domain) and verifies the domain has email via DNS</li>
+              </ol>
+            </div>
+          </section>
+
+          {/* 06 — Webhooks */}
           <section ref={sectionRefs.webhooks} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
             <SectionHeader num="04" title="Webhooks" />
             <p style={s.sectionHint}>Send real-time HTTP POST notifications to your endpoints when key events happen in Sonar. Compatible with Zapier, Make, n8n, or any custom integration.</p>

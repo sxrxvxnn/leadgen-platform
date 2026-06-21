@@ -293,7 +293,18 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
             {isEditing && col.key !== 'status' && <CellInput value={editValue} onChange={(e) => setEditValue(e.target.value)} onBlur={() => onSaveEdit(lead.id)} onKeyDown={(e) => { if (e.key === 'Enter') onSaveEdit(lead.id); if (e.key === 'Escape') onCancelEdit() }} />}
             {!isEditing && col.key === 'status' && <StatusBadge status={lead.status} />}
             {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500', textDecoration: onRowClick ? 'underline' : 'none', textDecorationColor: 'var(--border-strong)', textUnderlineOffset: 3 }}>{lead.name || '—'}</span>}
-            {!isEditing && col.key !== 'status' && col.key !== 'name' && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lead[col.key] || '—'}</span>}
+            {!isEditing && col.key === 'email' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</span>
+                {lead.email && lead.email_provider && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
+                    background: lead.email_provider === 'hunter' ? 'rgba(224,99,72,0.12)' : lead.email_provider === 'apollo' ? 'rgba(0,130,243,0.12)' : 'rgba(74,124,89,0.12)',
+                    color: lead.email_provider === 'hunter' ? '#e06348' : lead.email_provider === 'apollo' ? '#0082F3' : '#4a7c59',
+                  }}>{lead.email_provider}</span>
+                )}
+              </div>
+            )}
+            {!isEditing && col.key !== 'status' && col.key !== 'name' && col.key !== 'email' && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lead[col.key] || '—'}</span>}
           </div>
         )
       })}
