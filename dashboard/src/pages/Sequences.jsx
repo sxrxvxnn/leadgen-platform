@@ -14,7 +14,27 @@ const STEP_TYPES = [
 const STATUS_COLOR = { draft: '#888', active: '#4a7c59', paused: '#b07d2e' }
 const STATUS_BG    = { draft: '#88888818', active: '#4a7c5918', paused: '#b07d2e18' }
 
+function VariantLabel({ letter, color }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, marginTop: 4 }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 3, background: color + '18', border: `1px solid ${color}40`, color }}>
+        VARIANT {letter}
+      </span>
+    </div>
+  )
+}
+
 function StepCard({ step, index, onChange, onRemove }) {
+  const abEnabled = step.subject_b !== undefined && step.subject_b !== null
+
+  function toggleAB() {
+    if (abEnabled) {
+      onChange({ ...step, subject_b: null, body_b: null })
+    } else {
+      onChange({ ...step, subject_b: '', body_b: '' })
+    }
+  }
+
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 10 }}>
@@ -30,6 +50,11 @@ function StepCard({ step, index, onChange, onRemove }) {
             </button>
           ))}
           <div style={{ flex: 1 }} />
+          {step.type === 'email' && (
+            <button onClick={toggleAB} style={{ padding: '5px 10px', borderRadius: 6, border: abEnabled ? '1.5px solid #b07d2e' : '1px solid var(--border)', background: abEnabled ? '#b07d2e18' : 'transparent', color: abEnabled ? '#b07d2e' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+              A/B Test
+            </button>
+          )}
           <button onClick={onRemove} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Remove</button>
         </div>
 
@@ -43,6 +68,7 @@ function StepCard({ step, index, onChange, onRemove }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {step.type === 'email' && abEnabled && <VariantLabel letter="A" color="#4a7c59" />}
             {step.type === 'email' && (
               <input type="text" placeholder="Subject line…" value={step.subject || ''}
                 onChange={e => onChange({ ...step, subject: e.target.value })}
@@ -53,8 +79,26 @@ function StepCard({ step, index, onChange, onRemove }) {
               value={step.body || ''}
               onChange={e => onChange({ ...step, body: e.target.value })}
               style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
+
+            {step.type === 'email' && abEnabled && (
+              <div style={{ marginTop: 8, paddingTop: 12, borderTop: '1px dashed var(--border)' }}>
+                <VariantLabel letter="B" color="#b07d2e" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input type="text" placeholder="Subject line B… (leave blank to use Subject A)"
+                    value={step.subject_b || ''}
+                    onChange={e => onChange({ ...step, subject_b: e.target.value })}
+                    style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none' }} />
+                  <textarea rows={5}
+                    placeholder="Email body B…"
+                    value={step.body_b || ''}
+                    onChange={e => onChange({ ...step, body_b: e.target.value })}
+                    style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
+                </div>
+              </div>
+            )}
+
             {step.type !== 'wait' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>Send after</span>
                 <input type="number" min={0} max={30} value={step.delay_days}
                   onChange={e => onChange({ ...step, delay_days: parseInt(e.target.value) || 0 })}
@@ -158,20 +202,44 @@ function EnrollmentPanel({ seq }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: '0 0 4px' }}>Step Breakdown</p>
                       {analytics.steps.map(step => (
-                        <div key={step.step_number} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{step.step_number}</div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {step.type === 'email' ? (step.subject || '(no subject)') : step.type}
+                        <div key={step.step_number} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+                          {/* Summary row */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px' }}>
+                            <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{step.step_number}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {step.type === 'email' ? (step.subject || '(no subject)') : step.type}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{step.sent} sent</span>
+                              {step.type === 'email' && <>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.open_rate > 0 ? '#4a7c59' : 'var(--text-muted)' }}>{step.open_rate}% open</span>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.click_rate > 0 ? '#0082F3' : 'var(--text-muted)' }}>{step.click_rate}% click</span>
+                              </>}
+                              {step.ab && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', borderRadius: 3, background: '#b07d2e18', border: '1px solid #b07d2e40', color: '#b07d2e' }}>A/B</span>}
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{step.sent} sent</span>
-                            {step.type === 'email' && <>
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.open_rate > 0 ? '#4a7c59' : 'var(--text-muted)' }}>{step.open_rate}% open</span>
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.click_rate > 0 ? '#0082F3' : 'var(--text-muted)' }}>{step.click_rate}% click</span>
-                            </>}
-                          </div>
+                          {/* A/B comparison table */}
+                          {step.ab && step.type === 'email' && (
+                            <div style={{ borderTop: '1px dashed var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+                              {[['A', '#4a7c59'], ['B', '#b07d2e']].map(([v, color]) => {
+                                const vd = step.ab[v] || {}
+                                return (
+                                  <div key={v} style={{ padding: '8px 14px', borderRight: v === 'A' ? '1px dashed var(--border)' : 'none' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: color + '18', border: `1px solid ${color}40`, color }}>VARIANT {v}</span>
+                                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{vd.sent || 0} sent</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 12 }}>
+                                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: vd.open_rate > 0 ? '#4a7c59' : 'var(--text-muted)' }}>{vd.open_rate || 0}% open</span>
+                                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: vd.click_rate > 0 ? '#0082F3' : 'var(--text-muted)' }}>{vd.click_rate || 0}% click</span>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -203,6 +271,7 @@ function EnrollmentPanel({ seq }) {
                               </div>
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Step {stepN}/{totalSteps}</span>
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: STATUS_DOT[enr.status] || 'var(--text-muted)' }}>{STATUS_LABEL[enr.status] || enr.status?.toUpperCase()}</span>
+                              {enr.ab_variant && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: enr.ab_variant === 'A' ? '#4a7c5918' : '#b07d2e18', border: `1px solid ${enr.ab_variant === 'A' ? '#4a7c5940' : '#b07d2e40'}`, color: enr.ab_variant === 'A' ? '#4a7c59' : '#b07d2e' }}>V{enr.ab_variant}</span>}
                               {enr.status === 'active' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Next: {nextRun}</span>}
                             </div>
                             {enr.last_error && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e07070', marginTop: 3 }}>{enr.last_error}</div>}
@@ -254,8 +323,9 @@ function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {(seq.steps || []).map((step, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ padding: '3px 10px', borderRadius: 20, background: 'var(--bg)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+            <span style={{ padding: '3px 10px', borderRadius: 20, background: 'var(--bg)', border: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
               {step.type === 'wait' ? `Wait ${step.delay_days}d` : STEP_TYPES.find(t => t.id === step.type)?.label || step.type}
+              {step.subject_b && <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 2, background: '#b07d2e18', color: '#b07d2e' }}>A/B</span>}
             </span>
             {i < seq.steps.length - 1 && <span style={{ color: 'var(--border)', fontSize: 10 }}>→</span>}
           </div>

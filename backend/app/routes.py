@@ -4563,6 +4563,8 @@ async def create_sequence(payload: dict, authorization: str = Header(...)):
     steps = payload.get("steps", [])
     for i, step in enumerate(steps):
         supabase.table("sequence_steps").insert({
+            "subject_b": step.get("subject_b") or None,
+            "body_b":    step.get("body_b") or None,
             "sequence_id": seq["id"],
             "step_number": i + 1,
             "type": step.get("type", "email"),
@@ -4587,10 +4589,12 @@ async def update_sequence(seq_id: str, payload: dict, authorization: str = Heade
             supabase.table("sequence_steps").insert({
                 "sequence_id": seq_id,
                 "step_number": i + 1,
-                "type": step.get("type", "email"),
-                "delay_days": step.get("delay_days", 0),
-                "subject": step.get("subject", ""),
-                "body": step.get("body", ""),
+                "type":        step.get("type", "email"),
+                "delay_days":  step.get("delay_days", 0),
+                "subject":     step.get("subject", ""),
+                "body":        step.get("body", ""),
+                "subject_b":   step.get("subject_b") or None,
+                "body_b":      step.get("body_b") or None,
             }).execute()
     return {"ok": True}
 
@@ -4614,17 +4618,24 @@ async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(.
     first_step = (steps_res.data or [{}])[0]
     delay_days = first_step.get("delay_days") or 0
     next_run = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=delay_days)).isoformat()
+    # Detect if any steps have A/B variant content
+    all_steps_res = supabase.table("sequence_steps").select("subject_b").eq("sequence_id", seq_id).execute()
+    has_ab = any(s.get("subject_b") for s in (all_steps_res.data or []))
+
+    import random as _random
     enrolled = 0
     skipped = 0
     for lead_id in lead_ids:
         try:
+            ab_variant = _random.choice(["A", "B"]) if has_ab else None
             supabase.table("sequence_enrollments").insert({
                 "sequence_id": seq_id,
-                "lead_id": lead_id,
-                "user_id": user_id,
-                "status": "active",
+                "lead_id":     lead_id,
+                "user_id":     user_id,
+                "status":      "active",
                 "current_step": 1,
                 "next_run_at": next_run,
+                "ab_variant":  ab_variant,
             }).execute()
             enrolled += 1
         except Exception:
@@ -4735,8 +4746,12 @@ async def process_sequence_cron(request: Request):
                         error_msg = "No SMTP credentials saved. Go to Settings → Sequence Automation."
                         success   = False
                     else:
-                        subject = _personalize(current_step.get("subject") or "", lead_name, lead_first, lead_company, lead_title)
-                        body    = _personalize(current_step.get("body") or "", lead_name, lead_first, lead_company, lead_title)
+                        ab_variant  = enrollment.get("ab_variant") or "A"
+                        use_b       = (ab_variant == "B" and current_step.get("subject_b"))
+                        subject_raw = current_step.get("subject_b" if use_b else "subject") or ""
+                        body_raw    = current_step.get("body_b"    if use_b else "body")    or ""
+                        subject = _personalize(subject_raw, lead_name, lead_first, lead_company, lead_title)
+                        body    = _personalize(body_raw,    lead_name, lead_first, lead_company, lead_title)
 
                         # Generate tracking id & build pixel + unsubscribe token
                         tracking_id = secrets.token_urlsafe(20)
@@ -4778,6 +4793,7 @@ async def process_sequence_cron(request: Request):
                                 "sequence_id":   seq_id,
                                 "enrollment_id": enr_id,
                                 "step_number":   step_num,
+                                "ab_variant":    ab_variant,
                             }).execute()
 
                             # Log activity
@@ -5000,40 +5016,48 @@ async def get_sequence_analytics(seq_id: str, authorization: str = Header(...)):
     replied    = sum(1 for e in enrollments if e["status"] == "replied" or e.get("replied_at"))
     unsubbed   = sum(1 for e in enrollments if e["status"] == "unsubscribed")
 
-    # Email tracking aggregates for this sequence
-    tracking_res = supabase.table("email_tracking").select("open_count, click_count, step_number").eq("sequence_id", seq_id).execute()
+    # Email tracking aggregates for this sequence (include ab_variant)
+    tracking_res = supabase.table("email_tracking").select("open_count, click_count, step_number, ab_variant").eq("sequence_id", seq_id).execute()
     tracking = tracking_res.data or []
-    emails_sent = len(tracking)
-    total_opens  = sum((r.get("open_count") or 0) for r in tracking)
-    total_clicks = sum((r.get("click_count") or 0) for r in tracking)
-    unique_opens = sum(1 for r in tracking if (r.get("open_count") or 0) > 0)
-    unique_clicks= sum(1 for r in tracking if (r.get("click_count") or 0) > 0)
+    emails_sent   = len(tracking)
+    unique_opens  = sum(1 for r in tracking if (r.get("open_count") or 0) > 0)
+    unique_clicks = sum(1 for r in tracking if (r.get("click_count") or 0) > 0)
 
-    open_rate    = round(unique_opens  / emails_sent * 100) if emails_sent else 0
-    click_rate   = round(unique_clicks / emails_sent * 100) if emails_sent else 0
-    reply_rate   = round(replied       / total       * 100) if total else 0
-    bounce_rate  = round(bounced       / total       * 100) if total else 0
+    open_rate   = round(unique_opens  / emails_sent * 100) if emails_sent else 0
+    click_rate  = round(unique_clicks / emails_sent * 100) if emails_sent else 0
+    reply_rate  = round(replied / total * 100) if total else 0
+    bounce_rate = round(bounced / total * 100) if total else 0
 
-    # Per-step breakdown
-    steps_res = supabase.table("sequence_steps").select("step_number, type, subject").eq("sequence_id", seq_id).order("step_number").execute()
+    def _variant_stats(rows):
+        sent   = len(rows)
+        opens  = sum(1 for r in rows if (r.get("open_count") or 0) > 0)
+        clicks = sum(1 for r in rows if (r.get("click_count") or 0) > 0)
+        return {"sent": sent, "opens": opens, "clicks": clicks,
+                "open_rate": round(opens / sent * 100) if sent else 0,
+                "click_rate": round(clicks / sent * 100) if sent else 0}
+
+    # Per-step breakdown with A/B split
+    steps_res = supabase.table("sequence_steps").select("step_number, type, subject, subject_b").eq("sequence_id", seq_id).order("step_number").execute()
     steps = steps_res.data or []
     step_stats = []
     for step in steps:
         sn = step["step_number"]
         step_tracking = [t for t in tracking if t.get("step_number") == sn]
-        s_sent   = len(step_tracking)
-        s_opens  = sum(1 for t in step_tracking if (t.get("open_count") or 0) > 0)
-        s_clicks = sum(1 for t in step_tracking if (t.get("click_count") or 0) > 0)
-        step_stats.append({
+        base = _variant_stats(step_tracking)
+        stat = {
             "step_number": sn,
             "type":        step["type"],
             "subject":     step.get("subject") or "",
-            "sent":        s_sent,
-            "opens":       s_opens,
-            "clicks":      s_clicks,
-            "open_rate":   round(s_opens / s_sent * 100) if s_sent else 0,
-            "click_rate":  round(s_clicks / s_sent * 100) if s_sent else 0,
-        })
+            "subject_b":   step.get("subject_b") or None,
+            **base,
+        }
+        # A/B split only when both variants have data
+        if step.get("subject_b"):
+            rows_a = [t for t in step_tracking if (t.get("ab_variant") or "A") == "A"]
+            rows_b = [t for t in step_tracking if t.get("ab_variant") == "B"]
+            if rows_a or rows_b:
+                stat["ab"] = {"A": _variant_stats(rows_a), "B": _variant_stats(rows_b)}
+        step_stats.append(stat)
 
     return {
         "total_enrolled": total,
