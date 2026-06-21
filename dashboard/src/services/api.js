@@ -266,4 +266,12 @@ export const createTemplate  = (data) => api.post('/email-templates', data)
 export const updateTemplate  = (id, data) => api.patch(`/email-templates/${id}`, data)
 export const deleteTemplate  = (id) => api.delete(`/email-templates/${id}`)
 
+// ─── LINKEDIN LEAD SYNC ───────────────────────────────────────────
+export const getLinkedInStatus    = () => api.get('/linkedin/status')
+export const getLinkedInAuthUrl   = () => api.get('/linkedin/auth')
+export const disconnectLinkedIn   = () => api.delete('/linkedin/disconnect')
+export const getLinkedInAdAccounts = () => api.get('/linkedin/ad-accounts')
+export const selectLinkedInAccount = (account_urn) => api.post('/linkedin/select-account', { account_urn })
+export const linkedInSyncNow       = () => api.post('/linkedin/sync-now')
+
 export default api
