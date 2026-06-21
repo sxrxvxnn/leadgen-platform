@@ -4222,11 +4222,53 @@ async def bulk_maps_enrich_async(
 async def get_profile(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     res = supabase.table("profiles").select(
-        "id,email,full_name,mode,role,team_id,onboarding_complete"
+        "id,email,full_name,mode,role,team_id,onboarding_complete,cal_link,cal_slug"
     ).eq("id", user_id).single().execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     return res.data
+
+
+@router.get("/profile/cal")
+async def get_cal_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("profiles").select("cal_link,cal_slug,full_name").eq("id", user_id).maybe_single().execute()
+    data = res.data or {}
+    return {"cal_link": data.get("cal_link"), "cal_slug": data.get("cal_slug"), "full_name": data.get("full_name")}
+
+
+@router.patch("/profile/cal")
+async def save_cal_config(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    cal_link = (payload.get("cal_link") or "").strip()
+    cal_slug  = (payload.get("cal_slug") or "").strip().lower()
+
+    # Sanitise slug: only alphanumeric + hyphens
+    import re as _re2
+    cal_slug = _re2.sub(r"[^a-z0-9\-]", "", cal_slug)[:40] if cal_slug else ""
+
+    if cal_slug:
+        # Check uniqueness (ignore self)
+        existing = supabase.table("profiles").select("id").eq("cal_slug", cal_slug).neq("id", user_id).maybe_single().execute()
+        if existing.data:
+            raise HTTPException(status_code=409, detail="That slug is already taken. Try another.")
+
+    update: dict = {"cal_link": cal_link or None}
+    if cal_slug:
+        update["cal_slug"] = cal_slug
+
+    supabase.table("profiles").update(update).eq("id", user_id).execute()
+    return {"ok": True, "cal_link": cal_link or None, "cal_slug": cal_slug or None}
+
+
+@router.get("/public/book/{slug}")
+async def public_book_page(slug: str):
+    """Public endpoint — returns profile info for the /book/:slug booking page."""
+    slug = slug.strip().lower()
+    res = supabase.table("profiles").select("full_name,cal_link,cal_slug").eq("cal_slug", slug).maybe_single().execute()
+    if not res.data or not res.data.get("cal_link"):
+        raise HTTPException(status_code=404, detail="Booking page not found")
+    return {"full_name": res.data.get("full_name") or "Someone", "cal_link": res.data["cal_link"], "slug": slug}
 
 
 @router.post("/profile/setup")
@@ -4685,8 +4727,15 @@ async def process_sequence_cron(request: Request):
     processed = 0
     errors = 0
 
-    def _personalize(text, name, first, company, title):
-        return (text or "").replace("{{name}}", name).replace("{{first_name}}", first).replace("{{company}}", company).replace("{{title}}", title)
+    def _personalize(text, name, first, company, title, cal_link=""):
+        return (
+            (text or "")
+            .replace("{{name}}", name)
+            .replace("{{first_name}}", first)
+            .replace("{{company}}", company)
+            .replace("{{title}}", title)
+            .replace("{{cal_link}}", cal_link)
+        )
 
     def _wrap_links(text, tracking_id):
         def _sub(m):
@@ -4739,8 +4788,13 @@ async def process_sequence_cron(request: Request):
                         processed += 1
                         continue
 
-                    profile_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
-                    smtp = (profile_res.data or {}).get("smtp_config") or {}
+                    profile_res = supabase.table("profiles").select("smtp_config,cal_link,cal_slug").eq("id", user_id).maybe_single().execute()
+                    profile_data = profile_res.data or {}
+                    smtp = profile_data.get("smtp_config") or {}
+                    cal_slug = profile_data.get("cal_slug") or ""
+                    cal_link = profile_data.get("cal_link") or ""
+                    # Use the branded /book/ URL if slug is set, else raw cal_link
+                    cal_token = f"https://sonarleads.vercel.app/book/{cal_slug}" if cal_slug else cal_link
 
                     if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
                         error_msg = "No SMTP credentials saved. Go to Settings → Sequence Automation."
@@ -4750,8 +4804,8 @@ async def process_sequence_cron(request: Request):
                         use_b       = (ab_variant == "B" and current_step.get("subject_b"))
                         subject_raw = current_step.get("subject_b" if use_b else "subject") or ""
                         body_raw    = current_step.get("body_b"    if use_b else "body")    or ""
-                        subject = _personalize(subject_raw, lead_name, lead_first, lead_company, lead_title)
-                        body    = _personalize(body_raw,    lead_name, lead_first, lead_company, lead_title)
+                        subject = _personalize(subject_raw, lead_name, lead_first, lead_company, lead_title, cal_token)
+                        body    = _personalize(body_raw,    lead_name, lead_first, lead_company, lead_title, cal_token)
 
                         # Generate tracking id & build pixel + unsubscribe token
                         tracking_id = secrets.token_urlsafe(20)

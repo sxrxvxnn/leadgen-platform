@@ -30,6 +30,7 @@ const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
 const Terms           = lazy(() => import('./pages/Terms'))
+const BookingPage     = lazy(() => import('./pages/BookingPage'))
 
 function PageFallback() {
   return (
@@ -97,6 +98,7 @@ export default function App() {
               <Route path="/persona" element={<Navigate to="/targeting" replace />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
+              <Route path="/book/:slug" element={<BookingPage />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<RootRedirect />} />

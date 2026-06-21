@@ -75,7 +75,7 @@ function StepCard({ step, index, onChange, onRemove }) {
                 style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none' }} />
             )}
             <textarea rows={step.type === 'email' ? 5 : 3}
-              placeholder={step.type === 'email' ? 'Email body… Use {{name}}, {{company}}, {{title}} for personalization.' : step.type === 'linkedin' ? 'LinkedIn message…' : 'Call notes or script…'}
+              placeholder={step.type === 'email' ? 'Email body… Use {{name}}, {{company}}, {{title}}, {{cal_link}} for personalization.' : step.type === 'linkedin' ? 'LinkedIn message…' : 'Call notes or script…'}
               value={step.body || ''}
               onChange={e => onChange({ ...step, body: e.target.value })}
               style={{ padding: '8px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none', resize: 'vertical', lineHeight: 1.6 }} />
