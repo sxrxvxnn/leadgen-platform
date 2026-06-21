@@ -275,28 +275,29 @@ export default function Settings() {
                   </button>
                 </div>
 
-                {/* Ad account selection */}
+                {/* Ad account — manual entry */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.13em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
-                    Ad Account
+                    Campaign Manager Account ID
+                  </p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.6 }}>
+                    Open Campaign Manager → the numeric ID in the URL:<br />
+                    linkedin.com/campaignmanager/accounts/<strong style={{ color: 'var(--text)' }}>123456789</strong>/campaigns
                   </p>
                   {liStatus.selected_account_urn ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, background: 'rgba(74,124,89,0.12)', color: '#4a7c59', padding: '2px 8px', borderRadius: 3, border: '1px solid rgba(74,124,89,0.3)', letterSpacing: '0.06em' }}>Connected</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', padding: '5px 10px', borderRadius: 3 }}>
+                        {liStatus.selected_account_urn.replace('urn:li:sponsoredAccount:', '')}
+                      </span>
                       <button
-                        onClick={handleLoadAccounts}
+                        onClick={() => setLiStatus(prev => ({ ...prev, selected_account_urn: null }))}
                         style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                       >
                         Change
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={handleLoadAccounts}
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '8px 14px', cursor: 'pointer' }}
-                    >
-                      Load my ad accounts
-                    </button>
+                    <ManualAccountInput onSelect={handleSelectAccount} />
                   )}
 
                   {liAccounts.length > 0 && (
@@ -536,6 +537,34 @@ function ToggleRow({ label, checked, onChange }) {
           transition: 'left 0.2s',
           display: 'block',
         }} />
+      </button>
+    </div>
+  )
+}
+
+function ManualAccountInput({ onSelect }) {
+  const [val, setVal] = useState('')
+  function handleSubmit() {
+    const id = val.trim().replace(/\D/g, '')
+    if (!id) return
+    onSelect(`urn:li:sponsoredAccount:${id}`)
+    setVal('')
+  }
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <input
+        type="text"
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+        placeholder="e.g. 123456789"
+        style={{ flex: 1, padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', outline: 'none' }}
+      />
+      <button
+        onClick={handleSubmit}
+        style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+      >
+        Set account
       </button>
     </div>
   )
