@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import Navbar from '../components/Navbar'
 import { getLeads, getCompanies, createLead, searchCompanyPeople } from '../services/api'
 
 const DM_ROLES = [
@@ -249,8 +248,6 @@ export default function Targeting() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <Navbar />
-
       {/* Hero */}
       <motion.div style={{ position: 'relative', padding: '52px 48px 32px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>

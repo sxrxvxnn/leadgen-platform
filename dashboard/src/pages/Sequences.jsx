@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
@@ -201,7 +200,7 @@ export default function Sequences() {
   }
 
   const s = {
-    page: { minHeight: '100vh', background: 'var(--bg)', paddingTop: 64 },
+    page: { minHeight: '100vh', background: 'var(--bg)' },
     inner: { maxWidth: 900, margin: '0 auto', padding: '40px 24px' },
     header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 },
     title: { fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 },
@@ -214,7 +213,6 @@ export default function Sequences() {
   if (showBuilder) {
     return (
       <div style={s.page}>
-        <Navbar />
         <div style={{ ...s.inner, maxWidth: 700 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
             <button onClick={() => setShowBuilder(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'pointer', padding: 0 }}>← Back</button>
@@ -257,7 +255,6 @@ export default function Sequences() {
 
   return (
     <div style={s.page}>
-      <Navbar />
       <div style={s.inner}>
         <div style={s.header}>
           <div>
