@@ -4540,7 +4540,7 @@ _LI_CLIENT_ID     = os.environ.get("LINKEDIN_CLIENT_ID", "253300048")
 _LI_CLIENT_SECRET = os.environ.get("LINKEDIN_CLIENT_SECRET", "")
 _LI_REDIRECT_URI  = os.environ.get("LINKEDIN_REDIRECT_URI", "https://leadgenengineplatform-api.vercel.app/api/linkedin/callback")
 _LI_STATE_SECRET  = os.environ.get("LINKEDIN_STATE_SECRET", "sonar-li-state-secret")
-_LI_SCOPES        = "r_ads_leadgen_automation r_liteprofile r_emailaddress"
+_LI_SCOPES        = "r_ads_leadgen_automation"
 
 
 def _li_make_state(user_id: str) -> str:
