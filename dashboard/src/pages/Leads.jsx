@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence } from '../services/api'
+import { getLeads, updateLead, deleteLead, bulkDeleteLeads, bulkScoreLeads, bulkEnrichLeads, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence } from '../services/api'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
 import LeadDrawer from '../components/LeadDrawer'
@@ -47,11 +47,13 @@ const connectionStatusColors = {
   'Transferred to Rejah':    '#5b8db8',
 }
 
-function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusChange, onConnectionChange, onEnrollSequence }) {
+function BulkActionBar({ count, totalFiltered, onClearSelection, onSelectAll, onDelete, onExport, onStatusChange, onConnectionChange, onEnrollSequence, onScoreICP, onFindEmails, loading, loadingLabel }) {
   const [showStatus, setShowStatus] = useState(false)
   const [showConnection, setShowConnection] = useState(false)
   const [showSequences, setShowSequences] = useState(false)
   const [sequences, setSequences] = useState([])
+
+  const closeAll = () => { setShowStatus(false); setShowConnection(false); setShowSequences(false) }
 
   async function openSequences() {
     if (!sequences.length) {
@@ -63,82 +65,77 @@ function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusCh
     setShowConnection(false)
   }
 
-  return React.createElement(
-    'div',
-    { style: bulk.bar },
-    React.createElement(
-      'div',
-      { style: bulk.left },
-      React.createElement('span', { style: bulk.count }, count + ' selected'),
-      React.createElement('button', { style: bulk.clearBtn, onClick: onClearSelection }, '✕ Clear')
-    ),
-    React.createElement(
-      'div',
-      { style: bulk.actions },
-      React.createElement('button', { style: bulk.actionBtn, onClick: onExport }, 'Export →'),
-      React.createElement(
-        'div',
-        { style: { position: 'relative' } },
-        React.createElement('button', { style: bulk.actionBtn, onClick: openSequences }, 'Add to Sequence ↓'),
-        showSequences && React.createElement(
-          'div',
-          { style: { ...bulk.dropdown, minWidth: 200 } },
-          sequences.length === 0
-            ? React.createElement('div', { style: { ...bulk.dropdownItem, color: 'var(--text-muted)', cursor: 'default' } }, 'No sequences yet')
-            : sequences.map(seq =>
-                React.createElement('button', {
-                  key: seq.id, style: bulk.dropdownItem,
-                  onClick: () => { onEnrollSequence(seq.id); setShowSequences(false) }
-                }, seq.name)
-              )
-        )
-      ),
-      React.createElement(
-        'div',
-        { style: { position: 'relative' } },
-        React.createElement(
-          'button',
-          { style: bulk.actionBtn, onClick: () => { setShowStatus(!showStatus); setShowConnection(false); setShowSequences(false) } },
-          'Set Status ↓'
-        ),
-        showStatus && React.createElement(
-          'div',
-          { style: bulk.dropdown },
-          STATUS_OPTIONS.map(s =>
-            React.createElement(
-              'button',
-              { key: s, style: bulk.dropdownItem, onClick: () => { onStatusChange(s); setShowStatus(false) } },
-              s.toUpperCase()
-            )
-          )
-        )
-      ),
-      React.createElement(
-        'div',
-        { style: { position: 'relative' } },
-        React.createElement(
-          'button',
-          { style: bulk.actionBtn, onClick: () => { setShowConnection(!showConnection); setShowStatus(false); setShowSequences(false) } },
-          'Set Connection ↓'
-        ),
-        showConnection && React.createElement(
-          'div',
-          { style: { ...bulk.dropdown, width: '220px' } },
-          CONNECTION_STATUSES.map(s =>
-            React.createElement(
-              'button',
-              { key: s, style: bulk.dropdownItem, onClick: () => { onConnectionChange(s); setShowConnection(false) } },
-              s
-            )
-          )
-        )
-      ),
-      React.createElement(
-        'button',
-        { style: { ...bulk.actionBtn, color: 'var(--red)', borderColor: 'rgba(184,50,50,0.4)' }, onClick: onDelete },
-        'Delete Selected'
-      )
-    )
+  const btn = (extra = {}) => ({ ...bulk.actionBtn, ...(loading ? { opacity: 0.45, pointerEvents: 'none' } : {}), ...extra })
+
+  return (
+    <div style={bulk.bar}>
+      <div style={bulk.left}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#E7000B', flexShrink: 0 }} />
+        <span style={bulk.count}>{count} selected</span>
+        {count < totalFiltered && (
+          <button style={bulk.selectAllBtn} onClick={onSelectAll}>
+            Select all {totalFiltered}
+          </button>
+        )}
+        <button style={bulk.clearBtn} onClick={onClearSelection}>Clear</button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={bulk.spinner} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{loadingLabel}</span>
+        </div>
+      ) : (
+        <div style={bulk.actions}>
+          <button style={btn()} onClick={onExport}>Export CSV</button>
+
+          <button style={btn()} onClick={onScoreICP}>Score ICP</button>
+          <button style={btn()} onClick={onFindEmails}>Find Emails</button>
+
+          <div style={{ position: 'relative' }}>
+            <button style={btn()} onClick={openSequences}>Sequence ↓</button>
+            {showSequences && (
+              <div style={{ ...bulk.dropdown, minWidth: 210, bottom: '100%', top: 'auto', marginBottom: 6 }}>
+                {sequences.length === 0
+                  ? <div style={{ ...bulk.dropdownItem, color: 'var(--text-muted)', cursor: 'default' }}>No sequences yet</div>
+                  : sequences.map(seq => (
+                      <button key={seq.id} style={bulk.dropdownItem}
+                        onClick={() => { onEnrollSequence(seq.id); closeAll() }}>
+                        {seq.name}
+                      </button>
+                    ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            <button style={btn()} onClick={() => { setShowStatus(s => !s); setShowConnection(false); setShowSequences(false) }}>Status ↓</button>
+            {showStatus && (
+              <div style={{ ...bulk.dropdown, bottom: '100%', top: 'auto', marginBottom: 6 }}>
+                {STATUS_OPTIONS.map(s => (
+                  <button key={s} style={bulk.dropdownItem} onClick={() => { onStatusChange(s); closeAll() }}>{s.toUpperCase()}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: 'relative' }}>
+            <button style={btn()} onClick={() => { setShowConnection(s => !s); setShowStatus(false); setShowSequences(false) }}>Connection ↓</button>
+            {showConnection && (
+              <div style={{ ...bulk.dropdown, width: 220, bottom: '100%', top: 'auto', marginBottom: 6 }}>
+                {CONNECTION_STATUSES.map(s => (
+                  <button key={s} style={bulk.dropdownItem} onClick={() => { onConnectionChange(s); closeAll() }}>{s}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button style={btn({ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' })} onClick={onDelete}>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -276,7 +273,7 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
   const isSecurity = SECURITY_KEYWORDS.test(lead.title || '')
 
   return (
-    <div style={{ ...s.trow, background: isSelected ? 'rgba(168,100,72,0.04)' : 'transparent', borderLeft: lead.starred ? '2px solid var(--accent)' : '2px solid transparent' }}>
+    <div style={{ ...s.trow, background: isSelected ? 'rgba(168,100,72,0.07)' : 'transparent', borderLeft: isSelected ? '2px solid var(--accent)' : lead.starred ? '2px solid var(--accent)' : '2px solid transparent', outline: isSelected ? '1px solid rgba(168,100,72,0.18)' : 'none', outlineOffset: -1 }}>
       <div style={{ width: '32px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         <input type="checkbox" checked={isSelected} onChange={onToggleSelect} style={sub.checkbox} onClick={(e) => e.stopPropagation()} />
       </div>
@@ -330,6 +327,13 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
   )
 }
 
+// inject @keyframes spin once
+if (typeof document !== 'undefined' && !document.getElementById('sonar-spin-kf')) {
+  const st = document.createElement('style'); st.id = 'sonar-spin-kf'
+  st.textContent = '@keyframes spin{to{transform:rotate(360deg)}}'
+  document.head.appendChild(st)
+}
+
 export default function Leads() {
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
@@ -346,6 +350,8 @@ export default function Leads() {
   const [scoringId, setScoringId] = useState(null)
   const [draftingId, setDraftingId] = useState(null)
   const [emailDraft, setEmailDraft] = useState(null)   // { lead, subject, body }
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkLabel, setBulkLabel] = useState('')
 
   // Advanced filters
   const [filterSeniority, setFilterSeniority] = useState('')
@@ -392,39 +398,75 @@ export default function Leads() {
   }
 
   async function handleBulkDelete() {
-    if (!window.confirm('Delete ' + selected.length + ' selected leads?')) return
+    if (!window.confirm(`Delete ${selected.length} lead${selected.length !== 1 ? 's' : ''}? This cannot be undone.`)) return
     const ids = [...selected]
-    // Optimistic: remove immediately, restore on failure
     setLeads(prev => prev.filter(l => !ids.includes(l.id)))
     setSelected([])
     try {
-      await Promise.all(ids.map(id => deleteLead(id)))
+      await bulkDeleteLeads(ids)
     } catch (e) { console.error(e); fetchLeads() }
   }
 
   async function handleBulkStatus(status) {
+    setBulkLoading(true); setBulkLabel(`Setting status to ${status}…`)
     try {
       await Promise.all(selected.map(id => updateLead(id, { status })))
-      setLeads((prev) => prev.map((l) => selected.includes(l.id) ? { ...l, status } : l))
+      setLeads(prev => prev.map(l => selected.includes(l.id) ? { ...l, status } : l))
       setSelected([])
     } catch (e) { console.error(e) }
+    finally { setBulkLoading(false); setBulkLabel('') }
   }
 
   async function handleBulkConnectionStatus(connection_status) {
+    setBulkLoading(true); setBulkLabel(`Updating connection status…`)
     try {
       await Promise.all(selected.map(id => updateConnectionStatus(id, connection_status)))
-      setLeads((prev) => prev.map((l) => selected.includes(l.id) ? { ...l, connection_status } : l))
+      setLeads(prev => prev.map(l => selected.includes(l.id) ? { ...l, connection_status } : l))
       setSelected([])
     } catch (e) { console.error(e) }
+    finally { setBulkLoading(false); setBulkLabel('') }
   }
 
   async function handleBulkEnrollSequence(seqId) {
+    setBulkLoading(true); setBulkLabel(`Enrolling ${selected.length} leads…`)
     try {
       await enrollInSequence(seqId, selected)
       setImportMsg(`Enrolled ${selected.length} lead${selected.length !== 1 ? 's' : ''} in sequence.`)
       setSelected([])
       setTimeout(() => setImportMsg(''), 4000)
     } catch (e) { console.error(e) }
+    finally { setBulkLoading(false); setBulkLabel('') }
+  }
+
+  async function handleBulkScoreICP() {
+    setBulkLoading(true); setBulkLabel(`Scoring ${selected.length} leads against ICP…`)
+    try {
+      const res = await bulkScoreLeads(selected)
+      const results = res.data.results || []
+      setLeads(prev => prev.map(l => {
+        const hit = results.find(r => r.id === l.id)
+        return hit ? { ...l, icp_score: hit.score, icp_score_reason: hit.reason } : l
+      }))
+      setImportMsg(`Scored ${results.length} lead${results.length !== 1 ? 's' : ''}.`)
+      setSelected([])
+      setTimeout(() => setImportMsg(''), 4000)
+    } catch (e) { console.error(e); setImportMsg('Scoring failed.') }
+    finally { setBulkLoading(false); setBulkLabel('') }
+  }
+
+  async function handleBulkFindEmails() {
+    const needEmail = selected.filter(id => !leads.find(l => l.id === id)?.email)
+    if (!needEmail.length) { setImportMsg('All selected leads already have emails.'); setTimeout(() => setImportMsg(''), 3000); return }
+    setBulkLoading(true); setBulkLabel(`Finding emails for ${needEmail.length} leads…`)
+    try {
+      const res = await bulkEnrichLeads(needEmail)
+      const { enriched } = res.data
+      if (enriched > 0) { await fetchLeads() }
+      setImportMsg(`Found ${enriched} email${enriched !== 1 ? 's' : ''} out of ${needEmail.length} attempted.`)
+      setSelected([])
+      setTimeout(() => setImportMsg(''), 5000)
+    } catch (e) { console.error(e); setImportMsg('Email enrichment failed.') }
+    finally { setBulkLoading(false); setBulkLabel('') }
   }
 
   async function handleImportCSV(e) {
@@ -633,12 +675,18 @@ export default function Leads() {
         {selected.length > 0 && (
           <BulkActionBar
             count={selected.length}
+            totalFiltered={filtered.length}
             onClearSelection={() => setSelected([])}
+            onSelectAll={() => setSelected(filtered.map(l => l.id))}
             onDelete={handleBulkDelete}
             onExport={() => handleExport(filtered.filter(l => selected.includes(l.id)))}
             onStatusChange={handleBulkStatus}
             onConnectionChange={handleBulkConnectionStatus}
             onEnrollSequence={handleBulkEnrollSequence}
+            onScoreICP={handleBulkScoreICP}
+            onFindEmails={handleBulkFindEmails}
+            loading={bulkLoading}
+            loadingLabel={bulkLabel}
           />
         )}
 
@@ -858,30 +906,52 @@ const sub = {
 
 const bulk = {
   bar: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '12px 16px', background: 'var(--surface)', border: '1px solid rgba(168,100,72,0.3)',
-    borderRadius: '7px', marginBottom: '16px', gap: '16px',
+    position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '10px 14px',
+    background: 'var(--bg)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '10px',
+    gap: '14px',
+    zIndex: 200,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.22), 0 0 0 1px rgba(168,100,72,0.18)',
+    minWidth: 480, maxWidth: '90vw',
+    backdropFilter: 'blur(8px)',
   },
-  left: { display: 'flex', alignItems: 'center', gap: '12px' },
-  count: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', color: 'var(--accent)', letterSpacing: '0.06em' },
-  clearBtn: { background: 'none', border: 'none', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer' },
-  actions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
+  left: { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 },
+  count: { fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '700', color: 'var(--text)', letterSpacing: '0.04em' },
+  selectAllBtn: {
+    background: 'none', border: '1px solid rgba(168,100,72,0.3)', borderRadius: 5,
+    fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: '10px',
+    letterSpacing: '0.04em', cursor: 'pointer', padding: '3px 8px', fontWeight: '600',
+  },
+  clearBtn: {
+    background: 'none', border: 'none', fontFamily: 'var(--font-mono)',
+    color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer', padding: '2px 4px',
+  },
+  actions: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
   actionBtn: {
-    padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)',
-    borderRadius: '7px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '500',
-    letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer',
+    padding: '6px 11px', background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: '6px', fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600',
+    letterSpacing: '0.04em', color: 'var(--text-secondary)', cursor: 'pointer', whiteSpace: 'nowrap',
+    transition: 'border-color 0.15s, color 0.15s',
   },
   dropdown: {
-    position: 'absolute', top: '100%', left: 0, marginTop: '4px',
+    position: 'absolute', left: 0,
     background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: '8px', zIndex: 100, minWidth: '160px',
+    borderRadius: '8px', zIndex: 300, minWidth: '160px',
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
-    boxShadow: '0 4px 20px rgba(29,27,27,0.08)',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
   },
   dropdownItem: {
     padding: '9px 14px', background: 'none', border: 'none',
     fontFamily: 'var(--font-mono)', color: 'var(--text)', fontSize: '10px', fontWeight: '500',
     letterSpacing: '0.04em', cursor: 'pointer', textAlign: 'left',
     borderBottom: '1px solid var(--border)',
+  },
+  spinner: {
+    width: 14, height: 14, border: '2px solid var(--border)',
+    borderTopColor: 'var(--accent)', borderRadius: '50%',
+    animation: 'spin 0.7s linear infinite', flexShrink: 0,
   },
 }

@@ -304,6 +304,122 @@ async def delete_lead(lead_id: str, authorization: str = Header(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/leads/bulk-delete")
+async def bulk_delete_leads(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    ids = payload.get("ids", [])
+    if not ids or not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="ids required")
+    ids = [i for i in ids if isinstance(i, str) and len(i) == 36]
+    if not ids:
+        raise HTTPException(status_code=400, detail="No valid IDs")
+    try:
+        supabase.table("leads")\
+            .delete()\
+            .in_("id", ids)\
+            .eq("user_id", user_id)\
+            .execute()
+        posthog.capture(user_id, "leads_bulk_deleted", {"count": len(ids)})
+        return {"deleted": len(ids)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/leads/bulk-score")
+async def bulk_score_leads_selected(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    ids = payload.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids required")
+    ids = [i for i in ids if isinstance(i, str) and len(i) == 36][:50]
+
+    profiles = supabase.table("icp_profiles").select("*").eq("user_id", user_id).execute()
+    icp_list = profiles.data or []
+    if not icp_list:
+        raise HTTPException(status_code=400, detail="No ICP profiles defined")
+    icp_text = "\n".join([f"- {p.get('title','')}: {p.get('description','')}" for p in icp_list])
+
+    leads_res = supabase.table("leads").select("id,name,title,company,location,about")\
+        .in_("id", ids).eq("user_id", user_id).execute()
+    leads_data = leads_res.data or []
+
+    results = []
+    for lead in leads_data:
+        try:
+            prompt = f"""Rate this B2B lead against the ICP on a scale of 0-100.
+
+ICP:
+{icp_text}
+
+Lead:
+- Name: {lead.get('name','')}
+- Title: {lead.get('title','')}
+- Company: {lead.get('company','')}
+- Location: {lead.get('location','')}
+- About: {(lead.get('about') or '')[:300]}
+
+Reply with JSON only: {{"score": <0-100>, "reason": "<one sentence>"}}"""
+            raw = _call_ai(prompt, max_tokens=120, user_id=user_id, feature="bulk_icp_score")
+            import json as _json, re as _re
+            m = _re.search(r'\{.*\}', raw, _re.DOTALL)
+            if m:
+                parsed = _json.loads(m.group())
+                score = max(0, min(100, int(parsed.get("score", 0))))
+                reason = parsed.get("reason", "")
+                supabase.table("leads").update({"icp_score": score, "icp_score_reason": reason})\
+                    .eq("id", lead["id"]).eq("user_id", user_id).execute()
+                results.append({"id": lead["id"], "score": score, "reason": reason})
+        except Exception:
+            pass
+
+    return {"scored": len(results), "results": results}
+
+
+@router.post("/leads/bulk-enrich")
+async def bulk_enrich_emails_selected(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    ids = payload.get("ids", [])
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids required")
+    ids = [i for i in ids if isinstance(i, str) and len(i) == 36][:30]
+
+    leads_res = supabase.table("leads").select("id,name,email,company")\
+        .in_("id", ids).eq("user_id", user_id).execute()
+    leads_data = [l for l in (leads_res.data or []) if not l.get("email")]
+
+    enriched = 0
+    for lead in leads_data:
+        try:
+            from .routes import _hunter_domain_search  # noqa – reuse existing helper
+        except Exception:
+            break
+        name = lead.get("name", "")
+        company = lead.get("company", "")
+        if not name or not company:
+            continue
+        try:
+            import httpx, os as _os
+            hunter_key = _os.environ.get("HUNTER_API_KEY", "")
+            if not hunter_key:
+                break
+            parts = name.strip().split()
+            fn, ln = (parts[0], parts[-1]) if len(parts) >= 2 else (parts[0], "")
+            resp = httpx.get("https://api.hunter.io/v2/email-finder", params={
+                "domain": company.lower().replace(" ", "") + ".com",
+                "first_name": fn, "last_name": ln, "api_key": hunter_key
+            }, timeout=8)
+            if resp.status_code == 200:
+                email = resp.json().get("data", {}).get("email")
+                if email:
+                    supabase.table("leads").update({"email": email})\
+                        .eq("id", lead["id"]).eq("user_id", user_id).execute()
+                    enriched += 1
+        except Exception:
+            pass
+
+    return {"enriched": enriched, "attempted": len(leads_data)}
+
+
 # ─── COMPANIES ROUTES ────────────────────────────────────────
 
 @router.get("/companies")
