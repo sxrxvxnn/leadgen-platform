@@ -151,6 +151,9 @@ export const getLeads = async () => {
 export const createLead = (data) => { invalidateCache('/leads'); return api.post('/leads', data) }
 export const updateLead = (id, data) => { invalidateCache('/leads'); return api.patch(`/leads/${id}`, data) }
 export const deleteLead = (id) => { invalidateCache('/leads'); return api.delete(`/leads/${id}`) }
+export const bulkDeleteLeads = (ids) => { invalidateCache('/leads'); return api.post('/leads/bulk-delete', { ids }) }
+export const bulkScoreLeads = (ids) => api.post('/leads/bulk-score', { ids })
+export const bulkEnrichLeads = (ids) => api.post('/leads/bulk-enrich', { ids })
 export const bulkCreateLeads = (data) => { invalidateCache('/leads'); return api.post('/leads/bulk', data) }
 export const starLead = (id, starred) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/star`, { starred }) }
 export const updateConnectionStatus = (id, connection_status) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/connection-status`, { connection_status }) }
