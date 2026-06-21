@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate } from '../services/api'
 import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
 import ActivityFeed from './ActivityFeed'
+import TaskList from './TaskList'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -67,6 +68,10 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [tracking, setTracking]         = useState(false)
   const [tracked, setTracked]           = useState(null)
   const [emailTimelineKey, setEmailTimelineKey] = useState(0)
+  const [templates, setTemplates]       = useState(null)
+  const [savingTpl, setSavingTpl]       = useState(false)
+  const [tplSaved, setTplSaved]         = useState(false)
+  const [showTplPicker, setShowTplPicker] = useState(false)
   const activityRef = useRef(null)
 
   useEffect(() => {
@@ -122,6 +127,30 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
       activityRef.current?.refresh()
     } catch (e) { console.error(e) }
     finally { setTracking(false) }
+  }
+
+  async function handleSaveTemplate() {
+    if (!draft) return
+    setSavingTpl(true)
+    try {
+      await createTemplate({ name: draft.subject || 'Untitled', subject: draft.subject, body: draft.body })
+      setTplSaved(true); setTimeout(() => setTplSaved(false), 2500)
+      setTemplates(null)
+    } catch (e) { console.error(e) } finally { setSavingTpl(false) }
+  }
+
+  async function handleLoadTemplates() {
+    if (templates !== null) { setShowTplPicker(p => !p); return }
+    try {
+      const r = await getTemplates()
+      setTemplates(r.data.templates || [])
+      setShowTplPicker(true)
+    } catch (e) { console.error(e) }
+  }
+
+  function applyTemplate(tpl) {
+    setDraft({ subject: tpl.subject || '', body: tpl.body })
+    setShowTplPicker(false)
   }
 
   async function handleStatusChange(status) {
@@ -301,12 +330,41 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
             <p style={{ fontFamily: SANS, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, marginTop: -6 }}>
               Generate a hyper-personalized cold email in 2 seconds based on this lead's profile and company context.
             </p>
-            <button
-              onClick={handleDraft} disabled={drafting}
-              style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 16px', background: drafting ? 'var(--surface)' : '#4a7c59', color: drafting ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 5, cursor: drafting ? 'default' : 'pointer', marginBottom: 14, transition: 'all 0.15s' }}
-            >
-              {drafting ? 'Writing…' : draft ? 'Regenerate Email' : 'Write AI Email'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                onClick={handleDraft} disabled={drafting}
+                style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 16px', background: drafting ? 'var(--surface)' : '#4a7c59', color: drafting ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 5, cursor: drafting ? 'default' : 'pointer', transition: 'all 0.15s' }}
+              >
+                {drafting ? 'Writing…' : draft ? 'Regenerate' : 'Write AI Email'}
+              </button>
+              <button
+                onClick={handleLoadTemplates}
+                style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', padding: '8px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                Templates
+              </button>
+            </div>
+
+            {/* Template picker */}
+            {showTplPicker && (
+              <div style={{ marginBottom: 12, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                {templates && templates.length === 0 && (
+                  <p style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>No saved templates yet. Write an email and save it.</p>
+                )}
+                {templates && templates.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => applyTemplate(tpl)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: SANS, fontSize: 12, color: 'var(--text)', background: 'none', border: 'none', padding: '5px 0', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                    onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--text)'}
+                  >
+                    {tpl.name}
+                    {tpl.subject && <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)', marginLeft: 8 }}>{tpl.subject}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {draft && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -344,6 +402,12 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                     Tracking active — opens and link clicks will appear below
                   </p>
                 )}
+                <button
+                  onClick={handleSaveTemplate} disabled={savingTpl}
+                  style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, padding: '4px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, color: tplSaved ? '#4a7c59' : 'var(--text-muted)', cursor: savingTpl ? 'default' : 'pointer', letterSpacing: '0.05em', marginTop: 6 }}
+                >
+                  {tplSaved ? 'Saved as template' : savingTpl ? 'Saving…' : 'Save as template'}
+                </button>
               </div>
             )}
           </div>
@@ -383,6 +447,9 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
               {CONNECTION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+
+          {/* Tasks */}
+          <TaskList leadId={L.id} />
 
           {/* Notes */}
           <div>
