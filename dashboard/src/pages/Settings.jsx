@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { motion } from 'motion/react'
-import Navbar from '../components/Navbar'
 
 const SECTIONS = [
   { id: 'profile',  num: '01', label: 'Profile' },
@@ -41,8 +40,6 @@ export default function Settings() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-      <Navbar />
-
       {/* Hero */}
       <motion.div style={{ position: 'relative', padding: '64px 48px 48px', borderBottom: '1px solid var(--border)', overflow: 'hidden' }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
         <div style={{ position: 'relative' }}>
