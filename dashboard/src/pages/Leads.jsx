@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, scoreLeadICP, draftEmail } from '../services/api'
+import { getLeads, updateLead, deleteLead, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence } from '../services/api'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
 import LeadDrawer from '../components/LeadDrawer'
@@ -47,9 +47,21 @@ const connectionStatusColors = {
   'Transferred to Rejah':    '#5b8db8',
 }
 
-function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusChange, onConnectionChange }) {
+function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusChange, onConnectionChange, onEnrollSequence }) {
   const [showStatus, setShowStatus] = useState(false)
   const [showConnection, setShowConnection] = useState(false)
+  const [showSequences, setShowSequences] = useState(false)
+  const [sequences, setSequences] = useState([])
+
+  async function openSequences() {
+    if (!sequences.length) {
+      const r = await listSequences().catch(() => ({ data: [] }))
+      setSequences(r.data || [])
+    }
+    setShowSequences(s => !s)
+    setShowStatus(false)
+    setShowConnection(false)
+  }
 
   return React.createElement(
     'div',
@@ -67,9 +79,26 @@ function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusCh
       React.createElement(
         'div',
         { style: { position: 'relative' } },
+        React.createElement('button', { style: bulk.actionBtn, onClick: openSequences }, 'Add to Sequence ↓'),
+        showSequences && React.createElement(
+          'div',
+          { style: { ...bulk.dropdown, minWidth: 200 } },
+          sequences.length === 0
+            ? React.createElement('div', { style: { ...bulk.dropdownItem, color: 'var(--text-muted)', cursor: 'default' } }, 'No sequences yet')
+            : sequences.map(seq =>
+                React.createElement('button', {
+                  key: seq.id, style: bulk.dropdownItem,
+                  onClick: () => { onEnrollSequence(seq.id); setShowSequences(false) }
+                }, seq.name)
+              )
+        )
+      ),
+      React.createElement(
+        'div',
+        { style: { position: 'relative' } },
         React.createElement(
           'button',
-          { style: bulk.actionBtn, onClick: () => { setShowStatus(!showStatus); setShowConnection(false) } },
+          { style: bulk.actionBtn, onClick: () => { setShowStatus(!showStatus); setShowConnection(false); setShowSequences(false) } },
           'Set Status ↓'
         ),
         showStatus && React.createElement(
@@ -89,7 +118,7 @@ function BulkActionBar({ count, onClearSelection, onDelete, onExport, onStatusCh
         { style: { position: 'relative' } },
         React.createElement(
           'button',
-          { style: bulk.actionBtn, onClick: () => { setShowConnection(!showConnection); setShowStatus(false) } },
+          { style: bulk.actionBtn, onClick: () => { setShowConnection(!showConnection); setShowStatus(false); setShowSequences(false) } },
           'Set Connection ↓'
         ),
         showConnection && React.createElement(
@@ -327,7 +356,9 @@ export default function Leads() {
   const [scoreMsg, setScoreMsg] = useState('')
   const [selectedLead, setSelectedLead] = useState(null)
   const [viewMode, setViewMode] = useState('table') // 'table' | 'pipeline'
-
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
+  const csvInputRef = useRef(null)
 
   useEffect(() => { fetchLeads() }, [])
 
@@ -384,6 +415,44 @@ export default function Leads() {
       await Promise.all(selected.map(id => updateConnectionStatus(id, connection_status)))
       setLeads((prev) => prev.map((l) => selected.includes(l.id) ? { ...l, connection_status } : l))
       setSelected([])
+    } catch (e) { console.error(e) }
+  }
+
+  async function handleBulkEnrollSequence(seqId) {
+    try {
+      await enrollInSequence(seqId, selected)
+      setImportMsg(`Enrolled ${selected.length} lead${selected.length !== 1 ? 's' : ''} in sequence.`)
+      setSelected([])
+      setTimeout(() => setImportMsg(''), 4000)
+    } catch (e) { console.error(e) }
+  }
+
+  async function handleImportCSV(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportMsg('')
+    try {
+      const text = await file.text()
+      const r = await importLeadsCSV(text)
+      const { created, skipped } = r.data
+      setImportMsg(`Imported ${created} lead${created !== 1 ? 's' : ''}${skipped ? `, ${skipped} skipped (duplicates)` : ''}.`)
+      fetchLeads()
+    } catch (e) {
+      setImportMsg('Import failed — check the CSV format.')
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleExportCSV() {
+    try {
+      const r = await exportLeadsCSV()
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'text/csv' }))
+      const a = document.createElement('a')
+      a.href = url; a.download = 'sonar-leads.csv'; a.click()
+      URL.revokeObjectURL(url)
     } catch (e) { console.error(e) }
   }
 
@@ -546,8 +615,17 @@ export default function Leads() {
             ))}
           </div>
           <button style={s.spreadsheetBtn} onClick={() => setShowSpreadsheet(true)}>Spreadsheet</button>
-          <button style={s.exportBtn} onClick={() => handleExport()}>Export all →</button>
+          <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportCSV} />
+          <button style={s.exportBtn} onClick={() => csvInputRef.current?.click()} disabled={importing}>
+            {importing ? 'Importing…' : 'Import CSV'}
+          </button>
+          <button style={s.exportBtn} onClick={handleExportCSV}>Export CSV →</button>
         </div>
+        {importMsg && (
+          <div style={{ padding: '8px 24px', background: importMsg.includes('failed') ? 'rgba(231,0,11,0.08)' : 'rgba(74,124,89,0.1)', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: importMsg.includes('failed') ? '#E7000B' : '#4a7c59' }}>{importMsg}</span>
+          </div>
+        )}
       </motion.div>
 
       <div style={s.container}>
@@ -560,6 +638,7 @@ export default function Leads() {
             onExport={() => handleExport(filtered.filter(l => selected.includes(l.id)))}
             onStatusChange={handleBulkStatus}
             onConnectionChange={handleBulkConnectionStatus}
+            onEnrollSequence={handleBulkEnrollSequence}
           />
         )}
 

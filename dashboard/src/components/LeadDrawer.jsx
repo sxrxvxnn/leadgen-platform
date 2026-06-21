@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate, enrichLeadLinkedIn, sendLeadEmail } from '../services/api'
 import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
 import ActivityFeed from './ActivityFeed'
@@ -124,6 +124,10 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [savingTpl, setSavingTpl]       = useState(false)
   const [tplSaved, setTplSaved]         = useState(false)
   const [showTplPicker, setShowTplPicker] = useState(false)
+  const [sending, setSending]           = useState(false)
+  const [sendResult, setSendResult]     = useState(null)
+  const [enrichingLI, setEnrichingLI]   = useState(false)
+  const [liEnrichResult, setLiEnrichResult] = useState(null)
   const activityRef = useRef(null)
 
   useEffect(() => {
@@ -203,6 +207,56 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   function applyTemplate(tpl) {
     setDraft({ subject: tpl.subject || '', body: tpl.body })
     setShowTplPicker(false)
+  }
+
+  async function handleSendEmail() {
+    if (!draft) return
+    const smtpConfig = {
+      smtp_host:  localStorage.getItem('smtpHost')      || 'smtp.gmail.com',
+      smtp_port:  localStorage.getItem('smtpPort')      || '587',
+      smtp_user:  localStorage.getItem('smtpUser')      || '',
+      smtp_pass:  localStorage.getItem('smtpPass')      || '',
+      from_name:  localStorage.getItem('smtpFromName')  || '',
+      from_email: localStorage.getItem('smtpFromEmail') || '',
+    }
+    if (!smtpConfig.smtp_user || !smtpConfig.smtp_pass) {
+      setSendResult({ error: 'Configure SMTP credentials in Settings → Email Sending first.' })
+      return
+    }
+    setSending(true)
+    setSendResult(null)
+    try {
+      await sendLeadEmail(L.id, { subject: draft.subject, body: draft.body, ...smtpConfig })
+      setSendResult({ ok: true })
+      logActivity(L.id, 'email_sent', { subject: draft.subject }).catch(() => {})
+      activityRef.current?.refresh()
+      setTimeout(() => setSendResult(null), 4000)
+    } catch (e) {
+      setSendResult({ error: e?.response?.data?.detail || 'Send failed.' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function handleEnrichLinkedIn() {
+    setEnrichingLI(true)
+    setLiEnrichResult(null)
+    try {
+      const r = await enrichLeadLinkedIn(L.id)
+      const updated = r.data.updated || {}
+      if (Object.keys(updated).length) {
+        setLocalLead(prev => ({ ...prev, ...updated }))
+        onUpdate?.(L.id, updated)
+        setLiEnrichResult({ ok: true, fields: Object.keys(updated) })
+      } else {
+        setLiEnrichResult({ ok: true, fields: [] })
+      }
+      activityRef.current?.refresh()
+    } catch (e) {
+      setLiEnrichResult({ error: e?.response?.data?.detail || 'Enrichment failed.' })
+    } finally {
+      setEnrichingLI(false)
+    }
   }
 
   async function handleStatusChange(status) {
@@ -332,10 +386,22 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
             {!L.email && <p style={{ fontFamily: SANS, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>No email — use Email button in the table to find one</p>}
             <Field label="Phone" value={L.phone} mono />
             <Field label="Location" value={L.location} />
-            {L.profile_url && (
+            {(L.profile_url || L.linkedin_url) && (
               <div style={{ marginBottom: 12 }}>
-                <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>LinkedIn</p>
-                <a href={L.profile_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: MONO, fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Open Profile ↗</a>
+                <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>LinkedIn</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <a href={L.profile_url || L.linkedin_url} target="_blank" rel="noopener noreferrer" style={{ fontFamily: MONO, fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Open Profile ↗</a>
+                  <button
+                    onClick={handleEnrichLinkedIn}
+                    disabled={enrichingLI}
+                    style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.07em', padding: '4px 10px', background: liEnrichResult?.ok ? '#4a7c59' : 'var(--surface)', color: liEnrichResult?.ok ? '#fff' : 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 4, cursor: enrichingLI ? 'default' : 'pointer' }}
+                  >
+                    {enrichingLI ? 'Enriching…' : liEnrichResult?.ok ? (liEnrichResult.fields.length ? `+${liEnrichResult.fields.length} fields` : 'Up to date') : 'Enrich from LinkedIn'}
+                  </button>
+                </div>
+                {liEnrichResult?.error && (
+                  <p style={{ fontFamily: MONO, fontSize: 9, color: '#E7000B', margin: '4px 0 0' }}>{liEnrichResult.error}</p>
+                )}
               </div>
             )}
           </div>
@@ -437,7 +503,7 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                   </div>
                   <pre style={{ fontFamily: SANS, fontSize: 13, color: 'var(--text)', lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{draft.body}</pre>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     onClick={handleTrackCopy}
                     disabled={tracking}
@@ -451,7 +517,18 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                   >
                     Copy Plain
                   </button>
+                  <button
+                    onClick={handleSendEmail}
+                    disabled={sending || !L.email}
+                    title={!L.email ? 'Lead has no email address' : ''}
+                    style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 14px', background: sendResult?.ok ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: (sending || !L.email) ? 'default' : 'pointer', opacity: !L.email ? 0.4 : 1 }}
+                  >
+                    {sending ? 'Sending…' : sendResult?.ok ? 'Sent!' : 'Send'}
+                  </button>
                 </div>
+                {sendResult?.error && (
+                  <p style={{ fontFamily: MONO, fontSize: 9, color: '#E7000B', margin: '4px 0 0' }}>{sendResult.error}</p>
+                )}
                 {tracked && (
                   <p style={{ fontFamily: MONO, fontSize: 9, color: '#4a7c59', margin: '4px 0 0', letterSpacing: '0.06em' }}>
                     Tracking active — opens and link clicks will appear below

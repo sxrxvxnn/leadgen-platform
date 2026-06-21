@@ -2,30 +2,42 @@ import React, { useState, useRef, useCallback } from 'react'
 import { motion } from 'motion/react'
 
 const SECTIONS = [
-  { id: 'profile',  num: '01', label: 'Profile' },
-  { id: 'linkedin', num: '02', label: 'LinkedIn' },
-  { id: 'privacy',  num: '03', label: 'Privacy' },
-  { id: 'terms',    num: '04', label: 'Terms' },
+  { id: 'profile', num: '01', label: 'Profile' },
+  { id: 'email',   num: '02', label: 'Email Sending' },
+  { id: 'privacy', num: '03', label: 'Privacy' },
+  { id: 'terms',   num: '04', label: 'Terms' },
 ]
 
 export default function Settings() {
-  const [fullName, setFullName] = useState(localStorage.getItem('fullName') || '')
-  const [liCookie, setLiCookie] = useState(localStorage.getItem('liCookie') || '')
-  const [saved, setSaved] = useState(false)
+  const [fullName,    setFullName]    = useState(localStorage.getItem('fullName') || '')
+  const [saved,       setSaved]       = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
   const [agreedTerms, setAgreedTerms] = useState(localStorage.getItem('agreedTerms') === '1')
   const [wantsUpdates, setWantsUpdates] = useState(localStorage.getItem('wantsUpdates') !== '0')
 
+  // SMTP state
+  const [smtpHost,  setSmtpHost]  = useState(localStorage.getItem('smtpHost')  || 'smtp.gmail.com')
+  const [smtpPort,  setSmtpPort]  = useState(localStorage.getItem('smtpPort')  || '587')
+  const [smtpUser,  setSmtpUser]  = useState(localStorage.getItem('smtpUser')  || '')
+  const [smtpPass,  setSmtpPass]  = useState(localStorage.getItem('smtpPass')  || '')
+  const [fromName,  setFromName]  = useState(localStorage.getItem('smtpFromName') || '')
+  const [fromEmail, setFromEmail] = useState(localStorage.getItem('smtpFromEmail') || '')
+
   const sectionRefs = {
-    profile:  useRef(null),
-    linkedin: useRef(null),
-    privacy:  useRef(null),
-    terms:    useRef(null),
+    profile: useRef(null),
+    email:   useRef(null),
+    privacy: useRef(null),
+    terms:   useRef(null),
   }
 
   function handleSave() {
     localStorage.setItem('fullName', fullName)
-    localStorage.setItem('liCookie', liCookie)
+    localStorage.setItem('smtpHost', smtpHost)
+    localStorage.setItem('smtpPort', smtpPort)
+    localStorage.setItem('smtpUser', smtpUser)
+    localStorage.setItem('smtpPass', smtpPass)
+    localStorage.setItem('smtpFromName', fromName)
+    localStorage.setItem('smtpFromEmail', fromEmail)
     localStorage.setItem('agreedTerms', agreedTerms ? '1' : '0')
     localStorage.setItem('wantsUpdates', wantsUpdates ? '1' : '0')
     window.dispatchEvent(new Event('nameUpdated'))
@@ -94,46 +106,46 @@ export default function Settings() {
             </Field>
           </section>
 
-          {/* 02 — LinkedIn */}
-          <section ref={sectionRefs.linkedin} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
-            <SectionHeader num="02" title="LinkedIn" />
+          {/* 02 — Email Sending */}
+          <section ref={sectionRefs.email} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="02" title="Email Sending" />
             <p style={s.sectionHint}>
-              Paste your LinkedIn session cookie to unlock company enrichment — phone, founded year, specialties, and exact employee count directly from LinkedIn About pages.
+              Connect any email account via SMTP to send emails directly from Sonar — no copy-pasting required. Gmail users: use an App Password (Google Account → Security → 2FA → App Passwords).
             </p>
 
-            <Field label="Session cookie" badge="li_at" badgeColor="blue"
-              hint={
-                <span>
-                  While logged into LinkedIn, drag this bookmarklet to your bookmarks bar, then click it on any LinkedIn page to copy your cookie automatically.<br /><br />
-                  <a
-                    href={`javascript:(function(){var c=document.cookie.split(';').find(x=>x.trim().startsWith('li_at='));if(c){navigator.clipboard.writeText(c.trim().replace('li_at=',''));alert('li_at cookie copied — paste it into Sonar Settings.');}else{alert('Not found. Make sure you are logged into LinkedIn.');}})()`}
-                    style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', background: 'var(--surface)', border: '1px solid var(--border)', padding: '4px 10px', borderRadius: 3, color: 'var(--text)', textDecoration: 'none', display: 'inline-block' }}
-                    onClick={e => e.preventDefault()}
-                    title="Drag this to your bookmarks bar"
-                  >
-                    Copy li_at cookie
-                  </a>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-muted)', marginLeft: 8 }}>← drag to bookmarks bar, then click it on linkedin.com</span>
-                </span>
-              }>
-              <KeyInput value={liCookie} onChange={setLiCookie} placeholder="AQEDAx…" set={!!liCookie} />
-            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: 16 }}>
+              <Field label="Your name" hint="Shown as sender name">
+                <input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Jane Smith" style={s.input} />
+              </Field>
+              <Field label="From email" hint="Address recipients will reply to">
+                <input value={fromEmail} onChange={e => setFromEmail(e.target.value)} placeholder="jane@company.com" style={s.input} />
+              </Field>
+            </div>
 
-            <div style={{ marginTop: '16px' }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '10px' }}>What this unlocks</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1px', background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 0, overflow: 'hidden' }}>
-                {[
-                  { label: 'Phone',        text: 'Business phone number listed on LinkedIn About.' },
-                  { label: 'Founded',      text: 'Company founding year.' },
-                  { label: 'Specialties',  text: 'LinkedIn-listed expertise areas.' },
-                  { label: 'Company size', text: 'Exact employee band (e.g. 2-10, 51-200).' },
-                ].map(({ label, text }) => (
-                  <div key={label} style={{ background: 'var(--bg)', padding: '14px 16px' }}>
-                    <span style={badge.blue}>{label}</span>
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: '8px' }}>{text}</p>
-                  </div>
-                ))}
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '16px', marginBottom: 16 }}>
+              <Field label="SMTP host">
+                <input value={smtpHost} onChange={e => setSmtpHost(e.target.value)} placeholder="smtp.gmail.com" style={s.input} />
+              </Field>
+              <Field label="Port">
+                <input value={smtpPort} onChange={e => setSmtpPort(e.target.value)} placeholder="587" style={s.input} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <Field label="SMTP username">
+                <input value={smtpUser} onChange={e => setSmtpUser(e.target.value)} placeholder="jane@gmail.com" style={s.input} />
+              </Field>
+              <Field label="Password / App Password" hint="">
+                <KeyInput value={smtpPass} onChange={setSmtpPass} placeholder="App password or SMTP password" set={!!smtpPass} />
+              </Field>
+            </div>
+
+            <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4 }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: 0, lineHeight: 1.7 }}>
+                <strong style={{ color: 'var(--text)' }}>Gmail:</strong> smtp.gmail.com · port 587 · your Gmail address · <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>generate an App Password</a><br />
+                <strong style={{ color: 'var(--text)' }}>Outlook:</strong> smtp.office365.com · port 587 · your email · account password<br />
+                Credentials are saved in your browser only — never sent to our servers for storage.
+              </p>
             </div>
           </section>
 
