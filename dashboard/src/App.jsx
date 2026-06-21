@@ -25,6 +25,7 @@ const Sequences       = lazy(() => import('./pages/Sequences'))
 const Tasks           = lazy(() => import('./pages/Tasks'))
 const Analytics       = lazy(() => import('./pages/Analytics'))
 const Prospect        = lazy(() => import('./pages/Prospect'))
+const Unsubscribes    = lazy(() => import('./pages/Unsubscribes'))
 const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/targeting" element={<Targeting />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/unsubscribes" element={<Unsubscribes />} />
                 <Route path="/admin" element={<Admin />} />
               </Route>
 

@@ -305,4 +305,15 @@ export const getSmtpConfig    = () => api.get('/profile/smtp-config')
 export const saveSmtpConfig   = (config) => api.patch('/profile/smtp-config', config)
 export const deleteSmtpConfig = () => api.delete('/profile/smtp-config')
 
+// ─── SEGMENTS ────────────────────────────────────────────────────
+export const listSegments   = () => api.get('/segments')
+export const createSegment  = (name, filters) => api.post('/segments', { name, filters })
+export const updateSegment  = (id, data) => api.patch(`/segments/${id}`, data)
+export const deleteSegment  = (id) => api.delete(`/segments/${id}`)
+
+// ─── UNSUBSCRIBES ─────────────────────────────────────────────────
+export const listUnsubscribes  = () => api.get('/unsubscribes')
+export const addUnsubscribe    = (email) => api.post('/unsubscribes', { email })
+export const removeUnsubscribe = (id) => api.delete(`/unsubscribes/${id}`)
+
 export default api

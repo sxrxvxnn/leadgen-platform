@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getLeads, updateLead, deleteLead, bulkDeleteLeads, bulkScoreLeads, bulkEnrichLeads, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence } from '../services/api'
+import { getLeads, updateLead, deleteLead, bulkDeleteLeads, bulkScoreLeads, bulkEnrichLeads, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence, listSegments, createSegment, deleteSegment } from '../services/api'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
 import LeadDrawer from '../components/LeadDrawer'
@@ -352,6 +352,11 @@ export default function Leads() {
   const [emailDraft, setEmailDraft] = useState(null)   // { lead, subject, body }
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkLabel, setBulkLabel] = useState('')
+  const [segments, setSegments] = useState([])
+  const [activeSegmentId, setActiveSegmentId] = useState(null)
+  const [savingSegment, setSavingSegment] = useState(false)
+  const [segmentNameInput, setSegmentNameInput] = useState('')
+  const [showSegmentInput, setShowSegmentInput] = useState(false)
 
   // Advanced filters
   const [filterSeniority, setFilterSeniority] = useState('')
@@ -366,7 +371,14 @@ export default function Leads() {
   const [importMsg, setImportMsg] = useState('')
   const csvInputRef = useRef(null)
 
-  useEffect(() => { fetchLeads() }, [])
+  useEffect(() => { fetchLeads(); fetchSegments() }, [])
+
+  async function fetchSegments() {
+    try {
+      const res = await listSegments()
+      setSegments(res.data.segments || [])
+    } catch {}
+  }
 
   async function fetchLeads() {
     try {
@@ -453,6 +465,59 @@ export default function Leads() {
     } catch (e) { console.error(e); setImportMsg('Scoring failed.') }
     finally { setBulkLoading(false); setBulkLabel('') }
   }
+
+  function currentFilters() {
+    return { search, statusFilter, viewFilter, starredOnly, filterSeniority, filterConnection, filterMinScore }
+  }
+
+  function applySegment(seg) {
+    const f = seg.filters || {}
+    setSearch(f.search || '')
+    setStatusFilter(f.statusFilter || 'all')
+    setViewFilter(f.viewFilter || 'all')
+    setStarredOnly(f.starredOnly || false)
+    setFilterSeniority(f.filterSeniority || '')
+    setFilterConnection(f.filterConnection || '')
+    setFilterMinScore(f.filterMinScore || 0)
+    setActiveSegmentId(seg.id)
+  }
+
+  function clearSegment() {
+    setActiveSegmentId(null)
+    setSearch('')
+    setStatusFilter('all')
+    setViewFilter('all')
+    setStarredOnly(false)
+    setFilterSeniority('')
+    setFilterConnection('')
+    setFilterMinScore(0)
+  }
+
+  async function handleSaveSegment() {
+    const name = segmentNameInput.trim()
+    if (!name) return
+    setSavingSegment(true)
+    try {
+      const res = await createSegment(name, currentFilters())
+      const seg = res.data.segment
+      setSegments(prev => [...prev, seg])
+      setActiveSegmentId(seg.id)
+      setShowSegmentInput(false)
+      setSegmentNameInput('')
+    } catch {}
+    finally { setSavingSegment(false) }
+  }
+
+  async function handleDeleteSegment(id, e) {
+    e.stopPropagation()
+    try {
+      await deleteSegment(id)
+      setSegments(prev => prev.filter(s => s.id !== id))
+      if (activeSegmentId === id) clearSegment()
+    } catch {}
+  }
+
+  const hasActiveFilters = search || statusFilter !== 'all' || viewFilter !== 'all' || starredOnly || filterSeniority || filterConnection || filterMinScore
 
   async function handleBulkFindEmails() {
     const needEmail = selected.filter(id => !leads.find(l => l.id === id)?.email)
@@ -690,20 +755,72 @@ export default function Leads() {
           />
         )}
 
-        <div style={s.viewTabs}>
-          {[
-            { key: 'all', label: 'All leads', count: leads.length },
-            { key: 'decision-makers', label: 'Decision Makers', count: decisionMakerCount },
-            { key: 'security', label: 'Security', count: securityCount },
-          ].map(tab => (
-            <button key={tab.key} onClick={() => setViewFilter(tab.key)}
-              style={{ ...s.viewTab, ...(viewFilter === tab.key ? s.viewTabActive : {}) }}>
-              {tab.label}
-              <span style={{ ...s.viewTabCount, background: viewFilter === tab.key ? 'rgba(29,27,27,0.10)' : 'var(--surface-raised)', color: viewFilter === tab.key ? 'var(--bg)' : 'var(--text-muted)' }}>
-                {tab.count}
-              </span>
-            </button>
-          ))}
+        <div style={{ ...s.viewTabs, justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Built-in tabs */}
+            {[
+              { key: 'all', label: 'All leads', count: leads.length },
+              { key: 'decision-makers', label: 'Decision Makers', count: decisionMakerCount },
+              { key: 'security', label: 'Security', count: securityCount },
+            ].map(tab => (
+              <button key={tab.key}
+                onClick={() => { setViewFilter(tab.key); setActiveSegmentId(null) }}
+                style={{ ...s.viewTab, ...(viewFilter === tab.key && !activeSegmentId ? s.viewTabActive : {}) }}>
+                {tab.label}
+                <span style={{ ...s.viewTabCount, background: viewFilter === tab.key && !activeSegmentId ? 'rgba(29,27,27,0.10)' : 'var(--surface-raised)', color: viewFilter === tab.key && !activeSegmentId ? 'var(--bg)' : 'var(--text-muted)' }}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+
+            {/* Divider */}
+            {segments.length > 0 && <span style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />}
+
+            {/* Saved segments */}
+            {segments.map(seg => (
+              <button key={seg.id}
+                onClick={() => activeSegmentId === seg.id ? clearSegment() : applySegment(seg)}
+                style={{ ...s.viewTab, ...(activeSegmentId === seg.id ? s.viewTabActive : {}), display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 8 }}>◆</span>
+                {seg.name}
+                <span
+                  onClick={(e) => handleDeleteSegment(seg.id, e)}
+                  style={{ fontSize: 9, opacity: 0.5, cursor: 'pointer', marginLeft: 2, lineHeight: 1 }}
+                  title="Delete segment">✕</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Save segment button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {showSegmentInput ? (
+              <>
+                <input
+                  autoFocus
+                  value={segmentNameInput}
+                  onChange={e => setSegmentNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveSegment(); if (e.key === 'Escape') { setShowSegmentInput(false); setSegmentNameInput('') } }}
+                  placeholder="Segment name…"
+                  style={{ padding: '5px 10px', background: 'var(--surface)', border: '1px solid var(--accent)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', outline: 'none', width: 160 }}
+                />
+                <button onClick={handleSaveSegment} disabled={savingSegment || !segmentNameInput.trim()}
+                  style={{ padding: '5px 12px', background: 'var(--accent)', border: 'none', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: '#fff', cursor: 'pointer', opacity: savingSegment || !segmentNameInput.trim() ? 0.5 : 1 }}>
+                  {savingSegment ? '…' : 'Save'}
+                </button>
+                <button onClick={() => { setShowSegmentInput(false); setSegmentNameInput('') }}
+                  style={{ padding: '5px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              hasActiveFilters && (
+                <button onClick={() => setShowSegmentInput(true)}
+                  style={{ padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
+                  + Save as segment
+                </button>
+              )
+            )}
+          </div>
         </div>
 
         <div style={s.filters}>
