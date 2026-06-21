@@ -266,4 +266,21 @@ export const createTemplate  = (data) => api.post('/email-templates', data)
 export const updateTemplate  = (id, data) => api.patch(`/email-templates/${id}`, data)
 export const deleteTemplate  = (id) => api.delete(`/email-templates/${id}`)
 
+// ─── CSV IMPORT / EXPORT ──────────────────────────────────────────
+export const importLeadsCSV = (csvText) =>
+  api.post('/leads/import-csv', csvText, { headers: { 'Content-Type': 'text/plain' } })
+export const exportLeadsCSV = () =>
+  api.get('/leads/export-csv', { responseType: 'blob' })
+
+// ─── LINKEDIN ENRICHMENT (Proxycurl) ──────────────────────────────
+export const enrichLeadLinkedIn = (id) => api.post(`/leads/${id}/enrich-linkedin`)
+
+// ─── SMTP EMAIL SENDING ───────────────────────────────────────────
+export const sendLeadEmail = (id, payload) => api.post(`/leads/${id}/send-email`, payload)
+
+// ─── SEQUENCES (re-export for bulk enroll) ────────────────────────
+export const listSequences  = () => api.get('/sequences')
+export const enrollInSequence = (seqId, leadIds) =>
+  api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
+
 export default api

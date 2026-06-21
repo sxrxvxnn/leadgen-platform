@@ -4525,3 +4525,211 @@ async def get_analytics(authorization: str = Header(...)):
             "valued_deals": len(valued),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════
+# CSV IMPORT / EXPORT
+# ═══════════════════════════════════════════════════════════════════
+
+import csv as _csv
+import io as _io
+
+_CSV_FIELD_MAP = {
+    'name':         ['name', 'full name', 'fullname', 'contact name', 'contact'],
+    'email':        ['email', 'email address', 'work email', 'business email'],
+    'company':      ['company', 'company name', 'organization', 'employer', 'account'],
+    'title':        ['title', 'job title', 'position', 'role', 'designation'],
+    'phone':        ['phone', 'phone number', 'mobile', 'tel', 'telephone'],
+    'linkedin_url': ['linkedin', 'linkedin url', 'linkedin profile', 'profile url'],
+    'location':     ['location', 'city', 'country', 'region'],
+    'status':       ['status', 'lead status', 'stage'],
+    'notes':        ['notes', 'note', 'comments', 'description'],
+}
+_VALID_STATUSES = {'new', 'contacted', 'qualified', 'disqualified'}
+
+
+@router.post("/leads/import-csv")
+async def import_leads_csv(request: Request, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    body    = await request.body()
+    content = body.decode('utf-8-sig')
+
+    reader  = _csv.DictReader(_io.StringIO(content))
+    created = skipped = 0
+
+    for row in reader:
+        mapped: dict = {}
+        for raw_key, val in row.items():
+            k = raw_key.lower().strip()
+            for field, aliases in _CSV_FIELD_MAP.items():
+                if k in aliases:
+                    mapped[field] = (val or '').strip()
+                    break
+
+        if not mapped.get('name') and not mapped.get('email'):
+            skipped += 1
+            continue
+
+        if mapped.get('email'):
+            dup = supabase.table("leads").select("id") \
+                .eq("user_id", user_id).eq("email", mapped['email']).execute()
+            if dup.data:
+                skipped += 1
+                continue
+
+        if mapped.get('status') not in _VALID_STATUSES:
+            mapped['status'] = 'new'
+
+        supabase.table("leads").insert({
+            **{k: v for k, v in mapped.items() if v},
+            "user_id": user_id,
+            "source":  "csv_import",
+        }).execute()
+        created += 1
+
+    return {"created": created, "skipped": skipped}
+
+
+@router.get("/leads/export-csv")
+async def export_leads_csv(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    leads   = supabase.table("leads").select(
+        "name, email, title, company, phone, location, linkedin_url, status, connection_status, icp_score, deal_value, notes, created_at"
+    ).eq("user_id", user_id).order("created_at", desc=True).execute().data or []
+
+    fields  = ["name", "email", "title", "company", "phone", "location",
+                "linkedin_url", "status", "connection_status", "icp_score",
+                "deal_value", "notes", "created_at"]
+    out     = _io.StringIO()
+    writer  = _csv.DictWriter(out, fieldnames=fields, extrasaction='ignore')
+    writer.writeheader()
+    for lead in leads:
+        writer.writerow({f: (lead.get(f) or '') for f in fields})
+
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="sonar-leads.csv"'},
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# LINKEDIN ENRICHMENT VIA PROXYCURL
+# ═══════════════════════════════════════════════════════════════════
+
+_PROXYCURL_KEY = os.environ.get("PROXYCURL_API_KEY", "")
+
+
+@router.post("/leads/{lead_id}/enrich-linkedin")
+async def enrich_lead_linkedin(lead_id: str, authorization: str = Header(...)):
+    validate_uuid(lead_id)
+    user_id = get_user_id(authorization)
+
+    if not _PROXYCURL_KEY:
+        raise HTTPException(status_code=503, detail="LinkedIn enrichment not configured on this server.")
+
+    lead = supabase.table("leads").select("*") \
+        .eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
+    if not lead.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    li_url = lead.data.get("linkedin_url") or lead.data.get("profile_url")
+    if not li_url:
+        raise HTTPException(status_code=400, detail="No LinkedIn URL on this lead")
+
+    try:
+        res  = requests.get(
+            "https://nubela.co/proxycurl/api/v2/linkedin",
+            params={"url": li_url, "use_cache": "if-present", "fallback_to_cache": "on-error"},
+            headers={"Authorization": f"Bearer {_PROXYCURL_KEY}"},
+            timeout=20,
+        )
+        data = res.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Proxycurl error: {e}")
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=data.get("description", "Proxycurl failed"))
+
+    upd: dict = {}
+    if not lead.data.get("name")     and data.get("full_name"):   upd["name"]  = data["full_name"]
+    if not lead.data.get("location") and data.get("city"):
+        upd["location"] = ", ".join(p for p in [data.get("city"), data.get("country_full_name")] if p)
+    if not lead.data.get("about")    and data.get("summary"):     upd["about"] = data["summary"]
+
+    experiences = data.get("experiences") or []
+    current = next((e for e in experiences if not e.get("ends_at")), None)
+    if current:
+        if not lead.data.get("company") and current.get("company"): upd["company"] = current["company"]
+        if not lead.data.get("title")   and current.get("title"):   upd["title"]   = current["title"]
+
+    if upd:
+        supabase.table("leads").update(upd).eq("id", lead_id).execute()
+
+    supabase.table("lead_activity").insert({
+        "lead_id": lead_id, "user_id": user_id,
+        "event_type": "enriched",
+        "data": {"source": "proxycurl", "fields_updated": list(upd.keys())},
+    }).execute()
+
+    return {"updated": upd}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SMTP EMAIL SENDING
+# ═══════════════════════════════════════════════════════════════════
+
+import smtplib as _smtplib
+from email.mime.text      import MIMEText      as _MIMEText
+from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+
+
+@router.post("/leads/{lead_id}/send-email")
+async def send_lead_email(lead_id: str, payload: dict, authorization: str = Header(...)):
+    validate_uuid(lead_id)
+    user_id = get_user_id(authorization)
+
+    lead = supabase.table("leads").select("email, name").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
+    if not lead.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    to_email = lead.data.get("email")
+    if not to_email:
+        raise HTTPException(status_code=400, detail="Lead has no email address")
+
+    subject    = payload.get("subject", "(no subject)")
+    body       = payload.get("body", "")
+    smtp_host  = payload.get("smtp_host", "smtp.gmail.com")
+    smtp_port  = int(payload.get("smtp_port", 587))
+    smtp_user  = payload.get("smtp_user", "")
+    smtp_pass  = payload.get("smtp_pass", "")
+    from_name  = payload.get("from_name", "")
+    from_email = payload.get("from_email") or smtp_user
+
+    if not smtp_user or not smtp_pass:
+        raise HTTPException(status_code=400, detail="SMTP credentials not configured. Add them in Settings → Email Sending.")
+
+    try:
+        msg              = _MIMEMultipart("alternative")
+        msg["Subject"]   = subject
+        msg["From"]      = f"{from_name} <{from_email}>" if from_name else from_email
+        msg["To"]        = to_email
+        msg.attach(_MIMEText(body, "plain"))
+
+        with _smtplib.SMTP(smtp_host, smtp_port, timeout=15) as srv:
+            srv.ehlo()
+            srv.starttls()
+            srv.login(smtp_user, smtp_pass)
+            srv.sendmail(from_email, to_email, msg.as_string())
+    except _smtplib.SMTPAuthenticationError:
+        raise HTTPException(status_code=401, detail="SMTP login failed. For Gmail use an App Password, not your main password.")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Send failed: {e}")
+
+    supabase.table("lead_activity").insert({
+        "lead_id": lead_id, "user_id": user_id,
+        "event_type": "email_sent",
+        "data": {"subject": subject, "to": to_email, "via": "smtp"},
+    }).execute()
+
+    return {"sent": True, "to": to_email}
