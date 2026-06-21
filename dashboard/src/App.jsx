@@ -24,6 +24,7 @@ const Admin           = lazy(() => import('./pages/Admin'))
 const Sequences       = lazy(() => import('./pages/Sequences'))
 const Tasks           = lazy(() => import('./pages/Tasks'))
 const Analytics       = lazy(() => import('./pages/Analytics'))
+const Prospect        = lazy(() => import('./pages/Prospect'))
 const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
@@ -81,6 +82,7 @@ export default function App() {
                 <Route path="/leads" element={<Leads />} />
                 <Route path="/companies" element={<Companies />} />
                 <Route path="/directory" element={<CompanyDirectory />} />
+                <Route path="/prospect" element={<Prospect />} />
                 <Route path="/sequences" element={<Sequences />} />
                 <Route path="/tasks"     element={<Tasks />} />
                 <Route path="/analytics" element={<Analytics />} />

@@ -4733,3 +4733,97 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
     }).execute()
 
     return {"sent": True, "to": to_email}
+
+
+# ─── PROSPECT SEARCH (Apollo database) ─────────────────────────────────────────
+
+_APOLLO_KEY_PROSPECT = os.environ.get("APOLLO_API_KEY", "")
+
+@router.post("/prospect/people-search")
+async def prospect_people_search(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    key = _APOLLO_KEY_PROSPECT
+    if not key:
+        raise HTTPException(status_code=503, detail="Prospect search not configured — add APOLLO_API_KEY to Vercel env vars.")
+    body: dict = {"api_key": key, "page": payload.get("page", 1), "per_page": 25}
+    if payload.get("keywords"):   body["q_keywords"]                        = payload["keywords"]
+    if payload.get("titles"):     body["person_titles"]                     = [t.strip() for t in payload["titles"] if t.strip()]
+    if payload.get("companies"):  body["organization_names"]                = [c.strip() for c in payload["companies"] if c.strip()]
+    if payload.get("locations"):  body["person_locations"]                  = [l.strip() for l in payload["locations"] if l.strip()]
+    if payload.get("sizes"):      body["organization_num_employees_ranges"] = payload["sizes"]
+    if payload.get("industries"): body["organization_industry_tag_ids"]     = payload["industries"]
+    try:
+        res = requests.post("https://api.apollo.io/v1/mixed_people/search", json=body, timeout=20)
+        data = res.json()
+        if res.status_code != 200:
+            raise HTTPException(status_code=502, detail=data.get("error") or data.get("message") or "Apollo search failed")
+        return {
+            "people": data.get("people", []),
+            "total": data.get("pagination", {}).get("total_entries", 0),
+            "page": data.get("pagination", {}).get("page", 1),
+            "total_pages": data.get("pagination", {}).get("total_pages", 1),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+@router.post("/prospect/reveal-email")
+async def prospect_reveal_email(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    key = _APOLLO_KEY_PROSPECT
+    if not key:
+        raise HTTPException(status_code=503, detail="Not configured")
+    person_id = payload.get("person_id")
+    if not person_id:
+        raise HTTPException(status_code=400, detail="person_id required")
+    try:
+        res = requests.post(
+            "https://api.apollo.io/v1/people/match",
+            json={"api_key": key, "id": person_id, "reveal_personal_emails": False},
+            timeout=15,
+        )
+        data = res.json()
+        person = data.get("person") or {}
+        email = person.get("email")
+        return {"email": email, "phone": (person.get("phone_numbers") or [{}])[0].get("sanitized_number")}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+@router.post("/prospect/add-lead")
+async def prospect_add_lead(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    p = payload.get("person", {})
+    fn = (p.get("first_name") or "").strip()
+    ln = (p.get("last_name") or "").strip()
+    name = p.get("name") or f"{fn} {ln}".strip()
+    location_parts = [x for x in [p.get("city"), p.get("state"), p.get("country")] if x]
+    location = ", ".join(location_parts[:2]) if location_parts else None
+    phone = None
+    if p.get("phone_numbers"):
+        phone = p["phone_numbers"][0].get("sanitized_number")
+    lead_data = {k: v for k, v in {
+        "user_id":     user_id,
+        "name":        name or None,
+        "email":       p.get("email") or None,
+        "title":       p.get("title") or None,
+        "company":     p.get("organization_name") or None,
+        "location":    location,
+        "linkedin_url": p.get("linkedin_url") or None,
+        "phone":       phone,
+        "status":      "new",
+        "source":      "prospect_search",
+    }.items() if v}
+    # dedup by email
+    if lead_data.get("email"):
+        dup = supabase.table("leads").select("id").eq("user_id", user_id).eq("email", lead_data["email"]).execute()
+        if dup.data:
+            return {"added": False, "reason": "Already in leads", "lead_id": dup.data[0]["id"]}
+    # dedup by linkedin_url
+    if lead_data.get("linkedin_url"):
+        dup = supabase.table("leads").select("id").eq("user_id", user_id).eq("linkedin_url", lead_data["linkedin_url"]).execute()
+        if dup.data:
+            return {"added": False, "reason": "Already in leads", "lead_id": dup.data[0]["id"]}
+    res = supabase.table("leads").insert(lead_data).execute()
+    inserted = res.data[0] if res.data else {}
+    return {"added": True, "lead_id": inserted.get("id")}

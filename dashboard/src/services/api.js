@@ -278,6 +278,11 @@ export const enrichLeadLinkedIn = (id) => api.post(`/leads/${id}/enrich-linkedin
 // ─── SMTP EMAIL SENDING ───────────────────────────────────────────
 export const sendLeadEmail = (id, payload) => api.post(`/leads/${id}/send-email`, payload)
 
+// ─── PROSPECT SEARCH ─────────────────────────────────────────────
+export const prospectPeopleSearch = (payload) => api.post('/prospect/people-search', payload)
+export const prospectRevealEmail  = (personId) => api.post('/prospect/reveal-email', { person_id: personId })
+export const prospectAddLead      = (person) => api.post('/prospect/add-lead', { person })
+
 // ─── SEQUENCES (re-export for bulk enroll) ────────────────────────
 export const listSequences  = () => api.get('/sequences')
 export const enrollInSequence = (seqId, leadIds) =>
