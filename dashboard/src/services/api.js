@@ -316,6 +316,11 @@ export const listUnsubscribes  = () => api.get('/unsubscribes')
 export const addUnsubscribe    = (email) => api.post('/unsubscribes', { email })
 export const removeUnsubscribe = (id) => api.delete(`/unsubscribes/${id}`)
 
+// ─── ENRICHMENT CONFIG ────────────────────────────────────────────
+export const getEnrichmentConfig    = () => api.get('/profile/enrichment-config')
+export const saveEnrichmentConfig   = (data) => api.patch('/profile/enrichment-config', data)
+export const deleteEnrichmentConfig = () => api.delete('/profile/enrichment-config')
+
 // ─── MEETING SCHEDULER ────────────────────────────────────────────
 export const getCalConfig  = () => api.get('/profile/cal')
 export const saveCalConfig = (data) => api.patch('/profile/cal', data)

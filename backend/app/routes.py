@@ -240,7 +240,7 @@ async def get_lead_by_email(email: str, authorization: str = Header(...)):
         raise HTTPException(status_code=400, detail="Valid email required")
     try:
         res = supabase.table("leads")\
-            .select("id, name, title, company, location, email, stage, icp_score, icp_score_reason, email_score, email_status, profile_url, starred, status, connection_status")\
+            .select("id, name, title, company, location, email, email_provider, stage, icp_score, icp_score_reason, email_score, email_status, profile_url, starred, status, connection_status")\
             .eq("user_id", user_id)\
             .ilike("email", email.strip())\
             .limit(1)\
@@ -419,41 +419,44 @@ async def bulk_enrich_emails_selected(payload: dict, authorization: str = Header
         raise HTTPException(status_code=400, detail="ids required")
     ids = [i for i in ids if isinstance(i, str) and len(i) == 36][:30]
 
-    leads_res = supabase.table("leads").select("id,name,email,company")\
+    leads_res = supabase.table("leads").select("id,name,email,company,website")\
         .in_("id", ids).eq("user_id", user_id).execute()
     leads_data = [l for l in (leads_res.data or []) if not l.get("email")]
 
+    from .enrichment import waterfall_find_email, extract_domain
+    prof_res = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
+    ecfg       = ((prof_res.data or {}).get("enrichment_config") or {})
+    hunter_key = ecfg.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
+    apollo_key = ecfg.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
+
     enriched = 0
+    results  = []
     for lead in leads_data:
-        try:
-            from .routes import _hunter_domain_search  # noqa – reuse existing helper
-        except Exception:
-            break
-        name = lead.get("name", "")
+        name    = lead.get("name", "")
         company = lead.get("company", "")
-        if not name or not company:
+        website = lead.get("website", "")
+        if not name:
             continue
         try:
-            import httpx, os as _os
-            hunter_key = _os.environ.get("HUNTER_API_KEY", "")
-            if not hunter_key:
-                break
-            parts = name.strip().split()
-            fn, ln = (parts[0], parts[-1]) if len(parts) >= 2 else (parts[0], "")
-            resp = httpx.get("https://api.hunter.io/v2/email-finder", params={
-                "domain": company.lower().replace(" ", "") + ".com",
-                "first_name": fn, "last_name": ln, "api_key": hunter_key
-            }, timeout=8)
-            if resp.status_code == 200:
-                email = resp.json().get("data", {}).get("email")
-                if email:
-                    supabase.table("leads").update({"email": email})\
-                        .eq("id", lead["id"]).eq("user_id", user_id).execute()
-                    enriched += 1
+            domain = extract_domain(website) if website else ""
+            if not domain and company:
+                co_res = supabase.table("companies").select("website")\
+                    .eq("user_id", user_id).ilike("name", company).limit(1).execute()
+                if co_res.data and co_res.data[0].get("website"):
+                    domain = extract_domain(co_res.data[0]["website"])
+            hit = waterfall_find_email(name, company=company, domain=domain,
+                                       hunter_key=hunter_key, apollo_key=apollo_key)
+            if hit.get("email"):
+                upd = {"email": hit["email"],
+                       "email_provider": hit.get("email_provider"),
+                       "email_score":    hit.get("email_score")}
+                supabase.table("leads").update(upd).eq("id", lead["id"]).eq("user_id", user_id).execute()
+                enriched += 1
+                results.append({"id": lead["id"], **upd})
         except Exception:
             pass
 
-    return {"enriched": enriched, "attempted": len(leads_data)}
+    return {"enriched": enriched, "attempted": len(leads_data), "results": results}
 
 
 # ─── COMPANIES ROUTES ────────────────────────────────────────
@@ -635,51 +638,42 @@ async def enrich_lead_route(
         if lead.get("email"):
             return {"lead": lead, "enriched": False, "message": "Email already exists"}
 
-        hunter_key = payload.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
-        apollo_key = payload.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
+        from .enrichment import waterfall_find_email, extract_domain
+        prof_res   = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
+        ecfg       = ((prof_res.data or {}).get("enrichment_config") or {})
+        hunter_key = payload.get("hunter_key") or ecfg.get("hunter_key") or os.getenv("HUNTER_API_KEY", "")
+        apollo_key = payload.get("apollo_key") or ecfg.get("apollo_key") or os.getenv("APOLLO_API_KEY", "")
 
-        name = lead.get("name", "")
+        name    = lead.get("name", "")
         company = lead.get("company", "")
         website = lead.get("website", "")
 
-        # Try to get website from companies table if not on lead
         if not website and company:
             try:
-                co_res = supabase.table("companies")\
-                    .select("website")\
-                    .eq("user_id", user_id)\
-                    .ilike("name", company)\
-                    .execute()
+                co_res = supabase.table("companies").select("website")\
+                    .eq("user_id", user_id).ilike("name", company).limit(1).execute()
                 if co_res.data and co_res.data[0].get("website"):
                     website = co_res.data[0]["website"]
             except Exception:
                 pass
 
-        from .enrichment import enrich_lead, extract_domain
-        result = {}
-
-        # Try Hunter with domain
-        if hunter_key and website:
-            domain = extract_domain(website)
-            parts = name.strip().split(" ", 1)
-            first_name = parts[0]
-            last_name = parts[1] if len(parts) > 1 else ""
-            from .enrichment import enrich_with_hunter
-            result = enrich_with_hunter(first_name, last_name, domain)
+        domain = extract_domain(website) if website else ""
+        result = waterfall_find_email(name, company=company, domain=domain,
+                                      hunter_key=hunter_key, apollo_key=apollo_key)
 
         if result.get("email"):
-            update_data = {"email": result["email"]}
-            supabase.table("leads").update(update_data).eq("id", lead_id).eq("user_id", user_id).execute()
-            updated_lead = {**lead, **update_data}
-            posthog.capture(user_id, "lead_enriched", {"source": "hunter", "success": True})
-            return {"lead": updated_lead, "enriched": True, "message": "Email found via Hunter"}
+            upd = {"email": result["email"],
+                   "email_provider": result.get("email_provider"),
+                   "email_score":    result.get("email_score")}
+            supabase.table("leads").update(upd).eq("id", lead_id).eq("user_id", user_id).execute()
+            provider = result.get("email_provider", "unknown")
+            posthog.capture(user_id, "lead_enriched", {"source": provider, "success": True})
+            return {"lead": {**lead, **upd}, "enriched": True,
+                    "message": f"Email found via {provider}", "provider": provider}
 
-        posthog.capture(user_id, "lead_enriched", {"source": "hunter", "success": False})
-        return {
-            "lead": lead,
-            "enriched": False,
-            "message": "Email not found. Try adding the company website first using Auto-fill."
-        }
+        posthog.capture(user_id, "lead_enriched", {"source": "waterfall", "success": False})
+        return {"lead": lead, "enriched": False,
+                "message": "Email not found across all providers. Try adding the company website first."}
 
     except HTTPException:
         raise
@@ -5413,6 +5407,47 @@ async def save_smtp_config(payload: dict, authorization: str = Header(...)):
 async def delete_smtp_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     supabase.table("profiles").update({"smtp_config": None}).eq("id", user_id).execute()
+    return {"ok": True}
+
+
+# ─── ENRICHMENT CONFIG ───────────────────────────────────────────────────────
+
+@router.get("/profile/enrichment-config")
+async def get_enrichment_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res  = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
+    cfg  = (res.data or {}).get("enrichment_config") or {}
+    # Mask keys — return placeholder if set
+    return {
+        "hunter_key_set":  bool(cfg.get("hunter_key") or os.getenv("HUNTER_API_KEY")),
+        "apollo_key_set":  bool(cfg.get("apollo_key") or os.getenv("APOLLO_API_KEY")),
+        "hunter_key":      "••••••••" if cfg.get("hunter_key") else "",
+        "apollo_key":      "••••••••" if cfg.get("apollo_key") else "",
+        "waterfall_order": cfg.get("waterfall_order", ["hunter", "apollo", "pattern"]),
+    }
+
+
+@router.patch("/profile/enrichment-config")
+async def save_enrichment_config(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res  = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
+    existing = (res.data or {}).get("enrichment_config") or {}
+    updated  = dict(existing)
+    # Only overwrite keys that are explicitly provided (don't wipe with masked value)
+    for k in ("hunter_key", "apollo_key"):
+        val = (payload.get(k) or "").strip()
+        if val and val != "••••••••":
+            updated[k] = val
+    if "waterfall_order" in payload:
+        updated["waterfall_order"] = payload["waterfall_order"]
+    supabase.table("profiles").update({"enrichment_config": updated}).eq("id", user_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/profile/enrichment-config")
+async def delete_enrichment_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("profiles").update({"enrichment_config": {}}).eq("id", user_id).execute()
     return {"ok": True}
 
 
