@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-import { listEnrollments, unenrollLead } from '../services/api'
+import { listEnrollments, unenrollLead, markReplied, getSequenceAnalytics } from '../services/api'
 
 const STEP_TYPES = [
   { id: 'email',    label: 'Email'    },
@@ -69,17 +69,36 @@ function StepCard({ step, index, onChange, onRemove }) {
   )
 }
 
+const STATUS_DOT   = { active: '#4a7c59', completed: '#0082F3', paused: '#b07d2e', bounced: '#e07070', replied: '#9b59b6', unsubscribed: '#888' }
+const STATUS_LABEL = { active: 'ACTIVE', completed: 'DONE', bounced: 'BOUNCED', replied: 'REPLIED', unsubscribed: 'UNSUB', paused: 'PAUSED' }
+
+function AnalyticsBadge({ label, value, sub, color }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: 60 }}>
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: color || 'var(--text)', lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: color || 'var(--text-muted)', fontWeight: 600 }}>{sub}</div>}
+      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>{label}</div>
+    </div>
+  )
+}
+
 function EnrollmentPanel({ seq }) {
-  const [open, setOpen] = useState(false)
+  const [tab, setTab]           = useState('enrollments') // 'enrollments' | 'analytics'
+  const [open, setOpen]         = useState(false)
   const [enrollments, setEnrollments] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [analytics, setAnalytics]     = useState(null)
+  const [loading, setLoading]   = useState(false)
   const totalSteps = seq.steps?.length || 1
 
   async function load() {
     setLoading(true)
     try {
-      const res = await listEnrollments(seq.id)
-      setEnrollments(res.data.enrollments || [])
+      const [enrRes, anRes] = await Promise.all([
+        listEnrollments(seq.id),
+        getSequenceAnalytics(seq.id),
+      ])
+      setEnrollments(enrRes.data.enrollments || [])
+      setAnalytics(anRes.data)
     } catch { } finally { setLoading(false) }
   }
 
@@ -94,65 +113,117 @@ function EnrollmentPanel({ seq }) {
     setEnrollments(e => e.filter(x => x.id !== enrollmentId))
   }
 
-  const STATUS_DOT = { active: '#4a7c59', completed: '#0082F3', paused: '#b07d2e' }
+  async function handleReply(enrollmentId) {
+    await markReplied(seq.id, enrollmentId)
+    setEnrollments(e => e.map(x => x.id === enrollmentId ? { ...x, status: 'replied' } : x))
+  }
 
   return (
     <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <button onClick={toggle} style={{ background: 'none', border: 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontSize: 9 }}>{open ? '▼' : '▶'}</span>
-        {open ? 'Hide' : 'View'} enrolled leads ({seq.enrolled_count || 0})
+        {open ? 'Hide' : 'View'} analytics & leads ({seq.enrolled_count || 0} enrolled)
       </button>
 
       {open && (
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 14 }}>
           {loading ? (
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>Loading…</p>
-          ) : enrollments.length === 0 ? (
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>No leads enrolled yet. Enroll from the Leads page.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {enrollments.map(enr => {
-                const lead = enr.leads || {}
-                const stepN = enr.current_step || 1
-                const progress = Math.round((stepN - 1) / totalSteps * 100)
-                const nextRun = enr.next_run_at ? new Date(enr.next_run_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
-                return (
-                  <div key={enr.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[enr.status] || '#888', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {lead.name || lead.email || 'Unknown'}
-                        {lead.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {lead.company}</span>}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                        <div style={{ flex: 1, maxWidth: 120, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${progress}%`, background: enr.status === 'completed' ? '#0082F3' : '#4a7c59', borderRadius: 2 }} />
+            <>
+              {/* Tab bar */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+                {['analytics', 'enrollments'].map(t => (
+                  <button key={t} onClick={() => setTab(t)} style={{ padding: '5px 12px', borderRadius: 6, border: tab === t ? '1.5px solid var(--accent)' : '1px solid var(--border)', background: tab === t ? 'var(--accent)' : 'transparent', color: tab === t ? '#fff' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', cursor: 'pointer' }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              {tab === 'analytics' && analytics && (
+                <div>
+                  {/* Top metrics row */}
+                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', padding: '16px 20px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 14 }}>
+                    <AnalyticsBadge label="Sent" value={analytics.emails_sent} />
+                    <AnalyticsBadge label="Open Rate" value={`${analytics.open_rate}%`} sub={`${analytics.unique_opens} opens`} color={analytics.open_rate > 20 ? '#4a7c59' : undefined} />
+                    <AnalyticsBadge label="Click Rate" value={`${analytics.click_rate}%`} sub={`${analytics.unique_clicks} clicks`} color={analytics.click_rate > 5 ? '#0082F3' : undefined} />
+                    <AnalyticsBadge label="Replied" value={analytics.replied} sub={`${analytics.reply_rate}%`} color="#9b59b6" />
+                    <AnalyticsBadge label="Bounced" value={analytics.bounced} sub={`${analytics.bounce_rate}%`} color={analytics.bounced > 0 ? '#e07070' : undefined} />
+                    <AnalyticsBadge label="Unsub" value={analytics.unsubscribed} />
+                    <AnalyticsBadge label="Completed" value={analytics.completed} />
+                  </div>
+
+                  {/* Per-step breakdown */}
+                  {analytics.steps?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: '0 0 4px' }}>Step Breakdown</p>
+                      {analytics.steps.map(step => (
+                        <div key={step.step_number} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{step.step_number}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {step.type === 'email' ? (step.subject || '(no subject)') : step.type}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{step.sent} sent</span>
+                            {step.type === 'email' && <>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.open_rate > 0 ? '#4a7c59' : 'var(--text-muted)' }}>{step.open_rate}% open</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: step.click_rate > 0 ? '#0082F3' : 'var(--text-muted)' }}>{step.click_rate}% click</span>
+                            </>}
+                          </div>
                         </div>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                          Step {stepN}/{totalSteps}
-                        </span>
-                        {enr.status === 'active' && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                            Next: {nextRun}
-                          </span>
-                        )}
-                        {enr.status === 'completed' && (
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#0082F3', fontWeight: 600 }}>DONE</span>
-                        )}
-                      </div>
-                      {enr.last_error && (
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e07070', marginTop: 3 }}>
-                          Error: {enr.last_error}
-                        </div>
-                      )}
+                      ))}
                     </div>
-                    <button onClick={() => handleUnenroll(enr.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>
-                      Remove
-                    </button>
+                  )}
+                </div>
+              )}
+
+              {tab === 'enrollments' && (
+                enrollments.length === 0 ? (
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>No leads enrolled yet. Enroll from the Leads page.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {enrollments.map(enr => {
+                      const lead    = enr.leads || {}
+                      const stepN   = enr.current_step || 1
+                      const progress= Math.min(100, Math.round((stepN - 1) / totalSteps * 100))
+                      const nextRun = enr.next_run_at ? new Date(enr.next_run_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + new Date(enr.next_run_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—'
+                      return (
+                        <div key={enr.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[enr.status] || '#888', flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {lead.name || lead.email || 'Unknown'}
+                              {lead.company && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {lead.company}</span>}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5 }}>
+                              <div style={{ width: 80, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
+                                <div style={{ height: '100%', width: `${progress}%`, background: STATUS_DOT[enr.status] || '#4a7c59', borderRadius: 2 }} />
+                              </div>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Step {stepN}/{totalSteps}</span>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: STATUS_DOT[enr.status] || 'var(--text-muted)' }}>{STATUS_LABEL[enr.status] || enr.status?.toUpperCase()}</span>
+                              {enr.status === 'active' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Next: {nextRun}</span>}
+                            </div>
+                            {enr.last_error && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e07070', marginTop: 3 }}>{enr.last_error}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            {enr.status === 'active' && (
+                              <button onClick={() => handleReply(enr.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 8px', background: 'transparent', border: '1px solid #9b59b6', borderRadius: 5, color: '#9b59b6', cursor: 'pointer' }}>
+                                Replied
+                              </button>
+                            )}
+                            <button onClick={() => handleUnenroll(enr.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )
-              })}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
