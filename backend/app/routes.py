@@ -4867,6 +4867,122 @@ async def handle_unsubscribe(token: str = None, uid: str = None, email: str = No
     return Response(content=html, media_type="text/html")
 
 
+# ─── UNSUBSCRIBES CRUD ───────────────────────────────────────────────────────
+
+@router.get("/unsubscribes")
+async def list_unsubscribes(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    try:
+        res = supabase.table("unsubscribes").select("*")\
+            .eq("user_id", user_id).order("created_at", desc=True).execute()
+        return {"unsubscribes": res.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/unsubscribes")
+async def add_unsubscribe(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    email = (payload.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Valid email required")
+    try:
+        supabase.table("unsubscribes").upsert(
+            {"user_id": user_id, "email": email}, on_conflict="user_id,email"
+        ).execute()
+        # Pause any active enrollments for this email
+        lead_res = supabase.table("leads").select("id")\
+            .eq("user_id", user_id).ilike("email", email).execute()
+        for row in (lead_res.data or []):
+            supabase.table("sequence_enrollments").update({"status": "unsubscribed"})\
+                .eq("lead_id", row["id"]).eq("user_id", user_id)\
+                .eq("status", "active").execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/unsubscribes/{unsub_id}")
+async def remove_unsubscribe(unsub_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(unsub_id, "unsub_id")
+    try:
+        supabase.table("unsubscribes").delete()\
+            .eq("id", unsub_id).eq("user_id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/unsubscribes")
+async def clear_unsubscribes(authorization: str = Header(...)):
+    """Remove all suppressions for this user."""
+    user_id = get_user_id(authorization)
+    try:
+        supabase.table("unsubscribes").delete().eq("user_id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── LEAD SEGMENTS ───────────────────────────────────────────────────────────
+
+@router.get("/segments")
+async def list_segments(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    try:
+        res = supabase.table("lead_segments").select("*")\
+            .eq("user_id", user_id).order("created_at", desc=False).execute()
+        return {"segments": res.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/segments")
+async def create_segment(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name required")
+    filters = payload.get("filters") or {}
+    try:
+        res = supabase.table("lead_segments").insert(
+            {"user_id": user_id, "name": name, "filters": filters}
+        ).execute()
+        return {"segment": res.data[0] if res.data else {}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/segments/{seg_id}")
+async def update_segment(seg_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(seg_id, "seg_id")
+    update = {}
+    if "name" in payload: update["name"] = (payload["name"] or "").strip()
+    if "filters" in payload: update["filters"] = payload["filters"]
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    try:
+        res = supabase.table("lead_segments").update(update)\
+            .eq("id", seg_id).eq("user_id", user_id).execute()
+        return {"segment": res.data[0] if res.data else {}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/segments/{seg_id}")
+async def delete_segment(seg_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(seg_id, "seg_id")
+    try:
+        supabase.table("lead_segments").delete()\
+            .eq("id", seg_id).eq("user_id", user_id).execute()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── SEQUENCE ANALYTICS ──────────────────────────────────────────────────────
 
 @router.get("/sequences/{seq_id}/analytics")

@@ -26,7 +26,8 @@ const ICONS = {
   directory: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
   prospect:  ['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2', 'M9 11a4 4 0 100-8 4 4 0 000 8', 'M23 21v-2a4 4 0 00-3-3.87', 'M16 3.13a4 4 0 011.93 3.87M21 21l-2-2'],
   tasks:     ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
-  analytics: 'M18 20V10M12 20V4M6 20v-6',
+  analytics:    'M18 20V10M12 20V4M6 20v-6',
+  unsubscribes: ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2', 'M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z'],
 }
 
 const NAV_GROUPS = [
@@ -55,8 +56,9 @@ const NAV_GROUPS = [
   {
     label: 'Configure',
     items: [
-      { label: 'Targeting', path: '/targeting', icon: 'targeting' },
-      { label: 'Settings',  path: '/settings',  icon: 'settings' },
+      { label: 'Targeting',     path: '/targeting',     icon: 'targeting' },
+      { label: 'Unsubscribes',  path: '/unsubscribes',  icon: 'unsubscribes' },
+      { label: 'Settings',      path: '/settings',      icon: 'settings' },
     ],
   },
 ]
