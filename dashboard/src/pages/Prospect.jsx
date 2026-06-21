@@ -219,7 +219,7 @@ export default function Prospect() {
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontFamily: SANS, fontSize: 26, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Prospect Search</h1>
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          Search 800M+ verified contacts from People Data Labs — find the right people, add them in one click.
+          Search 800M+ verified contacts — find the right people, add them in one click. Results are cached for 1 hour.
         </p>
       </div>
 
