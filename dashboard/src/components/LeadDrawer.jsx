@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity } from '../services/api'
 import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
+import ActivityFeed from './ActivityFeed'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -66,6 +67,7 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [tracking, setTracking]         = useState(false)
   const [tracked, setTracked]           = useState(null)
   const [emailTimelineKey, setEmailTimelineKey] = useState(0)
+  const activityRef = useRef(null)
 
   useEffect(() => {
     if (!lead?.id) return
@@ -91,6 +93,8 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
       setScore(r.data)
       setLocalLead(prev => ({ ...prev, icp_score: r.data.score, icp_score_reason: r.data.reason }))
       onUpdate?.(L.id, { icp_score: r.data.score, icp_score_reason: r.data.reason })
+      logActivity(L.id, 'scored', { score: r.data.score }).catch(() => {})
+      activityRef.current?.refresh()
     } catch (e) { console.error(e) } finally { setScoring(false) }
   }
 
@@ -100,6 +104,8 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
     try {
       const r = await draftEmail(L.id)
       setDraft(r.data)
+      logActivity(L.id, 'email_drafted', { subject: r.data.subject }).catch(() => {})
+      activityRef.current?.refresh()
     } catch (e) { console.error(e) } finally { setDrafting(false) }
   }
 
@@ -112,20 +118,31 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
       const fullText = `Subject: ${r.data.subject}\n\n${r.data.body}`
       await navigator.clipboard.writeText(fullText)
       setEmailTimelineKey(k => k + 1)
+      logActivity(L.id, 'email_sent', { subject: draft.subject }).catch(() => {})
+      activityRef.current?.refresh()
     } catch (e) { console.error(e) }
     finally { setTracking(false) }
   }
 
   async function handleStatusChange(status) {
+    const prev_status = L.status
     setLocalLead(prev => ({ ...prev, status }))
     onUpdate?.(L.id, { status })
-    try { await updateLead(L.id, { status }) } catch (e) { console.error(e) }
+    try {
+      await updateLead(L.id, { status })
+      logActivity(L.id, 'status_changed', { from: prev_status, to: status }).catch(() => {})
+      activityRef.current?.refresh()
+    } catch (e) { console.error(e) }
   }
 
   async function handleConnectionChange(connection_status) {
     setLocalLead(prev => ({ ...prev, connection_status }))
     onUpdate?.(L.id, { connection_status })
-    try { await updateConnectionStatus(L.id, connection_status) } catch (e) { console.error(e) }
+    try {
+      await updateConnectionStatus(L.id, connection_status)
+      logActivity(L.id, 'connection_changed', { status: connection_status }).catch(() => {})
+      activityRef.current?.refresh()
+    } catch (e) { console.error(e) }
   }
 
   async function handleStar() {
@@ -140,6 +157,8 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
     try {
       await updateLead(L.id, { notes })
       onUpdate?.(L.id, { notes })
+      logActivity(L.id, 'note_saved', {}).catch(() => {})
+      activityRef.current?.refresh()
     } catch (e) { console.error(e) } finally { setSaving(false) }
   }
 
@@ -331,6 +350,9 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
 
           {/* Email Activity Timeline */}
           <EmailTimeline key={emailTimelineKey} leadId={L.id} />
+
+          {/* Activity Feed */}
+          <ActivityFeed ref={activityRef} leadId={L.id} />
 
           {/* Status & Connection */}
           <div>
