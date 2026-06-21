@@ -4735,34 +4735,66 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
     return {"sent": True, "to": to_email}
 
 
-# ─── PROSPECT SEARCH (Apollo database) ─────────────────────────────────────────
+# ─── PROSPECT SEARCH (People Data Labs — 800M+ profiles) ───────────────────────
 
-_APOLLO_KEY_PROSPECT = os.environ.get("APOLLO_API_KEY", "")
+_PDL_KEY = os.environ.get("PDL_API_KEY", "")
+_PDL_BASE = "https://api.peopledatalabs.com/v5"
+
+def _build_pdl_query(payload: dict) -> dict:
+    must: list = []
+    titles    = [t.strip() for t in (payload.get("titles") or []) if t.strip()]
+    companies = [c.strip() for c in (payload.get("companies") or []) if c.strip()]
+    locations = [l.strip() for l in (payload.get("locations") or []) if l.strip()]
+    sizes     = payload.get("sizes") or []
+    keywords  = (payload.get("keywords") or "").strip()
+
+    if titles:
+        must.append({"bool": {"should": [{"match": {"job_title": t}} for t in titles], "minimum_should_match": 1}})
+    if companies:
+        must.append({"bool": {"should": [{"match": {"job_company_name": c}} for c in companies], "minimum_should_match": 1}})
+    if locations:
+        loc_shoulds = []
+        for l in locations:
+            loc_shoulds.append({"match": {"location_country": l}})
+            loc_shoulds.append({"match": {"location_city": l}})
+            loc_shoulds.append({"match": {"location_region": l}})
+        must.append({"bool": {"should": loc_shoulds, "minimum_should_match": 1}})
+    if sizes:
+        must.append({"terms": {"job_company_size": sizes}})
+    if keywords:
+        must.append({"multi_match": {"query": keywords, "fields": ["job_title", "job_company_name", "summary", "headline", "industry"]}})
+
+    return {"bool": {"must": must}} if must else {"match_all": {}}
 
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
-    user_id = get_user_id(authorization)
-    key = _APOLLO_KEY_PROSPECT
-    if not key:
-        raise HTTPException(status_code=503, detail="Prospect search not configured — add APOLLO_API_KEY to Vercel env vars.")
-    body: dict = {"api_key": key, "page": payload.get("page", 1), "per_page": 25}
-    if payload.get("keywords"):   body["q_keywords"]                        = payload["keywords"]
-    if payload.get("titles"):     body["person_titles"]                     = [t.strip() for t in payload["titles"] if t.strip()]
-    if payload.get("companies"):  body["organization_names"]                = [c.strip() for c in payload["companies"] if c.strip()]
-    if payload.get("locations"):  body["person_locations"]                  = [l.strip() for l in payload["locations"] if l.strip()]
-    if payload.get("sizes"):      body["organization_num_employees_ranges"] = payload["sizes"]
-    if payload.get("industries"): body["organization_industry_tag_ids"]     = payload["industries"]
+    get_user_id(authorization)
+    if not _PDL_KEY:
+        raise HTTPException(status_code=503, detail="Prospect search not configured — add PDL_API_KEY to Vercel env vars.")
+    page     = max(1, int(payload.get("page", 1)))
+    per_page = 25
+    from_    = (page - 1) * per_page
+    body = {
+        "query":   _build_pdl_query(payload),
+        "size":    per_page,
+        "from":    from_,
+        "pretty":  False,
+        "dataset": "all",
+    }
     try:
-        res = requests.post("https://api.apollo.io/v1/mixed_people/search", json=body, timeout=20)
+        res = requests.post(
+            f"{_PDL_BASE}/person/search",
+            json=body,
+            headers={"X-Api-Key": _PDL_KEY, "Content-Type": "application/json"},
+            timeout=20,
+        )
         data = res.json()
-        if res.status_code != 200:
-            raise HTTPException(status_code=502, detail=data.get("error") or data.get("message") or "Apollo search failed")
-        return {
-            "people": data.get("people", []),
-            "total": data.get("pagination", {}).get("total_entries", 0),
-            "page": data.get("pagination", {}).get("page", 1),
-            "total_pages": data.get("pagination", {}).get("total_pages", 1),
-        }
+        if res.status_code not in (200, 404):
+            raise HTTPException(status_code=502, detail=data.get("error", {}).get("message") or "PDL search failed")
+        total = data.get("total", 0)
+        people = data.get("data", [])
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        return {"people": people, "total": total, "page": page, "total_pages": min(total_pages, 40)}
     except HTTPException:
         raise
     except Exception as e:
@@ -4770,23 +4802,28 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
 
 @router.post("/prospect/reveal-email")
 async def prospect_reveal_email(payload: dict, authorization: str = Header(...)):
-    user_id = get_user_id(authorization)
-    key = _APOLLO_KEY_PROSPECT
-    if not key:
+    get_user_id(authorization)
+    if not _PDL_KEY:
         raise HTTPException(status_code=503, detail="Not configured")
-    person_id = payload.get("person_id")
-    if not person_id:
-        raise HTTPException(status_code=400, detail="person_id required")
+    linkedin_url = payload.get("linkedin_url") or ""
+    person_id    = payload.get("person_id") or ""
+    if not linkedin_url and not person_id:
+        raise HTTPException(status_code=400, detail="linkedin_url or person_id required")
+    params: dict = {"pretty": False}
+    if linkedin_url: params["profile"] = linkedin_url
+    elif person_id:  params["id"]      = person_id
     try:
-        res = requests.post(
-            "https://api.apollo.io/v1/people/match",
-            json={"api_key": key, "id": person_id, "reveal_personal_emails": False},
+        res = requests.get(
+            f"{_PDL_BASE}/person/enrich",
+            params=params,
+            headers={"X-Api-Key": _PDL_KEY},
             timeout=15,
         )
         data = res.json()
-        person = data.get("person") or {}
-        email = person.get("email")
-        return {"email": email, "phone": (person.get("phone_numbers") or [{}])[0].get("sanitized_number")}
+        person = data.get("data") or data
+        email  = person.get("work_email") or (person.get("emails") or [{}])[0].get("address")
+        phone  = (person.get("phone_numbers") or [None])[0]
+        return {"email": email, "phone": phone}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -4794,22 +4831,23 @@ async def prospect_reveal_email(payload: dict, authorization: str = Header(...))
 async def prospect_add_lead(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     p = payload.get("person", {})
-    fn = (p.get("first_name") or "").strip()
-    ln = (p.get("last_name") or "").strip()
-    name = p.get("name") or f"{fn} {ln}".strip()
-    location_parts = [x for x in [p.get("city"), p.get("state"), p.get("country")] if x]
+    # PDL field names
+    name = p.get("full_name") or f"{p.get('first_name','') or ''} {p.get('last_name','') or ''}".strip()
+    location_parts = [x for x in [p.get("location_city"), p.get("location_state"), p.get("location_country")] if x]
     location = ", ".join(location_parts[:2]) if location_parts else None
-    phone = None
-    if p.get("phone_numbers"):
-        phone = p["phone_numbers"][0].get("sanitized_number")
+    email  = p.get("work_email") or (p.get("emails") or [{}])[0].get("address") if p.get("emails") else None
+    phone  = (p.get("phone_numbers") or [None])[0]
+    li_url = p.get("linkedin_url")
+    if li_url and not li_url.startswith("http"):
+        li_url = "https://" + li_url
     lead_data = {k: v for k, v in {
         "user_id":     user_id,
         "name":        name or None,
-        "email":       p.get("email") or None,
-        "title":       p.get("title") or None,
-        "company":     p.get("organization_name") or None,
+        "email":       email,
+        "title":       p.get("job_title") or None,
+        "company":     p.get("job_company_name") or None,
         "location":    location,
-        "linkedin_url": p.get("linkedin_url") or None,
+        "linkedin_url": li_url,
         "phone":       phone,
         "status":      "new",
         "source":      "prospect_search",
