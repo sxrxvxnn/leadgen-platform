@@ -275,6 +275,12 @@ export const exportLeadsCSV = () =>
 // ─── LINKEDIN ENRICHMENT (Proxycurl) ──────────────────────────────
 export const enrichLeadLinkedIn = (id) => api.post(`/leads/${id}/enrich-linkedin`)
 
+// ─── EMAIL VERIFICATION ───────────────────────────────────────────
+export const verifyLeadEmail = (id) => api.post(`/leads/${id}/verify-email`)
+
+// ─── DASHBOARD ────────────────────────────────────────────────────
+export const getDashboardSummary = () => api.get('/dashboard/summary')
+
 // ─── SMTP EMAIL SENDING ───────────────────────────────────────────
 export const sendLeadEmail = (id, payload) => api.post(`/leads/${id}/send-email`, payload)
 
