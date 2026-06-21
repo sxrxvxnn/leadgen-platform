@@ -1,15 +1,16 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig } from '../services/api'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig } from '../services/api'
 import api from '../services/api'
 
 const SECTIONS = [
   { id: 'profile',    num: '01', label: 'Profile' },
   { id: 'email',      num: '02', label: 'Email Sending' },
   { id: 'automation', num: '03', label: 'Sequence Automation' },
-  { id: 'webhooks',   num: '04', label: 'Webhooks' },
-  { id: 'privacy',    num: '05', label: 'Privacy' },
-  { id: 'terms',      num: '06', label: 'Terms' },
+  { id: 'scheduler',  num: '04', label: 'Meeting Scheduler' },
+  { id: 'webhooks',   num: '05', label: 'Webhooks' },
+  { id: 'privacy',    num: '06', label: 'Privacy' },
+  { id: 'terms',      num: '07', label: 'Terms' },
 ]
 
 const WEBHOOK_EVENT_LABELS = {
@@ -88,10 +89,25 @@ export default function Settings() {
     profile:    useRef(null),
     email:      useRef(null),
     automation: useRef(null),
+    scheduler:  useRef(null),
     webhooks:   useRef(null),
     privacy:    useRef(null),
     terms:      useRef(null),
   }
+
+  // Meeting scheduler state
+  const [calLink,    setCalLink]    = useState('')
+  const [calSlug,    setCalSlug]    = useState('')
+  const [calSaving,  setCalSaving]  = useState(false)
+  const [calSaved,   setCalSaved]   = useState(false)
+  const [calError,   setCalError]   = useState('')
+
+  useEffect(() => {
+    getCalConfig().then(r => {
+      setCalLink(r.data.cal_link || '')
+      setCalSlug(r.data.cal_slug || '')
+    }).catch(() => {})
+  }, [])
 
   // Webhooks state
   const [webhooks, setWebhooks] = useState([])
@@ -144,6 +160,22 @@ export default function Settings() {
       ...f,
       events: f.events.includes(ev) ? f.events.filter(e => e !== ev) : [...f.events, ev],
     }))
+  }
+
+  async function handleSaveCal() {
+    setCalError('')
+    if (calLink && !calLink.startsWith('http')) { setCalError('Enter a valid URL starting with https://'); return }
+    setCalSaving(true)
+    try {
+      const r = await saveCalConfig({ cal_link: calLink, cal_slug: calSlug })
+      setCalSlug(r.data.cal_slug || calSlug)
+      setCalSaved(true)
+      setTimeout(() => setCalSaved(false), 3000)
+    } catch (e) {
+      setCalError(e?.response?.data?.detail || 'Failed to save.')
+    } finally {
+      setCalSaving(false)
+    }
   }
 
   function handleSave() {
@@ -319,12 +351,74 @@ export default function Settings() {
                 {autoSaving ? 'Saving…' : autoSaved ? 'Saved to server' : 'Save for automation'}
               </button>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
-                Personalize with {'{{name}}'}, {'{{first_name}}'}, {'{{company}}'}, {'{{title}}'}
+                Tokens: {'{{name}}'} {'{{first_name}}'} {'{{company}}'} {'{{title}}'} {'{{cal_link}}'}
               </span>
             </div>
           </section>
 
-          {/* 04 — Webhooks */}
+          {/* 04 — Meeting Scheduler */}
+          <section ref={sectionRefs.scheduler} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="04" title="Meeting Scheduler" />
+            <p style={s.sectionHint}>
+              Paste your Calendly, Cal.com, Google Calendar, or any booking URL. Use <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--surface)', padding: '1px 5px', borderRadius: 3 }}>{'{{cal_link}}'}</code> in any sequence email to insert it automatically.
+            </p>
+
+            <Field label="Booking URL" hint="Your Calendly, Cal.com, or any scheduling link">
+              <input
+                type="url"
+                value={calLink}
+                onChange={e => setCalLink(e.target.value)}
+                placeholder="https://calendly.com/yourname/30min"
+                style={s.input}
+              />
+            </Field>
+
+            <Field label="Custom slug (optional)" hint={`Share as sonarleads.vercel.app/book/${calSlug || 'yourname'}`}>
+              <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', padding: '10px 10px 10px 14px', whiteSpace: 'nowrap', borderRight: '1px solid var(--border)' }}>
+                  sonarleads.vercel.app/book/
+                </span>
+                <input
+                  type="text"
+                  value={calSlug}
+                  onChange={e => setCalSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="yourname"
+                  style={{ ...s.input, border: 'none', borderRadius: 0, flex: 1 }}
+                />
+              </div>
+            </Field>
+
+            {calError && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#ef4444', marginTop: 4 }}>{calError}</p>}
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+              <button onClick={handleSaveCal} disabled={calSaving} style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '10px 20px',
+                background: calSaved ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none',
+                borderRadius: 3, cursor: calSaving ? 'default' : 'pointer', letterSpacing: '0.04em',
+              }}>
+                {calSaving ? 'Saving…' : calSaved ? 'Saved' : 'Save scheduler settings'}
+              </button>
+              {calSlug && calLink && (
+                <a href={`/book/${calSlug}`} target="_blank" rel="noreferrer"
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', textDecoration: 'none' }}>
+                  Preview booking page →
+                </a>
+              )}
+            </div>
+
+            {calLink && (
+              <div style={{ marginTop: 16, padding: '14px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>How to use in sequences</p>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  Add <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 3 }}>{'{{cal_link}}'}</code> anywhere in your sequence email body. Sonar replaces it with{' '}
+                  {calSlug ? <code style={{ background: 'var(--bg)', padding: '1px 5px', borderRadius: 3 }}>sonarleads.vercel.app/book/{calSlug}</code> : 'your booking URL'}{' '}
+                  when the email is sent.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* 05 — Webhooks */}
           <section ref={sectionRefs.webhooks} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
             <SectionHeader num="04" title="Webhooks" />
             <p style={s.sectionHint}>Send real-time HTTP POST notifications to your endpoints when key events happen in Sonar. Compatible with Zapier, Make, n8n, or any custom integration.</p>

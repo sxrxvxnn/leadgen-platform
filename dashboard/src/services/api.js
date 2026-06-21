@@ -316,4 +316,8 @@ export const listUnsubscribes  = () => api.get('/unsubscribes')
 export const addUnsubscribe    = (email) => api.post('/unsubscribes', { email })
 export const removeUnsubscribe = (id) => api.delete(`/unsubscribes/${id}`)
 
+// ─── MEETING SCHEDULER ────────────────────────────────────────────
+export const getCalConfig  = () => api.get('/profile/cal')
+export const saveCalConfig = (data) => api.patch('/profile/cal', data)
+
 export default api
