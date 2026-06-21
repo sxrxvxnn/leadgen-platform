@@ -1,11 +1,17 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
+import { useLocation } from 'react-router-dom'
+import {
+  getLinkedInStatus, getLinkedInAuthUrl, disconnectLinkedIn,
+  getLinkedInAdAccounts, selectLinkedInAccount, linkedInSyncNow,
+} from '../services/api'
 
 const SECTIONS = [
-  { id: 'profile',  num: '01', label: 'Profile' },
-  { id: 'linkedin', num: '02', label: 'LinkedIn' },
-  { id: 'privacy',  num: '03', label: 'Privacy' },
-  { id: 'terms',    num: '04', label: 'Terms' },
+  { id: 'profile',      num: '01', label: 'Profile' },
+  { id: 'linkedin',     num: '02', label: 'LinkedIn' },
+  { id: 'lead-sync',    num: '03', label: 'Lead Sync' },
+  { id: 'privacy',      num: '04', label: 'Privacy' },
+  { id: 'terms',        num: '05', label: 'Terms' },
 ]
 
 export default function Settings() {
@@ -16,11 +22,88 @@ export default function Settings() {
   const [agreedTerms, setAgreedTerms] = useState(localStorage.getItem('agreedTerms') === '1')
   const [wantsUpdates, setWantsUpdates] = useState(localStorage.getItem('wantsUpdates') !== '0')
 
+  // LinkedIn Lead Sync state
+  const [liStatus, setLiStatus]         = useState(null)
+  const [liAccounts, setLiAccounts]     = useState([])
+  const [liConnecting, setLiConnecting] = useState(false)
+  const [liSyncing, setLiSyncing]       = useState(false)
+  const [liSyncResult, setLiSyncResult] = useState(null)
+  const [liError, setLiError]           = useState(null)
+
+  const location = useLocation()
+
   const sectionRefs = {
-    profile:  useRef(null),
-    linkedin: useRef(null),
-    privacy:  useRef(null),
-    terms:    useRef(null),
+    profile:     useRef(null),
+    linkedin:    useRef(null),
+    'lead-sync': useRef(null),
+    privacy:     useRef(null),
+    terms:       useRef(null),
+  }
+
+  // On mount: load LinkedIn status + handle OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('li_connected') === '1') {
+      window.history.replaceState({}, '', '/settings')
+      setLiError(null)
+      setLiSyncResult(null)
+    }
+    if (params.get('li_error')) {
+      setLiError(`LinkedIn connect failed: ${params.get('li_error')}`)
+      window.history.replaceState({}, '', '/settings')
+    }
+    getLinkedInStatus()
+      .then(r => setLiStatus(r.data))
+      .catch(() => setLiStatus({ connected: false }))
+  }, [])
+
+  async function handleLinkedInConnect() {
+    setLiConnecting(true)
+    setLiError(null)
+    try {
+      const r = await getLinkedInAuthUrl()
+      window.location.href = r.data.auth_url
+    } catch {
+      setLiError('Failed to start LinkedIn OAuth. Make sure LINKEDIN_CLIENT_SECRET is set on the server.')
+      setLiConnecting(false)
+    }
+  }
+
+  async function handleLinkedInDisconnect() {
+    await disconnectLinkedIn().catch(() => {})
+    setLiStatus({ connected: false })
+    setLiAccounts([])
+    setLiSyncResult(null)
+  }
+
+  async function handleLoadAccounts() {
+    setLiError(null)
+    try {
+      const r = await getLinkedInAdAccounts()
+      setLiAccounts(r.data.accounts || [])
+    } catch (e) {
+      setLiError(e?.response?.data?.detail || 'Failed to load ad accounts')
+    }
+  }
+
+  async function handleSelectAccount(urn) {
+    await selectLinkedInAccount(urn).catch(() => {})
+    setLiStatus(prev => ({ ...prev, selected_account_urn: urn }))
+  }
+
+  async function handleSyncNow() {
+    setLiSyncing(true)
+    setLiSyncResult(null)
+    setLiError(null)
+    try {
+      const r = await linkedInSyncNow()
+      setLiSyncResult(r.data)
+      setLiStatus(prev => ({ ...prev, last_synced_at: new Date().toISOString() }))
+    } catch (e) {
+      setLiError(e?.response?.data?.detail || 'Sync failed')
+    } finally {
+      setLiSyncing(false)
+    }
   }
 
   function handleSave() {
@@ -130,9 +213,146 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 03 — Privacy */}
+          {/* 03 — LinkedIn Lead Sync */}
+          <section ref={sectionRefs['lead-sync']} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="03" title="Lead Sync" />
+            <p style={s.sectionHint}>
+              Connect your LinkedIn ad account to automatically pull leads from Lead Gen Forms directly into your pipeline. Requires LinkedIn Lead Sync API access (Standard Tier).
+            </p>
+
+            {liError && (
+              <div style={{ background: 'rgba(231,0,11,0.08)', border: '1px solid rgba(231,0,11,0.25)', borderRadius: 4, padding: '10px 14px', marginBottom: 16 }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#E7000B', margin: 0 }}>{liError}</p>
+              </div>
+            )}
+
+            {liStatus === null ? (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>Loading...</p>
+            ) : !liStatus.connected ? (
+              <div>
+                <button
+                  onClick={handleLinkedInConnect}
+                  disabled={liConnecting}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 20px', border: '1px solid var(--border)', borderRadius: 4,
+                    background: 'var(--surface)', color: 'var(--text)', cursor: liConnecting ? 'wait' : 'pointer',
+                    fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, letterSpacing: '0.04em',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                  </svg>
+                  {liConnecting ? 'Redirecting to LinkedIn...' : 'Connect LinkedIn'}
+                </button>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 10 }}>
+                  You will be redirected to LinkedIn to authorise access to your Lead Gen Forms.
+                </p>
+              </div>
+            ) : (
+              <div>
+                {/* Connected status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, marginBottom: 20 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4a7c59', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--text)', margin: 0 }}>
+                      LinkedIn Connected
+                    </p>
+                    {liStatus.last_synced_at && (
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                        Last synced: {new Date(liStatus.last_synced_at).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleLinkedInDisconnect}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border)', borderRadius: 3, padding: '4px 10px', cursor: 'pointer' }}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+
+                {/* Ad account selection */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.13em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Ad Account
+                  </p>
+                  {liStatus.selected_account_urn ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, background: 'rgba(74,124,89,0.12)', color: '#4a7c59', padding: '2px 8px', borderRadius: 3, border: '1px solid rgba(74,124,89,0.3)', letterSpacing: '0.06em' }}>Connected</span>
+                      <button
+                        onClick={handleLoadAccounts}
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleLoadAccounts}
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '8px 14px', cursor: 'pointer' }}
+                    >
+                      Load my ad accounts
+                    </button>
+                  )}
+
+                  {liAccounts.length > 0 && (
+                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {liAccounts.map(acc => (
+                        <button
+                          key={acc.urn}
+                          onClick={() => handleSelectAccount(acc.urn)}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '10px 14px', border: `1px solid ${liStatus.selected_account_urn === acc.urn ? 'var(--accent)' : 'var(--border)'}`,
+                            borderRadius: 4, background: liStatus.selected_account_urn === acc.urn ? 'rgba(231,0,11,0.05)' : 'var(--surface)',
+                            cursor: 'pointer', textAlign: 'left',
+                          }}
+                        >
+                          <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text)' }}>{acc.name}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>{acc.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sync */}
+                {liStatus.selected_account_urn && (
+                  <div>
+                    <button
+                      onClick={handleSyncNow}
+                      disabled={liSyncing}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '10px 18px', background: liSyncing ? 'var(--surface)' : 'var(--accent)',
+                        border: 'none', borderRadius: 4, color: '#fff',
+                        fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+                        cursor: liSyncing ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {liSyncing ? 'Syncing...' : 'Sync leads now'}
+                    </button>
+                    {liSyncResult && (
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#4a7c59', marginTop: 8 }}>
+                        Synced {liSyncResult.synced} new lead{liSyncResult.synced !== 1 ? 's' : ''} from {liSyncResult.forms_checked} form{liSyncResult.forms_checked !== 1 ? 's' : ''}.
+                      </p>
+                    )}
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', marginTop: 6 }}>
+                      Pulls all unsynced leads from your Lead Gen Forms. Duplicates are skipped by email.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* 04 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section }}>
-            <SectionHeader num="03" title="Privacy Policy" />
+            <SectionHeader num="04" title="Privacy Policy" />
             <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
@@ -172,7 +392,7 @@ export default function Settings() {
 
           {/* 04 — Terms */}
           <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="04" title="Terms of Service" />
+            <SectionHeader num="05" title="Terms of Service" />
             <p style={s.sectionHint}>The rules governing your use of Sonar. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
