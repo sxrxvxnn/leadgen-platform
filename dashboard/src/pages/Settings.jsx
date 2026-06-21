@@ -1,11 +1,13 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig } from '../services/api'
 
 const SECTIONS = [
-  { id: 'profile', num: '01', label: 'Profile' },
-  { id: 'email',   num: '02', label: 'Email Sending' },
-  { id: 'privacy', num: '03', label: 'Privacy' },
-  { id: 'terms',   num: '04', label: 'Terms' },
+  { id: 'profile',    num: '01', label: 'Profile' },
+  { id: 'email',      num: '02', label: 'Email Sending' },
+  { id: 'automation', num: '03', label: 'Sequence Automation' },
+  { id: 'privacy',    num: '04', label: 'Privacy' },
+  { id: 'terms',      num: '05', label: 'Terms' },
 ]
 
 export default function Settings() {
@@ -15,7 +17,7 @@ export default function Settings() {
   const [agreedTerms, setAgreedTerms] = useState(localStorage.getItem('agreedTerms') === '1')
   const [wantsUpdates, setWantsUpdates] = useState(localStorage.getItem('wantsUpdates') !== '0')
 
-  // SMTP state
+  // SMTP state (localStorage — for manual email sends in LeadDrawer)
   const [smtpHost,  setSmtpHost]  = useState(localStorage.getItem('smtpHost')  || 'smtp.gmail.com')
   const [smtpPort,  setSmtpPort]  = useState(localStorage.getItem('smtpPort')  || '587')
   const [smtpUser,  setSmtpUser]  = useState(localStorage.getItem('smtpUser')  || '')
@@ -23,11 +25,60 @@ export default function Settings() {
   const [fromName,  setFromName]  = useState(localStorage.getItem('smtpFromName') || '')
   const [fromEmail, setFromEmail] = useState(localStorage.getItem('smtpFromEmail') || '')
 
+  // Automation SMTP state (server-side — for sequence cron sends)
+  const [autoSmtp, setAutoSmtp] = useState({
+    smtp_host: 'smtp.gmail.com', smtp_port: '587',
+    smtp_user: '', smtp_pass: '', from_email: '', from_name: '',
+  })
+  const [autoConfigured, setAutoConfigured] = useState(false)
+  const [autoSaving, setAutoSaving]         = useState(false)
+  const [autoSaved,  setAutoSaved]          = useState(false)
+  const [autoDeleting, setAutoDeleting]     = useState(false)
+
+  useEffect(() => {
+    getSmtpConfig().then(res => {
+      const cfg = res.data?.smtp_config || {}
+      setAutoConfigured(res.data?.configured || false)
+      if (cfg.smtp_user) {
+        setAutoSmtp(prev => ({ ...prev, ...cfg }))
+      }
+    }).catch(() => {})
+  }, [])
+
+  async function handleSaveAutoSmtp() {
+    setAutoSaving(true)
+    try {
+      await saveSmtpConfig(autoSmtp)
+      setAutoConfigured(true)
+      setAutoSaved(true)
+      setTimeout(() => setAutoSaved(false), 3000)
+    } catch (e) {
+      alert('Failed to save: ' + (e?.response?.data?.detail || e.message))
+    } finally {
+      setAutoSaving(false)
+    }
+  }
+
+  async function handleDeleteAutoSmtp() {
+    if (!confirm('Remove saved SMTP credentials from server? Sequence automation will stop sending emails until reconfigured.')) return
+    setAutoDeleting(true)
+    try {
+      await deleteSmtpConfig()
+      setAutoConfigured(false)
+      setAutoSmtp({ smtp_host: 'smtp.gmail.com', smtp_port: '587', smtp_user: '', smtp_pass: '', from_email: '', from_name: '' })
+    } catch (e) {
+      alert('Failed: ' + (e?.response?.data?.detail || e.message))
+    } finally {
+      setAutoDeleting(false)
+    }
+  }
+
   const sectionRefs = {
-    profile: useRef(null),
-    email:   useRef(null),
-    privacy: useRef(null),
-    terms:   useRef(null),
+    profile:    useRef(null),
+    email:      useRef(null),
+    automation: useRef(null),
+    privacy:    useRef(null),
+    terms:      useRef(null),
   }
 
   function handleSave() {
@@ -149,9 +200,68 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 03 — Privacy */}
+          {/* 03 — Sequence Automation */}
+          <section ref={sectionRefs.automation} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="03" title="Sequence Automation" />
+            <p style={s.sectionHint}>
+              Save SMTP credentials server-side so sequence steps run automatically on schedule — even when you're offline. These are stored encrypted on our server and used only by the sequence cron job. Sequences run every 6 hours.
+            </p>
+
+            {autoConfigured && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '10px 14px', background: 'rgba(74,124,89,0.08)', border: '1px solid rgba(74,124,89,0.3)', borderRadius: 4 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#4a7c59', fontWeight: 600 }}>AUTOMATION ACTIVE</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', flex: 1 }}>Sequence emails will send automatically via {autoSmtp.smtp_user || 'saved account'}.</span>
+                <button onClick={handleDeleteAutoSmtp} disabled={autoDeleting} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, padding: '4px 10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 3, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  {autoDeleting ? 'Removing…' : 'Remove'}
+                </button>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: 16 }}>
+              <Field label="From name" hint="Shown as sender name in sequence emails">
+                <input value={autoSmtp.from_name} onChange={e => setAutoSmtp(p => ({ ...p, from_name: e.target.value }))} placeholder="Jane Smith" style={s.input} />
+              </Field>
+              <Field label="From email" hint="Reply-to address">
+                <input value={autoSmtp.from_email} onChange={e => setAutoSmtp(p => ({ ...p, from_email: e.target.value }))} placeholder="jane@company.com" style={s.input} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '16px', marginBottom: 16 }}>
+              <Field label="SMTP host">
+                <input value={autoSmtp.smtp_host} onChange={e => setAutoSmtp(p => ({ ...p, smtp_host: e.target.value }))} placeholder="smtp.gmail.com" style={s.input} />
+              </Field>
+              <Field label="Port">
+                <input value={autoSmtp.smtp_port} onChange={e => setAutoSmtp(p => ({ ...p, smtp_port: e.target.value }))} placeholder="587" style={s.input} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: 20 }}>
+              <Field label="SMTP username">
+                <input value={autoSmtp.smtp_user} onChange={e => setAutoSmtp(p => ({ ...p, smtp_user: e.target.value }))} placeholder="jane@gmail.com" style={s.input} />
+              </Field>
+              <Field label="Password / App Password">
+                <KeyInput value={autoSmtp.smtp_pass} onChange={v => setAutoSmtp(p => ({ ...p, smtp_pass: v }))} placeholder="App password or SMTP password" set={autoConfigured && autoSmtp.smtp_pass === '••••••••'} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button onClick={handleSaveAutoSmtp} disabled={autoSaving || !autoSmtp.smtp_user} style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '10px 20px',
+                background: autoSaved ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none',
+                borderRadius: 3, cursor: autoSaving || !autoSmtp.smtp_user ? 'default' : 'pointer',
+                opacity: !autoSmtp.smtp_user ? 0.5 : 1, letterSpacing: '0.04em',
+              }}>
+                {autoSaving ? 'Saving…' : autoSaved ? 'Saved to server' : 'Save for automation'}
+              </button>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
+                Personalize with {'{{name}}'}, {'{{first_name}}'}, {'{{company}}'}, {'{{title}}'}
+              </span>
+            </div>
+          </section>
+
+          {/* 04 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section }}>
-            <SectionHeader num="03" title="Privacy Policy" />
+            <SectionHeader num="04" title="Privacy Policy" />
             <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>
@@ -189,9 +299,9 @@ export default function Settings() {
             />
           </section>
 
-          {/* 04 — Terms */}
+          {/* 05 — Terms */}
           <section ref={sectionRefs.terms} style={{ ...s.section, borderBottom: 'none', paddingBottom: 0 }}>
-            <SectionHeader num="04" title="Terms of Service" />
+            <SectionHeader num="05" title="Terms of Service" />
             <p style={s.sectionHint}>The rules governing your use of Sonar. Effective June 16, 2026.</p>
 
             <div style={{ height: '280px', overflowY: 'scroll', border: '1px solid var(--border)', padding: '20px 22px', background: 'var(--surface)', marginBottom: '20px', lineHeight: 1.8 }}>

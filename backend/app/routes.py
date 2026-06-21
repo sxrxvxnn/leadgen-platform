@@ -4394,10 +4394,16 @@ async def delete_sequence(seq_id: str, authorization: str = Header(...)):
 
 @router.post("/sequences/{seq_id}/enroll")
 async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(...)):
+    import datetime as _dt
     user_id = get_user_id(authorization)
     lead_ids = payload.get("lead_ids", [])
     if not lead_ids:
         raise HTTPException(status_code=422, detail="lead_ids required")
+    # Get first step delay to set next_run_at
+    steps_res = supabase.table("sequence_steps").select("step_number,delay_days").eq("sequence_id", seq_id).order("step_number").limit(1).execute()
+    first_step = (steps_res.data or [{}])[0]
+    delay_days = first_step.get("delay_days") or 0
+    next_run = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=delay_days)).isoformat()
     enrolled = 0
     skipped = 0
     for lead_id in lead_ids:
@@ -4408,11 +4414,191 @@ async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(.
                 "user_id": user_id,
                 "status": "active",
                 "current_step": 1,
+                "next_run_at": next_run,
             }).execute()
             enrolled += 1
         except Exception:
             skipped += 1
     return {"enrolled": enrolled, "skipped": skipped}
+
+
+@router.get("/sequences/{seq_id}/enrollments")
+async def list_enrollments(seq_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("sequence_enrollments").select(
+        "id, lead_id, status, current_step, next_run_at, last_error, enrolled_at, completed_at, leads(name, email, company, title)"
+    ).eq("sequence_id", seq_id).eq("user_id", user_id).order("enrolled_at", desc=True).execute()
+    return {"enrollments": res.data or []}
+
+
+@router.delete("/sequences/{seq_id}/enrollments/{enrollment_id}")
+async def unenroll_lead(seq_id: str, enrollment_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(enrollment_id)
+    supabase.table("sequence_enrollments").delete().eq("id", enrollment_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@router.post("/sequences/process-cron")
+async def process_sequence_cron(request: Request):
+    """Cron endpoint — processes all due sequence enrollments."""
+    import datetime as _dt
+    import smtplib as _smtplib
+    from email.mime.text import MIMEText as _MIMEText
+    from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+    # Verify cron secret
+    cron_secret = os.environ.get("CRON_SECRET", "")
+    auth_header = request.headers.get("authorization", "")
+    provided = auth_header.replace("Bearer ", "").strip()
+    if cron_secret and provided != cron_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    now = _dt.datetime.now(_dt.timezone.utc)
+    now_iso = now.isoformat()
+    # Query all active enrollments that are due
+    due_res = supabase.table("sequence_enrollments").select(
+        "id, sequence_id, lead_id, user_id, status, current_step, leads(name, email, company, title)"
+    ).eq("status", "active").lte("next_run_at", now_iso).limit(50).execute()
+    due = due_res.data or []
+    processed = 0
+    errors = 0
+    for enrollment in due:
+        enr_id = enrollment["id"]
+        seq_id = enrollment["sequence_id"]
+        user_id = enrollment["user_id"]
+        current_step_num = enrollment["current_step"]
+        lead = enrollment.get("leads") or {}
+        lead_name = lead.get("name") or ""
+        lead_first = lead_name.split()[0] if lead_name else ""
+        lead_email = lead.get("email") or ""
+        lead_company = lead.get("company") or ""
+        lead_title = lead.get("title") or ""
+        try:
+            # Get all steps for this sequence
+            steps_res = supabase.table("sequence_steps").select("*").eq("sequence_id", seq_id).order("step_number").execute()
+            steps = steps_res.data or []
+            current_step = next((s for s in steps if s["step_number"] == current_step_num), None)
+            if not current_step:
+                # No matching step — complete the enrollment
+                supabase.table("sequence_enrollments").update({
+                    "status": "completed", "completed_at": now_iso
+                }).eq("id", enr_id).execute()
+                processed += 1
+                continue
+            step_type = current_step.get("type", "email")
+            success = True
+            error_msg = None
+            if step_type == "email":
+                if not lead_email:
+                    error_msg = "Lead has no email address"
+                    success = False
+                else:
+                    # Load user SMTP config
+                    profile_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
+                    smtp = (profile_res.data or {}).get("smtp_config") or {}
+                    if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
+                        error_msg = "No SMTP credentials saved for automation. Go to Settings → Sequence Automation."
+                        success = False
+                    else:
+                        def _personalize(text):
+                            return (text or "").replace("{{name}}", lead_name).replace("{{first_name}}", lead_first).replace("{{company}}", lead_company).replace("{{title}}", lead_title)
+                        subject = _personalize(current_step.get("subject") or "")
+                        body = _personalize(current_step.get("body") or "")
+                        try:
+                            msg = _MIMEMultipart("alternative")
+                            msg["Subject"] = subject
+                            from_email = smtp.get("from_email") or smtp["smtp_user"]
+                            from_name = smtp.get("from_name") or ""
+                            msg["From"] = f"{from_name} <{from_email}>" if from_name else from_email
+                            msg["To"] = lead_email
+                            msg.attach(_MIMEText(body, "plain"))
+                            smtp_host = smtp.get("smtp_host", "smtp.gmail.com")
+                            smtp_port = int(smtp.get("smtp_port", 587))
+                            with _smtplib.SMTP(smtp_host, smtp_port, timeout=15) as srv:
+                                srv.ehlo()
+                                srv.starttls()
+                                srv.login(smtp["smtp_user"], smtp["smtp_pass"])
+                                srv.sendmail(from_email, lead_email, msg.as_string())
+                            # Log activity
+                            supabase.table("lead_activity").insert({
+                                "lead_id": enrollment["lead_id"],
+                                "user_id": user_id,
+                                "event_type": "email_sent",
+                                "data": {"subject": subject, "to": lead_email, "via": "sequence", "sequence_id": seq_id, "step": current_step_num}
+                            }).execute()
+                        except Exception as e:
+                            success = False
+                            error_msg = str(e)
+            elif step_type in ("linkedin", "call", "task"):
+                # Create a manual task for the user
+                try:
+                    supabase.table("tasks").insert({
+                        "lead_id": enrollment["lead_id"],
+                        "user_id": user_id,
+                        "title": f"[Sequence] {step_type.title()}: {lead_name or 'Lead'}",
+                        "body": current_step.get("body") or "",
+                        "due_date": now_iso,
+                        "priority": "high",
+                        "completed": False,
+                    }).execute()
+                except Exception:
+                    pass
+            # Advance to next step
+            next_steps = [s for s in steps if s["step_number"] > current_step_num]
+            if next_steps:
+                next_step = next_steps[0]
+                next_delay = next_step.get("delay_days") or 1
+                next_run = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=next_delay)).isoformat()
+                update = {"current_step": next_step["step_number"], "next_run_at": next_run}
+                if not success and error_msg:
+                    update["last_error"] = error_msg
+                supabase.table("sequence_enrollments").update(update).eq("id", enr_id).execute()
+            else:
+                supabase.table("sequence_enrollments").update({
+                    "status": "completed", "completed_at": now_iso
+                }).eq("id", enr_id).execute()
+            processed += 1
+        except Exception as ex:
+            errors += 1
+            try:
+                supabase.table("sequence_enrollments").update({"last_error": str(ex)}).eq("id", enr_id).execute()
+            except Exception:
+                pass
+    return {"processed": processed, "errors": errors, "total_due": len(due)}
+
+
+# ─── PROFILE SMTP CONFIG ──────────────────────────────────────────────────────
+
+@router.get("/profile/smtp-config")
+async def get_smtp_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
+    config = (res.data or {}).get("smtp_config") or {}
+    # Mask password before returning
+    masked = {**config}
+    if masked.get("smtp_pass"):
+        masked["smtp_pass"] = "••••••••"
+    return {"smtp_config": masked, "configured": bool(config.get("smtp_user") and config.get("smtp_pass"))}
+
+
+@router.patch("/profile/smtp-config")
+async def save_smtp_config(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    allowed_keys = {"smtp_host", "smtp_port", "smtp_user", "smtp_pass", "from_email", "from_name"}
+    config = {k: v for k, v in payload.items() if k in allowed_keys}
+    # If password is masked placeholder, keep existing
+    if config.get("smtp_pass") == "••••••••":
+        existing_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
+        existing = (existing_res.data or {}).get("smtp_config") or {}
+        config["smtp_pass"] = existing.get("smtp_pass", "")
+    supabase.table("profiles").update({"smtp_config": config}).eq("id", user_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/profile/smtp-config")
+async def delete_smtp_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("profiles").update({"smtp_config": None}).eq("id", user_id).execute()
+    return {"ok": True}
 
 
 # ─── PHASE 1: ANALYTICS ──────────────────────────────────────────────────────

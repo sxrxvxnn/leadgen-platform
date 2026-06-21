@@ -283,9 +283,15 @@ export const prospectPeopleSearch = (payload) => api.post('/prospect/people-sear
 export const prospectRevealEmail  = (personId) => api.post('/prospect/reveal-email', { person_id: personId })
 export const prospectAddLead      = (person) => api.post('/prospect/add-lead', { person })
 
-// ─── SEQUENCES (re-export for bulk enroll) ────────────────────────
-export const listSequences  = () => api.get('/sequences')
-export const enrollInSequence = (seqId, leadIds) =>
-  api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
+// ─── SEQUENCES ────────────────────────────────────────────────────
+export const listSequences       = () => api.get('/sequences')
+export const enrollInSequence    = (seqId, leadIds) => api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
+export const listEnrollments     = (seqId) => api.get(`/sequences/${seqId}/enrollments`)
+export const unenrollLead        = (seqId, enrollmentId) => api.delete(`/sequences/${seqId}/enrollments/${enrollmentId}`)
+
+// ─── PROFILE SMTP CONFIG ──────────────────────────────────────────
+export const getSmtpConfig    = () => api.get('/profile/smtp-config')
+export const saveSmtpConfig   = (config) => api.patch('/profile/smtp-config', config)
+export const deleteSmtpConfig = () => api.delete('/profile/smtp-config')
 
 export default api
