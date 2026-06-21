@@ -253,4 +253,17 @@ export const getEmailOpens = (id) => api.get(`/leads/${id}/email-opens`)
 export const logActivity  = (id, event_type, data = {}) => api.post(`/leads/${id}/activity`, { event_type, data })
 export const getActivity  = (id) => api.get(`/leads/${id}/activity`)
 
+// ─── TASKS ────────────────────────────────────────────────────────
+export const getAllTasks    = (completed = false) => api.get(`/tasks?completed=${completed}`)
+export const getLeadTasks  = (id) => api.get(`/leads/${id}/tasks`)
+export const createTask    = (leadId, data) => api.post(`/leads/${leadId}/tasks`, data)
+export const updateTask    = (id, data) => api.patch(`/tasks/${id}`, data)
+export const deleteTask    = (id) => api.delete(`/tasks/${id}`)
+
+// ─── EMAIL TEMPLATES ──────────────────────────────────────────────
+export const getTemplates    = () => api.get('/email-templates')
+export const createTemplate  = (data) => api.post('/email-templates', data)
+export const updateTemplate  = (id, data) => api.patch(`/email-templates/${id}`, data)
+export const deleteTemplate  = (id) => api.delete(`/email-templates/${id}`)
+
 export default api

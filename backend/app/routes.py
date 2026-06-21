@@ -1303,6 +1303,143 @@ async def get_activity(lead_id: str, authorization: str = Header(...)):
     return {"activity": rows.data}
 
 
+# ─── TASKS ───────────────────────────────────────────────────────
+
+@router.get("/tasks")
+async def list_all_tasks(completed: str = "false", authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    is_done = completed.lower() == "true"
+    rows = (
+        supabase.table("tasks")
+        .select("*, leads(name, company)")
+        .eq("user_id", user_id)
+        .eq("completed", is_done)
+        .order("due_date", desc=False, nullsfirst=False)
+        .limit(100)
+        .execute()
+    )
+    return {"tasks": rows.data}
+
+
+@router.post("/leads/{lead_id}/tasks")
+async def create_task(lead_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title required")
+    row = supabase.table("tasks").insert({
+        "user_id": user_id,
+        "lead_id": lead_id,
+        "title": title,
+        "due_date": payload.get("due_date"),
+        "priority": payload.get("priority", "medium"),
+    }).execute()
+    return {"task": row.data[0] if row.data else {}}
+
+
+@router.get("/leads/{lead_id}/tasks")
+async def get_lead_tasks(lead_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(lead_id)
+    rows = (
+        supabase.table("tasks")
+        .select("*")
+        .eq("lead_id", lead_id)
+        .eq("user_id", user_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return {"tasks": rows.data}
+
+
+@router.patch("/tasks/{task_id}")
+async def update_task(task_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(task_id)
+    update = {}
+    if "title"     in payload: update["title"]     = payload["title"]
+    if "due_date"  in payload: update["due_date"]  = payload["due_date"]
+    if "priority"  in payload: update["priority"]  = payload["priority"]
+    if "completed" in payload:
+        update["completed"] = payload["completed"]
+        update["completed_at"] = __import__("datetime").datetime.utcnow().isoformat() + "Z" if payload["completed"] else None
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    row = (
+        supabase.table("tasks")
+        .update(update)
+        .eq("id", task_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {"task": row.data[0] if row.data else {}}
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(task_id)
+    supabase.table("tasks").delete().eq("id", task_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+# ─── EMAIL TEMPLATES ─────────────────────────────────────────────
+
+@router.get("/email-templates")
+async def list_templates(authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    rows = (
+        supabase.table("email_templates")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return {"templates": rows.data}
+
+
+@router.post("/email-templates")
+async def create_template(payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    name = (payload.get("name") or "").strip()
+    body = (payload.get("body") or "").strip()
+    if not name or not body:
+        raise HTTPException(status_code=400, detail="name and body required")
+    row = supabase.table("email_templates").insert({
+        "user_id": user_id,
+        "name": name,
+        "subject": payload.get("subject", ""),
+        "body": body,
+    }).execute()
+    return {"template": row.data[0] if row.data else {}}
+
+
+@router.patch("/email-templates/{tpl_id}")
+async def update_template(tpl_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(tpl_id)
+    update = {k: v for k, v in payload.items() if k in ("name", "subject", "body")}
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    row = (
+        supabase.table("email_templates")
+        .update(update)
+        .eq("id", tpl_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {"template": row.data[0] if row.data else {}}
+
+
+@router.delete("/email-templates/{tpl_id}")
+async def delete_template(tpl_id: str, authorization: str = Header(...)):
+    user_id = _get_user_id(authorization)
+    validate_uuid(tpl_id)
+    supabase.table("email_templates").delete().eq("id", tpl_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
 # ─── TECHNOPARK DIRECTORY ────────────────────────────────────────
 
 _TECHNOPARK_DISK_CACHE = os.path.join(
@@ -4310,6 +4447,45 @@ async def get_analytics(authorization: str = Header(...)):
 
     reply_rate = round((total_replied / total_enrolled * 100)) if total_enrolled > 0 else 0
 
+    # Pipeline breakdown by status
+    leads_full = supabase.table("leads").select("id, icp_score, starred, status, deal_value, expected_close_date, created_at").eq("user_id", user_id).execute().data or []
+    pipeline_by_status = {
+        "new":          len([l for l in leads_full if l.get("status") == "new"]),
+        "contacted":    len([l for l in leads_full if l.get("status") == "contacted"]),
+        "qualified":    len([l for l in leads_full if l.get("status") == "qualified"]),
+        "disqualified": len([l for l in leads_full if l.get("status") == "disqualified"]),
+    }
+    # Deal value
+    valued = [l for l in leads_full if l.get("deal_value")]
+    total_pipeline_value = sum(float(l["deal_value"]) for l in valued)
+
+    # ICP score distribution
+    score_dist = {"high": 0, "medium": 0, "low": 0, "unscored": 0}
+    for l in leads_full:
+        s = l.get("icp_score")
+        if s is None:          score_dist["unscored"] += 1
+        elif s >= 70:          score_dist["high"] += 1
+        elif s >= 40:          score_dist["medium"] += 1
+        else:                  score_dist["low"] += 1
+
+    # Email tracking stats
+    et_res = supabase.table("email_tracking").select("tracking_id, open_count, first_opened_at").eq("user_id", user_id).execute().data or []
+    emails_sent   = len(et_res)
+    emails_opened = len([e for e in et_res if (e.get("open_count") or 0) > 0])
+    open_rate     = round(emails_opened / emails_sent * 100) if emails_sent else 0
+    clicks_res    = supabase.table("email_clicks").select("tracking_id", count="exact").in_("tracking_id", [e["tracking_id"] for e in et_res] or ["__none__"]).execute()
+    total_clicks  = clicks_res.count or 0
+    click_rate    = round(total_clicks / emails_sent * 100) if emails_sent else 0
+
+    # Tasks stats
+    import datetime as _dt
+    today_str = _dt.date.today().isoformat()
+    week_ago  = (_dt.date.today() - _dt.timedelta(days=7)).isoformat()
+    tasks_res = supabase.table("tasks").select("id, completed, due_date, completed_at").eq("user_id", user_id).execute().data or []
+    tasks_open      = len([t for t in tasks_res if not t.get("completed")])
+    tasks_overdue   = len([t for t in tasks_res if not t.get("completed") and t.get("due_date") and t["due_date"] < today_str])
+    tasks_done_week = len([t for t in tasks_res if t.get("completed") and t.get("completed_at") and t["completed_at"][:10] >= week_ago])
+
     return {
         "leads": {
             "total": len(leads),
@@ -4317,6 +4493,8 @@ async def get_analytics(authorization: str = Header(...)):
             "avg_score": avg_score,
             "high_value": high_value,
             "starred": starred_count,
+            "by_status": pipeline_by_status,
+            "score_distribution": score_dist,
         },
         "companies": {
             "total": len(companies),
@@ -4328,5 +4506,22 @@ async def get_analytics(authorization: str = Header(...)):
             "total_replied": total_replied,
             "reply_rate": reply_rate,
             "list": sequences,
+        },
+        "email": {
+            "sent": emails_sent,
+            "opened": emails_opened,
+            "open_rate": open_rate,
+            "total_clicks": total_clicks,
+            "click_rate": click_rate,
+        },
+        "tasks": {
+            "open": tasks_open,
+            "overdue": tasks_overdue,
+            "completed_this_week": tasks_done_week,
+        },
+        "pipeline": {
+            "by_status": pipeline_by_status,
+            "total_value": total_pipeline_value,
+            "valued_deals": len(valued),
         },
     }
