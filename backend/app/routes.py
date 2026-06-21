@@ -4647,7 +4647,7 @@ async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(.
 async def list_enrollments(seq_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     res = supabase.table("sequence_enrollments").select(
-        "id, lead_id, status, current_step, next_run_at, last_error, enrolled_at, completed_at, leads(name, email, company, title)"
+        "id, lead_id, status, current_step, next_run_at, last_error, enrolled_at, completed_at, replied_at, ab_variant, leads(name, email, company, title)"
     ).eq("sequence_id", seq_id).eq("user_id", user_id).order("enrolled_at", desc=True).execute()
     return {"enrollments": res.data or []}
 
@@ -4767,10 +4767,12 @@ async def process_sequence_cron(request: Request):
                         try:
                             from_email = smtp.get("from_email") or smtp["smtp_user"]
                             from_name  = smtp.get("from_name") or ""
+                            message_id = f"<{tracking_id}@sonarleads.app>"
                             msg = _MIMEMultipart("alternative")
-                            msg["Subject"] = subject
-                            msg["From"]    = f"{from_name} <{from_email}>" if from_name else from_email
-                            msg["To"]      = lead_email
+                            msg["Subject"]             = subject
+                            msg["From"]                = f"{from_name} <{from_email}>" if from_name else from_email
+                            msg["To"]                  = lead_email
+                            msg["Message-ID"]          = message_id
                             msg["X-Unsubscribe-Token"] = unsub_token
                             msg["List-Unsubscribe"]    = f"<{unsub_url}>"
                             msg.attach(_MIMEText(tracked_body, "plain"))
@@ -4788,6 +4790,7 @@ async def process_sequence_cron(request: Request):
                                 "user_id":       user_id,
                                 "lead_id":       enrollment["lead_id"],
                                 "tracking_id":   tracking_id,
+                                "message_id":    message_id,
                                 "subject":       subject,
                                 "body_preview":  body[:120],
                                 "sequence_id":   seq_id,
@@ -4856,6 +4859,148 @@ async def process_sequence_cron(request: Request):
                 pass
 
     return {"processed": processed, "errors": errors, "total_due": len(due)}
+
+
+# ─── REPLY DETECTION CRON ────────────────────────────────────────────────────
+
+@router.post("/sequences/check-replies")
+async def check_sequence_replies(request: Request):
+    """Cron: IMAP-poll each user's inbox for replies to sequence emails."""
+    import imaplib as _imap
+    import email as _email_lib
+    import datetime as _dt
+
+    cron_secret = os.environ.get("CRON_SECRET", "")
+    auth_header = request.headers.get("authorization", "")
+    provided    = auth_header.replace("Bearer ", "").strip()
+    if cron_secret and provided != cron_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    def _imap_host(smtp_host: str) -> str:
+        h = (smtp_host or "").lower()
+        if "gmail" in h:
+            return "imap.gmail.com"
+        if "outlook" in h or "office365" in h:
+            return "outlook.office365.com"
+        if "yahoo" in h:
+            return "imap.mail.yahoo.com"
+        if "zoho" in h:
+            return "imap.zoho.com"
+        if h.startswith("smtp."):
+            return "imap." + h[5:]
+        return h
+
+    now     = _dt.datetime.now(_dt.timezone.utc)
+    since   = (now - _dt.timedelta(days=14)).strftime("%d-%b-%Y")
+    checked = 0
+    found   = 0
+    errors  = 0
+
+    # Find all users with active enrollments
+    active_res = supabase.table("sequence_enrollments").select("user_id").eq("status", "active").execute()
+    user_ids   = list({r["user_id"] for r in (active_res.data or [])})
+
+    for uid in user_ids:
+        try:
+            profile_res = supabase.table("profiles").select("smtp_config").eq("id", uid).maybe_single().execute()
+            smtp = (profile_res.data or {}).get("smtp_config") or {}
+            if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
+                continue
+
+            imap_server = _imap_host(smtp.get("smtp_host", "smtp.gmail.com"))
+            smtp_user   = smtp["smtp_user"]
+            smtp_pass   = smtp["smtp_pass"]
+
+            # Fetch our sent message_ids for this user (last 14 days)
+            track_res = supabase.table("email_tracking")\
+                .select("message_id, enrollment_id, lead_id")\
+                .eq("user_id", uid)\
+                .not_.is_("message_id", "null")\
+                .gte("created_at", (now - _dt.timedelta(days=14)).isoformat())\
+                .execute()
+            tracked = track_res.data or []
+            if not tracked:
+                continue
+
+            # Build lookup: message_id → {enrollment_id, lead_id}
+            mid_map = {r["message_id"]: r for r in tracked if r.get("message_id")}
+            if not mid_map:
+                continue
+
+            # Connect via IMAP
+            try:
+                mail = _imap.IMAP4_SSL(imap_server, 993)
+                mail.login(smtp_user, smtp_pass)
+                mail.select("INBOX")
+            except Exception as conn_err:
+                errors += 1
+                continue
+
+            try:
+                _, data = mail.search(None, f'SINCE {since}')
+                nums = data[0].split() if data and data[0] else []
+
+                for num in nums:
+                    try:
+                        _, raw_data = mail.fetch(num, "(RFC822.HEADER)")
+                        if not raw_data or not raw_data[0]:
+                            continue
+                        raw = raw_data[0][1]
+                        parsed = _email_lib.message_from_bytes(raw)
+                        in_reply_to = parsed.get("In-Reply-To", "").strip()
+                        references  = parsed.get("References", "").strip()
+
+                        # Look for any of our message_ids in these headers
+                        matched = None
+                        for mid, enr_info in mid_map.items():
+                            if mid in in_reply_to or mid in references:
+                                matched = enr_info
+                                break
+
+                        if not matched:
+                            continue
+
+                        enr_id  = matched["enrollment_id"]
+                        lead_id = matched["lead_id"]
+
+                        # Check enrollment is still active before marking replied
+                        enr_res = supabase.table("sequence_enrollments")\
+                            .select("status")\
+                            .eq("id", enr_id)\
+                            .maybe_single().execute()
+                        enr_status = (enr_res.data or {}).get("status")
+                        if enr_status not in ("active", "paused"):
+                            continue
+
+                        supabase.table("sequence_enrollments").update({
+                            "status":     "replied",
+                            "replied_at": now.isoformat(),
+                        }).eq("id", enr_id).execute()
+
+                        supabase.table("lead_activity").insert({
+                            "lead_id":    lead_id,
+                            "user_id":    uid,
+                            "event_type": "email_reply_detected",
+                            "data":       {"enrollment_id": enr_id, "detected_via": "imap"},
+                        }).execute()
+
+                        found += 1
+
+                    except Exception:
+                        pass
+
+            finally:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+
+            checked += 1
+
+        except Exception:
+            errors += 1
+
+    return {"users_checked": checked, "replies_found": found, "errors": errors}
 
 
 # ─── UNSUBSCRIBE (public — no auth) ──────────────────────────────────────────

@@ -20,6 +20,10 @@
     {
       "path": "/api/sequences/process-cron",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/sequences/check-replies",
+      "schedule": "0 */2 * * *"
     }
   ]
 }

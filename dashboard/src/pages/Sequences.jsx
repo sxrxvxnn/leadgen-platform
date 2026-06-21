@@ -273,6 +273,7 @@ function EnrollmentPanel({ seq }) {
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: STATUS_DOT[enr.status] || 'var(--text-muted)' }}>{STATUS_LABEL[enr.status] || enr.status?.toUpperCase()}</span>
                               {enr.ab_variant && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: enr.ab_variant === 'A' ? '#4a7c5918' : '#b07d2e18', border: `1px solid ${enr.ab_variant === 'A' ? '#4a7c5940' : '#b07d2e40'}`, color: enr.ab_variant === 'A' ? '#4a7c59' : '#b07d2e' }}>V{enr.ab_variant}</span>}
                               {enr.status === 'active' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Next: {nextRun}</span>}
+                              {enr.status === 'replied' && enr.replied_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Replied {new Date(enr.replied_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
                             </div>
                             {enr.last_error && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e07070', marginTop: 3 }}>{enr.last_error}</div>}
                           </div>
