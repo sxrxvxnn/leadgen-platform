@@ -5,7 +5,6 @@ import { invalidateCache, listSequences, enrollInSequence } from '../services/ap
 const SANS = "var(--font-sans,'Host Grotesk',sans-serif)"
 const MONO = "var(--font-mono,'IBM Plex Mono',monospace)"
 
-// PDL's exact company size bucket strings
 const SIZE_OPTIONS = [
   { label: '1–10',    value: '1-10' },
   { label: '11–50',   value: '11-50' },
@@ -24,8 +23,8 @@ const TITLE_SUGGESTIONS = [
   'Product Manager','Founder','Co-Founder','Chief of Staff',
 ]
 
-// pendingRef: a React ref the parent creates; updated on every keystroke so the
-// search function can read the uncommitted text even when React hasn't re-rendered yet.
+// TagInput: chips for committed values. pendingRef is updated on every keystroke
+// so the parent can read uncommitted text without waiting for a re-render.
 function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }) {
   const [input, setInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -46,8 +45,10 @@ function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }
 
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, minHeight: 40, cursor: 'text' }}
-        onClick={() => document.querySelector(`input[data-tag="${placeholder}"]`)?.focus()}>
+      <div
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, minHeight: 40, cursor: 'text' }}
+        onClick={() => document.querySelector(`input[data-tag="${placeholder}"]`)?.focus()}
+      >
         {value.map(t => (
           <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 8px', background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 20, fontFamily: MONO, fontSize: 11, color: 'var(--text)' }}>
             {t}
@@ -120,17 +121,16 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
   const displayEmail = workEmail || revealedEmail
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 150px', gap: 12, alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: isSelected ? 'rgba(231,0,11,0.04)' : 'transparent', transition: 'background 0.1s' }}
+    <div
+      style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 150px', gap: 12, alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: isSelected ? 'rgba(231,0,11,0.04)' : 'transparent', transition: 'background 0.1s' }}
       onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)' }}
-      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}>
-
-      {/* Checkbox */}
+      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(person.id)}
           style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#E7000B' }} />
       </div>
 
-      {/* Name + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: `hsl(${hue},45%,25%)`, border: `1px solid hsl(${hue},45%,35%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: `hsl(${hue},70%,70%)` }}>{initials}</span>
@@ -143,12 +143,10 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
         </div>
       </div>
 
-      {/* Location */}
       <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {[city, country].filter(Boolean).join(', ') || '—'}
       </p>
 
-      {/* Email */}
       <div>
         {displayEmail
           ? <p style={{ fontFamily: MONO, fontSize: 11, color: displayEmail === '—' || displayEmail === 'Not found' ? 'var(--text-muted)' : 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayEmail}</p>
@@ -159,7 +157,6 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
         }
       </div>
 
-      {/* Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {liUrl && (
           <a href={liUrl} target="_blank" rel="noopener noreferrer"
@@ -177,67 +174,62 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
 }
 
 export default function Prospect() {
-  const [keywords, setKeywords]     = useState('')
-  const [titles, setTitles]         = useState([])
-  const [companies, setCompanies]   = useState([])
-  const [locations, setLocations]   = useState([])
-  const [sizes, setSizes]           = useState([])
+  // Plain string state — updates on every keystroke, never stale in the search closure.
+  const [keywords,    setKeywords]    = useState('')
+  const [companyText, setCompanyText] = useState('')  // replaces companies[] TagInput
+  const [titles,      setTitles]      = useState([])
+  const [locations,   setLocations]   = useState([])
+  const [sizes,       setSizes]       = useState([])
 
-  // Track uncommitted TagInput text so Search works even without pressing Enter.
-  // These refs are updated on every keystroke (bypassing React's render cycle),
-  // so the search function always reads the latest typed value regardless of closure age.
+  // Refs for TagInput pending text (uncommitted chips).
+  // Updated on every keystroke, readable at search time regardless of React render cycle.
   const pendingTitle    = useRef('')
-  const pendingCompany  = useRef('')
   const pendingLocation = useRef('')
 
-  const [results, setResults]       = useState([])
-  const [total, setTotal]           = useState(0)
-  const [page, setPage]             = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading]       = useState(false)
-  const [searched, setSearched]     = useState(false)
-  const [error, setError]           = useState('')
-  const [addedIds, setAddedIds]     = useState(new Set())
+  const [results,     setResults]     = useState([])
+  const [total,       setTotal]       = useState(0)
+  const [page,        setPage]        = useState(1)
+  const [totalPages,  setTotalPages]  = useState(1)
+  const [loading,     setLoading]     = useState(false)
+  const [searched,    setSearched]    = useState(false)
+  const [error,       setError]       = useState('')
+  const [addedIds,    setAddedIds]    = useState(new Set())
+  const [selected,    setSelected]    = useState(new Set())
+  const [addedLeadIds,setAddedLeadIds]= useState({})
 
-  // Bulk selection
-  const [selected, setSelected]     = useState(new Set()) // person.id strings
-  const [addedLeadIds, setAddedLeadIds] = useState({})   // person.id → lead uuid (returned by add-lead)
-
-  // Sequence enroll modal
-  const [sequences, setSequences]   = useState([])
+  const [sequences,    setSequences]    = useState([])
   const [showSeqModal, setShowSeqModal] = useState(false)
-  const [enrolling, setEnrolling]   = useState(false)
+  const [enrolling,    setEnrolling]    = useState(false)
   const [enrollResult, setEnrollResult] = useState(null)
 
   useEffect(() => {
     listSequences().then(res => setSequences(res.data.sequences || [])).catch(() => {})
   }, [])
 
-  const hasFilters = keywords || titles.length || companies.length || locations.length || sizes.length
-    || pendingTitle.current.trim() || pendingCompany.current.trim() || pendingLocation.current.trim()
+  // Build the exact filter object that will be sent to the API.
+  // Called both by search() and by pagination so both always use the same payload.
+  function buildFilters() {
+    const companies = companyText.trim() ? [companyText.trim()] : []
+    const activeTitles    = [...titles,    ...(pendingTitle.current.trim()    ? [pendingTitle.current.trim()]    : [])]
+    const activeLocations = [...locations, ...(pendingLocation.current.trim() ? [pendingLocation.current.trim()] : [])]
+    return { keywords, companies, titles: activeTitles, locations: activeLocations, sizes }
+  }
+
+  // lastFilters stores the filters from the most recent successful search so that
+  // pagination (Prev / Next) always re-uses the exact same query.
+  const lastFilters = useRef(null)
 
   async function search(p = 1) {
-    // Merge committed tags with any text still sitting in a TagInput (not yet Enter'd).
-    // We read from refs here rather than from state to avoid the stale-closure problem:
-    // the onClick handler captures this function from the last render, but refs always
-    // reflect the latest value typed by the user.
-    const activeTitles    = [...titles,    ...(pendingTitle.current.trim()    ? [pendingTitle.current.trim()]    : [])]
-    const activeCompanies = [...companies, ...(pendingCompany.current.trim()  ? [pendingCompany.current.trim()]  : [])]
-    const activeLocations = [...locations, ...(pendingLocation.current.trim() ? [pendingLocation.current.trim()] : [])]
+    const filters = p === 1 ? buildFilters() : (lastFilters.current || buildFilters())
 
-    const anyFilter = keywords || activeTitles.length || activeCompanies.length || activeLocations.length || sizes.length
+    const anyFilter = filters.keywords || filters.companies.length || filters.titles.length
+      || filters.locations.length || filters.sizes.length
     if (!anyFilter) { setError('Add at least one filter to search.'); return }
 
     setLoading(true); setError(''); setPage(p); setSelected(new Set())
     try {
-      const res = await api.post('/prospect/people-search', {
-        keywords,
-        titles:    activeTitles,
-        companies: activeCompanies,
-        locations: activeLocations,
-        sizes,
-        page: p,
-      })
+      const res = await api.post('/prospect/people-search', { ...filters, page: p })
+      if (p === 1) lastFilters.current = filters   // lock filters for pagination
       setResults(res.data.people || [])
       setTotal(res.data.total || 0)
       setTotalPages(res.data.total_pages || 1)
@@ -248,6 +240,9 @@ export default function Prospect() {
       setLoading(false)
     }
   }
+
+  const hasFilters = keywords.trim() || companyText.trim() || titles.length || locations.length || sizes.length
+    || pendingTitle.current.trim() || pendingLocation.current.trim()
 
   const handleAdd = useCallback(async (person) => {
     setAddedIds(prev => new Set([...prev, person.id]))
@@ -271,25 +266,17 @@ export default function Prospect() {
   }
 
   function toggleSelectAll() {
-    if (selected.size === results.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(results.map(p => p.id)))
-    }
+    setSelected(selected.size === results.length ? new Set() : new Set(results.map(p => p.id)))
   }
 
   async function handleAddSelected() {
     const toAdd = results.filter(p => selected.has(p.id) && !addedIds.has(p.id))
-    for (const person of toAdd) {
-      await handleAdd(person)
-    }
+    for (const person of toAdd) await handleAdd(person)
   }
 
   async function handleEnrollSelected(seqId) {
-    setEnrolling(true)
-    setEnrollResult(null)
+    setEnrolling(true); setEnrollResult(null)
     try {
-      // First add any un-added selected leads, then enroll by lead id
       const toProcess = results.filter(p => selected.has(p.id))
       const leadIds = []
       for (const person of toProcess) {
@@ -301,14 +288,12 @@ export default function Prospect() {
             setAddedIds(prev => new Set([...prev, person.id]))
             setAddedLeadIds(prev => ({ ...prev, [person.id]: lid }))
           }
-        } else if (!lid) {
-          lid = addedLeadIds[person.id]
         }
         if (lid) leadIds.push(lid)
       }
       if (leadIds.length) {
         const res = await enrollInSequence(seqId, leadIds)
-        setEnrollResult(`Enrolled ${res.data.enrolled} leads. ${res.data.skipped ? `${res.data.skipped} skipped (already enrolled).` : ''}`)
+        setEnrollResult(`Enrolled ${res.data.enrolled} leads.${res.data.skipped ? ` ${res.data.skipped} skipped.` : ''}`)
       }
       invalidateCache('/leads')
     } catch (e) {
@@ -318,56 +303,62 @@ export default function Prospect() {
     }
   }
 
-  function toggleSize(v) {
-    setSizes(prev => prev.includes(v) ? prev.filter(s => s !== v) : [...prev, v])
-  }
+  const INPUT_STYLE = { width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: MONO, fontSize: 12, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }
+  const LABEL_STYLE = { fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }
 
   return (
     <div style={{ padding: '36px 40px', maxWidth: 1100, margin: '0 auto' }}>
 
-      {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontFamily: SANS, fontSize: 26, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Prospect Search</h1>
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          Search 800M+ verified contacts — find the right people, add them in one click. Results are cached for 1 hour.
+          Search 800M+ verified contacts — find the right people, add them in one click.
         </p>
       </div>
 
       {/* Filter card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
-            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Keywords</label>
+            <label style={LABEL_STYLE}>Keywords</label>
             <input
               value={keywords}
               onChange={e => setKeywords(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && search(1)}
               placeholder="e.g. machine learning, security, fintech…"
-              style={{ width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: MONO, fontSize: 12, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}
+              style={INPUT_STYLE}
             />
           </div>
           <div>
-            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Locations</label>
-            <TagInput value={locations} onChange={setLocations} placeholder="Add country or city…" pendingRef={pendingLocation} />
+            {/* Plain text input: state updates on every keystroke — no stale-closure risk */}
+            <label style={LABEL_STYLE}>Company</label>
+            <input
+              value={companyText}
+              onChange={e => { setCompanyText(e.target.value); lastFilters.current = null }}
+              onKeyDown={e => e.key === 'Enter' && search(1)}
+              placeholder="e.g. Stripe, Beagle Security…"
+              style={INPUT_STYLE}
+            />
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
-            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Job Titles</label>
-            <TagInput value={titles} onChange={setTitles} placeholder="Add title…" suggestions={TITLE_SUGGESTIONS} pendingRef={pendingTitle} />
+            <label style={LABEL_STYLE}>Job Titles</label>
+            <TagInput value={titles} onChange={v => { setTitles(v); lastFilters.current = null }} placeholder="Add title… (press Enter)" suggestions={TITLE_SUGGESTIONS} pendingRef={pendingTitle} />
           </div>
           <div>
-            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Companies</label>
-            <TagInput value={companies} onChange={setCompanies} placeholder="Add company name…" pendingRef={pendingCompany} />
+            <label style={LABEL_STYLE}>Locations</label>
+            <TagInput value={locations} onChange={v => { setLocations(v); lastFilters.current = null }} placeholder="Add country or city… (press Enter)" pendingRef={pendingLocation} />
           </div>
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Company Size</label>
+          <label style={LABEL_STYLE}>Company Size</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {SIZE_OPTIONS.map(s => (
-              <button key={s.value} onClick={() => toggleSize(s.value)}
+              <button key={s.value} onClick={() => { setSizes(prev => prev.includes(s.value) ? prev.filter(x => x !== s.value) : [...prev, s.value]); lastFilters.current = null }}
                 style={{ padding: '5px 12px', borderRadius: 20, fontFamily: MONO, fontSize: 11, fontWeight: 500, cursor: 'pointer', transition: 'all 0.12s', background: sizes.includes(s.value) ? 'var(--text)' : 'var(--bg)', color: sizes.includes(s.value) ? 'var(--bg)' : 'var(--text-muted)', border: sizes.includes(s.value) ? '1px solid var(--text)' : '1px solid var(--border)' }}>
                 {s.label}
               </button>
@@ -380,8 +371,8 @@ export default function Prospect() {
           <div style={{ flex: 1 }} />
           <button
             onClick={() => search(1)}
-            disabled={loading || !hasFilters}
-            style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '10px 28px', background: hasFilters ? 'var(--text)' : 'var(--surface)', color: hasFilters ? 'var(--bg)' : 'var(--text-muted)', border: 'none', borderRadius: 8, cursor: loading || !hasFilters ? 'default' : 'pointer' }}>
+            disabled={loading}
+            style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '10px 28px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Searching…' : 'Search'}
           </button>
         </div>
@@ -421,7 +412,6 @@ export default function Prospect() {
       {/* Results */}
       {searched && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-          {/* Results header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexWrap: 'wrap', gap: 10 }}>
             <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
               {total > 0 ? `${total.toLocaleString()} people found` : 'No results'}
@@ -442,7 +432,6 @@ export default function Prospect() {
             </div>
           </div>
 
-          {/* Column headers with select-all */}
           {results.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 150px', gap: 12, padding: '9px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
               <input type="checkbox" checked={selected.size === results.length && results.length > 0} onChange={toggleSelectAll}
@@ -463,7 +452,6 @@ export default function Prospect() {
             <PersonRow key={person.id} person={person} onAdd={handleAdd} addedIds={addedIds} selected={selected} onToggleSelect={toggleSelect} />
           ))}
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
               <button onClick={() => search(page - 1)} disabled={page <= 1 || loading}
@@ -488,7 +476,7 @@ export default function Prospect() {
             </svg>
           </div>
           <p style={{ fontFamily: SANS, fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 6px' }}>Start prospecting</p>
-          <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Add job titles, companies, or locations — then hit Search.</p>
+          <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Fill in any filter above and hit Search.</p>
         </div>
       )}
     </div>

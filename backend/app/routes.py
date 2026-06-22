@@ -2504,6 +2504,10 @@ async def autofill_company_from_linkedin(
         if website_to_save and (not company.get("website") or is_indian):
             update_data["website"] = website_to_save
 
+        # Save raw LinkedIn industry value
+        if li.get("industry") and not company.get("industry"):
+            update_data["industry"] = li["industry"]
+
         # Classification from LinkedIn industry (mirrors _LI_CLASS_MAP in _autofill_one)
         current_class = company.get("classification") or "Unclassified"
         if li.get("industry") and current_class == "Unclassified":
@@ -2950,6 +2954,10 @@ async def bulk_autofill_companies(
                     # Tagline (company slogan from LinkedIn og:description)
                     if li_data.get("tagline") and not company.get("tagline"):
                         update_data["tagline"] = li_data["tagline"]
+
+                    # Save raw LinkedIn industry value
+                    if li_data.get("industry") and not company.get("industry"):
+                        update_data["industry"] = li_data["industry"]
 
                     # Industry → classification (if not already set)
                     if li_data.get("industry") and not company.get("classification") or company.get("classification") == "Unclassified":
@@ -5978,10 +5986,6 @@ def _pdl_query_key(payload: dict) -> str:
     return _hashlib.md5(blob.encode()).hexdigest()
 
 def _build_pdl_sql(payload: dict) -> str:
-    """
-    Build a PDL SQL query string. PDL's SQL mode is more reliable than their
-    Elasticsearch DSL subset, which rejects multi_match and minimum_should_match.
-    """
     titles    = [t.strip() for t in (payload.get("titles") or []) if t.strip()]
     companies = [c.strip() for c in (payload.get("companies") or []) if c.strip()]
     locations = [l.strip() for l in (payload.get("locations") or []) if l.strip()]
@@ -5995,19 +5999,22 @@ def _build_pdl_sql(payload: dict) -> str:
 
     if keywords:
         kw = esc(keywords.lower())
-        clauses.append(
-            f"(job_title LIKE '%{kw}%' OR job_company_name LIKE '%{kw}%' OR job_company_industry LIKE '%{kw}%')"
-        )
+        # keywords searches title only to avoid flooding results with off-topic companies/industries
+        clauses.append(f"(job_title LIKE '%{kw}%')")
     if titles:
         parts = " OR ".join(f"job_title LIKE '%{esc(t.lower())}%'" for t in titles)
         clauses.append(f"({parts})")
     if companies:
-        parts = " OR ".join(f"job_company_name LIKE '%{esc(c.lower())}%'" for c in companies)
+        # PDL normalises company names to lowercase; use both exact and LIKE for reliability
+        parts = " OR ".join(
+            f"(job_company_name='{esc(c.lower())}' OR job_company_name LIKE '%{esc(c.lower())}%')"
+            for c in companies
+        )
         clauses.append(f"({parts})")
     if locations:
         loc_parts: list[str] = []
-        for l in locations:
-            el = esc(l.lower())
+        for loc in locations:
+            el = esc(loc.lower())
             loc_parts += [
                 f"location_country='{el}'",
                 f"location_city='{el}'",
@@ -6019,7 +6026,9 @@ def _build_pdl_sql(payload: dict) -> str:
         clauses.append(f"({parts})")
 
     where = " AND ".join(clauses) if clauses else "full_name IS NOT NULL"
-    return f"SELECT * FROM person WHERE {where}"
+    sql = f"SELECT * FROM person WHERE {where}"
+    print(f"[PDL] companies={companies!r} sizes={sizes!r} titles={titles!r} sql={sql!r}")
+    return sql
 
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
@@ -6048,8 +6057,6 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
             raise HTTPException(status_code=400, detail="No more results available.")
 
     sql = _build_pdl_sql(payload)
-    print(f"[PDL] payload received: companies={payload.get('companies')!r} titles={payload.get('titles')!r} locations={payload.get('locations')!r} sizes={payload.get('sizes')!r} keywords={payload.get('keywords')!r}")
-    print(f"[PDL] SQL: {sql}")
     body = {
         "sql":    sql,
         "size":   per_page,
