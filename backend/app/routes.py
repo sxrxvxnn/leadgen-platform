@@ -5975,41 +5975,49 @@ def _pdl_query_key(payload: dict) -> str:
     )
     return _hashlib.md5(blob.encode()).hexdigest()
 
-def _build_pdl_query(payload: dict) -> dict:
-    must: list = []
+def _build_pdl_sql(payload: dict) -> str:
+    """
+    Build a PDL SQL query string. PDL's SQL mode is more reliable than their
+    Elasticsearch DSL subset, which rejects multi_match and minimum_should_match.
+    """
     titles    = [t.strip() for t in (payload.get("titles") or []) if t.strip()]
     companies = [c.strip() for c in (payload.get("companies") or []) if c.strip()]
     locations = [l.strip() for l in (payload.get("locations") or []) if l.strip()]
     sizes     = payload.get("sizes") or []
     keywords  = (payload.get("keywords") or "").strip()
 
-    # PDL supports bool.should but NOT minimum_should_match.
-    # A bool with ONLY should clauses (no must/filter) defaults to requiring 1 match —
-    # so we rely on that ES default instead of setting it explicitly.
-    if titles:
-        must.append({"bool": {"should": [{"match": {"job_title": t}} for t in titles]}})
-    if companies:
-        must.append({"bool": {"should": [{"match": {"job_company_name": c}} for c in companies]}})
-    if locations:
-        loc_shoulds = []
-        for l in locations:
-            loc_shoulds.append({"match": {"location_country": l}})
-            loc_shoulds.append({"match": {"location_city": l}})
-            loc_shoulds.append({"match": {"location_region": l}})
-        must.append({"bool": {"should": loc_shoulds}})
-    if sizes:
-        must.append({"terms": {"job_company_size": sizes}})
+    def esc(s: str) -> str:
+        return s.replace("'", "''")
+
+    clauses: list[str] = []
+
     if keywords:
-        must.append({"bool": {"should": [
-            {"match": {"job_title": keywords}},
-            {"match": {"job_company_name": keywords}},
-            {"match": {"job_company_industry": keywords}},
-        ]}})
+        kw = esc(keywords.lower())
+        clauses.append(
+            f"(job_title LIKE '%{kw}%' OR job_company_name LIKE '%{kw}%' OR job_company_industry LIKE '%{kw}%')"
+        )
+    if titles:
+        parts = " OR ".join(f"job_title LIKE '%{esc(t.lower())}%'" for t in titles)
+        clauses.append(f"({parts})")
+    if companies:
+        parts = " OR ".join(f"job_company_name LIKE '%{esc(c.lower())}%'" for c in companies)
+        clauses.append(f"({parts})")
+    if locations:
+        loc_parts: list[str] = []
+        for l in locations:
+            el = esc(l.lower())
+            loc_parts += [
+                f"location_country='{el}'",
+                f"location_city='{el}'",
+                f"location_region='{el}'",
+            ]
+        clauses.append(f"({'  OR '.join(loc_parts)})")
+    if sizes:
+        parts = " OR ".join(f"job_company_size='{esc(s)}'" for s in sizes)
+        clauses.append(f"({parts})")
 
-    if not must:
-        return {"bool": {"must": [{"exists": {"field": "full_name"}}]}}
-
-    return {"bool": {"must": must}}
+    where = " AND ".join(clauses) if clauses else "full_name IS NOT NULL"
+    return f"SELECT * FROM person WHERE {where}"
 
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
@@ -6038,10 +6046,9 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
             raise HTTPException(status_code=400, detail="No more results available.")
 
     body = {
-        "query":   _build_pdl_query(payload),
-        "size":    per_page,
-        "pretty":  False,
-        "dataset": "all",
+        "sql":    _build_pdl_sql(payload),
+        "size":   per_page,
+        "pretty": False,
     }
     if scroll_token:
         body["scroll_token"] = scroll_token
