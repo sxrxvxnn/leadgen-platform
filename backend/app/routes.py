@@ -5997,9 +5997,18 @@ def _build_pdl_query(payload: dict) -> dict:
     if sizes:
         must.append({"terms": {"job_company_size": sizes}})
     if keywords:
-        must.append({"multi_match": {"query": keywords, "fields": ["job_title", "job_company_name", "summary", "headline", "industry"]}})
+        # PDL does not support multi_match — use bool.should with individual match clauses
+        must.append({"bool": {"should": [
+            {"match": {"job_title": keywords}},
+            {"match": {"job_company_name": keywords}},
+            {"match": {"job_company_industry": keywords}},
+        ], "minimum_should_match": 1}})
 
-    return {"bool": {"must": must}} if must else {"match_all": {}}
+    if not must:
+        # match_all is not supported by PDL — require at least one condition
+        return {"bool": {"must": [{"exists": {"field": "full_name"}}]}}
+
+    return {"bool": {"must": must}}
 
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
