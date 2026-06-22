@@ -182,8 +182,10 @@ class CompanyUpdate(BaseModel):
     phone: Optional[str] = None
     founded: Optional[str] = None
     specialties: Optional[str] = None
+    industry: Optional[str] = None
     size: Optional[str] = None
     company_type: Optional[str] = None
     compliance: Optional[str] = None
+    is_saas: Optional[bool] = None
     name: Optional[str] = None
     tagline: Optional[str] = None
