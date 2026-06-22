@@ -5983,29 +5983,30 @@ def _build_pdl_query(payload: dict) -> dict:
     sizes     = payload.get("sizes") or []
     keywords  = (payload.get("keywords") or "").strip()
 
+    # PDL supports bool.should but NOT minimum_should_match.
+    # A bool with ONLY should clauses (no must/filter) defaults to requiring 1 match —
+    # so we rely on that ES default instead of setting it explicitly.
     if titles:
-        must.append({"bool": {"should": [{"match": {"job_title": t}} for t in titles], "minimum_should_match": 1}})
+        must.append({"bool": {"should": [{"match": {"job_title": t}} for t in titles]}})
     if companies:
-        must.append({"bool": {"should": [{"match": {"job_company_name": c}} for c in companies], "minimum_should_match": 1}})
+        must.append({"bool": {"should": [{"match": {"job_company_name": c}} for c in companies]}})
     if locations:
         loc_shoulds = []
         for l in locations:
             loc_shoulds.append({"match": {"location_country": l}})
             loc_shoulds.append({"match": {"location_city": l}})
             loc_shoulds.append({"match": {"location_region": l}})
-        must.append({"bool": {"should": loc_shoulds, "minimum_should_match": 1}})
+        must.append({"bool": {"should": loc_shoulds}})
     if sizes:
         must.append({"terms": {"job_company_size": sizes}})
     if keywords:
-        # PDL does not support multi_match — use bool.should with individual match clauses
         must.append({"bool": {"should": [
             {"match": {"job_title": keywords}},
             {"match": {"job_company_name": keywords}},
             {"match": {"job_company_industry": keywords}},
-        ], "minimum_should_match": 1}})
+        ]}})
 
     if not must:
-        # match_all is not supported by PDL — require at least one condition
         return {"bool": {"must": [{"exists": {"field": "full_name"}}]}}
 
     return {"bool": {"must": must}}
