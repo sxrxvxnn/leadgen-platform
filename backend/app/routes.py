@@ -2504,8 +2504,8 @@ async def autofill_company_from_linkedin(
         if website_to_save and (not company.get("website") or is_indian):
             update_data["website"] = website_to_save
 
-        # Save raw LinkedIn industry value
-        if li.get("industry") and not company.get("industry"):
+        # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
+        if li.get("industry"):
             update_data["industry"] = li["industry"]
 
         # Classification from LinkedIn industry (mirrors _LI_CLASS_MAP in _autofill_one)
@@ -2955,8 +2955,8 @@ async def bulk_autofill_companies(
                     if li_data.get("tagline") and not company.get("tagline"):
                         update_data["tagline"] = li_data["tagline"]
 
-                    # Save raw LinkedIn industry value
-                    if li_data.get("industry") and not company.get("industry"):
+                    # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
+                    if li_data.get("industry"):
                         update_data["industry"] = li_data["industry"]
 
                     # Industry → classification (if not already set)
@@ -6017,7 +6017,7 @@ def _build_pdl_sql(payload: dict) -> str:
             el = esc(loc.lower())
             loc_parts += [
                 f"location_country='{el}'",
-                f"location_city='{el}'",
+                f"location_locality='{el}'",
                 f"location_region='{el}'",
             ]
         clauses.append(f"({'  OR '.join(loc_parts)})")

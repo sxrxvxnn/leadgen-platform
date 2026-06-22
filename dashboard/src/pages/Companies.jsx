@@ -113,6 +113,7 @@ const KEY_FIELDS = [
   { key: 'linkedin_url', label: 'LinkedIn' },
   { key: 'headquarters', label: 'HQ' },
   { key: 'size',         label: 'size' },
+  { key: 'industry',     label: 'industry' },
   { key: 'description',  label: 'description' },
 ]
 
@@ -182,8 +183,10 @@ const COMPANY_EDIT_FIELDS = [
   { key: 'revenue',      label: 'Revenue',        type: 'text', placeholder: 'e.g. $5M ARR' },
   { key: 'compliance',   label: 'Compliance',     type: 'text', placeholder: 'ISO 27001, SOC 2, …' },
   { key: 'founded',      label: 'Founded',        type: 'text', placeholder: 'e.g. 2018' },
+  { key: 'industry',     label: 'Industry',       type: 'text', placeholder: 'e.g. Computer Software' },
   { key: 'specialties',  label: 'Specialties',    type: 'text', placeholder: 'e.g. AI/ML, SaaS, Cloud' },
   { key: 'company_type', label: 'Type',           type: 'select', options: ['', 'Product', 'Service', 'Hybrid'] },
+  { key: 'is_saas',      label: 'SaaS',           type: 'select', options: ['', 'true', 'false'] },
   { key: 'description',  label: 'Description',    type: 'textarea' },
 ]
 
@@ -319,6 +322,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         if (a.company_type) patch.company_type = a.company_type
         if (a.compliance?.length) patch.compliance = a.compliance.join(', ')
         if (a.website_summary && !company.description) patch.description = a.website_summary
+        if (a.is_saas !== undefined && a.is_saas !== null) patch.is_saas = a.is_saas
         const currentClass = company.classification || 'Unclassified'
         if (currentClass === 'Unclassified') {
           const enriched = {
@@ -413,9 +417,14 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       headquarters: company.headquarters || '',
       size:         company.size || '',
       followers:    company.followers || '',
+      phone:        company.phone || '',
       revenue:      company.revenue || '',
       compliance:   company.compliance || '',
+      founded:      company.founded || '',
+      industry:     company.industry || '',
       company_type: company.company_type || '',
+      specialties:  company.specialties || '',
+      is_saas:      company.is_saas === true ? 'true' : company.is_saas === false ? 'false' : '',
       description:  company.description || '',
     })
     setShowEdit(true)
@@ -424,6 +433,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   async function saveEdit() {
     setSaving(true)
     const cleaned = Object.fromEntries(Object.entries(editForm).filter(([, v]) => v !== undefined))
+    if (cleaned.is_saas === 'true') cleaned.is_saas = true
+    else if (cleaned.is_saas === 'false') cleaned.is_saas = false
+    else delete cleaned.is_saas
     await onUpdate(company.id, cleaned)
     setShowEdit(false)
     setSaving(false)
@@ -563,6 +575,26 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           <p style={card.infoLabel}>FOLLOWERS</p>
           <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
         </div>
+        {company.industry && (
+          <div style={card.infoItem}>
+            <p style={card.infoLabel}>INDUSTRY</p>
+            <p style={card.infoValue}>{company.industry}</p>
+          </div>
+        )}
+        {company.is_saas !== null && company.is_saas !== undefined && (
+          <div style={card.infoItem}>
+            <p style={card.infoLabel}>SAAS</p>
+            <span style={{
+              fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
+              padding: '2px 7px', borderRadius: '4px', display: 'inline-block',
+              background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
+              color: company.is_saas ? '#5b8db8' : '#a1a1a1',
+              border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}`,
+            }}>
+              {company.is_saas ? 'SaaS' : 'Non-SaaS'}
+            </span>
+          </div>
+        )}
         {company.founded && (
           <div style={card.infoItem}>
             <p style={card.infoLabel}>FOUNDED</p>
@@ -583,7 +615,11 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       {company.specialties && (
         <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)' }}>
           <p style={{ ...card.infoLabel, marginBottom: '5px' }}>SPECIALTIES</p>
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-secondary)', lineHeight: 1.6, letterSpacing: '0.01em' }}>{company.specialties}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {company.specialties.split(',').map(s => s.trim()).filter(Boolean).map(spec => (
+              <span key={spec} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 6px', letterSpacing: '0.02em' }}>{spec}</span>
+            ))}
+          </div>
         </div>
       )}
 
