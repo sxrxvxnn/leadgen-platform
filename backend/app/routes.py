@@ -5958,27 +5958,22 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
 _PDL_KEY  = os.environ.get("PDL_API_KEY", "")
 _PDL_BASE = "https://api.peopledatalabs.com/v5"
 
-# In-memory cache: key → {data, ts}  (1-hour TTL, never charges credits twice for same query)
 import hashlib as _hashlib
 import json as _json
-_pdl_cache: dict = {}
-_PDL_CACHE_TTL = 3600  # seconds
+import time as _time
 
-def _pdl_cache_key(payload: dict, page: int, per_page: int) -> str:
-    blob = _json.dumps({k: payload.get(k) for k in ("keywords","titles","companies","locations","sizes")}, sort_keys=True)
-    return _hashlib.md5(f"{blob}|{page}|{per_page}".encode()).hexdigest()
+_PDL_CACHE_TTL = 3600  # 1 hour
 
-def _pdl_cache_get(key: str):
-    import time
-    entry = _pdl_cache.get(key)
-    if entry and time.time() - entry["ts"] < _PDL_CACHE_TTL:
-        return entry["data"]
-    _pdl_cache.pop(key, None)
-    return None
+# Nested cache: query_key → {page: {result, scroll_token, ts}}
+# scroll_token from page N is used to fetch page N+1
+_pdl_scroll_cache: dict = {}
 
-def _pdl_cache_set(key: str, data: dict):
-    import time
-    _pdl_cache[key] = {"data": data, "ts": time.time()}
+def _pdl_query_key(payload: dict) -> str:
+    blob = _json.dumps(
+        {k: payload.get(k) for k in ("keywords", "titles", "companies", "locations", "sizes")},
+        sort_keys=True,
+    )
+    return _hashlib.md5(blob.encode()).hexdigest()
 
 def _build_pdl_query(payload: dict) -> dict:
     must: list = []
@@ -6011,22 +6006,36 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
     get_user_id(authorization)
     if not _PDL_KEY:
         raise HTTPException(status_code=503, detail="Prospect search not configured — add PDL_API_KEY to Vercel env vars.")
-    page     = max(1, int(payload.get("page", 1)))
-    per_page = 10  # conservative — 10 credits per search instead of 25
-    from_    = (page - 1) * per_page
 
-    cache_key = _pdl_cache_key(payload, page, per_page)
-    cached = _pdl_cache_get(cache_key)
-    if cached:
-        return cached
+    page      = max(1, int(payload.get("page", 1)))
+    per_page  = 10
+    query_key = _pdl_query_key(payload)
+    q_cache   = _pdl_scroll_cache.get(query_key, {})
+
+    # Return cached result for this page if still fresh
+    page_entry = q_cache.get(page)
+    if page_entry and _time.time() - page_entry["ts"] < _PDL_CACHE_TTL:
+        return {**page_entry["result"], "cached": True}
+
+    # Need scroll_token from previous page to paginate
+    scroll_token = None
+    if page > 1:
+        prev = q_cache.get(page - 1)
+        if not prev or _time.time() - prev["ts"] >= _PDL_CACHE_TTL:
+            raise HTTPException(status_code=400, detail="Session expired — please search again from page 1.")
+        scroll_token = prev.get("scroll_token")
+        if not scroll_token:
+            raise HTTPException(status_code=400, detail="No more results available.")
 
     body = {
         "query":   _build_pdl_query(payload),
         "size":    per_page,
-        "from":    from_,
         "pretty":  False,
         "dataset": "all",
     }
+    if scroll_token:
+        body["scroll_token"] = scroll_token
+
     try:
         res = requests.post(
             f"{_PDL_BASE}/person/search",
@@ -6036,12 +6045,30 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
         )
         data = res.json()
         if res.status_code not in (200, 404):
-            raise HTTPException(status_code=502, detail=data.get("error", {}).get("message") or "PDL search failed")
-        total = data.get("total", 0)
-        people = data.get("data", [])
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        result = {"people": people, "total": total, "page": page, "total_pages": min(total_pages, 40), "cached": False}
-        _pdl_cache_set(cache_key, {**result, "cached": True})
+            raise HTTPException(
+                status_code=502,
+                detail=data.get("error", {}).get("message") or "PDL search failed",
+            )
+        total        = data.get("total", 0)
+        people       = data.get("data", [])
+        new_scroll   = data.get("scroll_token")
+        total_pages  = max(1, (total + per_page - 1) // per_page)
+        result = {
+            "people":      people,
+            "total":       total,
+            "page":        page,
+            "total_pages": min(total_pages, 40),
+            "has_more":    bool(new_scroll and len(people) == per_page),
+            "cached":      False,
+        }
+        # Cache result + scroll_token for next page
+        if query_key not in _pdl_scroll_cache:
+            _pdl_scroll_cache[query_key] = {}
+        _pdl_scroll_cache[query_key][page] = {
+            "result":       result,
+            "scroll_token": new_scroll,
+            "ts":           _time.time(),
+        }
         return result
     except HTTPException:
         raise
