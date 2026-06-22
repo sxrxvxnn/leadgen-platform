@@ -43,7 +43,7 @@ function StatCard({ label, value, suffix = '', note, color, trend, loading, onCl
       {loading ? <Skeleton height={28} width={60} /> : (
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
           <span style={{ fontFamily: DISPLAY, fontSize: 32, fontWeight: 700, color: color || 'var(--text)', letterSpacing: '-0.03em', lineHeight: 1 }}>
-            <CountUp end={typeof value === 'number' ? value : 0} duration={800} />
+            <CountUp to={typeof value === 'number' ? value : 0} duration={0.8} />
             {suffix}
           </span>
         </div>
