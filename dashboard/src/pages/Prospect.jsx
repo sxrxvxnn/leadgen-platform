@@ -98,7 +98,7 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
   const name      = person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim() || '—'
   const title     = person.job_title || ''
   const company   = person.job_company_name || ''
-  const city      = person.location_city || ''
+  const city      = person.location_locality || ''
   const country   = person.location_country || ''
   const liUrl     = person.linkedin_url ? (person.linkedin_url.startsWith('http') ? person.linkedin_url : `https://${person.linkedin_url}`) : null
   const workEmail = person.work_email || (person.emails || [])[0]?.address || null

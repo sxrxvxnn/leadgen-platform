@@ -6137,7 +6137,7 @@ async def prospect_add_lead(payload: dict, authorization: str = Header(...)):
     p = payload.get("person", {})
     # PDL field names
     name = p.get("full_name") or f"{p.get('first_name','') or ''} {p.get('last_name','') or ''}".strip()
-    location_parts = [x for x in [p.get("location_city"), p.get("location_state"), p.get("location_country")] if x]
+    location_parts = [x for x in [p.get("location_locality"), p.get("location_region"), p.get("location_country")] if x]
     location = ", ".join(location_parts[:2]) if location_parts else None
     email  = p.get("work_email") or (p.get("emails") or [{}])[0].get("address") if p.get("emails") else None
     phone  = (p.get("phone_numbers") or [None])[0]
