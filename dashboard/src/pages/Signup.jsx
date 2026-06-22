@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
 
@@ -66,7 +66,8 @@ export default function Signup() {
   const [error,    setError]    = useState('')
   const [done,     setDone]     = useState(false)
   const [loading,  setLoading]  = useState(false)
-  const { signup } = useAuth()
+  const { signup, login } = useAuth()
+  const navigate = useNavigate()
   const strength = passwordStrength(password)
 
   const handleSubmit = async (e) => {
@@ -76,7 +77,15 @@ export default function Signup() {
     setLoading(true)
     try {
       await signup(email, password, fullName)
-      setDone(true)
+      // Supabase auto-confirms accounts — attempt immediate login
+      try {
+        await login(email, password)
+        navigate('/dashboard')
+        return
+      } catch {
+        // Email confirmation required (or other issue) — fall through to inbox screen
+        setDone(true)
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.')
     } finally { setLoading(false) }
