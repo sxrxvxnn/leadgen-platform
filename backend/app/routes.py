@@ -68,6 +68,29 @@ async def signup(request: Request, user: UserSignup):
         raise HTTPException(status_code=400, detail="Registration failed. Please check your details and try again.")
 
 
+@router.post("/auth/ensure-profile")
+async def ensure_profile(request: Request, authorization: str = Header(...)):
+    """Idempotent profile upsert for OAuth sign-ins (Google, LinkedIn) that bypass /auth/signup."""
+    user_id = get_user_id(authorization)
+    body = await request.json()
+    email     = (body.get("email")     or "").strip()
+    full_name = (body.get("full_name") or "").strip()
+    res = supabase.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
+    if res.data:
+        return {"status": "exists"}
+    try:
+        supabase.table("profiles").insert({
+            "id": user_id,
+            "email": email,
+            "full_name": full_name,
+        }).execute()
+        posthog.identify(user_id, {"email": email, "has_full_name": bool(full_name)})
+        posthog.capture(user_id, "user_signed_up", {"signup_method": "oauth"})
+    except Exception:
+        pass
+    return {"status": "created"}
+
+
 @router.post("/auth/login")
 @limiter.limit("5/minute")
 async def login(request: Request, user: UserLogin):
@@ -461,7 +484,7 @@ async def get_companies(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     try:
         response = supabase.table("companies")\
-            .select("*")\
+            .select("*,is_saas,industry,specialties")\
             .eq("user_id", user_id)\
             .order("created_at", desc=True)\
             .execute()
@@ -773,7 +796,7 @@ async def update_connection_status(
         return {"lead": response.data[0]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
 # ─── SPREADSHEET UPDATE ───────────────────────────────────────
 
 @router.patch("/leads/{lead_id}/spreadsheet")
@@ -1928,7 +1951,7 @@ Industry: {industry or "Unknown"}
 Description: {description or "None"}
 Compliance already detected from their website: {compliance_found}
 
-Based ONLY on what's likely for this specific company given their industry and description, what compliance standards might they have? 
+Based ONLY on what's likely for this specific company given their industry and description, what compliance standards might they have?
 DO NOT make up standards. Only include ones that are highly likely given the industry.
 
 Reply with ONLY valid JSON:
@@ -2144,7 +2167,7 @@ async def autofill_bulk(
 
 Rules:
 - website: full URL with https://, empty string if unknown
-- revenue: number only in USD millions, empty string if unknown  
+- revenue: number only in USD millions, empty string if unknown
 - has_security_team: Yes if cybersecurity/fintech/large tech company, No if small company, Unknown if unsure
 - company_type: Product if SaaS/software product, Services if consulting/outsourcing, Hybrid if both
 
@@ -2257,7 +2280,7 @@ Be conservative and accurate. No explanation."""
         print(f"AUTOFILL BULK ERROR: {str(e)}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
-    
+
   # ─── WEBSITE ANALYZER ────────────────────────────────────────
 
 @router.post("/companies/{company_id}/analyze-website")
@@ -5964,6 +5987,101 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
 
 
 # ─── PROSPECT SEARCH (People Data Labs — 800M+ profiles) ───────────────────────
+# ─── LIVE ENRICHMENT (Proxycurl — real-time LinkedIn scrape) ────────────────────
+
+_PROXYCURL_KEY  = os.environ.get("PROXYCURL_API_KEY", "")
+_PROXYCURL_BASE = "https://nubela.co/proxycurl/api"
+
+@router.post("/prospect/enrich-live")
+async def prospect_enrich_live(payload: dict, authorization: str = Header(...)):
+    """Enrich a person with live data scraped from LinkedIn via Proxycurl."""
+    get_user_id(authorization)
+    if not _PROXYCURL_KEY:
+        raise HTTPException(status_code=503, detail="PROXYCURL_API_KEY not configured")
+
+    person = payload.get("person", {})
+
+    # ── Step 1: resolve a LinkedIn URL ──────────────────────────────────────────
+    li_url = (person.get("linkedin_url") or "").strip()
+    if li_url and not li_url.startswith("http"):
+        li_url = "https://linkedin.com/in/" + li_url
+
+    if not li_url:
+        # Fall back to name + company-domain lookup
+        fn = (person.get("first_name") or "").strip()
+        ln = (person.get("last_name") or "").strip()
+        if not fn and person.get("full_name"):
+            parts = (person["full_name"] or "").split()
+            fn = parts[0] if parts else ""
+            ln = " ".join(parts[1:]) if len(parts) > 1 else ""
+        raw_domain = (person.get("job_company_website") or "").strip()
+        domain = raw_domain.replace("https://", "").replace("http://", "").split("/")[0]
+        if fn and ln and domain:
+            lkp = requests.get(
+                f"{_PROXYCURL_BASE}/v2/person/lookup",
+                params={"first_name": fn, "last_name": ln, "company_domain": domain,
+                        "similarity_checks": "include"},
+                headers={"Authorization": f"Bearer {_PROXYCURL_KEY}"},
+                timeout=20,
+            )
+            if lkp.status_code == 200:
+                li_url = lkp.json().get("linkedin_profile_url", "")
+
+    if not li_url:
+        raise HTTPException(status_code=404,
+                            detail="No LinkedIn URL found — cannot enrich live without a profile link")
+
+    # ── Step 2: scrape the LinkedIn profile ─────────────────────────────────────
+    res = requests.get(
+        f"{_PROXYCURL_BASE}/v2/linkedin",
+        params={
+            "url":               li_url,
+            "personal_email":    "include",   # +1 credit but gives real email
+            "inferred_salary":   "skip",
+            "skills":            "skip",
+            "use_cache":         "if-present",   # Proxycurl cache ≤ 29 days; still fresher than PDL
+            "fallback_to_cache": "on-error",
+        },
+        headers={"Authorization": f"Bearer {_PROXYCURL_KEY}"},
+        timeout=30,
+    )
+    if res.status_code == 404:
+        raise HTTPException(status_code=404, detail="LinkedIn profile not found")
+    if res.status_code == 429:
+        raise HTTPException(status_code=429, detail="Proxycurl rate limit — try again shortly")
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Proxycurl returned {res.status_code}")
+
+    d = res.json()
+
+    # Current job = first experience with no end date; fall back to first entry
+    experiences = d.get("experiences") or []
+    current = next((e for e in experiences if not e.get("ends_at")),
+                   experiences[0] if experiences else {})
+
+    pid = d.get("public_identifier")
+    canonical_li = f"https://www.linkedin.com/in/{pid}/" if pid else li_url
+
+    # Merge: live data wins, PDL is the fallback for anything missing
+    enriched = {
+        **person,
+        "full_name":         d.get("full_name")                              or person.get("full_name"),
+        "first_name":        d.get("first_name")                             or person.get("first_name"),
+        "last_name":         d.get("last_name")                              or person.get("last_name"),
+        "job_title":         d.get("occupation") or current.get("title")     or person.get("job_title"),
+        "job_company_name":  current.get("company")                          or person.get("job_company_name"),
+        "linkedin_url":      canonical_li,
+        "location_locality": d.get("city")                                   or person.get("location_locality"),
+        "location_region":   d.get("state")                                  or person.get("location_region"),
+        "location_country":  d.get("country_full_name")                      or person.get("location_country"),
+        "work_email":        (d.get("personal_emails") or [None])[0]         or person.get("work_email"),
+        "summary":           d.get("summary")                                or person.get("summary"),
+        "profile_pic_url":   d.get("profile_pic_url")                        or person.get("profile_pic_url"),
+        "live_verified":     True,
+    }
+    return {"person": enriched}
+
+
 
 _PDL_KEY  = os.environ.get("PDL_API_KEY", "")
 _PDL_BASE = "https://api.peopledatalabs.com/v5"

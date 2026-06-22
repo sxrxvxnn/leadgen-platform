@@ -11,6 +11,7 @@ import { PageLoader } from './components/ui/PageLoader'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Landing from './pages/Landing'
+import AuthCallback from './pages/AuthCallback'
 
 // Lazy load everything else — splits into separate chunks
 const Dashboard       = lazy(() => import('./pages/Dashboard'))
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               {/* Standalone protected (no sidebar) */}
               <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 

@@ -87,6 +87,20 @@ export function AuthProvider({ children }) {
     return response
   }
 
+  const loginWithSession = async (session) => {
+    const { access_token, refresh_token, user } = session
+    localStorage.setItem('token', access_token)
+    if (refresh_token) localStorage.setItem('refreshToken', refresh_token)
+    localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('userEmail', user.email || '')
+    setToken(access_token)
+    setUser(user)
+    posthog.identify(user.id, { email: user.email })
+    _scheduleRefresh(access_token)
+    setProfileLoading(true)
+    _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
+  }
+
   const forgotPassword = async (email) => {
     const response = await forgotPasswordApi(email)
     return response
@@ -111,7 +125,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, profile, profileLoading, loading, login, signup, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider value={{ user, token, profile, profileLoading, loading, login, loginWithSession, signup, logout, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )
