@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import api from '../services/api'
 import { invalidateCache, listSequences, enrollInSequence } from '../services/api'
 
@@ -24,7 +24,9 @@ const TITLE_SUGGESTIONS = [
   'Product Manager','Founder','Co-Founder','Chief of Staff',
 ]
 
-function TagInput({ value, onChange, placeholder, suggestions = [] }) {
+// pendingRef: a React ref the parent creates; updated on every keystroke so the
+// search function can read the uncommitted text even when React hasn't re-rendered yet.
+function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }) {
   const [input, setInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
 
@@ -32,6 +34,7 @@ function TagInput({ value, onChange, placeholder, suggestions = [] }) {
     const t = tag.trim()
     if (t && !value.includes(t)) onChange([...value, t])
     setInput('')
+    if (pendingRef) pendingRef.current = ''
     setShowSuggestions(false)
   }
 
@@ -54,7 +57,11 @@ function TagInput({ value, onChange, placeholder, suggestions = [] }) {
         <input
           data-tag={placeholder}
           value={input}
-          onChange={e => { setInput(e.target.value); setShowSuggestions(true) }}
+          onChange={e => {
+            setInput(e.target.value)
+            if (pendingRef) pendingRef.current = e.target.value
+            setShowSuggestions(true)
+          }}
           onKeyDown={e => {
             if ((e.key === 'Enter' || e.key === ',') && input.trim()) { e.preventDefault(); add(input) }
             if (e.key === 'Backspace' && !input && value.length) remove(value[value.length - 1])
@@ -176,6 +183,13 @@ export default function Prospect() {
   const [locations, setLocations]   = useState([])
   const [sizes, setSizes]           = useState([])
 
+  // Track uncommitted TagInput text so Search works even without pressing Enter.
+  // These refs are updated on every keystroke (bypassing React's render cycle),
+  // so the search function always reads the latest typed value regardless of closure age.
+  const pendingTitle    = useRef('')
+  const pendingCompany  = useRef('')
+  const pendingLocation = useRef('')
+
   const [results, setResults]       = useState([])
   const [total, setTotal]           = useState(0)
   const [page, setPage]             = useState(1)
@@ -200,12 +214,30 @@ export default function Prospect() {
   }, [])
 
   const hasFilters = keywords || titles.length || companies.length || locations.length || sizes.length
+    || pendingTitle.current.trim() || pendingCompany.current.trim() || pendingLocation.current.trim()
 
   async function search(p = 1) {
-    if (!hasFilters) { setError('Add at least one filter to search.'); return }
+    // Merge committed tags with any text still sitting in a TagInput (not yet Enter'd).
+    // We read from refs here rather than from state to avoid the stale-closure problem:
+    // the onClick handler captures this function from the last render, but refs always
+    // reflect the latest value typed by the user.
+    const activeTitles    = [...titles,    ...(pendingTitle.current.trim()    ? [pendingTitle.current.trim()]    : [])]
+    const activeCompanies = [...companies, ...(pendingCompany.current.trim()  ? [pendingCompany.current.trim()]  : [])]
+    const activeLocations = [...locations, ...(pendingLocation.current.trim() ? [pendingLocation.current.trim()] : [])]
+
+    const anyFilter = keywords || activeTitles.length || activeCompanies.length || activeLocations.length || sizes.length
+    if (!anyFilter) { setError('Add at least one filter to search.'); return }
+
     setLoading(true); setError(''); setPage(p); setSelected(new Set())
     try {
-      const res = await api.post('/prospect/people-search', { keywords, titles, companies, locations, sizes, page: p })
+      const res = await api.post('/prospect/people-search', {
+        keywords,
+        titles:    activeTitles,
+        companies: activeCompanies,
+        locations: activeLocations,
+        sizes,
+        page: p,
+      })
       setResults(res.data.people || [])
       setTotal(res.data.total || 0)
       setTotalPages(res.data.total_pages || 1)
@@ -316,18 +348,18 @@ export default function Prospect() {
           </div>
           <div>
             <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Locations</label>
-            <TagInput value={locations} onChange={setLocations} placeholder="Add country or city…" />
+            <TagInput value={locations} onChange={setLocations} placeholder="Add country or city…" pendingRef={pendingLocation} />
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
             <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Job Titles</label>
-            <TagInput value={titles} onChange={setTitles} placeholder="Add title…" suggestions={TITLE_SUGGESTIONS} />
+            <TagInput value={titles} onChange={setTitles} placeholder="Add title…" suggestions={TITLE_SUGGESTIONS} pendingRef={pendingTitle} />
           </div>
           <div>
             <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Companies</label>
-            <TagInput value={companies} onChange={setCompanies} placeholder="Add company name…" />
+            <TagInput value={companies} onChange={setCompanies} placeholder="Add company name…" pendingRef={pendingCompany} />
           </div>
         </div>
 

@@ -2350,6 +2350,8 @@ async def analyze_company_website(
             update_data["compliance"] = ", ".join(merged_compliance)
         if result.get("website_summary") and not company.get("description"):
             update_data["description"] = result["website_summary"]
+        if result.get("is_saas") is not None:
+            update_data["is_saas"] = bool(result["is_saas"])
         if update_data:
             supabase.table("companies").update(update_data).eq("id", company_id).eq("user_id", user_id).execute()
 
@@ -6045,8 +6047,11 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
         if not scroll_token:
             raise HTTPException(status_code=400, detail="No more results available.")
 
+    sql = _build_pdl_sql(payload)
+    print(f"[PDL] payload received: companies={payload.get('companies')!r} titles={payload.get('titles')!r} locations={payload.get('locations')!r} sizes={payload.get('sizes')!r} keywords={payload.get('keywords')!r}")
+    print(f"[PDL] SQL: {sql}")
     body = {
-        "sql":    _build_pdl_sql(payload),
+        "sql":    sql,
         "size":   per_page,
         "pretty": False,
     }
