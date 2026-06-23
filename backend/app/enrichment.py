@@ -374,3 +374,232 @@ def waterfall_find_email(
 def enrich_lead(name: str, company: str, website: str = None) -> dict:
     domain = extract_domain(website) if website else ""
     return waterfall_find_email(name, company=company, domain=domain)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIRECRAWL — LinkedIn scraping + enhanced web search
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import os as _os
+
+FIRECRAWL_KEY  = _os.environ.get("FIRECRAWL_API_KEY", "")
+FIRECRAWL_BASE = "https://api.firecrawl.dev/v1"
+
+
+def _fc_headers() -> dict:
+    return {"Authorization": f"Bearer {FIRECRAWL_KEY}", "Content-Type": "application/json"}
+
+
+def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
+    """Scrape a URL via Firecrawl, return markdown. Empty string on any failure."""
+    if not FIRECRAWL_KEY:
+        return ""
+    try:
+        res = requests.post(
+            f"{FIRECRAWL_BASE}/scrape",
+            json={"url": url, "formats": ["markdown"], "onlyMainContent": True, "waitFor": wait_ms},
+            headers=_fc_headers(),
+            timeout=45,
+        )
+        if res.status_code == 200:
+            return res.json().get("data", {}).get("markdown", "")
+    except Exception:
+        pass
+    return ""
+
+
+def _fc_search(query: str, limit: int = 5) -> list:
+    """Web search via Firecrawl. Returns list of result dicts."""
+    if not FIRECRAWL_KEY:
+        return []
+    try:
+        res = requests.post(
+            f"{FIRECRAWL_BASE}/search",
+            json={"query": query, "limit": limit},
+            headers=_fc_headers(),
+            timeout=25,
+        )
+        if res.status_code == 200:
+            return res.json().get("data", [])
+    except Exception:
+        pass
+    return []
+
+
+# ── LinkedIn scraper ──────────────────────────────────────────────────────────
+
+def find_linkedin_url(first: str, last: str, company: str) -> str:
+    """Find a LinkedIn profile URL via web search. No login required."""
+    query = f'site:linkedin.com/in/ "{first} {last}" "{company}"'
+    for r in _fc_search(query, limit=5):
+        url = r.get("url", "")
+        if "linkedin.com/in/" in url:
+            return url
+    return ""
+
+
+def _parse_linkedin_md(md: str) -> dict:
+    """Extract structured fields from a scraped LinkedIn public profile."""
+    d = {}
+
+    # Name — first H1
+    m = re.search(r'^#\s+(.+)$', md, re.MULTILINE)
+    if m:
+        d['full_name'] = m.group(1).strip()
+
+    # Headline — first H2
+    m = re.search(r'^##\s+(.+)$', md, re.MULTILINE)
+    if m:
+        d['headline'] = m.group(1).strip()
+
+    # Location
+    for pat in [
+        r'(?:Location|Based in|Lives in)[:\s]+([A-Za-z ,]+)',
+        r'\n([A-Za-z][A-Za-z ,]{4,40})\s*·\s*\d+\s*connection',
+    ]:
+        m = re.search(pat, md, re.IGNORECASE)
+        if m:
+            d['location'] = m.group(1).strip()
+            break
+
+    # Current job — first entry in Experience section
+    exp = re.search(
+        r'(?:Experience|Work Experience)(.*?)(?:Education|Skills|Recommendations|$)',
+        md, re.DOTALL | re.IGNORECASE
+    )
+    if exp:
+        block = exp.group(1)
+        jm = re.search(r'###\s+(.+?)\n(.+?)(?:\n|$)', block)
+        if jm:
+            d['job_title'] = jm.group(1).strip()
+            raw = jm.group(2).strip()
+            d['job_company_name'] = re.sub(r'^(?:at|@|·)\s*', '', raw).strip()
+
+    # Profile picture from LinkedIn CDN
+    m = re.search(r'!\[.*?\]\((https://media\.licdn\.com/[^)]+)\)', md)
+    if m:
+        d['profile_pic_url'] = m.group(1)
+
+    return d
+
+
+def scrape_linkedin_profile(li_url: str) -> dict:
+    """
+    Scrape a public LinkedIn profile via Firecrawl.
+    No user credentials or cookies used — only publicly accessible data.
+    """
+    md = _fc_scrape(li_url, wait_ms=4000)
+    if not md or len(md) < 80:
+        return {}
+    return _parse_linkedin_md(md)
+
+
+# ── Firecrawl-enhanced email finding ─────────────────────────────────────────
+
+def _find_email_fc_search(first: str, last: str, domain: str) -> str:
+    """Use Firecrawl web search to find a leaked/published email."""
+    email_re = re.compile(rf'[a-zA-Z0-9._%+-]+@{re.escape(domain)}', re.IGNORECASE)
+    for query in [
+        f'"{first} {last}" "@{domain}"',
+        f'"{first} {last}" {domain} email contact',
+    ]:
+        for r in _fc_search(query, limit=5):
+            text = " ".join([r.get("markdown", ""), r.get("description", ""), r.get("url", "")])
+            for email in email_re.findall(text):
+                local = email.split("@")[0].lower()
+                if (first.lower() in local or last.lower() in local
+                        or (len(last) >= 3 and last.lower()[:3] in local)):
+                    return email.lower()
+    return ""
+
+
+def _scrape_domain_emails_fc(domain: str) -> list:
+    """Scrape company website pages for emails using Firecrawl."""
+    email_re = re.compile(rf'[a-zA-Z0-9._%+-]+@{re.escape(domain)}', re.IGNORECASE)
+    pages = [
+        f"https://{domain}/team",
+        f"https://{domain}/about",
+        f"https://{domain}/contact",
+        f"https://{domain}/about-us",
+        f"https://{domain}/our-team",
+        f"https://{domain}/people",
+        f"https://{domain}/leadership",
+    ]
+    found = set()
+    for url in pages:
+        md = _fc_scrape(url, wait_ms=2000)
+        if md:
+            for e in email_re.findall(md):
+                found.add(e.lower())
+        if len(found) >= 20:
+            break
+    return [e for e in found if e.split("@")[0] not in _GENERIC_LOCALS]
+
+
+def find_domain_contacts(domain: str) -> list:
+    """
+    Find all staff emails at a company domain.
+    Scrapes team/about/contact pages. Returns list of {email, name_hint}.
+    """
+    all_emails = _scrape_domain_emails_fc(domain) or _scrape_company_pages(domain)
+    # Deduplicate and sort
+    seen = set()
+    out  = []
+    for email in all_emails:
+        if email not in seen:
+            seen.add(email)
+            out.append({"email": email})
+    return out
+
+
+def waterfall_find_email_v2(first: str, last: str, domain: str, company: str = "") -> dict:
+    """
+    Full email finding pipeline (Firecrawl-enhanced):
+    1. Firecrawl web search — leaked/published email
+    2. DuckDuckGo HTML search — fallback web search
+    3. Company website scrape (Firecrawl → raw HTTP) — detect pattern
+    4. SMTP probing — verify patterns against MX
+    5. Pattern + MX — best-guess fallback
+    """
+    if not first or not last or not domain:
+        return {}
+
+    # 1. Firecrawl web search
+    email = _find_email_fc_search(first, last, domain)
+    if email:
+        return {"email": email, "email_provider": "web_search", "email_score": 82}
+
+    # 2. DuckDuckGo HTML fallback
+    web = _web_search_email(first, last, domain, company)
+    if web.get("email"):
+        web.pop("_domain_emails", None)
+        return web
+    domain_emails_web = web.get("_domain_emails", [])
+
+    # 3. Company website scrape
+    site_emails = _scrape_domain_emails_fc(domain) or _scrape_company_pages(domain, first, last)
+    all_domain_emails = site_emails + domain_emails_web
+
+    if all_domain_emails:
+        fmt = _detect_pattern_from_emails(all_domain_emails, domain, first, last)
+        if fmt:
+            email = _apply_pattern(fmt, first, last, domain)
+            if email:
+                verified = _smtp_verify(email)
+                if verified is True:
+                    return {"email": email, "email_provider": "site_pattern", "email_score": 93}
+                elif verified is None:
+                    return {"email": email, "email_provider": "site_pattern", "email_score": 64}
+
+    # 4. SMTP probing
+    result = _smtp_probe_patterns(first, last, domain)
+    if result.get("email"):
+        return result
+
+    # 5. Pattern + MX fallback
+    if _has_mx(domain):
+        patterns = _all_patterns(first, last, domain)
+        if patterns:
+            return {"email": patterns[0], "email_provider": "pattern", "email_score": 22}
+
+    return {}
