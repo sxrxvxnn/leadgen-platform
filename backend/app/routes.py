@@ -866,14 +866,12 @@ async def prefill_company(
     except Exception as e:
         print(f"Prefill website fetch error: {e}")
 
-    # Fallback 1: DDGS search for LinkedIn URL by company name
+    # Fallback 1: web search for LinkedIn URL by company name
     if not linkedin_url:
         try:
             linkedin_url = search_linkedin_url_direct(name)
-            if linkedin_url:
-                print(f"LinkedIn URL found via DDGS for {name}: {linkedin_url}")
         except Exception as e:
-            print(f"DDGS LinkedIn fallback error: {e}")
+            print(f"LinkedIn URL search fallback error: {e}")
 
     # Fallback 2: Scrape company homepage for LinkedIn company URL
     if not linkedin_url:
@@ -1034,15 +1032,12 @@ def _sonar_team_scrape(domain: str, roles: list) -> list:
 
 
 def _ddgs_linkedin_search(company_name: str, roles: list) -> list:
-    """Use DuckDuckGo to find LinkedIn profiles of people at a company."""
-    try:
-        from ddgs import DDGS
-    except ImportError:
-        return []
+    """Find LinkedIn profiles of people at a company via web search."""
+    from .company_prefill import _web_search
 
     queries = []
     if roles:
-        for role in roles[:4]:  # cap to avoid too many queries
+        for role in roles[:4]:
             queries.append(f'site:linkedin.com/in/ "{company_name}" "{role}"')
     else:
         queries.append(f'site:linkedin.com/in/ "{company_name}"')
@@ -1050,54 +1045,41 @@ def _ddgs_linkedin_search(company_name: str, roles: list) -> list:
     seen_urls = set()
     people = []
 
-    try:
-        with DDGS() as ddgs:
-            for q in queries:
-                try:
-                    for r in ddgs.text(q, max_results=8):
-                        url = r.get("href", "")
-                        if "linkedin.com/in/" not in url:
-                            continue
-                        # normalise URL
-                        clean_url = url.split("?")[0].rstrip("/")
-                        if clean_url in seen_urls:
-                            continue
-                        seen_urls.add(clean_url)
+    for q in queries:
+        for r in _web_search(q, count=8):
+            url = r.get("href", "")
+            if "linkedin.com/in/" not in url:
+                continue
+            clean_url = url.split("?")[0].rstrip("/")
+            if clean_url in seen_urls:
+                continue
+            seen_urls.add(clean_url)
 
-                        title_text = r.get("title", "")
-                        body_text  = r.get("body", "")
+            title_text = r.get("title", "")
+            name, title = "", ""
+            if " - " in title_text:
+                parts = [p.strip() for p in title_text.split(" - ")]
+                name  = parts[0]
+                title = parts[1] if len(parts) > 1 else ""
+            else:
+                name = title_text.split("|")[0].strip()
+            name = name.replace("| LinkedIn", "").strip()
 
-                        # parse "First Last - Title - Company | LinkedIn"
-                        name, title = "", ""
-                        if " - " in title_text:
-                            parts = [p.strip() for p in title_text.split(" - ")]
-                            name  = parts[0]
-                            title = parts[1] if len(parts) > 1 else ""
-                        else:
-                            name = title_text.split("|")[0].strip()
+            name_parts = name.split(" ", 1)
+            first = name_parts[0] if name_parts else ""
+            last  = name_parts[1] if len(name_parts) > 1 else ""
 
-                        # strip "| LinkedIn" suffix
-                        name = name.replace("| LinkedIn", "").strip()
-
-                        name_parts = name.split(" ", 1)
-                        first = name_parts[0] if name_parts else ""
-                        last  = name_parts[1] if len(name_parts) > 1 else ""
-
-                        people.append({
-                            "first_name":   first,
-                            "last_name":    last,
-                            "name":         name,
-                            "title":        title,
-                            "company":      company_name,
-                            "location":     "",
-                            "linkedin_url": clean_url,
-                            "email":        "",
-                            "photo_url":    "",
-                        })
-                except Exception:
-                    continue
-    except Exception as ex:
-        print(f"DDGS people search error: {ex}")
+            people.append({
+                "first_name":   first,
+                "last_name":    last,
+                "name":         name,
+                "title":        title,
+                "company":      company_name,
+                "location":     "",
+                "linkedin_url": clean_url,
+                "email":        "",
+                "photo_url":    "",
+            })
 
     return people
 
@@ -1291,25 +1273,20 @@ async def detect_company_signals(
 
     raw_results = []
     try:
-        from ddgs import DDGS
+        from .company_prefill import _web_search
         queries = [
             f'"{name}" hiring security OR CISO OR compliance',
             f'"{name}" funding OR investment OR "Series A" OR "Series B"',
             f'"{name}" data breach OR regulatory OR GDPR OR ISO27001',
         ]
-        with _DDGS_SEM:
-            with DDGS() as ddgs:
-                for q in queries:
-                    try:
-                        for r in ddgs.text(q, max_results=4):
-                            raw_results.append({
-                                "title": r.get("title", ""),
-                                "body": r.get("body", ""),
-                                "url": r.get("href", ""),
-                            })
-                    except Exception:
-                        pass
-    except ImportError:
+        for q in queries:
+            for r in _web_search(q, count=4):
+                raw_results.append({
+                    "title": r.get("title", ""),
+                    "body": r.get("body", ""),
+                    "url": r.get("href", ""),
+                })
+    except Exception:
         pass
 
     search_ctx = ""
@@ -2474,21 +2451,53 @@ async def autofill_company_from_linkedin(
         # Step 2 — Scrape LinkedIn
         li = scrape_linkedin_data(linkedin_url, li_cookie=li_cookie)
 
-        # If LinkedIn was blocked, try DDGS snippet fallback
+        # If LinkedIn was blocked, try web search snippet fallback
         if not any([li.get("followers"), li.get("employee_count"), li.get("description")]):
             try:
-                from ddgs import DDGS
-                with DDGS() as ddgs:
-                    q = f'"{company_name}" linkedin followers employees'
-                    for sr in ddgs.text(q, max_results=5):
-                        body = sr.get("body", "")
-                        if not li.get("followers"):
-                            import re as _re2
-                            m = _re2.search(r'([\d,]+)\s*followers', body, _re2.I)
-                            if m: li["followers"] = m.group(0).strip()
-                        if not li.get("description") and len(body) > 40:
-                            li["description"] = body[:280]
-                        if li.get("followers") and li.get("description"): break
+                from .company_prefill import _web_search
+                import re as _re2
+                for sr in _web_search(f'"{company_name}" linkedin followers employees', count=5):
+                    body = sr.get("body", "")
+                    if not li.get("followers"):
+                        m = _re2.search(r'([\d,]+)\s*followers', body, _re2.I)
+                        if m: li["followers"] = m.group(0).strip()
+                    if not li.get("description") and len(body) > 40:
+                        li["description"] = body[:280]
+                    if li.get("followers") and li.get("description"): break
+            except Exception:
+                pass
+
+        # ProxyCurl fallback — fills industry, founded, specialties when HTML scrape misses them
+        # (LinkedIn hides these from unauthenticated page views; ProxyCurl returns structured data)
+        _pcurl_key = os.environ.get("PROXYCURL_API_KEY", "")
+        missing_structured = not li.get("industry") or not li.get("founded") or not li.get("specialties")
+        if _pcurl_key and missing_structured:
+            try:
+                pc_res = requests.get(
+                    "https://nubela.co/proxycurl/api/linkedin/company",
+                    params={"url": linkedin_url, "use_cache": "if-present", "fallback_to_cache": "on-error"},
+                    headers={"Authorization": f"Bearer {_pcurl_key}"},
+                    timeout=15,
+                )
+                if pc_res.status_code == 200:
+                    pc = pc_res.json()
+                    if not li.get("industry") and pc.get("industry"):
+                        li["industry"] = pc["industry"]
+                    if not li.get("founded") and pc.get("founded_year"):
+                        li["founded"] = str(pc["founded_year"])
+                    if not li.get("specialties") and pc.get("specialities"):
+                        sp = pc["specialities"]
+                        li["specialties"] = ", ".join(str(s) for s in sp) if isinstance(sp, list) else str(sp)
+                    if not li.get("followers") and pc.get("follower_count"):
+                        li["followers"] = f"{pc['follower_count']:,} followers"
+                    if not li.get("employee_count") and pc.get("company_size_on_linkedin"):
+                        li["employee_count"] = str(pc["company_size_on_linkedin"])
+                    if not li.get("description") and pc.get("description"):
+                        li["description"] = pc["description"]
+                    if not li.get("location") and pc.get("hq"):
+                        hq = pc["hq"]
+                        parts = [hq.get("city"), hq.get("state"), hq.get("country")]
+                        li["location"] = ", ".join(p for p in parts if p)
             except Exception:
                 pass
 
@@ -5986,100 +5995,127 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
     return {"sent": True, "to": to_email}
 
 
-# ─── PROSPECT SEARCH (People Data Labs — 800M+ profiles) ───────────────────────
-# ─── LIVE ENRICHMENT (Proxycurl — real-time LinkedIn scrape) ────────────────────
+# ─── PROSPECT SEARCH (People Data Labs — 800M+ profiles) ──────────────────────
+# ─── LIVE ENRICHMENT (Firecrawl — LinkedIn scrape + proprietary email finder) ─
 
-_PROXYCURL_KEY  = os.environ.get("PROXYCURL_API_KEY", "")
-_PROXYCURL_BASE = "https://nubela.co/proxycurl/api"
+from app.enrichment import (
+    extract_domain as _extract_domain,
+    waterfall_find_email_v2 as _find_email,
+    scrape_linkedin_profile as _scrape_linkedin,
+    find_linkedin_url as _find_linkedin_url,
+    find_domain_contacts as _find_domain_contacts,
+    waterfall_find_email as _waterfall_find_email,
+)
+
 
 @router.post("/prospect/enrich-live")
 async def prospect_enrich_live(payload: dict, authorization: str = Header(...)):
-    """Enrich a person with live data scraped from LinkedIn via Proxycurl."""
+    """
+    Enrich a PDL prospect with live data.
+    1. Scrape their LinkedIn public profile via Firecrawl (no user credentials).
+    2. Find their work email via proprietary pipeline (web search → site scrape → SMTP).
+    3. Merge live data over PDL data and return.
+    """
     get_user_id(authorization)
-    if not _PROXYCURL_KEY:
-        raise HTTPException(status_code=503, detail="PROXYCURL_API_KEY not configured")
-
     person = payload.get("person", {})
 
-    # ── Step 1: resolve a LinkedIn URL ──────────────────────────────────────────
+    # ── Resolve names ────────────────────────────────────────────────────────────
+    fn = (person.get("first_name") or "").strip()
+    ln = (person.get("last_name") or "").strip()
+    if not fn and person.get("full_name"):
+        parts = (person.get("full_name") or "").split()
+        fn = parts[0] if parts else ""
+        ln = " ".join(parts[1:]) if len(parts) > 1 else ""
+
+    # ── Resolve LinkedIn URL ─────────────────────────────────────────────────────
     li_url = (person.get("linkedin_url") or "").strip()
     if li_url and not li_url.startswith("http"):
         li_url = "https://linkedin.com/in/" + li_url
+    if not li_url and fn and ln:
+        company = person.get("job_company_name") or ""
+        li_url  = _find_linkedin_url(fn, ln, company)
 
-    if not li_url:
-        # Fall back to name + company-domain lookup
-        fn = (person.get("first_name") or "").strip()
-        ln = (person.get("last_name") or "").strip()
-        if not fn and person.get("full_name"):
-            parts = (person["full_name"] or "").split()
-            fn = parts[0] if parts else ""
-            ln = " ".join(parts[1:]) if len(parts) > 1 else ""
-        raw_domain = (person.get("job_company_website") or "").strip()
-        domain = raw_domain.replace("https://", "").replace("http://", "").split("/")[0]
-        if fn and ln and domain:
-            lkp = requests.get(
-                f"{_PROXYCURL_BASE}/v2/person/lookup",
-                params={"first_name": fn, "last_name": ln, "company_domain": domain,
-                        "similarity_checks": "include"},
-                headers={"Authorization": f"Bearer {_PROXYCURL_KEY}"},
-                timeout=20,
-            )
-            if lkp.status_code == 200:
-                li_url = lkp.json().get("linkedin_profile_url", "")
+    # ── Scrape LinkedIn public profile ───────────────────────────────────────────
+    li_data: dict = {}
+    if li_url:
+        li_data = _scrape_linkedin(li_url)
 
-    if not li_url:
-        raise HTTPException(status_code=404,
-                            detail="No LinkedIn URL found — cannot enrich live without a profile link")
+    # ── Find work email ──────────────────────────────────────────────────────────
+    raw_domain = (person.get("job_company_website") or "").strip()
+    domain     = _extract_domain(raw_domain) if raw_domain else ""
+    if not domain:
+        company_name = (person.get("job_company_name") or "").lower().replace(" ", "")
+        domain = f"{company_name}.com" if company_name else ""
 
-    # ── Step 2: scrape the LinkedIn profile ─────────────────────────────────────
-    res = requests.get(
-        f"{_PROXYCURL_BASE}/v2/linkedin",
-        params={
-            "url":               li_url,
-            "personal_email":    "include",   # +1 credit but gives real email
-            "inferred_salary":   "skip",
-            "skills":            "skip",
-            "use_cache":         "if-present",   # Proxycurl cache ≤ 29 days; still fresher than PDL
-            "fallback_to_cache": "on-error",
-        },
-        headers={"Authorization": f"Bearer {_PROXYCURL_KEY}"},
-        timeout=30,
-    )
-    if res.status_code == 404:
-        raise HTTPException(status_code=404, detail="LinkedIn profile not found")
-    if res.status_code == 429:
-        raise HTTPException(status_code=429, detail="Proxycurl rate limit — try again shortly")
-    if res.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Proxycurl returned {res.status_code}")
+    email_result: dict = {}
+    existing_email = (person.get("work_email") or "").strip()
+    if not existing_email and fn and ln and domain:
+        email_result = _find_email(fn, ln, domain, person.get("job_company_name") or "")
 
-    d = res.json()
-
-    # Current job = first experience with no end date; fall back to first entry
-    experiences = d.get("experiences") or []
-    current = next((e for e in experiences if not e.get("ends_at")),
-                   experiences[0] if experiences else {})
-
-    pid = d.get("public_identifier")
-    canonical_li = f"https://www.linkedin.com/in/{pid}/" if pid else li_url
-
-    # Merge: live data wins, PDL is the fallback for anything missing
+    # ── Merge: live data wins, PDL as fallback ───────────────────────────────────
     enriched = {
         **person,
-        "full_name":         d.get("full_name")                              or person.get("full_name"),
-        "first_name":        d.get("first_name")                             or person.get("first_name"),
-        "last_name":         d.get("last_name")                              or person.get("last_name"),
-        "job_title":         d.get("occupation") or current.get("title")     or person.get("job_title"),
-        "job_company_name":  current.get("company")                          or person.get("job_company_name"),
-        "linkedin_url":      canonical_li,
-        "location_locality": d.get("city")                                   or person.get("location_locality"),
-        "location_region":   d.get("state")                                  or person.get("location_region"),
-        "location_country":  d.get("country_full_name")                      or person.get("location_country"),
-        "work_email":        (d.get("personal_emails") or [None])[0]         or person.get("work_email"),
-        "summary":           d.get("summary")                                or person.get("summary"),
-        "profile_pic_url":   d.get("profile_pic_url")                        or person.get("profile_pic_url"),
-        "live_verified":     True,
+        "full_name":         li_data.get("full_name")        or person.get("full_name"),
+        "job_title":         li_data.get("job_title")        or person.get("job_title"),
+        "job_company_name":  li_data.get("job_company_name") or person.get("job_company_name"),
+        "linkedin_url":      li_url                          or person.get("linkedin_url"),
+        "profile_pic_url":   li_data.get("profile_pic_url")  or person.get("profile_pic_url"),
+        "summary":           li_data.get("headline")         or person.get("summary"),
+        "work_email":        email_result.get("email")       or existing_email or person.get("work_email"),
+        "email_score":       email_result.get("email_score"),
+        "email_provider":    email_result.get("email_provider"),
+        "live_verified":     bool(li_data or email_result),
     }
+    if not enriched.get("live_verified"):
+        raise HTTPException(status_code=404, detail="Could not enrich — no LinkedIn URL and no email found")
+
     return {"person": enriched}
+
+
+@router.post("/prospect/find-email")
+async def prospect_find_email(payload: dict, authorization: str = Header(...)):
+    """
+    Standalone email finder — Hunter.io replacement.
+    Input: {first_name, last_name, domain, company}
+    Returns: {email, score, provider, patterns}
+    """
+    get_user_id(authorization)
+    first   = (payload.get("first_name") or "").strip()
+    last    = (payload.get("last_name")  or "").strip()
+    domain  = (payload.get("domain")     or "").strip().lower()
+    company = (payload.get("company")    or "").strip()
+
+    if not first or not last or not domain:
+        raise HTTPException(status_code=400, detail="first_name, last_name, and domain are required")
+
+    result = _find_email(first, last, domain, company)
+
+    from app.enrichment import _all_patterns
+    patterns = _all_patterns(first, last, domain)
+
+    return {
+        "email":    result.get("email"),
+        "score":    result.get("email_score", 0),
+        "provider": result.get("email_provider"),
+        "found":    bool(result.get("email")),
+        "patterns": patterns[:6],
+    }
+
+
+@router.post("/prospect/domain-contacts")
+async def prospect_domain_contacts(payload: dict, authorization: str = Header(...)):
+    """
+    Find all staff contacts at a company domain — Hunter domain search replacement.
+    Input: {domain}
+    Returns: {contacts: [{email}], total}
+    """
+    get_user_id(authorization)
+    domain = (payload.get("domain") or "").strip().lower()
+    if not domain or "." not in domain:
+        raise HTTPException(status_code=400, detail="Valid domain required (e.g. stripe.com)")
+
+    contacts = _find_domain_contacts(domain)
+    return {"contacts": contacts, "total": len(contacts), "domain": domain}
 
 
 
@@ -6380,6 +6416,129 @@ async def delete_webhook(webhook_id: str, authorization: str = Header(...)):
     validate_uuid(webhook_id)
     supabase.table("webhooks").delete().eq("id", webhook_id).eq("user_id", user_id).execute()
     return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SONAR DATABASE — proprietary contact database (GitHub + company sites)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from app.github_scraper import run_scrape_job, SCRAPE_QUERIES
+import threading as _db_thread
+
+_scrape_lock = _db_thread.Lock()
+_scrape_state: dict = {"running": False, "last_run": None, "last_result": None, "query_index": 0}
+
+
+@router.get("/database/stats")
+async def database_stats(authorization: str = Header(...)):
+    """Total contacts, breakdown by source, recent additions."""
+    get_user_id(authorization)
+    total_res  = supabase.table("sonar_contacts").select("id", count="exact").execute()
+    email_res  = supabase.table("sonar_contacts").select("id", count="exact").not_.is_("email", "null").execute()
+    github_res = supabase.table("sonar_contacts").select("id", count="exact").eq("source", "github").execute()
+    recent_res = supabase.table("sonar_contacts").select("*").order("scraped_at", desc=True).limit(5).execute()
+
+    return {
+        "total":        total_res.count or 0,
+        "with_email":   email_res.count or 0,
+        "by_source":    {"github": github_res.count or 0},
+        "recent":       recent_res.data or [],
+        "scrape_state": {
+            "running":     _scrape_state["running"],
+            "last_run":    _scrape_state["last_run"],
+            "last_result": _scrape_state["last_result"],
+        },
+    }
+
+
+@router.post("/database/search")
+async def database_search(payload: dict, authorization: str = Header(...)):
+    """
+    Search the proprietary Sonar contact database.
+    Supports: name, email, company, domain, location, source filters.
+    """
+    get_user_id(authorization)
+
+    q        = (payload.get("q") or "").strip()
+    company  = (payload.get("company") or "").strip()
+    domain   = (payload.get("domain") or "").strip().lower()
+    location = (payload.get("location") or "").strip()
+    source   = (payload.get("source") or "").strip()
+    page     = max(int(payload.get("page", 1)), 1)
+    per_page = min(int(payload.get("per_page", 25)), 100)
+    offset   = (page - 1) * per_page
+
+    query = supabase.table("sonar_contacts").select("*", count="exact")
+
+    if q:
+        # Search across name and email
+        query = query.or_(f"full_name.ilike.%{q}%,email.ilike.%{q}%")
+    if company:
+        query = query.ilike("job_company_name", f"%{company}%")
+    if domain:
+        query = query.eq("domain", domain)
+    if location:
+        query = query.or_(f"location_locality.ilike.%{location}%,location_country.ilike.%{location}%")
+    if source:
+        query = query.eq("source", source)
+
+    result = query.order("followers", desc=True).range(offset, offset + per_page - 1).execute()
+
+    total       = result.count or 0
+    total_pages = max((total + per_page - 1) // per_page, 1)
+
+    return {
+        "contacts":    result.data or [],
+        "total":       total,
+        "page":        page,
+        "total_pages": total_pages,
+    }
+
+
+@router.post("/database/scrape")
+async def database_scrape(authorization: str = Header(...)):
+    """
+    Trigger a GitHub scrape run (admin only).
+    Runs synchronously with a small batch — keep max_users low enough to finish within Vercel's 60s Hobby limit.
+    """
+    user_id = get_user_id(authorization)
+    profile = supabase.table("profiles").select("role").eq("id", user_id).maybe_single().execute()
+    if (profile.data or {}).get("role") not in ("admin",):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    if _scrape_state.get("running"):
+        raise HTTPException(status_code=409, detail="Scrape already running")
+
+    _scrape_state["running"] = True
+    try:
+        from datetime import datetime as _dt
+        qi     = _scrape_state.get("query_index", 0)
+        result = run_scrape_job(supabase, query_index=qi, max_users=50)
+        _scrape_state["last_result"]  = result
+        _scrape_state["last_run"]     = _dt.utcnow().isoformat() + "Z"
+        _scrape_state["query_index"]  = (qi + 1) % len(SCRAPE_QUERIES)
+        return {"ok": True, **result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Scrape failed: {exc}") from exc
+    finally:
+        _scrape_state["running"] = False
+
+
+@router.post("/cron/scrape-github")
+async def cron_scrape_github(request: Request):
+    """Vercel cron endpoint — runs daily to grow the contact database."""
+    secret = os.environ.get("CRON_SECRET", "")
+    if secret:
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {secret}":
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+    qi     = _scrape_state.get("query_index", 0)
+    result = run_scrape_job(supabase, query_index=qi, max_users=100)
+    _scrape_state["last_result"] = result
+    _scrape_state["last_run"]    = datetime.utcnow().isoformat() + "Z"
+    _scrape_state["query_index"] = (qi + 1) % len(SCRAPE_QUERIES)
+    return {"ok": True, **result}
 
 
 @router.post("/webhooks/{webhook_id}/test")

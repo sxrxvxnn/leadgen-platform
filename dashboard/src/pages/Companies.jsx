@@ -113,7 +113,6 @@ const KEY_FIELDS = [
   { key: 'linkedin_url', label: 'LinkedIn' },
   { key: 'headquarters', label: 'HQ' },
   { key: 'size',         label: 'size' },
-  { key: 'industry',     label: 'industry' },
   { key: 'description',  label: 'description' },
 ]
 
@@ -557,8 +556,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         </div>
       )}
 
-      {/* Info grid */}
-      <div style={card.infoGrid}>
+      {/* Info grid — 3-column layout */}
+      <div style={{ ...card.infoGrid, gridTemplateColumns: '1fr 1fr 1fr' }}>
         <div style={card.infoItem}>
           <p style={card.infoLabel}>SIZE</p>
           <p style={card.infoValue}>{company.size || '—'}</p>
@@ -568,39 +567,51 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           <p style={card.infoValue}>{company.headquarters || '—'}</p>
         </div>
         <div style={card.infoItem}>
+          <p style={card.infoLabel}>FOLLOWERS</p>
+          <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
+        </div>
+        <div style={card.infoItem}>
           <p style={card.infoLabel}>WEBSITE</p>
           <EditableWebsite value={company.website} onSave={v => onUpdate(company.id, { website: v })} />
         </div>
         <div style={card.infoItem}>
-          <p style={card.infoLabel}>FOLLOWERS</p>
-          <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
+          <p style={card.infoLabel}>INDUSTRY</p>
+          <p style={card.infoValue}>{company.industry || '—'}</p>
         </div>
-        {company.industry && (
-          <div style={card.infoItem}>
-            <p style={card.infoLabel}>INDUSTRY</p>
-            <p style={card.infoValue}>{company.industry}</p>
+        <div style={card.infoItem}>
+          <p style={card.infoLabel}>FOUNDED</p>
+          <p style={card.infoValue}>{company.founded || '—'}</p>
+        </div>
+        <div style={{ ...card.infoItem, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <p style={card.infoLabel}>TYPE · SAAS</p>
+          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
+            {company.is_saas !== null && company.is_saas !== undefined && (
+              <span style={{
+                fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
+                padding: '2px 7px', borderRadius: '4px', display: 'inline-block',
+                background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
+                color: company.is_saas ? '#5b8db8' : '#a1a1a1',
+                border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}`,
+              }}>
+                {company.is_saas ? 'SaaS' : 'Non-SaaS'}
+              </span>
+            )}
+            {!typeBadgeStyle && (company.is_saas === null || company.is_saas === undefined) && <p style={{ ...card.infoValue, margin: 0 }}>—</p>}
           </div>
-        )}
-        {company.is_saas !== null && company.is_saas !== undefined && (
-          <div style={card.infoItem}>
-            <p style={card.infoLabel}>SAAS</p>
-            <span style={{
-              fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
-              padding: '2px 7px', borderRadius: '4px', display: 'inline-block',
-              background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
-              color: company.is_saas ? '#5b8db8' : '#a1a1a1',
-              border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}`,
-            }}>
-              {company.is_saas ? 'SaaS' : 'Non-SaaS'}
-            </span>
-          </div>
-        )}
-        {company.founded && (
-          <div style={card.infoItem}>
-            <p style={card.infoLabel}>FOUNDED</p>
-            <p style={card.infoValue}>{company.founded}</p>
-          </div>
-        )}
+        </div>
+        <div style={{ ...card.infoItem, gridColumn: '2 / -1' }}>
+          <p style={card.infoLabel}>SPECIALTIES</p>
+          {company.specialties ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '3px' }}>
+              {company.specialties.split(',').map(s => s.trim()).filter(Boolean).map(spec => (
+                <span key={spec} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 5px', letterSpacing: '0.02em' }}>{spec}</span>
+              ))}
+            </div>
+          ) : (
+            <p style={{ ...card.infoValue, margin: 0 }}>—</p>
+          )}
+        </div>
         {company.phone && (
           <div style={{ ...card.infoItem, gridColumn: '1 / -1' }}>
             <p style={card.infoLabel}>PHONE</p>
@@ -610,18 +621,6 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           </div>
         )}
       </div>
-
-      {/* Specialties */}
-      {company.specialties && (
-        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border)' }}>
-          <p style={{ ...card.infoLabel, marginBottom: '5px' }}>SPECIALTIES</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {company.specialties.split(',').map(s => s.trim()).filter(Boolean).map(spec => (
-              <span key={spec} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 6px', letterSpacing: '0.02em' }}>{spec}</span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Compliance badges */}
       {company.compliance && (
@@ -1228,6 +1227,7 @@ export default function Companies() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.6), ease: [0.22, 1, 0.36, 1] }}
+                style={{ height: '100%' }}
               >
                 <CompanyCard
                   company={company}
@@ -1287,6 +1287,7 @@ const card = {
     background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.6)',
     borderRadius: '8px',
     display: 'flex', flexDirection: 'column',
+    height: '100%',
   },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px 10px', gap: '10px' },
   headerLeft: { flex: 1 },

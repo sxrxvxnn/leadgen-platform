@@ -1,9 +1,50 @@
+import os
 import re
 import json
 import html as _html
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import unquote, urlparse, parse_qs
+
+
+# ── Search helpers ────────────────────────────────────────────────────────────
+
+def _brave_search(query: str, count: int = 8) -> list:
+    """Brave Search API — 2 000 free queries/month, much more reliable than DDGS."""
+    key = os.environ.get("BRAVE_API_KEY", "")
+    if not key:
+        return []
+    try:
+        res = requests.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            params={"q": query, "count": min(count, 20)},
+            headers={"Accept": "application/json", "Accept-Encoding": "gzip", "X-Subscription-Token": key},
+            timeout=10,
+        )
+        if res.status_code == 200:
+            return [
+                {"href": r.get("url", ""), "title": r.get("title", ""), "body": r.get("description", "")}
+                for r in res.json().get("web", {}).get("results", [])
+            ]
+    except Exception:
+        pass
+    return []
+
+
+def _web_search(query: str, count: int = 8) -> list:
+    """Brave Search first (if BRAVE_API_KEY set), DDGS fallback."""
+    results = _brave_search(query, count)
+    if results:
+        return results
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            return [
+                {"href": r.get("href", r.get("url", "")), "title": r.get("title", ""), "body": r.get("body", "")}
+                for r in ddgs.text(query, max_results=count)
+            ]
+    except Exception:
+        return []
 
 
 _SKIP_DOMAINS = {
@@ -67,34 +108,22 @@ def search_company_website(company_name: str) -> str | None:
     if guessed:
         return guessed
 
-    # 2. Search with ddgs and require the domain to be relevant to the company name
-    try:
-        from ddgs import DDGS
-        queries = [
-            f'"{company_name}" official website',
-            f'{company_name} company official site',
-        ]
-        with DDGS() as ddgs:
-            for q in queries:
-                try:
-                    for r in ddgs.text(q, max_results=8):
-                        href = r.get('href', '')
-                        title = r.get('title', '')
-                        if not href:
-                            continue
-                        domain = urlparse(href).netloc.replace('www.', '')
-                        # Match whole domain (not substring) to avoid "x.com" hitting "sequantix.com"
-                        if any(domain == s or domain.endswith('.' + s) for s in _SKIP_DOMAINS):
-                            continue
-                        # Require domain or title to mention the company
-                        if _domain_is_relevant(domain, company_name) or company_name.lower() in title.lower():
-                            return href
-                except Exception:
-                    continue
-    except ImportError:
-        pass
-    except Exception as e:
-        print(f"DDGS search error: {e}")
+    # 2. Search and require the domain to be relevant to the company name
+    queries = [
+        f'"{company_name}" official website',
+        f'{company_name} company official site',
+    ]
+    for q in queries:
+        for r in _web_search(q, count=8):
+            href = r.get('href', '')
+            title = r.get('title', '')
+            if not href:
+                continue
+            domain = urlparse(href).netloc.replace('www.', '')
+            if any(domain == s or domain.endswith('.' + s) for s in _SKIP_DOMAINS):
+                continue
+            if _domain_is_relevant(domain, company_name) or company_name.lower() in title.lower():
+                return href
 
     return None
 
@@ -156,24 +185,16 @@ def search_linkedin_url_by_domain(website_url: str) -> str | None:
         f'linkedin.com/company {clean}',
     ]
     _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
-    try:
-        from ddgs import DDGS
-        with DDGS() as ddgs:
-            for q in queries:
-                try:
-                    for r in ddgs.text(q, max_results=6):
-                        href = r.get('href', '') or r.get('url', '')
-                        match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
-                        if not match:
-                            continue
-                        slug = match.group(1)
-                        if slug in _SKIP_SLUGS:
-                            continue
-                        return f'https://www.linkedin.com/company/{slug}/'
-                except Exception:
-                    continue
-    except Exception as e:
-        print(f"DDGS domain LinkedIn search error for {clean}: {e}")
+    for q in queries:
+        for r in _web_search(q, count=6):
+            href = r.get('href', '') or r.get('url', '')
+            match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+            if not match:
+                continue
+            slug = match.group(1)
+            if slug in _SKIP_SLUGS:
+                continue
+            return f'https://www.linkedin.com/company/{slug}/'
     return None
 
 
@@ -198,36 +219,23 @@ def search_linkedin_url_direct(company_name: str) -> str | None:
     _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
 
     fallback_slug = None
-    try:
-        from ddgs import DDGS
-        with DDGS() as ddgs:
-            for q in queries:
-                try:
-                    for r in ddgs.text(q, max_results=8):
-                        href = r.get('href', '') or r.get('url', '')
-                        match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
-                        if not match:
-                            continue
-                        slug = match.group(1)
-                        if slug in _SKIP_SLUGS:
-                            continue
-                        # For Indian entities: prefer slugs containing "india"
-                        if is_indian:
-                            if 'india' in slug.lower():
-                                # Perfect match — India entity slug
-                                return f'https://www.linkedin.com/company/{slug}/'
-                            else:
-                                # Keep as fallback in case no India-slug is found
-                                if not fallback_slug:
-                                    fallback_slug = slug
-                                continue
-                        return f'https://www.linkedin.com/company/{slug}/'
-                except Exception:
+    for q in queries:
+        for r in _web_search(q, count=8):
+            href = r.get('href', '') or r.get('url', '')
+            match = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+            if not match:
+                continue
+            slug = match.group(1)
+            if slug in _SKIP_SLUGS:
+                continue
+            if is_indian:
+                if 'india' in slug.lower():
+                    return f'https://www.linkedin.com/company/{slug}/'
+                else:
+                    if not fallback_slug:
+                        fallback_slug = slug
                     continue
-    except ImportError:
-        pass
-    except Exception as e:
-        print(f"DDGS LinkedIn search error: {e}")
+            return f'https://www.linkedin.com/company/{slug}/'
 
     # Use best fallback slug found (Indian entity whose slug doesn't contain "india")
     if fallback_slug:
@@ -309,11 +317,32 @@ _LI_HEADERS = {
 
 
 def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> str | None:
-    """Try fetching a LinkedIn URL with multiple user agents, return HTML on first 200.
-    fast=True uses shorter timeout and fewer UAs — for bulk autofill where speed matters.
-    li_cookie: value of the 'li_at' session cookie — when provided, LinkedIn serves the
-    full authenticated page with all About fields instead of the login wall.
+    """Fetch a LinkedIn page's HTML.
+    Tries Firecrawl first (bypasses anti-bot), falls back to direct HTTP with multiple UAs.
+    fast=True skips Firecrawl (too slow for bulk) and uses shorter direct-HTTP timeout.
+    li_cookie: 'li_at' session cookie for authenticated scraping.
     """
+    _LOGIN_WALL = 'keep in touch with people you know'
+
+    # Firecrawl — handles JS rendering and LinkedIn anti-bot; skip in fast/bulk mode
+    if not fast and not li_cookie:
+        fc_key = os.environ.get("FIRECRAWL_API_KEY", "")
+        if fc_key:
+            try:
+                fc_res = requests.post(
+                    "https://api.firecrawl.dev/v1/scrape",
+                    headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
+                    json={"url": url, "formats": ["html"], "timeout": 30000},
+                    timeout=35,
+                )
+                if fc_res.status_code == 200:
+                    html = fc_res.json().get("data", {}).get("html", "")
+                    if html and len(html) > 3000 and _LOGIN_WALL not in html[:5000]:
+                        return html
+            except Exception:
+                pass
+
+    # Direct HTTP fallback — multiple user agents
     ua_list = _LI_UA_LIST[:2] if fast else _LI_UA_LIST
     timeout = 4 if fast else 8
     cookie_header = f'li_at={li_cookie}' if li_cookie else ''
@@ -324,8 +353,7 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
                 hdrs['Cookie'] = cookie_header
             r = requests.get(url, headers=hdrs, timeout=timeout, allow_redirects=True)
             if r.status_code == 200 and len(r.text) > 3000:
-                # Reject the generic login wall (og:description is the sign-in pitch)
-                if 'keep in touch with people you know' in r.text[:5000]:
+                if _LOGIN_WALL in r.text[:5000]:
                     continue
                 return r.text
         except Exception:

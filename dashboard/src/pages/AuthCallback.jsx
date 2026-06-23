@@ -14,9 +14,15 @@ export default function AuthCallback() {
   useEffect(() => {
     async function exchange() {
       try {
-        const code = new URLSearchParams(window.location.search).get('code')
+        const params = new URLSearchParams(window.location.search)
+        const oauthError = params.get('error')
+        if (oauthError) {
+          navigate('/login', { replace: true })
+          return
+        }
+        const code = params.get('code')
         if (!code) {
-          setStatus('Invalid callback — no code provided.')
+          navigate('/login', { replace: true })
           return
         }
         const { data, error } = await supabase.auth.exchangeCodeForSession(code)

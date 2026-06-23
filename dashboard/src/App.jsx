@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useCallback } from 'react'
+import { lazy, Suspense, useState, useCallback, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
@@ -26,12 +26,27 @@ const Sequences       = lazy(() => import('./pages/Sequences'))
 const Tasks           = lazy(() => import('./pages/Tasks'))
 const Analytics       = lazy(() => import('./pages/Analytics'))
 const Prospect        = lazy(() => import('./pages/Prospect'))
+const EmailFinder     = lazy(() => import('./pages/EmailFinder'))
+const Database        = lazy(() => import('./pages/Database'))
 const Unsubscribes    = lazy(() => import('./pages/Unsubscribes'))
 const ForgotPassword  = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
 const Terms           = lazy(() => import('./pages/Terms'))
 const BookingPage     = lazy(() => import('./pages/BookingPage'))
+
+class ChunkErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { errored: false } }
+  static getDerivedStateFromError(e) {
+    const isChunk = e?.name === 'ChunkLoadError' || e?.message?.includes('Failed to fetch dynamically imported module') || e?.message?.includes('Importing a module script failed')
+    return isChunk ? { errored: true } : null
+  }
+  componentDidCatch(e) {
+    const isChunk = e?.name === 'ChunkLoadError' || e?.message?.includes('Failed to fetch dynamically imported module') || e?.message?.includes('Importing a module script failed')
+    if (isChunk) window.location.reload()
+  }
+  render() { return this.state.errored ? null : this.props.children }
+}
 
 function PageFallback() {
   return (
@@ -40,6 +55,13 @@ function PageFallback() {
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
+}
+
+function AdminRoute({ children }) {
+  const { profile, profileLoading } = useAuth()
+  if (profileLoading) return null
+  if (profile?.role !== 'admin') return <Navigate to="/dashboard" replace />
+  return children
 }
 
 function RootRedirect() {
@@ -71,6 +93,7 @@ export default function App() {
       <AuthProvider>
         <BulkOpsProvider>
           {!loaderDone && <PageLoader onDone={handleLoaderDone} />}
+          <ChunkErrorBoundary>
           <Suspense fallback={<PageFallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
@@ -87,6 +110,8 @@ export default function App() {
                 <Route path="/companies" element={<Companies />} />
                 <Route path="/directory" element={<CompanyDirectory />} />
                 <Route path="/prospect" element={<Prospect />} />
+                <Route path="/email-finder" element={<EmailFinder />} />
+                <Route path="/database" element={<AdminRoute><Database /></AdminRoute>} />
                 <Route path="/sequences" element={<Sequences />} />
                 <Route path="/tasks"     element={<Tasks />} />
                 <Route path="/analytics" element={<Analytics />} />
@@ -106,6 +131,7 @@ export default function App() {
               <Route path="*" element={<RootRedirect />} />
             </Routes>
           </Suspense>
+          </ChunkErrorBoundary>
         </BulkOpsProvider>
       </AuthProvider>
       </PostHogProvider>

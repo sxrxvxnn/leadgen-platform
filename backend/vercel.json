@@ -1,15 +1,11 @@
 {
   "version": 2,
   "alias": ["leadgenengineplatform-api.vercel.app"],
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
@@ -24,6 +20,10 @@
     {
       "path": "/api/sequences/check-replies",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/scrape-github",
+      "schedule": "0 2 * * *"
     }
   ]
 }
