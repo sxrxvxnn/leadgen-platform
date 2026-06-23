@@ -5,6 +5,7 @@ import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
 import ActivityFeed from './ActivityFeed'
 import TaskList from './TaskList'
+import { useAuth } from '../context/AuthContext'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -105,7 +106,10 @@ function DealValueSection({ lead, onUpdate }) {
   )
 }
 
+function lsGetU(user, key, fallback = '') { return localStorage.getItem(user?.id ? `${key}_${user.id}` : key) ?? localStorage.getItem(key) ?? fallback }
+
 export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
+  const { user } = useAuth()
   const [scoring, setScoring]     = useState(false)
   const [drafting, setDrafting]   = useState(false)
   const [draft, setDraft]         = useState(null)
@@ -214,12 +218,12 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   async function handleSendEmail() {
     if (!draft) return
     const smtpConfig = {
-      smtp_host:  localStorage.getItem('smtpHost')      || 'smtp.gmail.com',
-      smtp_port:  localStorage.getItem('smtpPort')      || '587',
-      smtp_user:  localStorage.getItem('smtpUser')      || '',
-      smtp_pass:  localStorage.getItem('smtpPass')      || '',
-      from_name:  localStorage.getItem('smtpFromName')  || '',
-      from_email: localStorage.getItem('smtpFromEmail') || '',
+      smtp_host:  lsGetU(user, 'smtpHost',      'smtp.gmail.com'),
+      smtp_port:  lsGetU(user, 'smtpPort',      '587'),
+      smtp_user:  lsGetU(user, 'smtpUser'),
+      smtp_pass:  lsGetU(user, 'smtpPass'),
+      from_name:  lsGetU(user, 'smtpFromName'),
+      from_email: lsGetU(user, 'smtpFromEmail'),
     }
     if (!smtpConfig.smtp_user || !smtpConfig.smtp_pass) {
       setSendResult({ error: 'Configure SMTP credentials in Settings → Email Sending first.' })
@@ -408,8 +412,18 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
               </div>
             )}
             {!L.email && <p style={{ fontFamily: SANS, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontStyle: 'italic' }}>No email — use Email button in the table to find one</p>}
-            <Field label="Phone" value={L.phone} mono />
-            <Field label="Location" value={L.location} />
+            {(L.phone || L.location) && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'rgba(196,193,189,0.35)', border: '1px solid rgba(196,193,189,0.5)', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
+                <div style={{ padding: '8px 12px', background: 'var(--bg)' }}>
+                  <p style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>Phone</p>
+                  {L.phone ? <a href={`tel:${L.phone}`} style={{ fontFamily: MONO, fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>{L.phone}</a> : <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>—</p>}
+                </div>
+                <div style={{ padding: '8px 12px', background: 'var(--bg)' }}>
+                  <p style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>Location</p>
+                  <p style={{ fontFamily: MONO, fontSize: 11, color: L.location ? 'var(--text)' : 'var(--text-muted)', margin: 0 }}>{L.location || '—'}</p>
+                </div>
+              </div>
+            )}
             {(L.profile_url || L.linkedin_url) && (
               <div style={{ marginBottom: 12 }}>
                 <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>LinkedIn</p>
@@ -434,12 +448,24 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
           {(L.company || L.industry || L.employee_count || L.org_size) && (
             <div>
               <SectionLabel>Company</SectionLabel>
-              <Field label="Company" value={L.company} />
-              <Field label="Industry" value={L.industry} />
-              <Field label="Employees" value={L.employee_count} />
-              <Field label="Size tier" value={L.org_size} />
-              <Field label="Revenue" value={L.revenue} />
-              <Field label="Website" value={L.website} mono />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1px', background: 'rgba(196,193,189,0.35)', border: '1px solid rgba(196,193,189,0.5)', borderRadius: 6, overflow: 'hidden', marginBottom: 10 }}>
+                {[
+                  { label: 'Company',   value: L.company },
+                  { label: 'Industry',  value: L.industry },
+                  { label: 'Employees', value: L.employee_count || L.org_size },
+                  { label: 'Revenue',   value: L.revenue },
+                  { label: 'Website',   value: L.website },
+                  { label: 'Location',  value: L.location },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ padding: '8px 12px', background: 'var(--bg)' }}>
+                    <p style={{ fontFamily: MONO, fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</p>
+                    {label === 'Website' && value
+                      ? <a href={value.startsWith('http') ? value : 'https://' + value} target="_blank" rel="noreferrer" style={{ fontFamily: MONO, fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>{value.replace(/^https?:\/\//, '').split('/')[0]}</a>
+                      : <p style={{ fontFamily: MONO, fontSize: 11, color: value ? 'var(--text)' : 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>{value || '—'}</p>
+                    }
+                  </div>
+                ))}
+              </div>
               {L.has_security_team && L.has_security_team !== 'No' && (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: 'rgba(231,0,11,0.07)', border: '1px solid rgba(231,0,11,0.2)', borderRadius: 4, marginBottom: 8 }}>
                   <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: '#E7000B', letterSpacing: '0.1em' }}>HAS SECURITY TEAM</span>

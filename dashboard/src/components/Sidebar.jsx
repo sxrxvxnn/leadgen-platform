@@ -25,6 +25,8 @@ const ICONS = {
   settings:  ['M12 15a3 3 0 100-6 3 3 0 000 6z', 'M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z'],
   directory: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
   prospect:  ['M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2', 'M9 11a4 4 0 100-8 4 4 0 000 8', 'M23 21v-2a4 4 0 00-3-3.87', 'M16 3.13a4 4 0 011.93 3.87M21 21l-2-2'],
+  email:     ['M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z', 'M22 6l-10 7L2 6'],
+  database:  ['M12 2C6.48 2 2 4.24 2 7s4.48 5 10 5 10-2.24 10-5-4.48-5-10-5z', 'M2 17c0 2.76 4.48 5 10 5s10-2.24 10-5', 'M2 12c0 2.76 4.48 5 10 5s10-2.24 10-5'],
   tasks:     ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
   analytics:    'M18 20V10M12 20V4M6 20v-6',
   unsubscribes: ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2', 'M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z'],
@@ -34,8 +36,10 @@ const NAV_GROUPS = [
   {
     items: [
       { label: 'Home',      path: '/dashboard', icon: 'home' },
-      { label: 'Prospect',  path: '/prospect',  icon: 'prospect' },
-      { label: 'Discovery', path: '/directory',  icon: 'directory' },
+      { label: 'Prospect',     path: '/prospect',     icon: 'prospect' },
+      { label: 'Email Finder', path: '/email-finder', icon: 'email' },
+      { label: 'Database',    path: '/database',     icon: 'database', adminOnly: true },
+      { label: 'Discovery',    path: '/directory',    icon: 'directory' },
     ],
   },
   {
@@ -109,7 +113,8 @@ export default function Sidebar() {
 
   useEffect(() => {
     function update() {
-      const saved = localStorage.getItem('fullName')
+      const key   = user?.id ? `fullName_${user.id}` : 'fullName'
+      const saved = localStorage.getItem(key) || localStorage.getItem('fullName')
       setDisplayName(saved || user?.email?.split('@')[0] || '')
     }
     update()
@@ -165,7 +170,7 @@ export default function Sidebar() {
                 {group.label}
               </p>
             )}
-            {group.items.map(item => (
+            {group.items.filter(item => item.adminOnly ? isAdmin : true).map(item => (
               <NavItem key={item.path} {...item} isActive={isActive(item.path)} />
             ))}
           </div>

@@ -29,7 +29,8 @@ export default function Navbar() {
 
   useEffect(() => {
     function updateName() {
-      const saved = localStorage.getItem('fullName')
+      const key   = user?.id ? `fullName_${user.id}` : 'fullName'
+      const saved = localStorage.getItem(key) || localStorage.getItem('fullName')
       setDisplayName(saved || user?.email?.split('@')[0] || '')
     }
     updateName()

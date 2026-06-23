@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import { getLeads } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const DM_TITLES = ['CEO', 'CTO', 'CPO', 'CISO', 'VP', 'Director', 'Head of', 'Founder', 'Co-Founder', 'President', 'Managing Director', 'General Manager']
 const ORG_SIZES = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
 
 export default function ICP() {
+  const { user } = useAuth()
+  const icpKey = user?.id ? `savedICPs_${user.id}` : 'savedICPs'
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedTitles, setSelectedTitles] = useState([])
@@ -14,7 +17,7 @@ export default function ICP() {
   const [requireProduct, setRequireProduct] = useState(false)
   const [locationFilter, setLocationFilter] = useState('')
   const [savedICPs, setSavedICPs] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('savedICPs') || '[]') } catch { return [] }
+    try { return JSON.parse(localStorage.getItem(icpKey) || localStorage.getItem('savedICPs') || '[]') } catch { return [] }
   })
   const [icpName, setIcpName] = useState('')
   const [showSaveForm, setShowSaveForm] = useState(false)
@@ -61,7 +64,7 @@ export default function ICP() {
     const icp = { id: Date.now(), name: icpName, titles: selectedTitles, sizes: selectedSizes, requireSecurity }
     const updated = [...savedICPs, icp]
     setSavedICPs(updated)
-    localStorage.setItem('savedICPs', JSON.stringify(updated))
+    localStorage.setItem(icpKey, JSON.stringify(updated))
     setIcpName('')
     setShowSaveForm(false)
   }
@@ -75,7 +78,7 @@ export default function ICP() {
   function deleteICP(id) {
     const updated = savedICPs.filter(i => i.id !== id)
     setSavedICPs(updated)
-    localStorage.setItem('savedICPs', JSON.stringify(updated))
+    localStorage.setItem(icpKey, JSON.stringify(updated))
   }
 
   return (

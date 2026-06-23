@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
 import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig } from '../services/api'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const SECTIONS = [
   { id: 'profile',    num: '01', label: 'Profile' },
@@ -22,20 +23,26 @@ const WEBHOOK_EVENT_LABELS = {
 }
 const ALL_WEBHOOK_EVENTS = Object.keys(WEBHOOK_EVENT_LABELS)
 
+// Scope a localStorage key to the current user so accounts don't bleed into each other
+function uk(user, key) { return user?.id ? `${key}_${user.id}` : key }
+function lsGet(user, key, fallback = '') { return localStorage.getItem(uk(user, key)) ?? localStorage.getItem(key) ?? fallback }
+function lsSet(user, key, value) { localStorage.setItem(uk(user, key), value); localStorage.removeItem(key) }
+
 export default function Settings() {
-  const [fullName,    setFullName]    = useState(localStorage.getItem('fullName') || '')
+  const { user } = useAuth()
+  const [fullName,    setFullName]    = useState(() => lsGet(user, 'fullName'))
   const [saved,       setSaved]       = useState(false)
   const [activeSection, setActiveSection] = useState('profile')
-  const [agreedTerms, setAgreedTerms] = useState(localStorage.getItem('agreedTerms') === '1')
-  const [wantsUpdates, setWantsUpdates] = useState(localStorage.getItem('wantsUpdates') !== '0')
+  const [agreedTerms, setAgreedTerms] = useState(() => lsGet(user, 'agreedTerms') === '1')
+  const [wantsUpdates, setWantsUpdates] = useState(() => lsGet(user, 'wantsUpdates', '1') !== '0')
 
   // SMTP state (localStorage — for manual email sends in LeadDrawer)
-  const [smtpHost,  setSmtpHost]  = useState(localStorage.getItem('smtpHost')  || 'smtp.gmail.com')
-  const [smtpPort,  setSmtpPort]  = useState(localStorage.getItem('smtpPort')  || '587')
-  const [smtpUser,  setSmtpUser]  = useState(localStorage.getItem('smtpUser')  || '')
-  const [smtpPass,  setSmtpPass]  = useState(localStorage.getItem('smtpPass')  || '')
-  const [fromName,  setFromName]  = useState(localStorage.getItem('smtpFromName') || '')
-  const [fromEmail, setFromEmail] = useState(localStorage.getItem('smtpFromEmail') || '')
+  const [smtpHost,  setSmtpHost]  = useState(() => lsGet(user, 'smtpHost',     'smtp.gmail.com'))
+  const [smtpPort,  setSmtpPort]  = useState(() => lsGet(user, 'smtpPort',     '587'))
+  const [smtpUser,  setSmtpUser]  = useState(() => lsGet(user, 'smtpUser'))
+  const [smtpPass,  setSmtpPass]  = useState(() => lsGet(user, 'smtpPass'))
+  const [fromName,  setFromName]  = useState(() => lsGet(user, 'smtpFromName'))
+  const [fromEmail, setFromEmail] = useState(() => lsGet(user, 'smtpFromEmail'))
 
   // Automation SMTP state (server-side — for sequence cron sends)
   const [autoSmtp, setAutoSmtp] = useState({
@@ -179,15 +186,15 @@ export default function Settings() {
   }
 
   function handleSave() {
-    localStorage.setItem('fullName', fullName)
-    localStorage.setItem('smtpHost', smtpHost)
-    localStorage.setItem('smtpPort', smtpPort)
-    localStorage.setItem('smtpUser', smtpUser)
-    localStorage.setItem('smtpPass', smtpPass)
-    localStorage.setItem('smtpFromName', fromName)
-    localStorage.setItem('smtpFromEmail', fromEmail)
-    localStorage.setItem('agreedTerms', agreedTerms ? '1' : '0')
-    localStorage.setItem('wantsUpdates', wantsUpdates ? '1' : '0')
+    lsSet(user, 'fullName',     fullName)
+    lsSet(user, 'smtpHost',     smtpHost)
+    lsSet(user, 'smtpPort',     smtpPort)
+    lsSet(user, 'smtpUser',     smtpUser)
+    lsSet(user, 'smtpPass',     smtpPass)
+    lsSet(user, 'smtpFromName', fromName)
+    lsSet(user, 'smtpFromEmail',fromEmail)
+    lsSet(user, 'agreedTerms',  agreedTerms  ? '1' : '0')
+    lsSet(user, 'wantsUpdates', wantsUpdates ? '1' : '0')
     window.dispatchEvent(new Event('nameUpdated'))
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { spreadsheetUpdateLead, autofillBulk } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const CONNECTION_STATUSES = [
   'Not Requested', 'Connection Request Sent', 'First Message Sent',
@@ -169,6 +170,7 @@ function ResizableHeader({ col, colIndex, onResize }) {
 }
 
 export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefresh }) {
+  const { user } = useAuth()
   const [localLeads, setLocalLeads] = useState(() => leads.map(l => ({ ...l })))
   const [columns, setColumns] = useState(COLUMNS)
   const [editingCell, setEditingCell] = useState(null)
@@ -180,7 +182,7 @@ export default function SpreadsheetView({ leads, onClose, onLeadUpdate, onRefres
   const [autofilling, setAutofilling] = useState(false)
   const [autofillMsg, setAutofillMsg] = useState('')
   const [refreshing, setRefreshing] = useState(false)
-  const accountManager = localStorage.getItem('fullName') || ''
+  const accountManager = localStorage.getItem(user?.id ? `fullName_${user.id}` : 'fullName') || localStorage.getItem('fullName') || ''
 
   useEffect(() => { setLocalLeads(leads.map(l => ({ ...l }))) }, [leads])
 

@@ -146,7 +146,8 @@ export default function Dashboard() {
     setJobAlerts(a => a.filter(x => x.id !== id))
   }
 
-  const displayName = localStorage.getItem('fullName') || user?.email?.split('@')[0] || 'there'
+  const nameKey     = user?.id ? `fullName_${user.id}` : 'fullName'
+  const displayName = localStorage.getItem(nameKey) || localStorage.getItem('fullName') || user?.email?.split('@')[0] || 'there'
   const L = data?.leads        || {}
   const S = data?.sequences    || {}
   const tasks    = data?.tasks_due_today || []

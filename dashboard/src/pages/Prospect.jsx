@@ -23,8 +23,6 @@ const TITLE_SUGGESTIONS = [
   'Product Manager','Founder','Co-Founder','Chief of Staff',
 ]
 
-// TagInput: chips for committed values. pendingRef is updated on every keystroke
-// so the parent can read uncommitted text without waiting for a re-render.
 function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }) {
   const [input, setInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -58,11 +56,7 @@ function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }
         <input
           data-tag={placeholder}
           value={input}
-          onChange={e => {
-            setInput(e.target.value)
-            if (pendingRef) pendingRef.current = e.target.value
-            setShowSuggestions(true)
-          }}
+          onChange={e => { setInput(e.target.value); if (pendingRef) pendingRef.current = e.target.value; setShowSuggestions(true) }}
           onKeyDown={e => {
             if ((e.key === 'Enter' || e.key === ',') && input.trim()) { e.preventDefault(); add(input) }
             if (e.key === 'Backspace' && !input && value.length) remove(value[value.length - 1])
@@ -89,19 +83,26 @@ function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }
   )
 }
 
-function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
-  const [revealing, setRevealing] = useState(false)
+// ── PersonRow ────────────────────────────────────────────────────────────────
+function PersonRow({ person, onAdd, addedIds, verifyingIds, liveIds, enrichedEmails, selected, onToggleSelect }) {
+  const [revealing,     setRevealing]     = useState(false)
   const [revealedEmail, setRevealedEmail] = useState(null)
-  const isAdded    = addedIds.has(person.id)
-  const isSelected = selected.has(person.id)
+
+  const isAdded     = addedIds.has(person.id)
+  const isVerifying = verifyingIds.has(person.id)
+  const isLive      = liveIds.has(person.id)
+  const isSelected  = selected.has(person.id)
 
   const name      = person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim() || '—'
   const title     = person.job_title || ''
   const company   = person.job_company_name || ''
   const city      = person.location_locality || ''
   const country   = person.location_country || ''
-  const liUrl     = person.linkedin_url ? (person.linkedin_url.startsWith('http') ? person.linkedin_url : `https://${person.linkedin_url}`) : null
-  const workEmail = person.work_email || (person.emails || [])[0]?.address || null
+  const liUrl     = person.linkedin_url
+    ? (person.linkedin_url.startsWith('http') ? person.linkedin_url : `https://${person.linkedin_url}`)
+    : null
+  // enrichedEmails map is updated when Proxycurl returns a live email
+  const workEmail = enrichedEmails[person.id] || person.work_email || (person.emails || [])[0]?.address || null
 
   async function revealEmail() {
     if (workEmail) { setRevealedEmail(workEmail); return }
@@ -116,37 +117,54 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
     }
   }
 
-  const initials     = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
-  const hue          = name.charCodeAt(0) % 360
+  const initials    = name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
+  const hue         = name.charCodeAt(0) % 360
   const displayEmail = workEmail || revealedEmail
+
+  // Button label & colour
+  let btnLabel = 'Add'
+  let btnBg    = 'var(--text)'
+  let btnColor = 'var(--bg)'
+  let btnBorder = 'none'
+  if (isVerifying) { btnLabel = 'Live check…'; btnBg = 'var(--surface)'; btnColor = 'var(--text-muted)'; btnBorder = '1px solid var(--border)' }
+  else if (isAdded) { btnLabel = 'Added'; btnBg = 'var(--surface)'; btnColor = 'var(--text-muted)'; btnBorder = '1px solid var(--border)' }
 
   return (
     <div
-      style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 150px', gap: 12, alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: isSelected ? 'rgba(231,0,11,0.04)' : 'transparent', transition: 'background 0.1s' }}
+      style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 160px', gap: 12, alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: isSelected ? 'rgba(231,0,11,0.04)' : 'transparent', transition: 'background 0.1s' }}
       onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface)' }}
       onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
     >
+      {/* Checkbox */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(person.id)}
           style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#E7000B' }} />
       </div>
 
+      {/* Name + title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: `hsl(${hue},45%,25%)`, border: `1px solid hsl(${hue},45%,35%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: `hsl(${hue},70%,70%)` }}>{initials}</span>
         </div>
         <div style={{ minWidth: 0 }}>
-          <p style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <p style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
+            {isLive && (
+              <span style={{ flexShrink: 0, fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#22c55e', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 4, padding: '1px 5px' }}>LIVE</span>
+            )}
+          </div>
           <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {[title, company].filter(Boolean).join(' · ') || '—'}
           </p>
         </div>
       </div>
 
+      {/* Location */}
       <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {[city, country].filter(Boolean).join(', ') || '—'}
       </p>
 
+      {/* Email */}
       <div>
         {displayEmail
           ? <p style={{ fontFamily: MONO, fontSize: 11, color: displayEmail === '—' || displayEmail === 'Not found' ? 'var(--text-muted)' : 'var(--text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayEmail}</p>
@@ -157,45 +175,52 @@ function PersonRow({ person, onAdd, addedIds, selected, onToggleSelect }) {
         }
       </div>
 
+      {/* Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {liUrl && (
           <a href={liUrl} target="_blank" rel="noopener noreferrer"
-            style={{ fontFamily: MONO, fontSize: 10, color: 'var(--accent)', textDecoration: 'none', padding: '4px 8px', border: '1px solid rgba(231,0,11,0.3)', borderRadius: 5 }}>
+            style={{ fontFamily: MONO, fontSize: 10, color: 'var(--accent)', textDecoration: 'none', padding: '4px 8px', border: '1px solid rgba(231,0,11,0.3)', borderRadius: 5, flexShrink: 0 }}>
             LI
           </a>
         )}
-        <button onClick={() => !isAdded && onAdd(person)}
-          style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '5px 14px', background: isAdded ? 'var(--surface)' : 'var(--text)', color: isAdded ? 'var(--text-muted)' : 'var(--bg)', border: isAdded ? '1px solid var(--border)' : 'none', borderRadius: 5, cursor: isAdded ? 'default' : 'pointer' }}>
-          {isAdded ? 'Added' : 'Add'}
+        <button
+          onClick={() => !isAdded && !isVerifying && onAdd(person)}
+          disabled={isAdded || isVerifying}
+          style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '5px 14px', background: btnBg, color: btnColor, border: btnBorder, borderRadius: 5, cursor: (isAdded || isVerifying) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          {btnLabel}
         </button>
       </div>
     </div>
   )
 }
 
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function Prospect() {
-  // Plain string state — updates on every keystroke, never stale in the search closure.
   const [keywords,    setKeywords]    = useState('')
-  const [companyText, setCompanyText] = useState('')  // replaces companies[] TagInput
+  const [companyText, setCompanyText] = useState('')
   const [titles,      setTitles]      = useState([])
   const [locations,   setLocations]   = useState([])
   const [sizes,       setSizes]       = useState([])
 
-  // Refs for TagInput pending text (uncommitted chips).
-  // Updated on every keystroke, readable at search time regardless of React render cycle.
   const pendingTitle    = useRef('')
   const pendingLocation = useRef('')
 
-  const [results,     setResults]     = useState([])
-  const [total,       setTotal]       = useState(0)
-  const [page,        setPage]        = useState(1)
-  const [totalPages,  setTotalPages]  = useState(1)
-  const [loading,     setLoading]     = useState(false)
-  const [searched,    setSearched]    = useState(false)
-  const [error,       setError]       = useState('')
-  const [addedIds,    setAddedIds]    = useState(new Set())
-  const [selected,    setSelected]    = useState(new Set())
-  const [addedLeadIds,setAddedLeadIds]= useState({})
+  const [results,      setResults]      = useState([])
+  const [total,        setTotal]        = useState(0)
+  const [page,         setPage]         = useState(1)
+  const [totalPages,   setTotalPages]   = useState(1)
+  const [loading,      setLoading]      = useState(false)
+  const [searched,     setSearched]     = useState(false)
+  const [error,        setError]        = useState('')
+
+  // Per-person state
+  const [addedIds,      setAddedIds]      = useState(new Set())   // person.id → added
+  const [verifyingIds,  setVerifyingIds]  = useState(new Set())   // person.id → live check running
+  const [liveIds,       setLiveIds]       = useState(new Set())   // person.id → verified live
+  const [enrichedEmails,setEnrichedEmails]= useState({})          // person.id → email from Proxycurl
+  const [addedLeadIds,  setAddedLeadIds]  = useState({})          // person.id → lead uuid
+
+  const [selected,     setSelected]     = useState(new Set())
 
   const [sequences,    setSequences]    = useState([])
   const [showSeqModal, setShowSeqModal] = useState(false)
@@ -206,22 +231,17 @@ export default function Prospect() {
     listSequences().then(res => setSequences(res.data.sequences || [])).catch(() => {})
   }, [])
 
-  // Build the exact filter object that will be sent to the API.
-  // Called both by search() and by pagination so both always use the same payload.
-  function buildFilters() {
-    const companies = companyText.trim() ? [companyText.trim()] : []
-    const activeTitles    = [...titles,    ...(pendingTitle.current.trim()    ? [pendingTitle.current.trim()]    : [])]
-    const activeLocations = [...locations, ...(pendingLocation.current.trim() ? [pendingLocation.current.trim()] : [])]
-    return { keywords, companies, titles: activeTitles, locations: activeLocations, sizes }
-  }
-
-  // lastFilters stores the filters from the most recent successful search so that
-  // pagination (Prev / Next) always re-uses the exact same query.
   const lastFilters = useRef(null)
 
-  async function search(p = 1) {
-    const filters = p === 1 ? buildFilters() : (lastFilters.current || buildFilters())
+  function buildFilters() {
+    const companies    = companyText.trim() ? [companyText.trim()] : []
+    const activeTitles = [...titles, ...(pendingTitle.current.trim() ? [pendingTitle.current.trim()] : [])]
+    const activeLocs   = [...locations, ...(pendingLocation.current.trim() ? [pendingLocation.current.trim()] : [])]
+    return { keywords, companies, titles: activeTitles, locations: activeLocs, sizes }
+  }
 
+  async function search(p = 1) {
+    const filters   = p === 1 ? buildFilters() : (lastFilters.current || buildFilters())
     const anyFilter = filters.keywords || filters.companies.length || filters.titles.length
       || filters.locations.length || filters.sizes.length
     if (!anyFilter) { setError('Add at least one filter to search.'); return }
@@ -229,7 +249,7 @@ export default function Prospect() {
     setLoading(true); setError(''); setPage(p); setSelected(new Set())
     try {
       const res = await api.post('/prospect/people-search', { ...filters, page: p })
-      if (p === 1) lastFilters.current = filters   // lock filters for pagination
+      if (p === 1) lastFilters.current = filters
       setResults(res.data.people || [])
       setTotal(res.data.total || 0)
       setTotalPages(res.data.total_pages || 1)
@@ -241,36 +261,55 @@ export default function Prospect() {
     }
   }
 
-  const hasFilters = keywords.trim() || companyText.trim() || titles.length || locations.length || sizes.length
-    || pendingTitle.current.trim() || pendingLocation.current.trim()
-
+  // ── Add with live enrichment ────────────────────────────────────────────────
   const handleAdd = useCallback(async (person) => {
-    setAddedIds(prev => new Set([...prev, person.id]))
+    // Mark as "verifying" immediately so the button updates
+    setVerifyingIds(prev => new Set([...prev, person.id]))
+
+    let personToSave = person
+    let wasLive = false
+
+    // Step 1: enrich live via Proxycurl (best-effort — fall back to PDL on any error)
     try {
-      const res = await api.post('/prospect/add-lead', { person })
+      const enrichRes = await api.post('/prospect/enrich-live', { person })
+      const enriched  = enrichRes.data.person
+      personToSave    = enriched
+      wasLive         = true
+      // Surface the live email immediately in the row (before the lead is saved)
+      if (enriched.work_email) {
+        setEnrichedEmails(prev => ({ ...prev, [person.id]: enriched.work_email }))
+      }
+    } catch {
+      // Proxycurl failed or no LinkedIn URL — silently use PDL data
+    }
+
+    // Step 2: save the lead
+    setVerifyingIds(prev => { const s = new Set(prev); s.delete(person.id); return s })
+    setAddedIds(prev => new Set([...prev, person.id]))
+    if (wasLive) setLiveIds(prev => new Set([...prev, person.id]))
+
+    try {
+      const res = await api.post('/prospect/add-lead', { person: personToSave })
       if (res.data?.lead_id) {
         setAddedLeadIds(prev => ({ ...prev, [person.id]: res.data.lead_id }))
       }
       invalidateCache('/leads')
     } catch {
+      // Roll back optimistic add
       setAddedIds(prev => { const s = new Set(prev); s.delete(person.id); return s })
+      setLiveIds(prev => { const s = new Set(prev); s.delete(person.id); return s })
     }
   }, [])
 
   function toggleSelect(id) {
-    setSelected(prev => {
-      const s = new Set(prev)
-      s.has(id) ? s.delete(id) : s.add(id)
-      return s
-    })
+    setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
-
   function toggleSelectAll() {
     setSelected(selected.size === results.length ? new Set() : new Set(results.map(p => p.id)))
   }
 
   async function handleAddSelected() {
-    const toAdd = results.filter(p => selected.has(p.id) && !addedIds.has(p.id))
+    const toAdd = results.filter(p => selected.has(p.id) && !addedIds.has(p.id) && !verifyingIds.has(p.id))
     for (const person of toAdd) await handleAdd(person)
   }
 
@@ -282,12 +321,8 @@ export default function Prospect() {
       for (const person of toProcess) {
         let lid = addedLeadIds[person.id]
         if (!lid && !addedIds.has(person.id)) {
-          const res = await api.post('/prospect/add-lead', { person })
-          lid = res.data?.lead_id
-          if (lid) {
-            setAddedIds(prev => new Set([...prev, person.id]))
-            setAddedLeadIds(prev => ({ ...prev, [person.id]: lid }))
-          }
+          await handleAdd(person)
+          lid = addedLeadIds[person.id]
         }
         if (lid) leadIds.push(lid)
       }
@@ -303,54 +338,47 @@ export default function Prospect() {
     }
   }
 
-  const INPUT_STYLE = { width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: MONO, fontSize: 12, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }
-  const LABEL_STYLE = { fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }
+  const INPUT_STYLE  = { width: '100%', padding: '9px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: MONO, fontSize: 12, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }
+  const LABEL_STYLE  = { fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }
 
   return (
     <div style={{ padding: '36px 40px', maxWidth: 1100, margin: '0 auto' }}>
 
+      {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontFamily: SANS, fontSize: 26, fontWeight: 700, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.5px' }}>Prospect Search</h1>
         <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-          Search 800M+ verified contacts — find the right people, add them in one click.
+          Search 800M+ contacts via PDL · live-verified against LinkedIn before saving
         </p>
       </div>
 
       {/* Filter card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
             <label style={LABEL_STYLE}>Keywords</label>
-            <input
-              value={keywords}
-              onChange={e => setKeywords(e.target.value)}
+            <input value={keywords} onChange={e => { setKeywords(e.target.value); lastFilters.current = null }}
               onKeyDown={e => e.key === 'Enter' && search(1)}
-              placeholder="e.g. machine learning, security, fintech…"
-              style={INPUT_STYLE}
-            />
+              placeholder="e.g. machine learning, security…" style={INPUT_STYLE} />
           </div>
           <div>
-            {/* Plain text input: state updates on every keystroke — no stale-closure risk */}
             <label style={LABEL_STYLE}>Company</label>
-            <input
-              value={companyText}
-              onChange={e => { setCompanyText(e.target.value); lastFilters.current = null }}
+            <input value={companyText} onChange={e => { setCompanyText(e.target.value); lastFilters.current = null }}
               onKeyDown={e => e.key === 'Enter' && search(1)}
-              placeholder="e.g. Stripe, Beagle Security…"
-              style={INPUT_STYLE}
-            />
+              placeholder="e.g. Stripe, Beagle Security…" style={INPUT_STYLE} />
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
             <label style={LABEL_STYLE}>Job Titles</label>
-            <TagInput value={titles} onChange={v => { setTitles(v); lastFilters.current = null }} placeholder="Add title… (press Enter)" suggestions={TITLE_SUGGESTIONS} pendingRef={pendingTitle} />
+            <TagInput value={titles} onChange={v => { setTitles(v); lastFilters.current = null }}
+              placeholder="Add title… (press Enter)" suggestions={TITLE_SUGGESTIONS} pendingRef={pendingTitle} />
           </div>
           <div>
             <label style={LABEL_STYLE}>Locations</label>
-            <TagInput value={locations} onChange={v => { setLocations(v); lastFilters.current = null }} placeholder="Add country or city… (press Enter)" pendingRef={pendingLocation} />
+            <TagInput value={locations} onChange={v => { setLocations(v); lastFilters.current = null }}
+              placeholder="Add country or city… (press Enter)" pendingRef={pendingLocation} />
           </div>
         </div>
 
@@ -358,7 +386,8 @@ export default function Prospect() {
           <label style={LABEL_STYLE}>Company Size</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {SIZE_OPTIONS.map(s => (
-              <button key={s.value} onClick={() => { setSizes(prev => prev.includes(s.value) ? prev.filter(x => x !== s.value) : [...prev, s.value]); lastFilters.current = null }}
+              <button key={s.value}
+                onClick={() => { setSizes(prev => prev.includes(s.value) ? prev.filter(x => x !== s.value) : [...prev, s.value]); lastFilters.current = null }}
                 style={{ padding: '5px 12px', borderRadius: 20, fontFamily: MONO, fontSize: 11, fontWeight: 500, cursor: 'pointer', transition: 'all 0.12s', background: sizes.includes(s.value) ? 'var(--text)' : 'var(--bg)', color: sizes.includes(s.value) ? 'var(--bg)' : 'var(--text-muted)', border: sizes.includes(s.value) ? '1px solid var(--text)' : '1px solid var(--border)' }}>
                 {s.label}
               </button>
@@ -369,9 +398,7 @@ export default function Prospect() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           {error && <p style={{ fontFamily: MONO, fontSize: 11, color: '#E7000B', margin: 0 }}>{error}</p>}
           <div style={{ flex: 1 }} />
-          <button
-            onClick={() => search(1)}
-            disabled={loading}
+          <button onClick={() => search(1)} disabled={loading}
             style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '10px 28px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Searching…' : 'Search'}
           </button>
@@ -383,7 +410,7 @@ export default function Prospect() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, width: 420, maxHeight: '80vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Enroll {selected.size} leads in sequence</h3>
+              <h3 style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Enroll {selected.size} leads</h3>
               <button onClick={() => { setShowSeqModal(false); setEnrollResult(null) }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', padding: 0 }}>×</button>
             </div>
             {enrollResult ? (
@@ -391,7 +418,7 @@ export default function Prospect() {
                 <p style={{ fontFamily: MONO, fontSize: 12, color: '#4a7c59', margin: 0 }}>{enrollResult}</p>
               </div>
             ) : sequences.length === 0 ? (
-              <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>No sequences yet. Create one in the Sequences page first.</p>
+              <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)' }}>No sequences yet — create one first.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {sequences.map(seq => (
@@ -402,7 +429,7 @@ export default function Prospect() {
                     <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{seq.steps?.length || 0} steps · {seq.enrolled_count || 0} enrolled</div>
                   </button>
                 ))}
-                {enrolling && <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>Adding leads & enrolling…</p>}
+                {enrolling && <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>Enriching & enrolling…</p>}
               </div>
             )}
           </div>
@@ -413,9 +440,14 @@ export default function Prospect() {
       {searched && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', flexWrap: 'wrap', gap: 10 }}>
-            <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
-              {total > 0 ? `${total.toLocaleString()} people found` : 'No results'}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                {total > 0 ? `${total.toLocaleString()} people found` : 'No results'}
+              </p>
+              <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#22c55e', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 4, padding: '2px 6px' }}>
+                Live verified on add
+              </span>
+            </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               {selected.size > 0 && (
                 <>
@@ -429,11 +461,12 @@ export default function Prospect() {
                 </>
               )}
               {addedIds.size > 0 && <span style={{ fontFamily: MONO, fontSize: 11, color: '#4a7c59' }}>{addedIds.size} added</span>}
+              {liveIds.size > 0 && <span style={{ fontFamily: MONO, fontSize: 11, color: '#22c55e' }}>{liveIds.size} live verified</span>}
             </div>
           </div>
 
           {results.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 150px', gap: 12, padding: '9px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 160px 190px 160px', gap: 12, padding: '9px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
               <input type="checkbox" checked={selected.size === results.length && results.length > 0} onChange={toggleSelectAll}
                 style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#E7000B', margin: 'auto' }} />
               {['Person', 'Location', 'Email', 'Actions'].map(h => (
@@ -449,7 +482,17 @@ export default function Prospect() {
           )}
 
           {results.map(person => (
-            <PersonRow key={person.id} person={person} onAdd={handleAdd} addedIds={addedIds} selected={selected} onToggleSelect={toggleSelect} />
+            <PersonRow
+              key={person.id}
+              person={person}
+              onAdd={handleAdd}
+              addedIds={addedIds}
+              verifyingIds={verifyingIds}
+              liveIds={liveIds}
+              enrichedEmails={enrichedEmails}
+              selected={selected}
+              onToggleSelect={toggleSelect}
+            />
           ))}
 
           {totalPages > 1 && (
@@ -476,7 +519,7 @@ export default function Prospect() {
             </svg>
           </div>
           <p style={{ fontFamily: SANS, fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 6px' }}>Start prospecting</p>
-          <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Fill in any filter above and hit Search.</p>
+          <p style={{ fontFamily: MONO, fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Fill in any filter and hit Search. Leads are live-verified on LinkedIn before saving.</p>
         </div>
       )}
     </div>

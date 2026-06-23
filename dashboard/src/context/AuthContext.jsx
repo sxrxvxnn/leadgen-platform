@@ -117,6 +117,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
     localStorage.removeItem('userEmail')
+    // Clear legacy unscoped keys so they don't bleed into the next account on this browser
+    ;['fullName','smtpHost','smtpPort','smtpUser','smtpPass','smtpFromName','smtpFromEmail',
+      'agreedTerms','wantsUpdates','savedICPs'].forEach(k => localStorage.removeItem(k))
     posthog.reset()
     setToken(null)
     setUser(null)
