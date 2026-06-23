@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase-client'
-import api from '../services/api'
 
 const SANS = "'Host Grotesk', 'Roboto', sans-serif"
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 export default function AuthCallback() {
   const [status, setStatus] = useState('Completing sign-in…')
@@ -12,39 +12,64 @@ export default function AuthCallback() {
   const { loginWithSession } = useAuth()
 
   useEffect(() => {
-    async function exchange() {
-      try {
-        const params = new URLSearchParams(window.location.search)
-        const oauthError = params.get('error')
-        if (oauthError) {
-          navigate('/login', { replace: true })
-          return
-        }
-        const code = params.get('code')
-        if (!code) {
-          navigate('/login', { replace: true })
-          return
-        }
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error || !data.session) {
-          setStatus('Sign-in failed. Please try again.')
-          return
-        }
-        const session = data.session
-        await loginWithSession(session)
-        // Ensure profile row exists for OAuth users (email/password signup creates it server-side)
-        try {
-          await api.post('/auth/ensure-profile', {
-            email:     session.user.email || '',
-            full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || '',
-          }, { headers: { Authorization: `Bearer ${session.access_token}` } })
-        } catch { /* non-fatal */ }
-        navigate('/dashboard', { replace: true })
-      } catch {
-        setStatus('An unexpected error occurred. Please try again.')
-      }
+    // Bail immediately if this is an OAuth error redirect
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('error')) {
+      navigate('/login', { replace: true })
+      return
     }
-    exchange()
+
+    // Guard so we only complete once even if both listeners fire
+    let done = false
+
+    async function complete(session) {
+      if (done) return
+      done = true
+      await loginWithSession(session)
+      // Use raw fetch to avoid the axios 401 interceptor — if ensure-profile
+      // were to 401, the interceptor would clear localStorage before our
+      // window.location.replace runs, causing AuthLayout to redirect back to login.
+      fetch(`${API_BASE}/auth/ensure-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: session.user.email || '',
+          full_name:
+            session.user.user_metadata?.full_name ||
+            session.user.user_metadata?.name ||
+            '',
+        }),
+      }).catch(() => {})
+      // Hard reload so AuthProvider re-initialises from localStorage
+      window.location.replace('/dashboard')
+    }
+
+    // Supabase JS v2 with detectSessionInUrl=true automatically exchanges the
+    // PKCE code in the URL during createClient(). Calling exchangeCodeForSession
+    // manually races with that internal call and fails. Instead, listen for the
+    // session Supabase creates.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        complete(session)
+      }
+    })
+
+    // Supabase may have already finished by the time our listener registered
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) complete(session)
+    })
+
+    const timeout = setTimeout(() => {
+      if (!done) setStatus('Sign-in failed. Please try again.')
+    }, 15000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   return (
