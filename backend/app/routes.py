@@ -2527,7 +2527,7 @@ async def autofill_company_from_linkedin(
                 )
                 if _g.status_code == 200:
                     _raw_li = _g.json()["choices"][0]["message"]["content"].strip()
-                    _m_li = re.search(r'\{[^}]+\}', _raw_li, re.DOTALL)
+                    _m_li = _re.search(r'\{[^}]+\}', _raw_li, _re.DOTALL)
                     if _m_li:
                         _ex = _json_li.loads(_m_li.group(0))
                         if not li.get("industry") and _ex.get("industry") and _ex["industry"] not in (None, "null"):
@@ -3133,7 +3133,7 @@ async def bulk_autofill_companies(
                     )
                     if _gr.status_code == 200:
                         _rb = _gr.json()["choices"][0]["message"]["content"].strip()
-                        _mb = _re_mod.search(r'\{[^}]+\}', _rb, re.DOTALL)
+                        _mb = _re_mod.search(r'\{[^}]+\}', _rb, _re_mod.DOTALL)
                         if _mb:
                             _xb = _json_bulk.loads(_mb.group(0))
                             if not update_data.get("industry") and not company.get("industry") and \
