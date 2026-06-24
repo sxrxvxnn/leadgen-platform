@@ -1,0 +1,228 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - complementary [ref=e441]:
+        - link [ref=e442] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: Skip to main content
+        - button [ref=e443]:
+          - generic [ref=e9]: Keyboard shortcuts
+        - link [ref=e444] [cursor=pointer]:
+          - /url: https://cloud.google.com/docs/accessibility?hl=en_US
+          - generic [ref=e11]:
+            - text: Accessibility Help
+            - img [ref=e446]:
+              - img [ref=e14]
+        - link [ref=e447] [cursor=pointer]:
+          - /url: https://support.google.com/accessibility/contact/feedback?hl=en_US
+          - generic [ref=e17]:
+            - text: Accessibility Feedback
+            - img [ref=e449]:
+              - img [ref=e20]
+      - banner [ref=e23]:
+        - generic [ref=e24]:
+          - navigation [ref=e27]:
+            - button [ref=e450] [cursor=pointer]:
+              - img [ref=e30]
+          - link [ref=e451] [cursor=pointer]:
+            - /url: /
+            - generic:
+              - img
+          - button [ref=e452]:
+            - generic [ref=e267]:
+              - img [ref=e269]
+              - generic [ref=e272]: My First Project
+        - search [ref=e453]:
+          - combobox [ref=e47]:
+            - searchbox [ref=e454]
+          - button [disabled]:
+            - generic:
+              - img
+            - generic: Search
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - button [ref=e455] [cursor=pointer]:
+              - img [ref=e278]
+            - button [ref=e456] [cursor=pointer]:
+              - img [ref=e282]
+            - button [ref=e457] [cursor=pointer]:
+              - generic [ref=e287]: "4"
+            - button [ref=e458] [cursor=pointer]:
+              - img [ref=e67]
+          - button [ref=e459]:
+            - img [ref=e291]
+    - generic [ref=e80]:
+      - navigation [ref=e460]:
+        - link [ref=e461] [cursor=pointer]:
+          - /url: /auth?project=project-99157687-d844-4fba-963
+          - img [ref=e302]
+          - generic [ref=e306]: Google Auth Platform
+        - list [ref=e307]:
+          - listitem [ref=e308]:
+            - generic [ref=e309]: /
+            - link [ref=e462] [cursor=pointer]:
+              - /url: /auth/audience?project=project-99157687-d844-4fba-963
+              - generic [ref=e314]: Audience
+      - generic [ref=e91]:
+        - navigation [ref=e463]:
+          - generic [ref=e99]:
+            - list [ref=e464]:
+              - listitem [ref=e114]:
+                - generic [ref=e117]:
+                  - link [ref=e465] [cursor=pointer]:
+                    - /url: /auth/overview
+                    - generic [ref=e119]:
+                      - img [ref=e122]
+                      - generic [ref=e124]: Overview
+                  - button [ref=e466] [cursor=pointer]:
+                    - img [ref=e128]
+              - listitem [ref=e130]:
+                - generic [ref=e133]:
+                  - link [ref=e467] [cursor=pointer]:
+                    - /url: /auth/branding
+                    - generic [ref=e135]:
+                      - img [ref=e138]
+                      - generic [ref=e144]: Branding
+                  - button [ref=e468] [cursor=pointer]:
+                    - img [ref=e148]
+              - listitem [ref=e150]:
+                - generic [ref=e153]:
+                  - link [ref=e469] [cursor=pointer]:
+                    - /url: /auth/audience
+                    - generic [ref=e155]:
+                      - img [ref=e158]
+                      - generic [ref=e160]: Audience
+                  - button [ref=e470] [cursor=pointer]:
+                    - img [ref=e164]
+              - listitem [ref=e166]:
+                - generic [ref=e169]:
+                  - link [ref=e471] [cursor=pointer]:
+                    - /url: /auth/clients
+                    - generic [ref=e171]:
+                      - img [ref=e174]
+                      - generic [ref=e176]: Clients
+                  - button [ref=e472] [cursor=pointer]:
+                    - img [ref=e180]
+              - listitem [ref=e182]:
+                - generic [ref=e185]:
+                  - link [ref=e473] [cursor=pointer]:
+                    - /url: /auth/scopes
+                    - generic [ref=e187]:
+                      - img [ref=e190]
+                      - generic [ref=e193]: Data Access
+                  - button [ref=e474] [cursor=pointer]:
+                    - img [ref=e197]
+              - listitem [ref=e199]:
+                - generic [ref=e202]:
+                  - link [ref=e475] [cursor=pointer]:
+                    - /url: /auth/verification
+                    - generic [ref=e204]:
+                      - img [ref=e207]
+                      - generic [ref=e210]: Verification Center
+                  - button [ref=e476] [cursor=pointer]:
+                    - img [ref=e214]
+              - listitem [ref=e216]:
+                - generic [ref=e219]:
+                  - link [ref=e477] [cursor=pointer]:
+                    - /url: /auth/settings
+                    - generic [ref=e221]:
+                      - img [ref=e224]
+                      - generic [ref=e226]: Settings
+                  - button [ref=e478] [cursor=pointer]:
+                    - img [ref=e230]
+            - button [pressed] [ref=e479] [cursor=pointer]:
+              - img [ref=e236]
+        - main [ref=e239]:
+          - generic [ref=e325]:
+            - heading [level=1] [ref=e480]:
+              - generic [ref=e332]: Audience
+            - generic [ref=e334]:
+              - generic [ref=e335]:
+                - generic [ref=e337]:
+                  - text: Publishing status
+                  - button [ref=e481] [cursor=pointer]:
+                    - img [ref=e341]
+                - paragraph [ref=e343]: Testing
+                - button [ref=e482]:
+                  - generic [ref=e346]: Publish app
+              - generic [ref=e347]:
+                - generic [ref=e348]: User type
+                - paragraph [ref=e349]:
+                  - text: External
+                  - button [ref=e483] [cursor=pointer]:
+                    - img [ref=e353]
+                - button [ref=e484]:
+                  - generic [ref=e357]: Make internal
+              - generic [ref=e358]:
+                - text: OAuth user cap
+                - button [ref=e485] [cursor=pointer]:
+                  - img [ref=e362]
+              - generic [ref=e365]:
+                - group [ref=e486]:
+                  - generic [ref=e369]:
+                    - paragraph [ref=e370]:
+                      - text: While publishing status is set to "Testing", only test users are able to access the app. Allowed user cap prior to app verification is 100, and is counted over the entire lifetime of the app.
+                      - link [ref=e487] [cursor=pointer]:
+                        - /url: https://support.google.com/cloud/answer/7454865
+                        - text: Learn more
+                        - img [ref=e488]:
+                          - img [ref=e373]
+                    - generic [ref=e386]: 0 users (0 test, 0 other) / 100 user cap
+                    - button [ref=e489] [cursor=pointer]:
+                      - img [ref=e390]
+                    - generic [ref=e392]: Test users
+                    - button [ref=e490]:
+                      - generic [ref=e394]:
+                        - img [ref=e396]:
+                          - img [ref=e397]
+                        - text: Add users
+                    - generic [ref=e402]:
+                      - img [ref=e404]
+                      - generic [ref=e406]: Filter
+                      - group [ref=e491]:
+                        - combobox [ref=e492]: Enter property name or value
+                      - button [ref=e493] [cursor=pointer]:
+                        - img [ref=e413]
+                    - grid [ref=e494]:
+                      - rowgroup [ref=e423]:
+                        - row [ref=e495]:
+                          - columnheader [ref=e496]:
+                            - generic [ref=e427]: User information
+                          - columnheader [ref=e497]
+                      - rowgroup [ref=e430]:
+                        - row [ref=e498]:
+                          - gridcell [ref=e499]: No rows to display
+                - button [expanded] [ref=e500]:
+                  - generic [ref=e436]:
+                    - img [ref=e438]
+                    - text: Show less
+  - iframe [ref=e263]:
+    
+  - iframe [ref=e265]:
+    
+  - alertdialog "Push to production?" [ref=e504]:
+    - generic [ref=e508]:
+      - heading "Push to production?" [level=1] [ref=e509]
+      - generic [ref=e510]:
+        - paragraph [ref=e511]: Your app will be available to any user with a Google Account.
+        - paragraph [ref=e512]:
+          - text: If your app's configuration has more than 10 domains, has a logo, or requests sensitive or restricted scopes, you will need to
+          - link "Submit for verification external, opens new window" [ref=e513] [cursor=pointer]:
+            - /url: https://support.google.com/cloud/answer/9110914
+            - text: submit for verification
+            - img "external, opens new window" [ref=e514]:
+              - img [ref=e515]
+          - text: .
+      - generic [ref=e517]:
+        - button "Cancel" [disabled]:
+          - generic: Cancel
+        - progressbar "Loading" [active] [ref=e525]:
+          - generic [ref=e526]:
+            - img [ref=e527]:
+              - img [ref=e529]
+              - generic [ref=e532]:
+                - img [ref=e534]
+                - img [ref=e537]
+                - img [ref=e540]
+            - generic [ref=e542]: Loading
+  - paragraph [ref=e543]: Loading

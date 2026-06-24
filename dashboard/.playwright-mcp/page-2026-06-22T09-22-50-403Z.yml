@@ -1,0 +1,375 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - banner:
+            - generic:
+              - generic:
+                - link:
+                  - /url: /dashboard/org/kfnbnherkjytmusxhllx
+                  - img
+                - generic:
+                  - generic:
+                    - img
+                  - generic:
+                    - link:
+                      - /url: /dashboard/org/kfnbnherkjytmusxhllx
+                      - img
+                      - generic: Beagle Security
+                      - generic: Free
+                    - button:
+                      - generic:
+                        - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - link:
+                        - /url: /dashboard/project/gzvrjsacjjalfrjmozjp
+                        - img
+                        - generic: leadgen-platform
+                      - button:
+                        - generic:
+                          - img
+                    - generic:
+                      - img
+                    - generic:
+                      - link:
+                        - /url: /dashboard/project/gzvrjsacjjalfrjmozjp
+                        - generic: main
+                        - generic: Production
+                      - button:
+                        - generic:
+                          - img
+                - generic:
+                  - button:
+                    - generic:
+                      - img
+                    - generic: Connect
+              - generic:
+                - generic:
+                  - generic: Feedback
+                - generic:
+                  - button:
+                    - generic:
+                      - img
+                      - paragraph: Search...
+                    - generic:
+                      - generic: ⌘K
+                  - button [ref=e535] [cursor=pointer]:
+                    - generic [ref=e36]:
+                      - img [ref=e37]
+                      - generic [ref=e40]: Help
+                  - button [ref=e536] [cursor=pointer]:
+                    - generic [ref=e43]:
+                      - img [ref=e44]
+                      - generic [ref=e46]: Advisor Center
+                  - button [ref=e537] [cursor=pointer]:
+                    - generic [ref=e48]:
+                      - img [ref=e49]
+                      - generic [ref=e51]: SQL Editor
+                  - button [ref=e538] [cursor=pointer]:
+                    - generic [ref=e53]:
+                      - img [ref=e56]
+                      - generic [ref=e59]: AI Assistant
+                - button [ref=e539] [cursor=pointer]:
+                  - img [ref=e540]
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - list:
+                      - generic:
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/editor
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/sql
+                            - img
+                      - generic:
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/database/schemas
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/users
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/storage/files
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/functions
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/realtime/inspector
+                            - img
+                      - generic:
+                        - generic:
+                          - listitem:
+                            - link:
+                              - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/advisors/security
+                              - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/observability
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/logs/explorer
+                            - img
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/integrations
+                            - img
+                      - generic:
+                        - listitem:
+                          - link:
+                            - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/settings/general
+                            - img
+                - generic:
+                  - generic:
+                    - button:
+                      - generic:
+                        - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - heading [level=4]: Authentication
+                              - generic:
+                                - generic:
+                                  - menu [disabled]:
+                                    - list:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic: Manage
+                                            - generic:
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/users
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Users
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/oauth-apps
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: OAuth Apps
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic: Notifications
+                                            - generic:
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/templates
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Emails
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - generic:
+                                                - generic:
+                                                  - generic: Configuration
+                                            - generic:
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/policies
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Policies
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/providers
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Sign In / Providers
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/passkeys
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Passkeys
+                                                        - generic: Beta
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/oauth-server
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: OAuth Server
+                                                        - generic: Beta
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/sessions
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Sessions
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/rate-limits
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Rate Limits
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/mfa
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Multi-Factor
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/url-configuration
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: URL Configuration
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/protection
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Attack Protection
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/hooks
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Auth Hooks
+                                                        - generic: Beta
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/audit-logs
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Audit Logs
+                                              - link [disabled]:
+                                                - /url: /dashboard/project/gzvrjsacjjalfrjmozjp/auth/performance
+                                                - menuitem [disabled]:
+                                                  - generic:
+                                                    - generic:
+                                                      - generic:
+                                                        - generic: Performance
+                      - separator [disabled]:
+                        - generic:
+                          - img
+                      - generic:
+                        - generic:
+                          - main:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - heading [level=1]: URL Configuration
+                                    - generic: Configure site URL and redirect URLs for authentication
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - heading [level=2]: Site URL
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - generic:
+                                            - generic:
+                                              - textbox: https://sonarleads.vercel.app
+                                            - generic:
+                                              - generic:
+                                                - generic: Site URL
+                                              - generic: Configure the default redirect URL used when a redirect URL is not specified or doesn't match one from the allow list. This value is also exposed as a template variable in the email templates section. Wildcards cannot be used here.
+                                      - generic:
+                                        - button [disabled]:
+                                          - generic: Save changes
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - heading [level=2]: Redirect URLs
+                                      - generic: URLs that auth providers are permitted to redirect to post authentication. Wildcards are allowed, for example, https://*.domain.com
+                                    - generic:
+                                      - link:
+                                        - /url: https://supabase.com/docs/guides/auth/concepts/redirect-urls
+                                        - generic:
+                                          - img
+                                        - generic: Docs
+                                - generic:
+                                  - generic:
+                                    - button [ref=e541] [cursor=pointer]:
+                                      - generic [ref=e422]: Add URL
+                                    - generic:
+                                      - generic:
+                                        - generic:
+                                          - heading [level=3]: No Redirect URLs
+                                          - paragraph: Auth providers may need a URL to redirect back to
+  - generic:
+    - alert: URL Configuration | Authentication | Supabase
+  - dialog "Add new redirect URLs" [ref=e543]:
+    - generic [ref=e544]:
+      - heading "Add new redirect URLs" [level=2] [ref=e545]
+      - paragraph [ref=e546]: This will add a URL to a list of allowed URLs that can interact with your Authentication services for this project.
+    - generic [ref=e548]:
+      - generic [ref=e549]:
+        - generic [ref=e550]: URL
+        - generic [ref=e559]:
+          - generic [ref=e560]:
+            - generic [ref=e561]:
+              - textbox "https://mydomain.com" [ref=e563]: https://sonarleads.vercel.app/auth/callback
+              - button "Remove URL" [ref=e577] [cursor=pointer]:
+                - img [ref=e579]
+            - generic [ref=e582]:
+              - textbox "https://mydomain.com" [active] [ref=e584]
+              - button "Remove URL" [ref=e585] [cursor=pointer]:
+                - img [ref=e587]
+          - button "Add URL" [ref=e565] [cursor=pointer]:
+            - img [ref=e567]
+            - generic [ref=e568]: Add URL
+      - button "Save URLs" [ref=e570] [cursor=pointer]:
+        - generic [ref=e571]: Save URLs
+    - button "Close" [ref=e572]:
+      - img [ref=e573]
+      - generic [ref=e576]: Close

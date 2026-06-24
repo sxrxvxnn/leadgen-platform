@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens (exact from runner.now) ──────────────────────────── */
+:root {
+  --c-background: #fdfdfd;
+  --c-primary: #1d1b1b;
+  --c-secondary: #6e6e6e;
+  --c-line: #bbb7b3;
+  --c-warm-accent: #a0553a;
+  --c-cool-accent: #9fa69f;
+
+  --marketing-page-bg: #fdfdfd;
+  --marketing-heading: #1d1b1b;
+  --marketing-copy: #1d1b1b;
+  --marketing-copy-soft: #464242;
+  --marketing-eyebrow: #a1a1a1;
+  --marketing-card: #ffffffeb;
+  --marketing-card-strong: #fffffff5;
+  --marketing-card-subtle: #ffffff7a;
+  --marketing-card-muted: #c4c1bd3d;
+  --marketing-card-cream: #f5f5f2;
+  --marketing-border: #c4c1bd;
+  --marketing-border-strong: #1d1b1b2e;
+  --marketing-header-bg: #fdfdfdb8;
+  --marketing-header-bg-strong: #fdfdfde0;
+  --marketing-header-border: #1d1b1b1a;
+  --marketing-header-text: #1d1b1b;
+  --marketing-header-subtle: #a1a1a1;
+  --marketing-primary-bg: #1d1b1b;
+  --marketing-primary-text: #e7e7e7;
+  --marketing-secondary-bg: #4420200f;
+  --marketing-secondary-text: #1d1b1b;
+  --marketing-accent: #a86448;
+  --marketing-accent-warm: #cd704c;
+  --marketing-accent-brown: #824b2f;
+  --marketing-muted: #c4c1bd;
+  --marketing-ambient-primary: #a8644826;
+  --marketing-ambient-secondary: #cd704c1a;
+}
+
+/* ── Base resets ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--marketing-page-bg);
+  color: var(--marketing-heading);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ── Typography helpers ──────────────────────────────────────────────── */
+.font-display {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.font-mono {
+  font-family: 'Geist Mono', 'JetBrains Mono', monospace;
+}
+
+/* ── Section dividers ────────────────────────────────────────────────── */
+.section-border {
+  border-top: 1px dashed var(--marketing-border);
+}
+
+/* ── Scroll animation utility ────────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Custom scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--marketing-card-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--marketing-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-secondary);
+}
+
+/* ── Dashed grid pattern for buttons ────────────────────────────────── */
+.grid-dots {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* ── Ambient glow ────────────────────────────────────────────────────── */
+.ambient-glow {
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--marketing-ambient-primary), transparent 70%);
+}
+
+/* ── Noise texture overlay ───────────────────────────────────────────── */
+.noise::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  opacity: 0.4;
+  border-radius: inherit;
+}
+
+/* ── Horizontal scroll snap ──────────────────────────────────────────── */
+.scroll-snap-x {
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-snap-item {
+  scroll-snap-align: start;
+}
+
+/* ── Marquee animation ───────────────────────────────────────────────── */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  animation: marquee 35s linear infinite;
+  display: flex;
+  width: max-content;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* ── Accordion smooth transition ─────────────────────────────────────── */
+.accordion-content {
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
+}

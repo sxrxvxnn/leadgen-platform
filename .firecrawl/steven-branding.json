@@ -1,0 +1,132 @@
+{
+  "branding": {
+    "colorScheme": "dark",
+    "fonts": [
+      {
+        "family": "Host Grotesk",
+        "role": "body"
+      },
+      {
+        "family": "Arial",
+        "role": "body"
+      },
+      {
+        "family": "Field Gothic Trimmed",
+        "role": "heading"
+      }
+    ],
+    "colors": {
+      "primary": "#3898EC",
+      "secondary": "#FFFF00",
+      "accent": "#0082F3",
+      "background": "#121212",
+      "textPrimary": "#121212",
+      "link": "#0082F3"
+    },
+    "typography": {
+      "fontFamilies": {
+        "primary": "Host Grotesk",
+        "heading": "Field Gothic Trimmed"
+      },
+      "fontStacks": {
+        "heading": [
+          "Field Gothic Trimmed",
+          "sans-serif"
+        ],
+        "body": [
+          "Host Grotesk",
+          "Arial",
+          "sans-serif"
+        ],
+        "paragraph": [
+          "Host Grotesk",
+          "Arial",
+          "sans-serif"
+        ]
+      },
+      "fontSizes": {
+        "h1": "71.2px",
+        "h2": "71.2px",
+        "body": "12px"
+      }
+    },
+    "spacing": {
+      "baseUnit": 4,
+      "borderRadius": "0px"
+    },
+    "components": {},
+    "images": {
+      "logo": "data:image/svg+xml;utf8,%3Csvg%20width%3D%22100%25%22%20height%3D%22100%25%22%20viewBox%3D%220%200%2012%2012%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20data-fc-idx%3D%220%22%3E%0A%20%20%3Cg%20stroke%3D%22currentColor%22%20style%3D%22fill%3A%20none%20!important%3B%20stroke%3A%20rgb(18%2C%2018%2C%2018)%20!important%3B%22%3E%0A%20%20%20%20%3Ccircle%20cx%3D%226%22%20cy%3D%226%22%20r%3D%222.5%22%20fill%3D%22currentColor%22%20style%3D%22fill%3A%20rgb(18%2C%2018%2C%2018)%20!important%3B%20stroke%3A%20rgb(18%2C%2018%2C%2018)%20!important%3B%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%226%22%20cy%3D%226%22%20r%3D%225.5%22%20style%3D%22fill%3A%20none%20!important%3B%20stroke%3A%20rgb(18%2C%2018%2C%2018)%20!important%3B%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E",
+      "favicon": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8015962fdc3eb677099c7_Steven%20Profile%20Photo%20(3).png",
+      "ogImage": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8009945da2bf4e77b77b2_f566a0db8f50de24a553c6bea0cffd68_Steven%20Design%20Feedback%20%281%29.webp",
+      "logoHref": "/"
+    },
+    "__llm_logo_reasoning": {
+      "selectedIndex": 1,
+      "reasoning": "Selected #1 because it is located in the header, links to the homepage, and matches the brand inferred from the URL and page title.",
+      "confidence": 0.85,
+      "source": "llm"
+    },
+    "personality": {
+      "tone": "modern",
+      "energy": "medium",
+      "targetAudience": "creators and entrepreneurs"
+    },
+    "designSystem": {
+      "framework": "custom",
+      "componentLibrary": ""
+    },
+    "confidence": {
+      "buttons": 0,
+      "colors": 0.9,
+      "overall": 0.45
+    },
+    "__llm_metadata": {
+      "logoSelection": {
+        "llmCalled": true,
+        "llmSucceeded": true,
+        "finalSource": "llm",
+        "rawLogoSelection": {
+          "selectedLogoIndex": 1,
+          "selectedLogoReasoning": "Selected #1 because it is located in the header, links to the homepage, and matches the brand inferred from the URL and page title.",
+          "confidence": 0.85
+        }
+      },
+      "buttonClassification": {
+        "llmCalled": false,
+        "llmSucceeded": false
+      }
+    }
+  },
+  "metadata": {
+    "title": "Operating System for the Creator Economy | Steven.com",
+    "og:title": "Operating System for the Creator Economy | Steven.com",
+    "twitter:title": "Operating System for the Creator Economy | Steven.com",
+    "og:description": "The operating system for the creator economy. Connecting creators to resources, platforms, community and technology where trust shifts to individuals.",
+    "twitter:image": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8009945da2bf4e77b77b2_f566a0db8f50de24a553c6bea0cffd68_Steven%20Design%20Feedback%20%281%29.webp",
+    "twitter:description": "The operating system for the creator economy. Connecting creators to resources, platforms, community and technology where trust shifts to individuals.",
+    "description": "The operating system for the creator economy. Connecting creators to resources, platforms, community and technology where trust shifts to individuals.",
+    "viewport": "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no",
+    "language": "en",
+    "og:image": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8009945da2bf4e77b77b2_f566a0db8f50de24a553c6bea0cffd68_Steven%20Design%20Feedback%20%281%29.webp",
+    "ogTitle": "Operating System for the Creator Economy | Steven.com",
+    "ogImage": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8009945da2bf4e77b77b2_f566a0db8f50de24a553c6bea0cffd68_Steven%20Design%20Feedback%20%281%29.webp",
+    "twitter:card": "summary_large_image",
+    "ogDescription": "The operating system for the creator economy. Connecting creators to resources, platforms, community and technology where trust shifts to individuals.",
+    "og:type": "website",
+    "favicon": "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/69b8015962fdc3eb677099c7_Steven%20Profile%20Photo%20(3).png",
+    "scrapeId": "019eda26-dc25-71ff-bf02-7993585e40fc",
+    "sourceURL": "https://steven.com/",
+    "url": "https://steven.com/",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "timezone": "America/New_York",
+    "proxyUsed": "basic",
+    "indexId": "51502e30-9978-47fb-b55b-ae812ccb3392",
+    "creditsUsed": 1,
+    "concurrencyLimited": false
+  },
+  "images": [
+    "https://cdn.prod.website-files.com/6932cd1b03d7cbc06304d0ee/6938582571769266ba807220_stev-signature.png"
+  ]
+}
