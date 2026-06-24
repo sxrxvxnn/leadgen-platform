@@ -405,11 +405,17 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         'per month', 'per year', '/month', '/year', 'billed monthly', 'billed annually',
         'pricing plan', 'choose a plan', 'upgrade plan', 'monthly plan', 'annual plan',
         'subscription plan', 'saas', 'software as a service',
+        # Mobile app signals — only companies shipping their own app have these
+        'download on the app store', 'available on the app store',
+        'get it on google play', 'available on google play',
+        'download our app', 'download the app', 'get the app',
+        'app store and google play', 'ios and android',
     ]
     # Weak: suggestive but service companies also say these
     product_weak = [
         'product-based', 'product company', 'white label', 'white-label',
         'our software product', 'software product',
+        'mobile app', 'our app',  # weaker — service firms also say "we build mobile apps"
     ]
     # Counter-signals: product_weak hits don't count when these are present
     # (service company building a product FOR clients, not selling it as SaaS)

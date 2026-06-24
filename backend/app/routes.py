@@ -2647,7 +2647,10 @@ async def autofill_company_from_linkedin(
                         if not li.get("industry") and _ex.get("industry") and _ex["industry"] not in (None, "null"):
                             li["industry"] = str(_ex["industry"])
                         if not li.get("founded") and _ex.get("founded") and str(_ex["founded"]) not in ("", "None", "null"):
-                            li["founded"] = str(_ex["founded"])
+                            _yr = str(_ex["founded"]).strip()
+                            # Only accept years that appear literally in the description — prevents hallucination
+                            if _re.match(r'^\d{4}$', _yr) and 1800 <= int(_yr) <= 2030 and _yr in _desc_li:
+                                li["founded"] = _yr
                         if not li.get("specialties") and _ex.get("specialties") and _ex["specialties"] not in (None, "null"):
                             li["specialties"] = str(_ex["specialties"])
             except Exception:
@@ -3448,7 +3451,9 @@ async def bulk_autofill_companies(
                                 update_data["industry"] = str(_xb["industry"])
                             if not update_data.get("founded") and not company.get("founded") and \
                                _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
-                                update_data["founded"] = str(_xb["founded"])
+                                _yr_b = str(_xb["founded"]).strip()
+                                if _re_mod.match(r'^\d{4}$', _yr_b) and 1800 <= int(_yr_b) <= 2030 and _yr_b in _desc_bulk:
+                                    update_data["founded"] = _yr_b
                             if not update_data.get("specialties") and not company.get("specialties") and \
                                _xb.get("specialties") and _xb["specialties"] not in (None, "null"):
                                 update_data["specialties"] = str(_xb["specialties"])
