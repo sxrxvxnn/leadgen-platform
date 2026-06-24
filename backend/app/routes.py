@@ -837,7 +837,7 @@ async def prefill_company(
     from .company_prefill import (
         search_company_website, extract_linkedin_url_from_html,
         extract_linkedin_url_with_qwen3, scrape_linkedin_data,
-        search_linkedin_url_direct,
+        search_linkedin_url_direct, search_linkedin_url_by_domain,
     )
 
     # Indian "(P) Ltd" / "Pvt Ltd" entities must be found via LinkedIn direct search —
@@ -866,25 +866,15 @@ async def prefill_company(
     except Exception as e:
         print(f"Prefill website fetch error: {e}")
 
-    # Fallback 1: domain-to-slug (e.g. way.com → /company/way-com, app.io → /company/app-io)
-    # This is the most reliable approach when we already have the website.
+    # Fallback 1: domain-based search (site:linkedin.com/company "way.com")
+    # Far more precise than slug guessing — finds pages that actually mention the domain.
     if not linkedin_url and website_url:
         try:
-            _pf_domain = urlparse(url).netloc.replace("www.", "")
-            _pf_parts = _pf_domain.rsplit(".", 1)  # ["way", "com"] or ["app", "io"]
-            if len(_pf_parts) == 2 and _pf_parts[0] and _pf_parts[1]:
-                _pf_slug = f"{_pf_parts[0]}-{_pf_parts[1]}"  # "way-com"
-                _pf_guessed = f"https://www.linkedin.com/company/{_pf_slug}/"
-                _pf_probe = requests.get(
-                    _pf_guessed,
-                    headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en-US"},
-                    timeout=8, allow_redirects=True,
-                )
-                if _pf_probe.status_code == 200 and "linkedin.com/company/" in _pf_probe.url:
-                    linkedin_url = _pf_probe.url
-                    print(f"LinkedIn URL found via domain-to-slug for {name}: {linkedin_url}")
+            linkedin_url = search_linkedin_url_by_domain(website_url)
+            if linkedin_url:
+                print(f"LinkedIn URL found via domain search for {name}: {linkedin_url}")
         except Exception as e:
-            print(f"Domain-to-slug LinkedIn guess error: {e}")
+            print(f"Domain-based LinkedIn search error: {e}")
 
     # Fallback 2: Scrape company homepage for LinkedIn company URL
     if not linkedin_url:
@@ -963,21 +953,25 @@ async def prefill_company(
                 linkedin_people_url = None
                 linkedin_data = {}
         elif linkedin_data:
-            # LinkedIn scraped but no website listed — check slug vs domain core
+            # LinkedIn scraped but no website listed — check slug vs domain core strictly.
+            # When the company lists no website, we can't do a definitive domain check,
+            # so require the slug to start with or equal the domain core (not just contain it).
+            # "waycom" starts with "way" → allow. "waywayapp" starts with "way" → allow.
+            # "way-com" scrubbed = "waycom" starts with "way" → allow.
+            # "somethingway" starts with "something" not "way" → reject.
             _slug_m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9-]+)', linkedin_url or '')
             if _slug_m and _stored_root:
                 _dom_core = _stored_root.split(".")[0]
                 _raw_slug = _slug_m.group(1).lower()
                 _slug_parts = _raw_slug.split("-")
                 _slug = _raw_slug.replace("-", "")
-                # Reject letter-by-letter slugs like "w-a-y" — all segments are single chars
+                # Reject letter-by-letter slugs like "w-a-y"
                 _is_letter_slug = len(_slug_parts) > 1 and all(len(p) == 1 for p in _slug_parts)
-                _mismatch = _is_letter_slug or (
-                    len(_dom_core) >= 3 and len(_slug) >= 3
-                    and _dom_core not in _slug and _slug not in _dom_core
-                )
+                # Require slug to START with dom_core (or be exactly dom_core)
+                _slug_starts = _slug.startswith(_dom_core) if len(_dom_core) >= 3 else True
+                _mismatch = _is_letter_slug or (len(_dom_core) >= 3 and not _slug_starts)
                 if _mismatch:
-                    print(f"Prefill slug mismatch: slug={_raw_slug}, domain={_dom_core} (letter_slug={_is_letter_slug}) — clearing LinkedIn data")
+                    print(f"Prefill slug mismatch: slug={_raw_slug}, domain={_dom_core} (letter={_is_letter_slug}, starts={_slug_starts}) — clearing")
                     linkedin_url = None
                     linkedin_people_url = None
                     linkedin_data = {}
