@@ -701,39 +701,44 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     </div>
 
     {/* ── Sub-cards: Employee Count + Funding ── */}
-    {(empCount || company.revenue) && (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
 
-        {/* Employee Count */}
-        {empCount && (
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0d9488', borderRadius: 8, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>👥</span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Employee count</span>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-              Headcount data for <strong style={{ color: 'var(--text)' }}>{domain || company.name}</strong>.
-            </p>
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: '#0d9488', margin: 0, letterSpacing: '-0.03em' }}>{empCount}</p>
-          </div>
-        )}
-
-        {/* Company Funding */}
-        {company.revenue && (
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '16px 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>📈</span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Company funding</span>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-              Funding rounds, amounts, and participating investors.
-            </p>
-            <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#16a34a', margin: 0, letterSpacing: '-0.03em' }}>{company.revenue}</p>
-          </div>
-        )}
-
+      {/* Employee Count */}
+      <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0d9488', borderRadius: 8, padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Employee count</span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+          Headcount data for <strong style={{ color: 'var(--text)' }}>{domain || company.name}</strong>.
+        </p>
+        {empCount
+          ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: '#0d9488', margin: 0, letterSpacing: '-0.03em' }}>{empCount}</p>
+          : <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Not available — run Fill LI to populate.</p>
+        }
       </div>
-    )}
+
+      {/* Company Funding */}
+      <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+          </svg>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Company funding</span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+          Funding rounds, amounts, and participating investors.
+        </p>
+        {company.revenue
+          ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#16a34a', margin: 0, letterSpacing: '-0.03em' }}>{company.revenue}</p>
+          : <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Not available — enter via Edit or run Enrich.</p>
+        }
+      </div>
+
+    </div>
   </>
   )
 }
