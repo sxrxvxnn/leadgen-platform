@@ -308,7 +308,7 @@ function checkCompanyAccuracy(company) {
   }
 }
 
-function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy }) {
+function CompanyCard({ company, index, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
   const [notes, setNotes] = useState(company.notes || '')
@@ -623,6 +623,11 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', padding: '18px 22px 14px', gap: 14 }}>
+        {index !== undefined && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', minWidth: '22px', paddingTop: '6px', opacity: 0.5, letterSpacing: '0.04em' }}>
+            {String(index + 1).padStart(2, '0')}
+          </span>
+        )}
         <CompanyLogo domain={domain} name={company.name} size={58} />
 
         {/* Name + domain + tagline */}
@@ -1323,23 +1328,30 @@ export default function Companies() {
         ) : (
           <div style={s.grid}>
             {filtered.map((company, i) => (
-              <motion.div
-                key={company.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.6), ease: [0.22, 1, 0.36, 1] }}
-                style={{ width: '100%' }}
-              >
-                <CompanyCard
-                  company={company}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
-                  onViewLeads={setSelectedCompany}
-                  selected={selectedIds.includes(company.id)}
-                  onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
-                  accuracy={accuracyMap[company.id]}
-                />
-              </motion.div>
+              <React.Fragment key={company.id}>
+                {i > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '4px 0' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-strong)' }} />
+                  </div>
+                )}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: Math.min(i * 0.05, 0.6), ease: [0.22, 1, 0.36, 1] }}
+                  style={{ width: '100%' }}
+                >
+                  <CompanyCard
+                    company={company}
+                    index={i}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                    onViewLeads={setSelectedCompany}
+                    selected={selectedIds.includes(company.id)}
+                    onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+                    accuracy={accuracyMap[company.id]}
+                  />
+                </motion.div>
+              </React.Fragment>
             ))}
           </div>
         )}
