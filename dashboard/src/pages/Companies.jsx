@@ -720,7 +720,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             </p>
           </div>
         ) : field('Type', null)}
-        {field('Founded', company.founded)}
+
         {field('HQ', company.headquarters)}
         {followersDisplay !== '—' ? field('Followers', followersDisplay) : null}
         {company.website && (
