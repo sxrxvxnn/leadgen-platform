@@ -513,7 +513,10 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     return clean
   }
 
+  const empCount = formatEmployees(company.size)
+
   return (
+  <>
     <div style={{ ...card.wrapper, borderLeft: `4px solid ${accentColor}` }}>
 
       {/* ── Header ── */}
@@ -621,23 +624,11 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         ) : field('Type', null)}
         {field('Founded', company.founded)}
         {field('HQ', company.headquarters)}
-        {formatEmployees(company.size) ? (
-          <div>
-            <p style={card.fieldLabel}>Employees</p>
-            <p style={card.fieldValue}>{formatEmployees(company.size)}</p>
-          </div>
-        ) : null}
         {followersDisplay !== '—' ? field('Followers', followersDisplay) : null}
         {company.website && (
           <div>
             <p style={card.fieldLabel}>Website</p>
             <EditableWebsite value={company.website} onSave={v => onUpdate(company.id, { website: v })} />
-          </div>
-        )}
-        {company.revenue && (
-          <div>
-            <p style={card.fieldLabel}>Funding</p>
-            <p style={card.fieldValue}>{company.revenue}</p>
           </div>
         )}
         {company.specialties && (
@@ -708,6 +699,42 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       )}
 
     </div>
+
+    {/* ── Sub-cards: Employee Count + Funding ── */}
+    {(empCount || company.revenue) && (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+
+        {/* Employee Count */}
+        {empCount && (
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0d9488', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>👥</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Employee count</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+              Headcount data for <strong style={{ color: 'var(--text)' }}>{domain || company.name}</strong>.
+            </p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: '#0d9488', margin: 0, letterSpacing: '-0.03em' }}>{empCount}</p>
+          </div>
+        )}
+
+        {/* Company Funding */}
+        {company.revenue && (
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>📈</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Company funding</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+              Funding rounds, amounts, and participating investors.
+            </p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#16a34a', margin: 0, letterSpacing: '-0.03em' }}>{company.revenue}</p>
+          </div>
+        )}
+
+      </div>
+    )}
+  </>
   )
 }
 
