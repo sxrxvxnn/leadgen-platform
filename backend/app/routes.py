@@ -866,12 +866,25 @@ async def prefill_company(
     except Exception as e:
         print(f"Prefill website fetch error: {e}")
 
-    # Fallback 1: web search for LinkedIn URL by company name
-    if not linkedin_url:
+    # Fallback 1: domain-to-slug (e.g. way.com → /company/way-com, app.io → /company/app-io)
+    # This is the most reliable approach when we already have the website.
+    if not linkedin_url and website_url:
         try:
-            linkedin_url = search_linkedin_url_direct(name)
+            _pf_domain = urlparse(url).netloc.replace("www.", "")
+            _pf_parts = _pf_domain.rsplit(".", 1)  # ["way", "com"] or ["app", "io"]
+            if len(_pf_parts) == 2 and _pf_parts[0] and _pf_parts[1]:
+                _pf_slug = f"{_pf_parts[0]}-{_pf_parts[1]}"  # "way-com"
+                _pf_guessed = f"https://www.linkedin.com/company/{_pf_slug}/"
+                _pf_probe = requests.get(
+                    _pf_guessed,
+                    headers={"User-Agent": "Mozilla/5.0", "Accept-Language": "en-US"},
+                    timeout=8, allow_redirects=True,
+                )
+                if _pf_probe.status_code == 200 and "linkedin.com/company/" in _pf_probe.url:
+                    linkedin_url = _pf_probe.url
+                    print(f"LinkedIn URL found via domain-to-slug for {name}: {linkedin_url}")
         except Exception as e:
-            print(f"LinkedIn URL search fallback error: {e}")
+            print(f"Domain-to-slug LinkedIn guess error: {e}")
 
     # Fallback 2: Scrape company homepage for LinkedIn company URL
     if not linkedin_url:
@@ -890,7 +903,16 @@ async def prefill_company(
         except Exception as e:
             print(f"Site scrape LinkedIn fallback error: {e}")
 
-    # Fallback 3: Guess slug from domain (e.g. sequantix.com → /company/sequantix)
+    # Fallback 3: web search for LinkedIn URL by company name (least reliable — last resort)
+    if not linkedin_url:
+        try:
+            linkedin_url = search_linkedin_url_direct(name)
+            if linkedin_url:
+                print(f"LinkedIn URL found via name search for {name}: {linkedin_url}")
+        except Exception as e:
+            print(f"LinkedIn URL search fallback error: {e}")
+
+    # Fallback 4: Guess slug from domain base (e.g. sequantix.com → /company/sequantix)
     if not linkedin_url:
         try:
             domain = urlparse(url).netloc.replace("www.", "")
@@ -945,13 +967,20 @@ async def prefill_company(
             _slug_m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9-]+)', linkedin_url or '')
             if _slug_m and _stored_root:
                 _dom_core = _stored_root.split(".")[0]
-                _slug = _slug_m.group(1).lower().replace("-", "")
-                if len(_dom_core) >= 3 and len(_slug) >= 3:
-                    if _dom_core not in _slug and _slug not in _dom_core:
-                        print(f"Prefill slug mismatch: slug={_slug}, domain={_dom_core} — clearing LinkedIn data")
-                        linkedin_url = None
-                        linkedin_people_url = None
-                        linkedin_data = {}
+                _raw_slug = _slug_m.group(1).lower()
+                _slug_parts = _raw_slug.split("-")
+                _slug = _raw_slug.replace("-", "")
+                # Reject letter-by-letter slugs like "w-a-y" — all segments are single chars
+                _is_letter_slug = len(_slug_parts) > 1 and all(len(p) == 1 for p in _slug_parts)
+                _mismatch = _is_letter_slug or (
+                    len(_dom_core) >= 3 and len(_slug) >= 3
+                    and _dom_core not in _slug and _slug not in _dom_core
+                )
+                if _mismatch:
+                    print(f"Prefill slug mismatch: slug={_raw_slug}, domain={_dom_core} (letter_slug={_is_letter_slug}) — clearing LinkedIn data")
+                    linkedin_url = None
+                    linkedin_people_url = None
+                    linkedin_data = {}
 
     return {
         "name": name,
