@@ -2501,6 +2501,44 @@ async def autofill_company_from_linkedin(
             except Exception:
                 pass
 
+        # Groq inference fallback — fills remaining blanks when ProxyCurl key is absent.
+        # Uses the description we already scraped to infer industry, founded, specialties.
+        _groq_key_li = os.environ.get("GROQ_API_KEY", "")
+        _desc_li = li.get("description") or company.get("description") or ""
+        if _groq_key_li and _desc_li and (not li.get("industry") or not li.get("founded") or not li.get("specialties")):
+            try:
+                import json as _json_li
+                _li_prompt = (
+                    f'Company: {company_name}\nDescription: {_desc_li[:400]}\n\n'
+                    'Extract these fields. Be specific and concise.\n'
+                    '- industry: industry name (e.g. "Software Development", "Financial Services", "Travel & Tourism")\n'
+                    '- founded: 4-digit founding year only (omit if unsure)\n'
+                    '- specialties: 3-5 comma-separated specialty areas based on what the company does\n\n'
+                    'Respond ONLY as JSON: {"industry":"...","founded":"...","specialties":"..."}\n'
+                    'Use null for fields you are not confident about.'
+                )
+                _g = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {_groq_key_li}", "Content-Type": "application/json"},
+                    json={"model": "llama-3.1-8b-instant",
+                          "messages": [{"role": "user", "content": _li_prompt}],
+                          "max_tokens": 120, "temperature": 0.1},
+                    timeout=10,
+                )
+                if _g.status_code == 200:
+                    _raw_li = _g.json()["choices"][0]["message"]["content"].strip()
+                    _m_li = re.search(r'\{[^}]+\}', _raw_li, re.DOTALL)
+                    if _m_li:
+                        _ex = _json_li.loads(_m_li.group(0))
+                        if not li.get("industry") and _ex.get("industry") and _ex["industry"] not in (None, "null"):
+                            li["industry"] = str(_ex["industry"])
+                        if not li.get("founded") and _ex.get("founded") and str(_ex["founded"]) not in ("", "None", "null"):
+                            li["founded"] = str(_ex["founded"])
+                        if not li.get("specialties") and _ex.get("specialties") and _ex["specialties"] not in (None, "null"):
+                            li["specialties"] = str(_ex["specialties"])
+            except Exception:
+                pass
+
         # Step 3 — Website: prefer stored website over LinkedIn-scraped to avoid aggregator sites
         # (e.g. LinkedIn page for SS&C shows ampliz.com, but stored website ssctech.com is correct)
         if not is_indian and not found_website and not li.get("website"):
@@ -3064,6 +3102,49 @@ async def bulk_autofill_companies(
                             if not company.get("compliance") and not update_data.get("compliance"):
                                 comp2 = ws2.get("compliance_detected") or []
                                 if comp2: update_data["compliance"] = ", ".join(comp2)
+                except Exception:
+                    pass
+
+            # Groq inference — fills industry/founded/specialties if still blank after LI scrape
+            _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
+            _desc_bulk = update_data.get("description") or company.get("description") or ""
+            _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
+                            (not update_data.get("founded") and not company.get("founded")) or \
+                            (not update_data.get("specialties") and not company.get("specialties"))
+            if _groq_key_bulk and _desc_bulk and _missing_bulk:
+                try:
+                    import json as _json_bulk
+                    _bp = (
+                        f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
+                        'Extract these fields. Be specific and concise.\n'
+                        '- industry: industry name (e.g. "Software Development", "Financial Services")\n'
+                        '- founded: 4-digit founding year only (omit if unsure)\n'
+                        '- specialties: 3-5 comma-separated specialty areas\n\n'
+                        'Respond ONLY as JSON: {"industry":"...","founded":"...","specialties":"..."}\n'
+                        'Use null for fields you are not confident about.'
+                    )
+                    _gr = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
+                        json={"model": "llama-3.1-8b-instant",
+                              "messages": [{"role": "user", "content": _bp}],
+                              "max_tokens": 120, "temperature": 0.1},
+                        timeout=10,
+                    )
+                    if _gr.status_code == 200:
+                        _rb = _gr.json()["choices"][0]["message"]["content"].strip()
+                        _mb = _re_mod.search(r'\{[^}]+\}', _rb, re.DOTALL)
+                        if _mb:
+                            _xb = _json_bulk.loads(_mb.group(0))
+                            if not update_data.get("industry") and not company.get("industry") and \
+                               _xb.get("industry") and _xb["industry"] not in (None, "null"):
+                                update_data["industry"] = str(_xb["industry"])
+                            if not update_data.get("founded") and not company.get("founded") and \
+                               _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
+                                update_data["founded"] = str(_xb["founded"])
+                            if not update_data.get("specialties") and not company.get("specialties") and \
+                               _xb.get("specialties") and _xb["specialties"] not in (None, "null"):
+                                update_data["specialties"] = str(_xb["specialties"])
                 except Exception:
                     pass
 
