@@ -1362,8 +1362,8 @@ export default function Companies() {
 // ─── STYLES ───────────────────────────────────────────────────
 
 const s = {
-  page: { minHeight: '100vh', background: 'var(--bg)' },
-  hero: { padding: '64px 48px 40px', borderBottom: '1px solid var(--border)' },
+  page: { minHeight: '100vh', background: 'var(--surface-raised)' },
+  hero: { padding: '64px 48px 40px', borderBottom: '1px solid var(--border)', background: 'var(--bg)' },
   eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '600', letterSpacing: '0.14em', color: 'var(--text-muted)', marginBottom: '14px', textTransform: 'uppercase' },
     heroTitle: { fontFamily: 'var(--font-display)', fontSize: 'clamp(64px, 9vw, 112px)', fontWeight: '900', color: 'var(--text)', letterSpacing: '-0.05em', lineHeight: 1, marginBottom: '0' },
   heroUnit: { fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 4.5vw, 56px)', fontWeight: '700', color: 'var(--text-muted)', letterSpacing: '-0.03em' },
@@ -1376,7 +1376,7 @@ const s = {
   select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.04em' },
   primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
-  grid: { display: 'flex', flexDirection: 'column', gap: '20px' },
+  grid: { display: 'flex', flexDirection: 'column', gap: '16px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
   emptyTitle: { fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '-0.03em' },
@@ -1385,9 +1385,9 @@ const s = {
 
 const card = {
   wrapper: {
-    background: 'var(--surface)', border: '1px solid var(--border)',
+    background: 'var(--bg)', border: '1px solid var(--border)',
     borderRadius: '10px',
-    boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.03)',
     display: 'flex', flexDirection: 'column',
   },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px 10px', gap: '10px' },
