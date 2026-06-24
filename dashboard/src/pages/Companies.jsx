@@ -486,58 +486,58 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
   const chip = (label, value) => value ? (
     <div style={{ flexShrink: 0 }}>
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>{label}</p>
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', margin: '2px 0 0', whiteSpace: 'nowrap', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</p>
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>{label}</p>
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text)', margin: '3px 0 0', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</p>
     </div>
   ) : null
 
+  const vbar = <div style={{ width: 1, height: 38, background: 'rgba(196,193,189,0.5)', flexShrink: 0 }} />
+
   return (
-    <CardContainer style={{ borderRadius: 8 }}>
-    <CardBody style={{ ...card.wrapper, borderLeft: `3px solid ${accentColor}` }}>
+    <div style={{ ...card.wrapper, borderLeft: `4px solid ${accentColor}` }}>
 
       {/* ── Main list row ── */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', gap: 10, minHeight: 60 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '14px 18px', gap: 14, minHeight: 80 }}>
 
         {/* Checkbox */}
         <input type="checkbox" checked={selected || false} onChange={() => onToggle(company.id)}
           onClick={e => e.stopPropagation()}
-          style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
+          style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0, width: 14, height: 14 }} />
 
         {/* Logo */}
         <CompanyLogo domain={domain} name={company.name} />
 
         {/* Identity: name + domain + tagline */}
-        <div style={{ width: 200, flexShrink: 0, minWidth: 0 }}>
-          <h3 style={{ ...card.name, fontSize: 14, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.name}</h3>
-          {domain && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: '1px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{domain}</p>}
+        <div style={{ width: 220, flexShrink: 0 }}>
+          <h3 style={{ ...card.name, fontSize: 16, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.name}</h3>
+          {domain && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{domain}</p>}
           {(company.tagline || company.description) && (
-            <p style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {company.tagline || company.description?.substring(0, 60)}
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {company.tagline || company.description?.substring(0, 70)}
             </p>
           )}
           {isSuspicious && (
-            <span style={{ fontSize: 7, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 2, padding: '0 4px', marginTop: 2, display: 'inline-block' }}>
+            <span style={{ fontSize: 8, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 2, padding: '0 4px', marginTop: 2, display: 'inline-block' }}>
               ⊘ mismatch
             </span>
           )}
         </div>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
+        {vbar}
 
         {/* Info chips — horizontal */}
-        <div style={{ flex: 1, display: 'flex', gap: 18, minWidth: 0, overflow: 'hidden', alignItems: 'flex-start' }}>
+        <div style={{ flex: 1, display: 'flex', gap: 24, minWidth: 0, overflow: 'hidden', alignItems: 'flex-start' }}>
           {chip('Industry', company.industry)}
           {chip('Founded', company.founded)}
           {chip('Size', company.size)}
           {chip('HQ', company.headquarters)}
           {company.company_type && (
             <div style={{ flexShrink: 0 }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Type</p>
-              <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Type</p>
+              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                 {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
                 {company.is_saas !== null && company.is_saas !== undefined && (
-                  <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 3,
+                  <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 3,
                     background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
                     color: company.is_saas ? '#5b8db8' : '#a1a1a1',
                     border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}` }}>
@@ -547,21 +547,19 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               </div>
             </div>
           )}
-          {followersDisplay !== '—' && chip('Followers', followersDisplay)}
         </div>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 32, background: 'var(--border)', flexShrink: 0 }} />
+        {vbar}
 
         {/* Status + classification */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
           <select value={prospectStatus} onChange={e => handleStatusChange(e.target.value)}
             style={{ ...card.statusSelect, color: statusColor, borderColor: `${statusColor}40` }}>
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           {showCustomInput ? (
             <input type="text" placeholder="Category…" autoFocus
-              style={{ ...card.select, width: 100, color: 'var(--text)', borderColor: 'var(--accent)' }}
+              style={{ ...card.select, width: 110, color: 'var(--text)', borderColor: 'var(--accent)' }}
               onBlur={e => { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }}
               onKeyDown={e => {
                 if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }
@@ -577,25 +575,33 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           )}
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {vbar}
+
+        {/* Enrich actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button style={{ ...card.actionBtn, opacity: analyzing ? 0.5 : 1 }} onClick={handleAnalyze} disabled={analyzing}>
-            {analyzing ? '…' : 'Analyze'}
+            {analyzing ? 'Analyzing…' : 'Analyze'}
           </button>
           <button
             style={{ ...card.actionBtn, color: fillingLI ? 'var(--text-muted)' : 'var(--accent)', borderColor: fillingLI ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: fillingLI ? 0.5 : 1 }}
             onClick={handleFillLinkedIn} disabled={fillingLI}>
-            {fillingLI ? '…' : 'Fill LI'}
+            {fillingLI ? 'Filling…' : 'Fill LI'}
           </button>
           <button
             style={{ ...card.actionBtn, color: pipelining ? 'var(--text-muted)' : '#5b8db8', borderColor: pipelining ? 'var(--border)' : 'rgba(91,141,184,0.35)', opacity: pipelining ? 0.6 : 1 }}
             onClick={handleEnrichPipeline} disabled={pipelining} title="Website analysis + compliance + maps enrich">
-            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3` : '⚡ Enrich'}
+            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : '⚡ Enrich'}
           </button>
+        </div>
+
+        {vbar}
+
+        {/* Utility + LinkedIn */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button
             style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
             onClick={() => setShowSignals(v => !v)}>
-            {cachedSignals?.length ? `${cachedSignals.length}S` : 'Signals'}
+            {cachedSignals?.length ? `${cachedSignals.length} Signals` : 'Signals'}
           </button>
           <button style={{ ...card.actionBtn, color: (showNotes || notes) ? 'var(--text)' : 'var(--text-muted)' }}
             onClick={() => { setShowNotes(v => !v); if (!showNotes) setEditingNotes(false) }}>
@@ -604,7 +610,15 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           {company.linkedin_url && (
             <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LI ↗</a>
           )}
-          <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
+        </div>
+
+        {vbar}
+
+        {/* Primary CTA */}
+        <button style={{ ...card.primaryBtn, padding: '8px 18px', fontSize: 12 }} onClick={() => onViewLeads(company)}>Leads →</button>
+
+        {/* Edit / Delete */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button style={card.editCardBtn} onClick={openEdit} title="Edit">✎</button>
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
         </div>
@@ -692,8 +706,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         </div>
       )}
 
-    </CardBody>
-    </CardContainer>
+    </div>
   )
 }
 
@@ -1227,8 +1240,8 @@ const card = {
   headerRight: { display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 },
   name: { fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: '400', color: 'var(--text)', letterSpacing: '-0.03em', lineHeight: 1.1 },
   industry: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', letterSpacing: '0.02em' },
-  select: { fontFamily: 'var(--font-mono)', padding: '3px 7px', background: 'var(--surface)', border: '1px solid', borderRadius: '4px', fontSize: '9px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
-  editCardBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)', fontSize: '10px', letterSpacing: '0.04em', cursor: 'pointer', padding: '3px 6px', lineHeight: 1 },
+  select: { fontFamily: 'var(--font-mono)', padding: '5px 9px', background: 'var(--surface)', border: '1px solid', borderRadius: '5px', fontSize: '10px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
+  editCardBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', fontSize: '11px', letterSpacing: '0.04em', cursor: 'pointer', padding: '5px 9px', lineHeight: 1 },
   deleteBtn: { fontFamily: 'var(--font-mono)', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', padding: '4px', opacity: 0.5 },
   editPanel: { padding: '14px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface)' },
   editGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' },
@@ -1250,10 +1263,10 @@ const card = {
   notesText: { fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6 },
   textarea: { width: '100%', padding: '7px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: '11px', color: 'var(--text)', outline: 'none', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' },
   footer: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', flexWrap: 'wrap', gap: '6px', marginTop: 'auto' },
-  statusSelect: { fontFamily: 'var(--font-mono)', padding: '4px 8px', background: 'var(--surface)', border: '1px solid', borderRadius: '4px', fontSize: '9px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
-  actionBtn: { fontFamily: 'var(--font-mono)', padding: '4px 9px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '9px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.04em' },
-  linkedinBtn: { fontFamily: 'var(--font-mono)', padding: '4px 9px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '9px', fontWeight: '500', color: 'var(--text-muted)', textDecoration: 'none', letterSpacing: '0.04em' },
-  primaryBtn: { fontFamily: 'var(--font-mono)', padding: '5px 12px', background: 'var(--text)', border: 'none', borderRadius: '5px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', letterSpacing: '0.04em' },
+  statusSelect: { fontFamily: 'var(--font-mono)', padding: '5px 9px', background: 'var(--surface)', border: '1px solid', borderRadius: '5px', fontSize: '10px', fontWeight: '600', outline: 'none', cursor: 'pointer', letterSpacing: '0.04em' },
+  actionBtn: { fontFamily: 'var(--font-mono)', padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
+  linkedinBtn: { fontFamily: 'var(--font-mono)', padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '10px', fontWeight: '500', color: 'var(--text-muted)', textDecoration: 'none', letterSpacing: '0.04em' },
+  primaryBtn: { fontFamily: 'var(--font-mono)', padding: '8px 18px', background: 'var(--text)', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
 }
 
 const modal = {
