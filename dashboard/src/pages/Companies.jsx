@@ -168,6 +168,36 @@ function EditableWebsite({ value, onSave }) {
   )
 }
 
+// ─── COMPANY LOGO ─────────────────────────────────────────────
+
+function CompanyLogo({ domain, name }) {
+  const initials = (name || '').split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
+  const hue = (name || 'A').charCodeAt(0) % 360
+  const [stage, setStage] = useState(0) // 0=clearbit, 1=favicon, 2=initials
+
+  if (!domain || stage === 2) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: 10, background: `hsl(${hue},40%,22%)`, border: `1px solid hsl(${hue},40%,32%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: `hsl(${hue},65%,72%)` }}>{initials}</span>
+      </div>
+    )
+  }
+
+  const src = stage === 0
+    ? `https://logo.clearbit.com/${domain}`
+    : `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+
+  return (
+    <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+      <img
+        src={src} alt={name}
+        style={{ width: stage === 0 ? 30 : 24, height: stage === 0 ? 30 : 24, objectFit: 'contain' }}
+        onError={() => setStage(s => s + 1)}
+      />
+    </div>
+  )
+}
+
 // ─── COMPANY CARD ─────────────────────────────────────────────
 
 const COMPANY_EDIT_FIELDS = [
@@ -445,49 +475,52 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const typeBadgeStyle = getTypeBadge(company.company_type)
   const missingFields = getMissingFields(company)
   const isSuspicious = accuracy?.confidence === 'low' || accuracy?.confidence === 'medium'
+  const domain = company.website
+    ? company.website.replace(/^https?:\/\//, '').split('/')[0]
+    : null
+  const accentColor = missingFields.length > 0 ? 'rgba(168,100,72,0.6)' : isSuspicious ? 'rgba(217,119,6,0.7)' : classColor
+  const followersDisplay = company.followers
+    ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim()
+    : '—'
 
   return (
-    <CardContainer style={{ borderRadius: '8px' }}>
-    <CardBody style={{ ...card.wrapper }}>
+    <CardContainer style={{ borderRadius: 10 }}>
+    <CardBody style={{ ...card.wrapper, borderLeft: `3px solid ${accentColor}` }}>
 
-      {/* Accent strip */}
-      <div style={{ height: '3px', background: missingFields.length > 0 ? 'rgba(168,100,72,0.5)' : isSuspicious ? 'rgba(217,119,6,0.6)' : classColor, opacity: 0.8 }} />
+      {/* Header: logo + name/domain/tagline + controls */}
+      <div style={{ padding: '14px 14px 12px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <CompanyLogo domain={domain} name={company.name} />
 
-      {/* Header */}
-      <div style={card.header}>
-        <div style={card.headerLeft}>
-          <CardItem translateZ={28} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px', marginBottom: '2px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
             <h3 style={card.name}>{company.name}</h3>
-            {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
-          </CardItem>
-          {company.tagline && company.tagline.length <= 100 && (
-            <CardItem as="p" translateZ={16} style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: '2px', lineHeight: 1.4 }}>{company.tagline}</CardItem>
+            {domain && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>· {domain}</span>}
+          </div>
+          {(company.tagline || company.description) && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '3px 0 0', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {company.tagline || company.description?.substring(0, 80) + '…'}
+            </p>
           )}
-          <CardItem as="p" translateZ={10} style={card.industry}>{company.classification || company.industry || 'Unknown industry'}</CardItem>
           {missingFields.length > 0 && (
-            <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 3, marginTop: 5, flexWrap: 'wrap' }}>
               {missingFields.map(f => (
-                <span key={f} style={{ fontSize: '8px', fontFamily: 'monospace', color: 'var(--text-muted)', background: 'rgba(168,100,72,0.07)', border: '1px solid rgba(168,100,72,0.18)', borderRadius: '3px', padding: '1px 4px', letterSpacing: '0.04em' }}>
-                  no {f}
-                </span>
+                <span key={f} style={{ fontSize: 8, fontFamily: 'monospace', color: 'var(--text-muted)', background: 'rgba(168,100,72,0.07)', border: '1px solid rgba(168,100,72,0.18)', borderRadius: 3, padding: '1px 4px' }}>no {f}</span>
               ))}
             </div>
           )}
           {isSuspicious && (
-            <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '8px', fontFamily: 'monospace', fontWeight: '600', color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: '3px', padding: '1px 5px', letterSpacing: '0.04em' }}>
-                ⊘ {accuracy.issues.includes('linkedin-website-mismatch')
-                  ? 'LinkedIn lists a different website'
-                  : accuracy.issues.map(i => `${i}?`).join(' · ')}
-              </span>
-            </div>
+            <span style={{ fontSize: 8, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 3, padding: '1px 5px', marginTop: 4, display: 'inline-block' }}>
+              ⊘ {accuracy.issues.includes('linkedin-website-mismatch') ? 'LinkedIn lists a different website' : accuracy.issues.map(i => `${i}?`).join(' · ')}
+            </span>
           )}
         </div>
-        <div style={card.headerRight}>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {showCustomInput ? (
             <input
-              type="text" placeholder="Type category…" autoFocus
-              style={{ ...card.select, width: '120px', color: 'var(--text)', borderColor: 'var(--accent)' }}
+              type="text" placeholder="Category…" autoFocus
+              style={{ ...card.select, width: 110, color: 'var(--text)', borderColor: 'var(--accent)' }}
               onBlur={e => { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }}
               onKeyDown={e => {
                 if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }
@@ -503,12 +536,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          <input
-            type="checkbox" checked={selected || false}
-            onChange={() => onToggle(company.id)}
-            onClick={e => e.stopPropagation()}
-            style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
-          />
+          <input type="checkbox" checked={selected || false} onChange={() => onToggle(company.id)} onClick={e => e.stopPropagation()}
+            style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }} />
           <button style={card.editCardBtn} onClick={openEdit} title="Edit">✎</button>
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
         </div>
@@ -522,27 +551,15 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               <div key={f.key} style={{ gridColumn: f.type === 'textarea' ? '1 / -1' : 'auto' }}>
                 <label style={card.editLabel}>{f.label}</label>
                 {f.type === 'textarea' ? (
-                  <textarea
-                    value={editForm[f.key] || ''}
-                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    style={{ ...card.editInput, height: '64px', resize: 'vertical' }}
-                    placeholder="Description…"
-                  />
+                  <textarea value={editForm[f.key] || ''} onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    style={{ ...card.editInput, height: 64, resize: 'vertical' }} placeholder="Description…" />
                 ) : f.type === 'select' ? (
-                  <select
-                    value={editForm[f.key] || ''}
-                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    style={card.editInput}
-                  >
+                  <select value={editForm[f.key] || ''} onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))} style={card.editInput}>
                     {f.options.map(o => <option key={o} value={o}>{o || '—'}</option>)}
                   </select>
                 ) : (
-                  <input
-                    type="text" value={editForm[f.key] || ''}
-                    onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder || ''}
-                    style={card.editInput}
-                  />
+                  <input type="text" value={editForm[f.key] || ''} onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
+                    placeholder={f.placeholder || ''} style={card.editInput} />
                 )}
               </div>
             ))}
@@ -556,62 +573,58 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         </div>
       )}
 
-      {/* Info grid — 3-column layout */}
+      {/* Info grid — 3-column */}
       <div style={{ ...card.infoGrid, gridTemplateColumns: '1fr 1fr 1fr' }}>
         <div style={card.infoItem}>
-          <p style={card.infoLabel}>SIZE</p>
-          <p style={card.infoValue}>{company.size || '—'}</p>
+          <p style={card.infoLabel}>Industry</p>
+          <p style={card.infoValue}>{company.industry || '—'}</p>
+        </div>
+        <div style={card.infoItem}>
+          <p style={card.infoLabel}>Type</p>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginTop: 1 }}>
+            {typeBadgeStyle
+              ? <span style={typeBadgeStyle}>{company.company_type}</span>
+              : <p style={{ ...card.infoValue, margin: 0 }}>—</p>}
+            {company.is_saas !== null && company.is_saas !== undefined && (
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4,
+                background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
+                color: company.is_saas ? '#5b8db8' : '#a1a1a1',
+                border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}` }}>
+                {company.is_saas ? 'SaaS' : 'Non-SaaS'}
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={card.infoItem}>
+          <p style={card.infoLabel}>Founded</p>
+          <p style={card.infoValue}>{company.founded || '—'}</p>
         </div>
         <div style={card.infoItem}>
           <p style={card.infoLabel}>HQ</p>
           <p style={card.infoValue}>{company.headquarters || '—'}</p>
         </div>
         <div style={card.infoItem}>
-          <p style={card.infoLabel}>FOLLOWERS</p>
-          <p style={card.infoValue}>{company.followers ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim() : '—'}</p>
+          <p style={card.infoLabel}>Employees</p>
+          <p style={card.infoValue}>{company.size || '—'}</p>
         </div>
         <div style={card.infoItem}>
-          <p style={card.infoLabel}>WEBSITE</p>
+          <p style={card.infoLabel}>Followers</p>
+          <p style={card.infoValue}>{followersDisplay}</p>
+        </div>
+        <div style={{ ...card.infoItem, gridColumn: '1 / -1' }}>
+          <p style={card.infoLabel}>Website</p>
           <EditableWebsite value={company.website} onSave={v => onUpdate(company.id, { website: v })} />
         </div>
-        <div style={card.infoItem}>
-          <p style={card.infoLabel}>INDUSTRY</p>
-          <p style={card.infoValue}>{company.industry || '—'}</p>
-        </div>
-        <div style={card.infoItem}>
-          <p style={card.infoLabel}>FOUNDED</p>
-          <p style={card.infoValue}>{company.founded || '—'}</p>
-        </div>
-        <div style={{ ...card.infoItem, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <p style={card.infoLabel}>TYPE · SAAS</p>
-          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
-            {company.is_saas !== null && company.is_saas !== undefined && (
-              <span style={{
-                fontSize: '9px', fontWeight: '600', letterSpacing: '0.8px', textTransform: 'uppercase',
-                padding: '2px 7px', borderRadius: '4px', display: 'inline-block',
-                background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
-                color: company.is_saas ? '#5b8db8' : '#a1a1a1',
-                border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}`,
-              }}>
-                {company.is_saas ? 'SaaS' : 'Non-SaaS'}
-              </span>
-            )}
-            {!typeBadgeStyle && (company.is_saas === null || company.is_saas === undefined) && <p style={{ ...card.infoValue, margin: 0 }}>—</p>}
-          </div>
-        </div>
-        <div style={{ ...card.infoItem, gridColumn: '2 / -1' }}>
-          <p style={card.infoLabel}>SPECIALTIES</p>
-          {company.specialties ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '3px' }}>
+        {company.specialties && (
+          <div style={{ ...card.infoItem, gridColumn: '1 / -1' }}>
+            <p style={card.infoLabel}>Specialties</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
               {company.specialties.split(',').map(s => s.trim()).filter(Boolean).map(spec => (
-                <span key={spec} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 5px', letterSpacing: '0.02em' }}>{spec}</span>
+                <span key={spec} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-secondary)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3, padding: '2px 5px' }}>{spec}</span>
               ))}
             </div>
-          ) : (
-            <p style={{ ...card.infoValue, margin: 0 }}>—</p>
-          )}
-        </div>
+          </div>
+        )}
         {company.phone && (
           <div style={{ ...card.infoItem, gridColumn: '1 / -1' }}>
             <p style={card.infoLabel}>PHONE</p>
