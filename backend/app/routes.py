@@ -3340,7 +3340,7 @@ async def bulk_autofill_companies(
                         update_data["industry"] = li_data["industry"]
 
                     # Industry → classification (if not already set)
-                    if li_data.get("industry") and not company.get("classification") or company.get("classification") == "Unclassified":
+                    if li_data.get("industry") and (not company.get("classification") or company.get("classification") == "Unclassified"):
                         _LI_CLASS_MAP = {
                             'software development': 'IT Services',
                             'information technology': 'IT Services',
@@ -3371,7 +3371,7 @@ async def bulk_autofill_companies(
                             'manufacturing': 'Manufacturing',
                             'e-commerce': 'E-commerce',
                         }
-                        ind_lower = li_data["industry"].lower()
+                        ind_lower = (li_data.get("industry") or "").lower()
                         mapped = next((v for k, v in _LI_CLASS_MAP.items() if k in ind_lower), None)
                         if mapped:
                             update_data["classification"] = mapped
