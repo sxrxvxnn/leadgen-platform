@@ -492,6 +492,27 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     </div>
   ) : null
 
+  // Strip LinkedIn date-prefixed posts ("Oct 7, 2025 · …") and truncate to one sentence
+  const cleanTagline = (() => {
+    const raw = company.tagline || company.description || ''
+    if (!raw) return null
+    const stripped = raw.replace(/^[A-Z][a-z]{2,8}\s+\d{1,2},\s+\d{4}\s*[·•·]\s*/i, '').trim()
+    const sentence = stripped.split(/(?<=[.!?])\s+/)[0] || stripped
+    return sentence.length > 4 ? (sentence.length > 110 ? sentence.substring(0, 108) + '…' : sentence) : null
+  })()
+
+  // Format employee count: "1547 employees" → "1,547" / "1001-5000" → "1,001–5,000"
+  const formatEmployees = (s) => {
+    if (!s) return null
+    const clean = String(s).replace(/\s*employees?\s*/gi, '').trim()
+    if (/^\d+$/.test(clean.replace(/,/g, ''))) {
+      return parseInt(clean.replace(/,/g, ''), 10).toLocaleString()
+    }
+    const range = clean.match(/^(\d[\d,]*)\s*[-–]\s*(\d[\d,]*)$/)
+    if (range) return `${parseInt(range[1].replace(/,/g, ''), 10).toLocaleString()}–${parseInt(range[2].replace(/,/g, ''), 10).toLocaleString()}`
+    return clean
+  }
+
   return (
     <div style={{ ...card.wrapper, borderLeft: `4px solid ${accentColor}` }}>
 
@@ -506,9 +527,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             {domain && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>· {domain}</span>}
             {isSuspicious && <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', letterSpacing: '0.04em' }}>⊘ mismatch</span>}
           </div>
-          {(company.tagline || company.description) && (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4 }}>
-              {company.tagline || company.description?.substring(0, 100)}
+          {cleanTagline && (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {cleanTagline}
             </p>
           )}
           {/* Inline result lines — no boxes */}
@@ -600,12 +621,23 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         ) : field('Type', null)}
         {field('Founded', company.founded)}
         {field('HQ', company.headquarters)}
-        {field('Size', company.size)}
+        {formatEmployees(company.size) ? (
+          <div>
+            <p style={card.fieldLabel}>Employees</p>
+            <p style={card.fieldValue}>{formatEmployees(company.size)}</p>
+          </div>
+        ) : null}
         {followersDisplay !== '—' ? field('Followers', followersDisplay) : null}
         {company.website && (
           <div>
             <p style={card.fieldLabel}>Website</p>
             <EditableWebsite value={company.website} onSave={v => onUpdate(company.id, { website: v })} />
+          </div>
+        )}
+        {company.revenue && (
+          <div>
+            <p style={card.fieldLabel}>Funding</p>
+            <p style={card.fieldValue}>{company.revenue}</p>
           </div>
         )}
         {company.specialties && (
