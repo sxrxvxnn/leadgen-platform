@@ -170,15 +170,16 @@ function EditableWebsite({ value, onSave }) {
 
 // ─── COMPANY LOGO ─────────────────────────────────────────────
 
-function CompanyLogo({ domain, name }) {
+function CompanyLogo({ domain, name, size = 52 }) {
   const initials = (name || '').split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
   const hue = (name || 'A').charCodeAt(0) % 360
-  const [stage, setStage] = useState(0) // 0=clearbit, 1=favicon, 2=initials
+  const [stage, setStage] = useState(0)
 
+  const r = Math.round(size * 0.22)
   if (!domain || stage === 2) {
     return (
-      <div style={{ width: 44, height: 44, borderRadius: 10, background: `hsl(${hue},40%,22%)`, border: `1px solid hsl(${hue},40%,32%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: `hsl(${hue},65%,72%)` }}>{initials}</span>
+      <div style={{ width: size, height: size, borderRadius: r, background: `hsl(${hue},40%,22%)`, border: `1px solid hsl(${hue},40%,32%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: Math.round(size * 0.33), fontWeight: 700, color: `hsl(${hue},65%,72%)` }}>{initials}</span>
       </div>
     )
   }
@@ -188,10 +189,10 @@ function CompanyLogo({ domain, name }) {
     : `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
 
   return (
-    <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+    <div style={{ width: size, height: size, borderRadius: r, background: '#F8F8F8', border: '1px solid rgba(196,193,189,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
       <img
         src={src} alt={name}
-        style={{ width: stage === 0 ? 30 : 24, height: stage === 0 ? 30 : 24, objectFit: 'contain' }}
+        style={{ width: stage === 0 ? Math.round(size * 0.7) : Math.round(size * 0.55), height: stage === 0 ? Math.round(size * 0.7) : Math.round(size * 0.55), objectFit: 'contain' }}
         onError={() => setStage(s => s + 1)}
       />
     </div>
@@ -484,75 +485,56 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim()
     : '—'
 
-  const chip = (label, value) => value ? (
-    <div style={{ flexShrink: 0 }}>
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>{label}</p>
-      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text)', margin: '3px 0 0', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</p>
+  const field = (label, value) => value ? (
+    <div>
+      <p style={card.fieldLabel}>{label}</p>
+      <p style={card.fieldValue}>{value}</p>
     </div>
   ) : null
-
-  const vbar = <div style={{ width: 1, height: 38, background: 'rgba(196,193,189,0.5)', flexShrink: 0 }} />
 
   return (
     <div style={{ ...card.wrapper, borderLeft: `4px solid ${accentColor}` }}>
 
-      {/* ── Main list row ── */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '14px 18px', gap: 14, minHeight: 80 }}>
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', padding: '18px 22px 14px', gap: 14 }}>
+        <CompanyLogo domain={domain} name={company.name} size={58} />
 
-        {/* Checkbox */}
-        <input type="checkbox" checked={selected || false} onChange={() => onToggle(company.id)}
-          onClick={e => e.stopPropagation()}
-          style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0, width: 14, height: 14 }} />
-
-        {/* Logo */}
-        <CompanyLogo domain={domain} name={company.name} />
-
-        {/* Identity: name + domain + tagline */}
-        <div style={{ width: 220, flexShrink: 0 }}>
-          <h3 style={{ ...card.name, fontSize: 16, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.name}</h3>
-          {domain && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{domain}</p>}
+        {/* Name + domain + tagline */}
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>{company.name}</h3>
+            {domain && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>· {domain}</span>}
+            {isSuspicious && <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', letterSpacing: '0.04em' }}>⊘ mismatch</span>}
+          </div>
           {(company.tagline || company.description) && (
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {company.tagline || company.description?.substring(0, 70)}
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4 }}>
+              {company.tagline || company.description?.substring(0, 100)}
             </p>
           )}
-          {isSuspicious && (
-            <span style={{ fontSize: 8, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 2, padding: '0 4px', marginTop: 2, display: 'inline-block' }}>
-              ⊘ mismatch
-            </span>
+          {/* Inline result lines — no boxes */}
+          {fillResult && (
+            <p style={{ fontSize: 11, margin: '6px 0 0', color: fillResult.ok ? '#4a7c59' : 'var(--accent)' }}>
+              {fillResult.ok ? `✓ Filled: ${fillResult.filled.join(', ')}` : `⚠ ${fillResult.msg}`}
+            </p>
+          )}
+          {analyzeResult && (
+            <p style={{ fontSize: 11, margin: '4px 0 0', color: analyzeResult.ok ? '#4a7c59' : 'var(--accent)' }}>
+              {analyzeResult.ok
+                ? [
+                    analyzeResult.analysis.company_type,
+                    analyzeResult.analysis.company_type_confidence ? `(${analyzeResult.analysis.company_type_confidence})` : null,
+                    analyzeResult.analysis.compliance?.length ? `· ${analyzeResult.analysis.compliance.join(', ')}` : null,
+                  ].filter(Boolean).join(' ')
+                : `⚠ ${analyzeResult.msg}`}
+            </p>
           )}
         </div>
 
-        {vbar}
-
-        {/* Info chips — horizontal */}
-        <div style={{ flex: 1, display: 'flex', gap: 24, minWidth: 0, overflow: 'hidden', alignItems: 'flex-start' }}>
-          {chip('Industry', company.industry)}
-          {chip('Founded', company.founded)}
-          {chip('Size', company.size)}
-          {chip('HQ', company.headquarters)}
-          {company.company_type && (
-            <div style={{ flexShrink: 0 }}>
-              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase', margin: 0 }}>Type</p>
-              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                {typeBadgeStyle && <span style={typeBadgeStyle}>{company.company_type}</span>}
-                {company.is_saas !== null && company.is_saas !== undefined && (
-                  <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 3,
-                    background: company.is_saas ? 'rgba(91,141,184,0.10)' : 'rgba(161,161,161,0.10)',
-                    color: company.is_saas ? '#5b8db8' : '#a1a1a1',
-                    border: `1px solid ${company.is_saas ? 'rgba(91,141,184,0.25)' : 'rgba(161,161,161,0.25)'}` }}>
-                    {company.is_saas ? 'SaaS' : 'Non-SaaS'}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {vbar}
-
-        {/* Status + classification */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <input type="checkbox" checked={selected || false} onChange={() => onToggle(company.id)}
+            onClick={e => e.stopPropagation()}
+            style={{ accentColor: 'var(--accent)', cursor: 'pointer', width: 14, height: 14 }} />
           <select value={prospectStatus} onChange={e => handleStatusChange(e.target.value)}
             style={{ ...card.statusSelect, color: statusColor, borderColor: `${statusColor}40` }}>
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -573,12 +555,6 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-        </div>
-
-        {vbar}
-
-        {/* Enrich actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button style={{ ...card.actionBtn, opacity: analyzing ? 0.5 : 1 }} onClick={handleAnalyze} disabled={analyzing}>
             {analyzing ? 'Analyzing…' : 'Analyze'}
           </button>
@@ -592,12 +568,6 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             onClick={handleEnrichPipeline} disabled={pipelining} title="Website analysis + compliance + maps enrich">
             {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : '⚡ Enrich'}
           </button>
-        </div>
-
-        {vbar}
-
-        {/* Utility + LinkedIn */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button
             style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
             onClick={() => setShowSignals(v => !v)}>
@@ -610,22 +580,49 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           {company.linkedin_url && (
             <a href={company.linkedin_url} target="_blank" rel="noreferrer" style={card.linkedinBtn}>LI ↗</a>
           )}
-        </div>
-
-        {vbar}
-
-        {/* Primary CTA */}
-        <button style={{ ...card.primaryBtn, padding: '8px 18px', fontSize: 12 }} onClick={() => onViewLeads(company)}>Leads →</button>
-
-        {/* Edit / Delete */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
           <button style={card.editCardBtn} onClick={openEdit} title="Edit">✎</button>
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
         </div>
       </div>
 
-      {/* ── Expandable panels ── */}
+      {/* ── Info grid ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px 32px', padding: '14px 22px 18px', borderTop: '1px solid var(--border)' }}>
+        {field('Industry', company.industry)}
+        {company.company_type ? (
+          <div>
+            <p style={card.fieldLabel}>Type</p>
+            <p style={card.fieldValue}>
+              {company.company_type}
+              {company.is_saas !== null && company.is_saas !== undefined && ` · ${company.is_saas ? 'SaaS' : 'Non-SaaS'}`}
+            </p>
+          </div>
+        ) : field('Type', null)}
+        {field('Founded', company.founded)}
+        {field('HQ', company.headquarters)}
+        {field('Size', company.size)}
+        {followersDisplay !== '—' ? field('Followers', followersDisplay) : null}
+        {company.website && (
+          <div>
+            <p style={card.fieldLabel}>Website</p>
+            <EditableWebsite value={company.website} onSave={v => onUpdate(company.id, { website: v })} />
+          </div>
+        )}
+        {company.specialties && (
+          <div style={{ gridColumn: '2 / -1' }}>
+            <p style={card.fieldLabel}>Specialties</p>
+            <p style={card.fieldValue}>{company.specialties.split(',').map(s => s.trim()).filter(Boolean).join(', ')}</p>
+          </div>
+        )}
+        {company.compliance && (
+          <div>
+            <p style={card.fieldLabel}>Compliance</p>
+            <p style={card.fieldValue}>{company.compliance}</p>
+          </div>
+        )}
+      </div>
 
+      {/* ── Edit panel ── */}
       {showEdit && (
         <div style={{ ...card.editPanel, borderTop: '1px solid var(--border)' }}>
           <div style={card.editGrid}>
@@ -655,53 +652,25 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         </div>
       )}
 
-      {fillResult && (
-        <div style={{ padding: '6px 14px', borderTop: `1px dashed ${fillResult.ok ? 'rgba(74,124,89,0.2)' : 'rgba(168,100,72,0.2)'}`, background: fillResult.ok ? 'rgba(74,124,89,0.04)' : 'rgba(168,100,72,0.04)' }}>
-          {fillResult.ok
-            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: '#4a7c59', margin: 0 }}>✓ Filled: {fillResult.filled.join(', ')}</p>
-            : <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>⚠ {fillResult.msg}</p>
-          }
-        </div>
-      )}
-
-      {analyzeResult && (
-        <div style={{ padding: '10px 14px', borderTop: `1px dashed ${analyzeResult.ok ? 'rgba(74,124,89,0.18)' : 'rgba(184,50,50,0.18)'}`, background: analyzeResult.ok ? 'rgba(74,124,89,0.03)' : 'rgba(184,50,50,0.03)' }}>
-          {!analyzeResult.ok
-            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--accent)', margin: 0 }}>⚠ {analyzeResult.msg}</p>
-            : (() => {
-                const a = analyzeResult.analysis
-                return (
-                  <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {a.company_type && <span style={{ ...getTypeBadge(a.company_type) }}>{a.company_type}</span>}
-                    {a.company_type_confidence && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>{a.company_type_confidence} confidence</span>}
-                    {a.company_type_reason && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: 0 }}>{a.company_type_reason}</p>}
-                    {a.compliance?.length > 0 && a.compliance.map(c => (
-                      <span key={c} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, color: '#4a7c59', background: 'rgba(74,124,89,0.10)', border: '1px solid rgba(74,124,89,0.22)', padding: '2px 7px', borderRadius: 3 }}>{c}</span>
-                    ))}
-                  </div>
-                )
-              })()
-          }
-        </div>
-      )}
-
+      {/* ── Notes ── */}
       {(showNotes || editingNotes) && (
-        <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <div style={{ padding: '12px 22px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <p style={card.infoLabel}>NOTES</p>
+            <p style={card.fieldLabel}>Notes</p>
             <button style={card.editBtn} onClick={() => editingNotes ? handleSaveNotes() : setEditingNotes(true)}>
               {editingNotes ? 'Save' : 'Edit'}
             </button>
           </div>
           {editingNotes
             ? <textarea value={notes} onChange={e => setNotes(e.target.value)} style={card.textarea} placeholder="Add notes…" rows={2} autoFocus />
-            : <p style={card.notesText}>{notes || 'No notes yet.'}</p>
+            : <p style={{ ...card.notesText, fontSize: 13 }}>{notes || 'No notes yet.'}</p>
           }
         </div>
       )}
 
+      {/* ── Signals ── */}
       {showSignals && (
-        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
           <CompanySignals companyId={company.id} initialSignals={cachedSignals} compact={false} />
         </div>
       )}
@@ -1222,7 +1191,7 @@ const s = {
   select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.04em' },
   primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
-  grid: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  grid: { display: 'flex', flexDirection: 'column', gap: '10px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
   emptyTitle: { fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '-0.03em' },
@@ -1254,6 +1223,8 @@ const card = {
   infoItem: { padding: '9px 14px', background: 'var(--bg)' },
   infoLabel: { fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '600', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '3px', textTransform: 'uppercase' },
   infoValue: { fontSize: '12px', color: 'var(--text)', fontWeight: '400', margin: 0 },
+  fieldLabel: { fontSize: 12, color: 'var(--text-muted)', margin: '0 0 4px', fontWeight: 400 },
+  fieldValue: { fontSize: 15, color: 'var(--text)', fontWeight: 500, margin: 0, lineHeight: 1.3 },
   complianceSection: { padding: '8px 14px', borderBottom: '1px solid rgba(196,193,189,0.4)' },
   complianceBadge: { padding: '2px 7px', border: '1px solid rgba(74,124,89,0.3)', borderRadius: '3px', fontSize: '9px', fontWeight: '600', color: '#4a7c59', letterSpacing: '0.5px', background: 'rgba(74,124,89,0.07)', fontFamily: 'var(--font-mono)' },
   description: { padding: '8px 14px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6, borderBottom: '1px solid rgba(196,193,189,0.4)' },
