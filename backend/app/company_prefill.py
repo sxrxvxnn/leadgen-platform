@@ -83,7 +83,9 @@ def _guess_domain(name: str) -> str | None:
         try:
             r = requests.head(url, timeout=5, allow_redirects=True,
                               headers={'User-Agent': 'Mozilla/5.0'})
-            if r.status_code < 400:
+            # 403 means the server exists and actively rejected the HEAD —
+            # the domain is valid, the site is real (many CDNs block HEAD requests)
+            if r.status_code < 400 or r.status_code == 403:
                 return url
         except Exception:
             continue

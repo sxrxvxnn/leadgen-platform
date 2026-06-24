@@ -918,6 +918,41 @@ async def prefill_company(
     if linkedin_url:
         linkedin_data = scrape_linkedin_data(linkedin_url, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
 
+    # Domain cross-check: verify scraped LinkedIn company belongs to the same domain
+    if linkedin_url and website_url:
+        def _root_domain_pf(u):
+            try:
+                from urllib.parse import urlparse as _up
+                h = _up(u if "://" in u else "https://" + u).netloc.lower()
+                h = h.replace("www.", "")
+                parts = h.split(".")
+                return ".".join(parts[-2:]) if len(parts) >= 2 else h
+            except Exception:
+                return ""
+
+        _stored_root = _root_domain_pf(website_url)
+        _li_website = linkedin_data.get("website", "")
+
+        if _li_website:
+            _scraped_root = _root_domain_pf(_li_website)
+            if _stored_root and _scraped_root and _stored_root != _scraped_root:
+                print(f"Prefill domain mismatch: company website={_stored_root}, LinkedIn website={_scraped_root} — clearing LinkedIn data")
+                linkedin_url = None
+                linkedin_people_url = None
+                linkedin_data = {}
+        elif linkedin_data:
+            # LinkedIn scraped but no website listed — check slug vs domain core
+            _slug_m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9-]+)', linkedin_url or '')
+            if _slug_m and _stored_root:
+                _dom_core = _stored_root.split(".")[0]
+                _slug = _slug_m.group(1).lower().replace("-", "")
+                if len(_dom_core) >= 3 and len(_slug) >= 3:
+                    if _dom_core not in _slug and _slug not in _dom_core:
+                        print(f"Prefill slug mismatch: slug={_slug}, domain={_dom_core} — clearing LinkedIn data")
+                        linkedin_url = None
+                        linkedin_people_url = None
+                        linkedin_data = {}
+
     return {
         "name": name,
         "website_url": website_url,
@@ -2403,6 +2438,7 @@ async def autofill_company_from_linkedin(
         linkedin_url  = company.get("linkedin_url") or ""
         stored_website = company.get("website") or ""  # original DB value — used for domain search
         found_website  = stored_website                # may be updated below; used for saving
+        _li_url_source = "stored" if linkedin_url else ""
 
         if is_indian:
             # Reject stored linkedin_url that points to global parent (no "india" in slug)
@@ -2424,8 +2460,10 @@ async def autofill_company_from_linkedin(
                         timeout=12, allow_redirects=True
                     )
                     linkedin_url = extract_linkedin_url_from_html(r.text)
+                    if linkedin_url: _li_url_source = "html"
                     if not linkedin_url and openrouter_key:
                         linkedin_url = extract_linkedin_url_with_qwen3(r.text, company_name, openrouter_key)
+                        if linkedin_url: _li_url_source = "html"
                 except Exception as e:
                     print(f"Website fetch for autofill: {e}")
 
@@ -2439,10 +2477,12 @@ async def autofill_company_from_linkedin(
         #     This avoids name-search mismatches (e.g. "DIAGNAL (P) Ltd" → G3G).
         if not linkedin_url and stored_website:
             linkedin_url = search_linkedin_url_by_domain(stored_website) or ""
+            if linkedin_url: _li_url_source = "domain"
 
         # (c) Name-based search — last resort, most likely to match wrong entity
         if not linkedin_url:
             linkedin_url = search_linkedin_url_direct(search_name) or ""
+            if linkedin_url: _li_url_source = "name"
 
         if not linkedin_url:
             return {"success": False, "filled": [], "update": {}, "linkedin_url": None,
@@ -2450,6 +2490,55 @@ async def autofill_company_from_linkedin(
 
         # Step 2 — Scrape LinkedIn
         li = scrape_linkedin_data(linkedin_url, li_cookie=li_cookie)
+
+        # Domain cross-check — applies to ALL sources including stored URLs.
+        # A stored LinkedIn URL may have been auto-saved from a previous wrong search.
+        # We always verify the scraped company's website matches the stored domain.
+        if stored_website:
+            def _root_domain(url):
+                try:
+                    from urllib.parse import urlparse
+                    host = urlparse(url if "://" in url else "https://" + url).netloc
+                    host = host.replace("www.", "").split(":")[0].lower()
+                    parts = host.split(".")
+                    return ".".join(parts[-2:]) if len(parts) >= 2 else host
+                except Exception:
+                    return ""
+            _stored_root = _root_domain(stored_website)
+            # Check 1: website domain mismatch (only when LinkedIn has a website listed)
+            if li.get("website"):
+                _scraped_root = _root_domain(li.get("website", ""))
+                if _stored_root and _scraped_root and _stored_root != _scraped_root:
+                    # Clear the wrong stored LinkedIn URL so future searches start fresh
+                    if _li_url_source == "stored":
+                        supabase.table("companies").update({"linkedin_url": None}).eq("id", company_id).execute()
+                    return {
+                        "success": False, "filled": [], "update": {}, "linkedin_url": None,
+                        "message": (
+                            f"The LinkedIn page found has website \"{li.get('website')}\" "
+                            f"but this company's domain is \"{stored_website}\" — wrong match. "
+                            "The saved LinkedIn URL has been cleared. "
+                            "Please paste the correct LinkedIn URL via Edit on the card."
+                        ),
+                    }
+            # Check 2: LinkedIn slug vs. stored domain core (fallback when LinkedIn has no website)
+            _slug_match = _re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin_url or '')
+            if _slug_match and _stored_root:
+                _dom_core = _stored_root.split(".")[0]  # e.g. "way" from "way.com"
+                _slug = _slug_match.group(1).lower().replace("-", "")
+                if len(_dom_core) >= 3 and len(_slug) >= 3:
+                    if _dom_core not in _slug and _slug not in _dom_core:
+                        if _li_url_source == "stored":
+                            supabase.table("companies").update({"linkedin_url": None}).eq("id", company_id).execute()
+                        return {
+                            "success": False, "filled": [], "update": {}, "linkedin_url": None,
+                            "message": (
+                                f"The LinkedIn page \"{linkedin_url}\" doesn't match "
+                                f"the expected domain \"{stored_website}\" — wrong match. "
+                                "The saved LinkedIn URL has been cleared. "
+                                "Please paste the correct LinkedIn URL via Edit on the card."
+                            ),
+                        }
 
         # If LinkedIn was blocked, try web search snippet fallback
         if not any([li.get("followers"), li.get("employee_count"), li.get("description")]):
@@ -2504,7 +2593,9 @@ async def autofill_company_from_linkedin(
         # Groq inference fallback — fills remaining blanks when ProxyCurl key is absent.
         # Uses the description we already scraped to infer industry, founded, specialties.
         _groq_key_li = os.environ.get("GROQ_API_KEY", "")
-        _desc_li = li.get("description") or company.get("description") or ""
+        # Only use description scraped from LinkedIn — never fall back to stored description
+        # (stored descriptions may be user notes / LinkedIn post snippets, not company info)
+        _desc_li = li.get("description") or ""
         if _groq_key_li and _desc_li and (not li.get("industry") or not li.get("founded") or not li.get("specialties")):
             try:
                 import json as _json_li
@@ -2539,10 +2630,100 @@ async def autofill_company_from_linkedin(
             except Exception:
                 pass
 
+        # Generate a clean one-liner tagline from the real LinkedIn description using Groq
+        if _groq_key_li and li.get("description") and not li.get("tagline"):
+            try:
+                _tg = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {_groq_key_li}", "Content-Type": "application/json"},
+                    json={"model": "llama-3.1-8b-instant",
+                          "messages": [{"role": "user", "content": (
+                              f"Write ONE sentence (max 15 words) summarizing what this company does.\n"
+                              f"Company: {company_name}\nDescription: {li['description'][:500]}\n"
+                              "Respond with ONLY the sentence, no quotes."
+                          )}],
+                          "max_tokens": 60, "temperature": 0.2},
+                    timeout=8,
+                )
+                if _tg.status_code == 200:
+                    _tagline = _tg.json()["choices"][0]["message"]["content"].strip().strip('"').strip("'").rstrip(".")
+                    if len(_tagline) > 10:
+                        li["tagline"] = _tagline
+            except Exception:
+                pass
+
         # Step 3 — Website: prefer stored website over LinkedIn-scraped to avoid aggregator sites
         # (e.g. LinkedIn page for SS&C shows ampliz.com, but stored website ssctech.com is correct)
         if not is_indian and not found_website and not li.get("website"):
-            found_website = search_company_website(company_name) or ""
+            from .company_prefill import _web_search, _SKIP_DOMAINS, _domain_is_relevant, _guess_domain
+            from urllib.parse import urlparse as _up2
+
+            # 3a: Derive domain from LinkedIn URL slug — most reliable when URL is stored.
+            # "way-com" → "way.com", "beagle-security-com" → "beagle-security.com", etc.
+            _slug_m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9-]+)', linkedin_url or '')
+            if _slug_m:
+                _slug = _slug_m.group(1).lower()
+                _tlds = ['com', 'io', 'co', 'ai', 'net', 'app']
+                for _tld in _tlds:
+                    if _slug.endswith(f'-{_tld}') and len(_slug) > len(_tld) + 1:
+                        _candidate = _slug[: -(len(_tld) + 1)] + '.' + _tld
+                        try:
+                            _r2 = requests.get(
+                                f'https://{_candidate}', timeout=6, allow_redirects=True,
+                                headers={'User-Agent': 'Mozilla/5.0'}, stream=True
+                            )
+                            _r2.close()
+                            if _r2.status_code < 500:
+                                found_website = f'https://{_candidate}'
+                        except Exception:
+                            pass
+                        break  # only one tld suffix per slug
+
+            # 3b: Direct domain guess — HTTP-verifies the domain exists, no web search needed.
+            # For "Way" this tries way.com HEAD request → 200/403 → done. Much more reliable than
+            # DDGS which accepts any domain containing "way" (e.g. getaway.com, oneway.com).
+            if not found_website:
+                found_website = _guess_domain(company_name) or ""
+
+            # 3b: Contextual DDGS search using LinkedIn location/industry as disambiguators
+            if not found_website:
+                _li_loc = (li.get("location") or "").split(",")[0].strip()
+                _li_ind = (li.get("industry") or "")
+                if _li_loc or _li_ind:
+                    _hint = " ".join(h for h in [_li_loc, _li_ind] if h)[:60]
+                    for _q in [f'"{company_name}" {_hint} official website', f'"{company_name}" {_hint} site']:
+                        for _r in _web_search(_q, count=6):
+                            _href = _r.get('href', '')
+                            if not _href:
+                                continue
+                            _dom2 = _up2(_href).netloc.replace('www.', '')
+                            if any(_dom2 == s or _dom2.endswith('.' + s) for s in _SKIP_DOMAINS):
+                                continue
+                            # Require domain to START with company name to avoid substring traps
+                            # ("way" in "getaway" is True — we want "getaway".startswith("way") = False)
+                            _dom_core = _dom2.split('.')[0]
+                            _name_lc = re.sub(r'[^a-z0-9]', '', company_name.lower())
+                            if _dom_core == _name_lc or _dom_core.startswith(_name_lc) or company_name.lower() in _r.get('title', '').lower():
+                                found_website = _href
+                                break
+                        if found_website:
+                            break
+
+            # 3c: Plain name search fallback (already tries _guess_domain internally, skip that)
+            if not found_website:
+                for _q in [f'"{company_name}" official website', f'{company_name} company site']:
+                    for _r in _web_search(_q, count=6):
+                        _href = _r.get('href', '')
+                        if not _href:
+                            continue
+                        _dom2 = _up2(_href).netloc.replace('www.', '')
+                        if any(_dom2 == s or _dom2.endswith('.' + s) for s in _SKIP_DOMAINS):
+                            continue
+                        if _domain_is_relevant(_dom2, company_name) or company_name.lower() in _r.get('title', '').lower():
+                            found_website = _href
+                            break
+                    if found_website:
+                        break
         # For Indian entities found_website is already "" (cleared above), so li.get("website") is used
         website_to_save = (found_website if not is_indian else "") or li.get("website") or ""
 
@@ -2573,6 +2754,16 @@ async def autofill_company_from_linkedin(
         # Website: only set when empty (or Indian entity where stored URL was the global parent)
         if website_to_save and (not company.get("website") or is_indian):
             update_data["website"] = website_to_save
+
+        # Always persist what LinkedIn's page listed as their website — even an empty sentinel.
+        # The frontend checkCompanyAccuracy() uses this field to verify LinkedIn URL correctness:
+        # if linkedin_website ≠ company.website it flags the LinkedIn URL as a wrong-entity match.
+        if li.get("website"):
+            update_data["linkedin_website"] = li["website"]
+        elif any([li.get("followers"), li.get("description"), li.get("employee_count")]):
+            # LinkedIn was reachable but listed no website — save "" sentinel so accuracy check
+            # knows "we looked and found nothing" vs "we never checked"
+            update_data["linkedin_website"] = ""
 
         # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
         if li.get("industry"):
@@ -2615,6 +2806,99 @@ async def autofill_company_from_linkedin(
             "linkedin_url": linkedin_url,
             "classification": update_data.get("classification"),
         }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── FETCH FUNDING ────────────────────────────────────────────
+
+@router.post("/companies/{company_id}/fetch-funding")
+async def fetch_company_funding(company_id: str, authorization: str = Header(...)):
+    """Search the web for company funding data and save to the revenue field."""
+    user_id = get_user_id(authorization)
+    try:
+        co_res = supabase.table("companies").select("id,name,website").eq("id", company_id).eq("user_id", user_id).single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = co_res.data
+    name = company.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Company name not set")
+
+    try:
+        from ddgs import DDGS
+        import re as _fre
+        import json as _fjson
+
+        snippets = []
+        queries = [
+            f'"{name}" total funding raised "Series" OR "Seed" OR "seed round" OR "pre-seed"',
+            f'site:crunchbase.com "{name}" funding',
+            f'"{name}" investment round raised million',
+        ]
+        with DDGS() as ddgs:
+            for q in queries:
+                try:
+                    for r in ddgs.text(q, max_results=4):
+                        snippets.append((r.get("title", "") + " " + r.get("body", "")).strip())
+                    if len(snippets) >= 8:
+                        break
+                except Exception:
+                    continue
+
+        if not snippets:
+            return {"success": False, "message": "No funding data found"}
+
+        combined = " | ".join(snippets[:8])[:2500]
+        groq_key = os.environ.get("GROQ_API_KEY", "")
+        if not groq_key:
+            return {"success": False, "message": "Groq key not configured"}
+
+        import requests as _freq
+        gres = _freq.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": (
+                    f"Extract funding info for company '{name}' from these web snippets:\n\n{combined}\n\n"
+                    'Return ONLY JSON: {"stage":"Seed/Series A/Series B/etc or null","amount":"e.g. $5M or null","investors":"main investor names or null"}\n'
+                    "Use null for fields that are not clearly stated. Only include data that is specifically about this company."
+                )}],
+                "max_tokens": 150,
+                "temperature": 0.1,
+            },
+            timeout=12,
+        )
+        if gres.status_code != 200:
+            return {"success": False, "message": "AI extraction failed"}
+
+        raw = gres.json()["choices"][0]["message"]["content"].strip()
+        m = _fre.search(r'\{[^}]+\}', raw, _fre.DOTALL)
+        if not m:
+            return {"success": False, "message": "Could not parse funding response"}
+
+        data = _fjson.loads(m.group(0))
+        stage  = (data.get("stage")     or "").strip()
+        amount = (data.get("amount")    or "").strip()
+        investors = (data.get("investors") or "").strip()
+
+        if not stage and not amount:
+            return {"success": False, "message": "No clear funding data found for this company"}
+
+        parts = [p for p in [stage, amount] if p and p not in ("null", "None")]
+        if investors and investors not in ("null", "None"):
+            parts.append(f"· {investors}")
+        funding_str = " ".join(parts)
+
+        supabase.table("companies").update({"revenue": funding_str}).eq("id", company_id).eq("user_id", user_id).execute()
+        posthog.capture(user_id, "company_funding_fetched", {"company": name})
+        return {"success": True, "funding": funding_str}
 
     except HTTPException:
         raise

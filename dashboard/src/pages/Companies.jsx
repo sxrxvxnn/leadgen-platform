@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { syncToDirectory } from '../services/companyDirectory'
@@ -244,24 +244,32 @@ function _domainOf(url) {
 }
 
 function checkCompanyAccuracy(company) {
-  // Strongest signal: a correct LinkedIn company profile lists the real website.
-  // If it disagrees with our stored website, that overrides the keyword heuristic
-  // below in both directions — agreement is stronger proof than any name match.
-  if (company.linkedin_website && company.website) {
-    const d1 = _domainOf(company.website)
-    const d2 = _domainOf(company.linkedin_website)
-    if (d1 && d2) {
-      return d1 === d2
-        ? { confidence: 'high', issues: [] }
-        : { confidence: 'low', issues: ['linkedin-website-mismatch'] }
+  // ── Tier 1: domain comparison (most reliable) ──────────────────────────────
+  // linkedin_website = website that LinkedIn's own company page lists.
+  // Saved by Fill LI every time it runs. If it matches our stored website,
+  // we know the LinkedIn URL is pointing to the right entity.
+  if (company.linkedin_website !== undefined && company.linkedin_website !== null) {
+    // Empty string sentinel means "Fill LI ran but LinkedIn listed no website"
+    if (company.linkedin_website === '') {
+      // Can't do domain comparison — fall through to slug check below
+    } else if (company.website) {
+      const d1 = _domainOf(company.website)
+      const d2 = _domainOf(company.linkedin_website)
+      if (d1 && d2) {
+        return d1 === d2
+          ? { confidence: 'high', issues: [] }
+          : { confidence: 'low', issues: ['linkedin-website-mismatch'] }
+      }
     }
   }
 
+  // ── Tier 2: slug ↔ name/domain keyword match (heuristic fallback) ──────────
   const words = _nameWords(company.name)
   const issues = []
   if (words.length === 0 || !(company.website || company.linkedin_url)) {
     return { confidence: 'none', issues: [] }
   }
+
   if (company.website) {
     try {
       const url = company.website.includes('://') ? company.website : 'https://' + company.website
@@ -273,16 +281,27 @@ function checkCompanyAccuracy(company) {
       if (!hit) issues.push('website')
     } catch {}
   }
+
   if (company.linkedin_url) {
     const m = (company.linkedin_url || '').match(/linkedin\.com\/company\/([a-zA-Z0-9_-]+)/i)
     if (m) {
       const slug = m[1].toLowerCase().replace(/-/g, '')
       const initials = words.map(w => w[0]).join('')
+      // Also check slug against stored website domain core for extra precision
+      let domainCore = ''
+      if (company.website) {
+        try {
+          const u = company.website.includes('://') ? company.website : 'https://' + company.website
+          domainCore = new URL(u).hostname.replace(/^www\./, '').split('.')[0].toLowerCase()
+        } catch {}
+      }
       const hit = words.some(w => slug.includes(w)) ||
-                  slug === initials || slug.startsWith(initials) || initials.startsWith(slug)
+                  slug === initials || slug.startsWith(initials) || initials.startsWith(slug) ||
+                  (domainCore.length > 2 && (slug.includes(domainCore) || domainCore.includes(slug)))
       if (!hit) issues.push('linkedin')
     }
   }
+
   return {
     confidence: issues.length === 0 ? 'high' : issues.length === 1 ? 'medium' : 'low',
     issues,
@@ -307,6 +326,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const [showSignals, setShowSignals] = useState(false)
   const [cachedSignals, setCachedSignals] = useState(null)
   const [showNotes, setShowNotes] = useState(false)
+  const [fetchingFunding, setFetchingFunding] = useState(false)
+  const [fundingResult, setFundingResult] = useState(null)
 
   useEffect(() => {
     getCompanySignals(company.id).then(r => {
@@ -413,6 +434,87 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       setFillResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Fill failed' })
     } finally {
       setFillingLI(false)
+    }
+  }
+
+  async function handleFillAndAnalyze() {
+    let updatedWebsite = company.website
+
+    // Step 1: Fill from LinkedIn
+    setFillingLI(true)
+    setFillResult(null)
+    try {
+      const res = await autofillCompanyLinkedIn(company.id)
+      const { success, update, filled, linkedin_url, message, classification: newClass } = res.data
+      if (success !== false && filled.length > 0) {
+        const patch = { ...update, linkedin_url: update.linkedin_url || linkedin_url || company.linkedin_url }
+        if (update.website) updatedWebsite = update.website
+        if (newClass) { patch.classification = newClass; setClassification(newClass) }
+        else {
+          const enriched = { ...company, ...patch }
+          const autoClass = classifyCompany(enriched)
+          if (autoClass !== 'Unclassified' && (company.classification || 'Unclassified') === 'Unclassified') {
+            patch.classification = autoClass; setClassification(autoClass)
+          }
+        }
+        onUpdate(company.id, patch)
+        setFillResult({ ok: true, filled })
+      } else {
+        setFillResult({ ok: false, msg: message || 'Could not find LinkedIn data' })
+      }
+    } catch (e) {
+      setFillResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Fill failed' })
+    } finally {
+      setFillingLI(false)
+    }
+
+    // Step 2: Analyze website
+    setAnalyzing(true)
+    setAnalyzeResult(null)
+    try {
+      const res = await analyzeCompany(company.id, { website: updatedWebsite })
+      const data = res.data
+      if (data.success && data.analysis) {
+        const a = data.analysis
+        const patch = {}
+        if (a.company_type) patch.company_type = a.company_type
+        if (a.compliance?.length) patch.compliance = a.compliance.join(', ')
+        if (a.website_summary && !company.description) patch.description = a.website_summary
+        if (a.is_saas !== undefined && a.is_saas !== null) patch.is_saas = a.is_saas
+        const currentClass = company.classification || 'Unclassified'
+        if (currentClass === 'Unclassified') {
+          const enriched = { ...company, description: a.website_summary || company.description || '', products_or_services: (a.products_or_services || []).join(' ') }
+          const autoClass = classifyCompany(enriched)
+          if (autoClass !== 'Unclassified') { patch.classification = autoClass; setClassification(autoClass) }
+        }
+        if (Object.keys(patch).length) onUpdate(company.id, patch)
+        setAnalyzeResult({ ok: true, analysis: a })
+      } else {
+        setAnalyzeResult({ ok: false, msg: data.detail || 'Analysis failed' })
+      }
+    } catch (e) {
+      setAnalyzeResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Analysis failed' })
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  async function handleFetchFunding() {
+    setFetchingFunding(true)
+    setFundingResult(null)
+    try {
+      const res = await fetchCompanyFunding(company.id)
+      const { success, funding, message } = res.data
+      if (success && funding) {
+        onUpdate(company.id, { revenue: funding })
+        setFundingResult({ ok: true, value: funding })
+      } else {
+        setFundingResult({ ok: false, msg: message || 'No funding data found' })
+      }
+    } catch (e) {
+      setFundingResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Fetch failed' })
+    } finally {
+      setFetchingFunding(false)
     }
   }
 
@@ -579,18 +681,17 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          <button style={{ ...card.actionBtn, opacity: analyzing ? 0.5 : 1 }} onClick={handleAnalyze} disabled={analyzing}>
-            {analyzing ? 'Analyzing…' : 'Analyze'}
-          </button>
           <button
-            style={{ ...card.actionBtn, color: fillingLI ? 'var(--text-muted)' : 'var(--accent)', borderColor: fillingLI ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: fillingLI ? 0.5 : 1 }}
-            onClick={handleFillLinkedIn} disabled={fillingLI}>
-            {fillingLI ? 'Filling…' : 'Fill LI'}
+            style={{ ...card.actionBtn, color: (fillingLI || analyzing) ? 'var(--text-muted)' : 'var(--accent)', borderColor: (fillingLI || analyzing) ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: (fillingLI || analyzing) ? 0.5 : 1 }}
+            onClick={handleFillAndAnalyze}
+            disabled={fillingLI || analyzing}
+            title="Fill from LinkedIn, then analyze website">
+            {fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : 'Fill + Analyze'}
           </button>
           <button
             style={{ ...card.actionBtn, color: pipelining ? 'var(--text-muted)' : '#5b8db8', borderColor: pipelining ? 'var(--border)' : 'rgba(91,141,184,0.35)', opacity: pipelining ? 0.6 : 1 }}
             onClick={handleEnrichPipeline} disabled={pipelining} title="Website analysis + compliance + maps enrich">
-            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : '⚡ Enrich'}
+            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enrich'}
           </button>
           <button
             style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
@@ -733,18 +834,28 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
       {/* Company Funding */}
       <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-          </svg>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Company funding</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Company funding</span>
+          </div>
+          <button
+            onClick={handleFetchFunding}
+            disabled={fetchingFunding}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 10px', background: 'transparent', border: '1px solid rgba(22,163,74,0.35)', borderRadius: 5, color: fetchingFunding ? 'var(--text-muted)' : '#16a34a', cursor: fetchingFunding ? 'default' : 'pointer', opacity: fetchingFunding ? 0.6 : 1, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+            {fetchingFunding ? 'Fetching…' : 'Fetch Funding'}
+          </button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
           Funding rounds, amounts, and participating investors.
         </p>
-        {company.revenue
-          ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#16a34a', margin: 0, letterSpacing: '-0.03em' }}>{company.revenue}</p>
-          : <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Not available — enter via Edit or run Enrich.</p>
+        {(company.revenue || fundingResult?.ok)
+          ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: '#16a34a', margin: 0, letterSpacing: '-0.03em' }}>{fundingResult?.ok ? fundingResult.value : company.revenue}</p>
+          : fundingResult?.ok === false
+            ? <p style={{ fontSize: 12, color: 'var(--accent)', margin: 0 }}>{fundingResult.msg}</p>
+            : <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Not available — click Fetch Funding or enter via Edit.</p>
         }
       </div>
 
@@ -1265,7 +1376,7 @@ const s = {
   select: { padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', outline: 'none', fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: '0.04em' },
   primaryBtn: { padding: '9px 16px', background: 'var(--text)', border: 'none', borderRadius: '7px', fontSize: '10px', fontWeight: '600', color: '#FFFFFF', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
   secondaryBtn: { padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '10px', fontWeight: '500', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', letterSpacing: '0.04em' },
-  grid: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  grid: { display: 'flex', flexDirection: 'column', gap: '28px' },
   empty: { padding: '40px 0', fontSize: '13px', color: 'var(--text-muted)' },
   emptyState: { padding: '80px 0', textAlign: 'center' },
   emptyTitle: { fontFamily: 'var(--font-display)', fontSize: '24px', fontWeight: '400', color: 'var(--text-secondary)', marginBottom: '8px', letterSpacing: '-0.03em' },

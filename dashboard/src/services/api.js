@@ -189,6 +189,7 @@ export const autofillCompanyLinkedIn = (id) =>
   api.post(`/companies/${id}/autofill-linkedin`, {
     li_cookie: localStorage.getItem('liCookie') || '',
   })
+export const fetchCompanyFunding = (id) => api.post(`/companies/${id}/fetch-funding`)
 export const prefillCompany = (name, websiteUrl) =>
   api.post('/companies/prefill', {
     name,
