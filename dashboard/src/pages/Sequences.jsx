@@ -512,6 +512,22 @@ export default function Sequences() {
 
   async function handleToggle(seq) {
     const next = seq.status === 'active' ? 'paused' : 'active'
+    if (next === 'active') {
+      // Pre-flight checks before activating
+      const warnings = []
+      if (!seq.steps || seq.steps.filter(s => s.type === 'email').length === 0) {
+        warnings.push('This sequence has no email steps.')
+      }
+      if (seq.enrolled_count === 0) {
+        warnings.push('No leads are enrolled. Enroll leads first.')
+      }
+      if (sendStats && sendStats.remaining === 0) {
+        warnings.push(`Daily send limit reached (${sendStats.daily_limit}/day). Emails will send tomorrow.`)
+      }
+      if (warnings.length > 0 && !confirm(`Before activating:\n\n${warnings.map(w => '⚠ ' + w).join('\n')}\n\nContinue anyway?`)) {
+        return
+      }
+    }
     await api.patch(`/sequences/${seq.id}`, { status: next })
     await load()
   }

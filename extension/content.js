@@ -310,7 +310,7 @@ function buildIcpChip(score) {
 
 function buildEmailChip(status) {
   if (!status) return ''
-  const map = { valid: ['ok', '✓ valid'], risky: ['warn', '⚠ risky'], invalid: ['bad', '✕ invalid'] }
+  const map = { valid: ['ok', '✓ valid'], risky: ['warn', '⚠ risky'], invalid: ['bad', '✕ invalid'], role: ['warn', '⊘ role'], catch_all: ['warn', '~ catch-all'] }
   const [cls, lbl] = map[status] || ['', '']
   return cls ? `<span class="sp-chip ${cls}">${lbl}</span>` : ''
 }
