@@ -349,4 +349,7 @@ export const dismissAlert        = (id) => api.delete(`/job-change-alerts/${id}`
 export const getFeatureFlags   = () => api.get('/feature-flags')
 export const updateFeatureFlag = (name, enabled) => api.patch(`/feature-flags/${name}`, { enabled })
 
+// ─── DOMAIN HEALTH ────────────────────────────────────────────────
+export const checkDomainHealth = (domain) => api.get('/profile/domain-health', { params: { domain } })
+
 export default api

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig } from '../services/api'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, checkDomainHealth } from '../services/api'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
@@ -53,6 +53,10 @@ export default function Settings() {
   const [autoSaving, setAutoSaving]         = useState(false)
   const [autoSaved,  setAutoSaved]          = useState(false)
   const [autoDeleting, setAutoDeleting]     = useState(false)
+  const [domainInput,   setDomainInput]     = useState('')
+  const [domainChecking, setDomainChecking] = useState(false)
+  const [domainHealth,  setDomainHealth]    = useState(null)
+  const [domainError,   setDomainError]     = useState('')
 
   useEffect(() => {
     getSmtpConfig().then(res => {
@@ -89,6 +93,23 @@ export default function Settings() {
       alert('Failed: ' + (e?.response?.data?.detail || e.message))
     } finally {
       setAutoDeleting(false)
+    }
+  }
+
+  async function handleCheckDomain() {
+    const domain = (domainInput || autoSmtp.from_email.split('@')[1] || '').trim()
+    if (!domain) return
+    setDomainError('')
+    setDomainHealth(null)
+    setDomainChecking(true)
+    try {
+      const r = await checkDomainHealth(domain)
+      setDomainHealth(r.data)
+      setDomainInput(domain)
+    } catch (e) {
+      setDomainError(e?.response?.data?.detail || 'Check failed. Verify the domain name.')
+    } finally {
+      setDomainChecking(false)
     }
   }
 
@@ -360,6 +381,85 @@ export default function Settings() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
                 Tokens: {'{{name}}'} {'{{first_name}}'} {'{{company}}'} {'{{title}}'} {'{{cal_link}}'}
               </span>
+            </div>
+
+            {/* Domain Health Check */}
+            <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 4 }}>Domain Health</p>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
+                Check SPF and DMARC records for your sending domain. Missing records increase spam placement.
+              </p>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input
+                  value={domainInput || (autoSmtp.from_email.includes('@') ? autoSmtp.from_email.split('@')[1] : '')}
+                  onChange={e => setDomainInput(e.target.value)}
+                  placeholder="yourdomain.com"
+                  style={{ ...s.input, flex: 1, maxWidth: 280 }}
+                />
+                <button onClick={handleCheckDomain} disabled={domainChecking} style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '10px 18px',
+                  background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)',
+                  borderRadius: 3, cursor: domainChecking ? 'default' : 'pointer', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                }}>
+                  {domainChecking ? 'Checking…' : 'Check DNS'}
+                </button>
+              </div>
+
+              {domainError && (
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#ef4444', marginTop: 10 }}>{domainError}</p>
+              )}
+
+              {domainHealth && (
+                <div style={{ marginTop: 16, padding: '16px 18px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  {/* Score bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: domainHealth.score >= 80 ? 'rgba(74,124,89,0.15)' : domainHealth.score >= 40 ? 'rgba(234,179,8,0.12)' : 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: domainHealth.score >= 80 ? '#4a7c59' : domainHealth.score >= 40 ? '#ca8a04' : '#ef4444' }}>{domainHealth.score}</span>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{domainHealth.domain}</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: domainHealth.score >= 80 ? '#4a7c59' : domainHealth.score >= 40 ? '#ca8a04' : '#ef4444', margin: '2px 0 0' }}>
+                        {domainHealth.score >= 80 ? 'Strong deliverability' : domainHealth.score >= 40 ? 'Needs improvement' : 'High spam risk'}
+                      </p>
+                    </div>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 3, background: domainHealth.spf.ok && !domainHealth.spf.warn ? 'rgba(74,124,89,0.12)' : 'rgba(239,68,68,0.1)', color: domainHealth.spf.ok && !domainHealth.spf.warn ? '#4a7c59' : '#ef4444' }}>
+                        SPF {domainHealth.spf.ok ? (domainHealth.spf.warn ? '⚠' : '✓') : '✗'}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 3, background: domainHealth.dmarc.ok && !domainHealth.dmarc.warn ? 'rgba(74,124,89,0.12)' : 'rgba(239,68,68,0.1)', color: domainHealth.dmarc.ok && !domainHealth.dmarc.warn ? '#4a7c59' : '#ef4444' }}>
+                        DMARC {domainHealth.dmarc.ok ? (domainHealth.dmarc.warn ? '⚠' : '✓') : '✗'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Record values */}
+                  {domainHealth.spf.value && (
+                    <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 3, border: '1px solid var(--border)' }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: '0 0 3px', fontWeight: 600 }}>SPF RECORD</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)', margin: 0, wordBreak: 'break-all' }}>{domainHealth.spf.value}</p>
+                    </div>
+                  )}
+                  {domainHealth.dmarc.value && (
+                    <div style={{ marginBottom: 8, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 3, border: '1px solid var(--border)' }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', margin: '0 0 3px', fontWeight: 600 }}>DMARC RECORD</p>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)', margin: 0, wordBreak: 'break-all' }}>{domainHealth.dmarc.value}</p>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {domainHealth.recommendations.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Recommendations</p>
+                      {domainHealth.recommendations.map((rec, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#ca8a04', flexShrink: 0, marginTop: 1 }}>→</span>
+                          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>{rec}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 

@@ -6459,6 +6459,61 @@ async def unverified_email_count(authorization: str = Header(...)):
     return {"count": res.count or 0}
 
 
+# ─── DOMAIN HEALTH CHECK ─────────────────────────────────────────────────────
+
+@router.get("/profile/domain-health")
+async def check_domain_health(domain: str, authorization: str = Header(...)):
+    """Check SPF and DMARC DNS records for a sending domain."""
+    get_user_id(authorization)
+    import re as _re2
+    domain = domain.strip().lower().lstrip("@")
+    if not domain or not _re2.match(r'^[a-z0-9][a-z0-9\-\.]+\.[a-z]{2,}$', domain):
+        raise HTTPException(status_code=422, detail="Invalid domain")
+
+    import urllib.request as _urlreq, json as _jlib
+
+    def _dns_txt(name: str) -> list[str]:
+        """Fetch TXT records via Google DoH."""
+        try:
+            url = f"https://dns.google/resolve?name={name}&type=TXT"
+            with _urlreq.urlopen(url, timeout=5) as r:
+                data = _jlib.loads(r.read())
+            return [
+                "".join(x.get("data", "").strip('"') for x in (ans.get("data") or [{}] if isinstance(ans.get("data"), list) else [{"data": ans.get("data", "")}]))
+                for ans in (data.get("Answer") or [])
+                if ans.get("type") == 16
+            ]
+        except Exception:
+            return []
+
+    spf_records  = [r for r in _dns_txt(domain) if r.startswith("v=spf1")]
+    dmarc_records = [r for r in _dns_txt(f"_dmarc.{domain}") if r.startswith("v=DMARC1")]
+
+    spf_ok     = len(spf_records) > 0
+    dmarc_ok   = len(dmarc_records) > 0
+    spf_val    = spf_records[0] if spf_records else None
+    dmarc_val  = dmarc_records[0] if dmarc_records else None
+
+    # Warn if SPF is too permissive (+all) or if DMARC is set to none
+    spf_warn   = spf_ok and "+all" in (spf_val or "")
+    dmarc_none = dmarc_ok and "p=none" in (dmarc_val or "")
+
+    score = (40 if spf_ok else 0) + (40 if dmarc_ok else 0) + (20 if not spf_warn and not dmarc_none else 0)
+
+    return {
+        "domain":  domain,
+        "score":   score,
+        "spf":     {"ok": spf_ok, "value": spf_val, "warn": spf_warn},
+        "dmarc":   {"ok": dmarc_ok, "value": dmarc_val, "warn": dmarc_none},
+        "recommendations": [
+            *( [] if spf_ok else ["Add an SPF record: v=spf1 include:_spf.google.com ~all"] ),
+            *( ["Your SPF uses +all (allows any server) — switch to ~all or -all"] if spf_warn else [] ),
+            *( [] if dmarc_ok else ["Add a DMARC record: v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"] ),
+            *( ["Your DMARC policy is p=none (monitor only) — upgrade to p=quarantine"] if dmarc_none else [] ),
+        ],
+    }
+
+
 # ─── PHASE 1: ANALYTICS ──────────────────────────────────────────────────────
 
 @router.get("/analytics")
