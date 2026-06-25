@@ -6256,7 +6256,7 @@ async def dashboard_summary(authorization: str = Header(...)):
 
 @router.post("/leads/{lead_id}/verify-email")
 async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
-    """Verify lead email deliverability via Sonar SMTP + MX check."""
+    """Verify lead email deliverability — full pipeline (MX, disposable, catch-all, SMTP)."""
     user_id = get_user_id(authorization)
     validate_uuid(lead_id)
     lead_res = supabase.table("leads").select("email").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
@@ -6265,26 +6265,78 @@ async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
     if not email:
         raise HTTPException(status_code=422, detail="Lead has no email address")
     try:
-        from .enrichment import _has_mx, _smtp_verify
-        domain   = email.split("@")[-1]
-        mx_found = _has_mx(domain)
-        if not mx_found:
-            result = {"email": email, "status": "invalid", "score": 0, "disposable": False, "mx_found": False}
-            supabase.table("leads").update({"email_status": "invalid", "email_score": 0}).eq("id", lead_id).execute()
-            return result
-        smtp_result = _smtp_verify(email)
-        if smtp_result is True:
-            status, score = "valid", 90
-        elif smtp_result is False:
-            status, score = "invalid", 5
-        else:
-            # Port 25 blocked — MX exists so domain is real, can't confirm mailbox
-            status, score = "risky", 40
-        result = {"email": email, "status": status, "score": score, "disposable": False, "mx_found": mx_found}
-        supabase.table("leads").update({"email_status": status, "email_score": score}).eq("id", lead_id).execute()
+        from .email_verifier import verify_email, status_to_db
+        result = verify_email(email)
+        supabase.table("leads").update(status_to_db(result)).eq("id", lead_id).execute()
         return result
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/leads/bulk-verify")
+async def bulk_verify_leads(payload: dict, authorization: str = Header(...)):
+    """Verify emails for a batch of leads. Returns per-lead results."""
+    user_id  = get_user_id(authorization)
+    lead_ids = payload.get("lead_ids") or []
+    if not lead_ids:
+        raise HTTPException(status_code=422, detail="lead_ids required")
+    if len(lead_ids) > 200:
+        raise HTTPException(status_code=422, detail="Maximum 200 leads per bulk verify call")
+
+    from .email_verifier import verify_email, status_to_db
+
+    res = supabase.table("leads")\
+        .select("id,email")\
+        .in_("id", lead_ids)\
+        .eq("user_id", user_id)\
+        .execute()
+    leads = res.data or []
+
+    results   = []
+    verified  = 0
+    skipped   = 0
+    errors    = 0
+
+    for lead in leads:
+        lid   = lead["id"]
+        email = (lead.get("email") or "").strip()
+        if not email:
+            results.append({"lead_id": lid, "email": None, "status": "skipped", "score": None, "reason": "No email"})
+            skipped += 1
+            continue
+        try:
+            r = verify_email(email)
+            supabase.table("leads").update(status_to_db(r)).eq("id", lid).execute()
+            results.append({"lead_id": lid, **r})
+            verified += 1
+        except Exception as ex:
+            results.append({"lead_id": lid, "email": email, "status": "error", "score": None, "reason": str(ex)})
+            errors += 1
+
+    summary = {
+        "total":    len(leads),
+        "verified": verified,
+        "skipped":  skipped,
+        "errors":   errors,
+        "valid":    sum(1 for r in results if r.get("status") == "valid"),
+        "risky":    sum(1 for r in results if r.get("status") in ("risky", "unknown", "catch_all")),
+        "invalid":  sum(1 for r in results if r.get("status") in ("invalid", "disposable")),
+        "role":     sum(1 for r in results if r.get("status") == "role"),
+    }
+    return {"summary": summary, "results": results}
+
+
+@router.get("/leads/unverified-count")
+async def unverified_email_count(authorization: str = Header(...)):
+    """Count leads that have an email but haven't been verified yet."""
+    user_id = get_user_id(authorization)
+    res = supabase.table("leads")\
+        .select("id", count="exact")\
+        .eq("user_id", user_id)\
+        .not_.is_("email", "null")\
+        .is_("email_status", "null")\
+        .execute()
+    return {"count": res.count or 0}
 
 
 # ─── PHASE 1: ANALYTICS ──────────────────────────────────────────────────────

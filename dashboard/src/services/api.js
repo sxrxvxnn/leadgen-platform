@@ -296,7 +296,9 @@ export const exportLeadsCSV = () =>
 export const enrichLeadLinkedIn = (id) => api.post(`/leads/${id}/enrich-linkedin`)
 
 // ─── EMAIL VERIFICATION ───────────────────────────────────────────
-export const verifyLeadEmail = (id) => api.post(`/leads/${id}/verify-email`)
+export const verifyLeadEmail      = (id) => api.post(`/leads/${id}/verify-email`)
+export const bulkVerifyEmails     = (lead_ids) => api.post('/leads/bulk-verify', { lead_ids })
+export const getUnverifiedCount   = () => api.get('/leads/unverified-count')
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
 export const getDashboardSummary = () => api.get('/dashboard/summary')

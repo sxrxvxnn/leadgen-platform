@@ -123,6 +123,21 @@ function EditableCell({ lead, col, onSave, isEditing, onStartEdit, onStopEdit })
   }
 
   const displayVal = getCellValue(lead, col.key)
+
+  // Email column: show value + verification badge
+  if (col.key === 'email' && displayVal) {
+    const STATUS_COLOR = { valid: '#10b981', risky: '#f59e0b', invalid: '#ef4444', disposable: '#ef4444', role: '#8b5cf6', unknown: '#6b7280', catch_all: '#f59e0b' }
+    const STATUS_LABEL = { valid: '✓', risky: '⚠', invalid: '✕', disposable: '✕', role: '⊘', unknown: '?', catch_all: '~' }
+    const es = lead.email_status
+    return React.createElement('div', { style: { ...cell.text, cursor: 'text', display: 'flex', alignItems: 'center', gap: 5 }, onClick: onStartEdit },
+      displayVal,
+      es && React.createElement('span', {
+        title: `${es}${lead.email_score != null ? ` · ${lead.email_score}% deliverability` : ''}`,
+        style: { fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, color: STATUS_COLOR[es] || '#6b7280', flexShrink: 0, cursor: 'default' }
+      }, STATUS_LABEL[es] || '?')
+    )
+  }
+
   return React.createElement('div', { style: { ...cell.text, cursor: 'text' }, onClick: onStartEdit },
     displayVal || React.createElement('span', { style: { color: 'var(--gray-3)' } }, '—')
   )
