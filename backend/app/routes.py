@@ -6302,6 +6302,7 @@ async def dashboard_summary(authorization: str = Header(...)):
     tracking       = tracking_res.data or []
     tasks_res      = supabase.table("tasks").select("id,title,due_date,completed,priority,leads(name,company)").eq("user_id", user_id).eq("completed", False).lte("due_date", today_end).order("due_date").limit(8).execute()
     activity_res   = supabase.table("lead_activity").select("id,event_type,data,created_at,leads(name,company)").eq("user_id", user_id).order("created_at", desc=True).limit(15).execute()
+    replies_res    = supabase.table("sequence_enrollments").select("id,replied_at,lead_id,sequence_id,leads(id,name,email,company,title),sequences(name)").eq("user_id", user_id).eq("status", "replied").order("replied_at", desc=True).limit(10).execute()
 
     emails_sent    = len(tracking)
     unique_opens   = sum(1 for t in tracking if (t.get("open_count") or 0) > 0)
@@ -6332,8 +6333,9 @@ async def dashboard_summary(authorization: str = Header(...)):
             "avg_open_rate":      round(unique_opens / emails_sent * 100) if emails_sent else 0,
             "avg_click_rate":     round(unique_clicks / emails_sent * 100) if emails_sent else 0,
         },
-        "tasks_due_today": tasks_res.data or [],
+        "tasks_due_today":  tasks_res.data or [],
         "recent_activity":  activity_res.data or [],
+        "recent_replies":   replies_res.data or [],
     }
 
 
