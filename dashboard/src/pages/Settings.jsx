@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, checkDomainHealth } from '../services/api'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, checkDomainHealth, getWarmupConfig, saveWarmupConfig } from '../services/api'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,10 +8,11 @@ const SECTIONS = [
   { id: 'profile',    num: '01', label: 'Profile' },
   { id: 'email',      num: '02', label: 'Email Sending' },
   { id: 'automation', num: '03', label: 'Sequence Automation' },
-  { id: 'scheduler',  num: '04', label: 'Meeting Scheduler' },
-  { id: 'webhooks',   num: '05', label: 'Webhooks' },
-  { id: 'privacy',    num: '06', label: 'Privacy' },
-  { id: 'terms',      num: '07', label: 'Terms' },
+  { id: 'warmup',     num: '04', label: 'Email Warm-up' },
+  { id: 'scheduler',  num: '05', label: 'Meeting Scheduler' },
+  { id: 'webhooks',   num: '06', label: 'Webhooks' },
+  { id: 'privacy',    num: '07', label: 'Privacy' },
+  { id: 'terms',      num: '08', label: 'Terms' },
 ]
 
 const WEBHOOK_EVENT_LABELS = {
@@ -117,6 +118,7 @@ export default function Settings() {
     profile:    useRef(null),
     email:      useRef(null),
     automation: useRef(null),
+    warmup:     useRef(null),
     scheduler:  useRef(null),
     webhooks:   useRef(null),
     privacy:    useRef(null),
@@ -145,9 +147,42 @@ export default function Settings() {
   const [whTesting, setWhTesting] = useState({})
   const [whTestResult, setWhTestResult] = useState({})
 
+  // Warm-up state
+  const [warmup, setWarmup] = useState(null)
+  const [warmupLoading, setWarmupLoading] = useState(true)
+  const [warmupSaving,  setWarmupSaving]  = useState(false)
+  const [warmupSaved,   setWarmupSaved]   = useState(false)
+  const [warmupEnabled, setWarmupEnabled] = useState(false)
+  const [warmupEmails,  setWarmupEmails]  = useState('')
+
   useEffect(() => {
     api.get('/webhooks').then(r => setWebhooks(r.data.webhooks || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    getWarmupConfig().then(r => {
+      const cfg = r.data?.config
+      setWarmup(r.data)
+      setWarmupEnabled(cfg?.enabled || false)
+      setWarmupEmails((cfg?.partner_emails || []).join(', '))
+    }).catch(() => {}).finally(() => setWarmupLoading(false))
+  }, [])
+
+  async function handleSaveWarmup() {
+    setWarmupSaving(true)
+    try {
+      const emails = warmupEmails.split(',').map(e => e.trim()).filter(Boolean)
+      const r = await saveWarmupConfig({ enabled: warmupEnabled, partner_emails: emails })
+      const cfg = r.data?.config
+      setWarmup({ ...warmup, config: cfg, day: warmup?.day || 0, daily_target: warmup?.daily_target || 2 })
+      setWarmupSaved(true)
+      setTimeout(() => setWarmupSaved(false), 3000)
+    } catch (e) {
+      alert('Failed to save warm-up config: ' + (e?.response?.data?.detail || e.message))
+    } finally {
+      setWarmupSaving(false)
+    }
+  }
 
   async function addWebhook() {
     if (!whForm.url || !whForm.events.length) return
@@ -463,7 +498,86 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 04 — Meeting Scheduler */}
+          {/* 04 — Email Warm-up */}
+          <section ref={sectionRefs.warmup} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
+            <SectionHeader num="04" title="Email Warm-up" />
+            <p style={s.sectionHint}>
+              Gradually increase your sending volume to build sender reputation — like Instantly.ai. Sonar sends friendly warm-up emails to your partner addresses each day, starting at 2/day and ramping up to 40/day over 20 days.
+            </p>
+
+            {warmupLoading ? (
+              <div style={{ height: 80, background: 'var(--bg)', borderRadius: 6, marginBottom: 16 }} />
+            ) : (
+              <>
+                {warmup?.config && warmup.config.enabled && (
+                  <div style={{ marginBottom: 20, padding: '12px 16px', background: 'rgba(74,124,89,0.08)', border: '1px solid rgba(74,124,89,0.3)', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: '#4a7c59', letterSpacing: '0.1em' }}>WARM-UP ACTIVE</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Day {warmup.day} / 20 &nbsp;·&nbsp; {warmup.daily_target} emails/day</span>
+                    </div>
+                    <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (warmup.day / 20) * 100)}%`, background: '#4a7c59', borderRadius: 2, transition: 'width 0.4s' }} />
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                  <button
+                    onClick={() => setWarmupEnabled(v => !v)}
+                    style={{
+                      position: 'relative', flexShrink: 0,
+                      width: '44px', height: '24px',
+                      background: warmupEnabled ? 'var(--accent)' : 'var(--surface)',
+                      border: warmupEnabled ? '1px solid var(--accent)' : '1px solid var(--border)',
+                      borderRadius: '12px', cursor: 'pointer', transition: 'background 0.2s', padding: 0,
+                    }}
+                  >
+                    <span style={{ position: 'absolute', top: 3, left: warmupEnabled ? 22 : 3, width: 16, height: 16, borderRadius: '50%', background: warmupEnabled ? '#fff' : '#9CA3AF', transition: 'left 0.2s', display: 'block' }} />
+                  </button>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {warmupEnabled ? 'Warm-up enabled' : 'Warm-up disabled'}
+                  </span>
+                </div>
+
+                <Field label="Partner emails" hint="Comma-separated list of email addresses you control (your own backup accounts). Warm-up emails will be sent here daily.">
+                  <input
+                    value={warmupEmails}
+                    onChange={e => setWarmupEmails(e.target.value)}
+                    placeholder="backup@gmail.com, personal@outlook.com"
+                    style={s.input}
+                  />
+                </Field>
+
+                {warmup?.config?.start_date && (
+                  <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4 }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>
+                      Started: {new Date(warmup.config.start_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' '}&nbsp;·&nbsp; Target today: <strong style={{ color: 'var(--text)' }}>{warmup.daily_target}</strong> emails/day
+                    </p>
+                  </div>
+                )}
+
+                <button onClick={handleSaveWarmup} disabled={warmupSaving} style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '10px 20px',
+                  background: warmupSaved ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none',
+                  borderRadius: 3, cursor: warmupSaving ? 'default' : 'pointer', letterSpacing: '0.04em',
+                }}>
+                  {warmupSaving ? 'Saving…' : warmupSaved ? 'Saved' : 'Save warm-up settings'}
+                </button>
+
+                <div style={{ marginTop: 20, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>How it works</p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: 0, lineHeight: 1.7 }}>
+                    Day 1: 2 emails · Day 2: 4 emails · … · Day 20: 40 emails/day.<br />
+                    Requires Sequence Automation SMTP configured above. Runs daily at 8 AM UTC.<br />
+                    Use your own secondary email accounts as partners to keep warm-up traffic in your control.
+                  </p>
+                </div>
+              </>
+            )}
+          </section>
+
+          {/* 05 — Meeting Scheduler */}
           <section ref={sectionRefs.scheduler} style={{ ...s.section, borderBottom: '1px solid var(--border)' }}>
             <SectionHeader num="04" title="Meeting Scheduler" />
             <p style={s.sectionHint}>

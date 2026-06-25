@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { getAllTasks, updateTask, deleteTask } from '../services/api'
+import { getAllTasks, updateTask, deleteTask, createStandaloneTask } from '../services/api'
 
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
@@ -44,6 +44,9 @@ export default function Tasks() {
   const [tasks, setTasks]       = useState([])
   const [loading, setLoading]   = useState(true)
   const [showDone, setShowDone] = useState(false)
+  const [showForm,  setShowForm]  = useState(false)
+  const [taskForm,  setTaskForm]  = useState({ title: '', due_date: '', priority: 'medium', notes: '' })
+  const [creating,  setCreating]  = useState(false)
 
   useEffect(() => { load() }, [showDone])
 
@@ -65,6 +68,24 @@ export default function Tasks() {
   async function handleDelete(id) {
     setTasks(prev => prev.filter(t => t.id !== id))
     try { await deleteTask(id) } catch (e) { console.error(e) }
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    if (!taskForm.title.trim()) return
+    setCreating(true)
+    try {
+      await createStandaloneTask({
+        title:    taskForm.title.trim(),
+        due_date: taskForm.due_date || null,
+        priority: taskForm.priority,
+        body:     taskForm.notes,
+      })
+      setShowForm(false)
+      setTaskForm({ title: '', due_date: '', priority: 'medium', notes: '' })
+      await load()
+    } catch (e) { console.error(e) }
+    finally { setCreating(false) }
   }
 
   // Group tasks
@@ -90,7 +111,7 @@ export default function Tasks() {
             )}
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             onClick={() => setShowDone(false)}
             style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '7px 14px', background: !showDone ? 'var(--text)' : 'var(--surface)', color: !showDone ? 'var(--bg)' : 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer' }}
@@ -102,6 +123,12 @@ export default function Tasks() {
             style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '7px 14px', background: showDone ? 'var(--text)' : 'var(--surface)', color: showDone ? 'var(--bg)' : 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer' }}
           >
             Completed
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '7px 14px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', marginLeft: 8 }}
+          >
+            + New Task
           </button>
         </div>
       </div>
@@ -157,6 +184,102 @@ export default function Tasks() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function NewTaskModal({ show, onClose, form, onChange, onSubmit, creating }) {
+  if (!show) return null
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(8,9,10,0.75)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+        padding: '28px 28px 24px', width: '100%', maxWidth: 440,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+          <p style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>New Task</p>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18, lineHeight: 1, padding: '0 2px' }}>×</button>
+        </div>
+        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Title *</label>
+            <input
+              autoFocus
+              value={form.title}
+              onChange={e => onChange('title', e.target.value)}
+              placeholder="e.g. Follow up with prospect"
+              required
+              style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: SANS, fontSize: 13, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Due Date</label>
+              <input
+                type="date"
+                value={form.due_date}
+                onChange={e => onChange('due_date', e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: MONO, fontSize: 11, color: 'var(--text)', outline: 'none', boxSizing: 'border-box', colorScheme: 'dark' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Priority</label>
+              <select
+                value={form.priority}
+                onChange={e => onChange('priority', e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: MONO, fontSize: 11, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={e => onChange('notes', e.target.value)}
+              placeholder="Optional notes..."
+              rows={3}
+              style={{ width: '100%', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: MONO, fontSize: 11, color: 'var(--text)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button
+              type="submit"
+              disabled={creating || !form.title.trim()}
+              style={{ flex: 1, padding: '10px', background: creating ? 'var(--border)' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: 5, fontFamily: MONO, fontSize: 11, fontWeight: 600, cursor: creating || !form.title.trim() ? 'default' : 'pointer', letterSpacing: '0.04em', opacity: !form.title.trim() ? 0.5 : 1 }}
+            >
+              {creating ? 'Creating…' : 'Create Task'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{ padding: '10px 16px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, fontFamily: MONO, fontSize: 11, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+      <NewTaskModal
+        show={showForm}
+        onClose={() => { setShowForm(false); setTaskForm({ title: '', due_date: '', priority: 'medium', notes: '' }) }}
+        form={taskForm}
+        onChange={(field, val) => setTaskForm(f => ({ ...f, [field]: val }))}
+        onSubmit={handleCreate}
+        creating={creating}
+      />
     </div>
   )
 }

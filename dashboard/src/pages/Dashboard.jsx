@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
-import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert } from '../services/api'
+import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert, getHotLeads } from '../services/api'
 import { Skeleton } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
 
@@ -127,6 +127,7 @@ export default function Dashboard() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [jobAlerts, setJobAlerts] = useState([])
+  const [hotLeads, setHotLeads] = useState([])
 
   useEffect(() => {
     getDashboardSummary()
@@ -135,6 +136,9 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
     listJobChangeAlerts()
       .then(r => setJobAlerts(r.data.alerts || []))
+      .catch(() => {})
+    getHotLeads()
+      .then(r => setHotLeads(r.data.leads || []))
       .catch(() => {})
   }, [])
 
@@ -284,6 +288,39 @@ export default function Dashboard() {
                         <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 3, background: sm.bg, color: sm.color, letterSpacing: '0.06em' }}>{sm.icon} {sm.label}</span>
                         <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)' }}>{seq.name || ''}</div>
                       </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Hot Leads */}
+          {!loading && hotLeads.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Hot Leads</p>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(202,138,4,0.35)', color: '#ca8a04' }}>{hotLeads.length}</span>
+                </div>
+                <button onClick={() => navigate('/leads')} style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>View all →</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {hotLeads.map(lead => {
+                  const score = lead.engagement_score || 0
+                  const scoreColor  = score >= 50 ? '#4a7c59' : score >= 10 ? '#ca8a04' : '#888'
+                  const scoreBg     = score >= 50 ? 'rgba(74,124,89,0.12)' : score >= 10 ? 'rgba(234,179,8,0.10)' : 'rgba(161,161,161,0.08)'
+                  const scoreBorder = score >= 50 ? 'rgba(74,124,89,0.35)' : score >= 10 ? 'rgba(202,138,4,0.35)' : 'rgba(161,161,161,0.25)'
+                  return (
+                    <div key={lead.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(234,179,8,0.04)', border: '1px solid rgba(202,138,4,0.18)', borderRadius: 8, cursor: 'pointer' }} onClick={() => navigate('/leads')}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(202,138,4,0.12)', border: '1px solid rgba(202,138,4,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: MONO, fontSize: 13, color: '#ca8a04', fontWeight: 700 }}>
+                        {(lead.name || '?')[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lead.name || lead.email || 'Unknown'}</div>
+                        <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)' }}>{lead.company || ''}{lead.company && lead.title ? ' · ' : ''}{lead.title || ''}</div>
+                      </div>
+                      <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: scoreBg, border: `1px solid ${scoreBorder}`, color: scoreColor, letterSpacing: '0.04em', flexShrink: 0 }}>🔥 {score}</span>
                     </div>
                   )
                 })}

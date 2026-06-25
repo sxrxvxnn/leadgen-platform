@@ -210,6 +210,18 @@ function IcpScoreBadge({ score, reason }) {
   )
 }
 
+function EngagementBadge({ score }) {
+  if (!score || score <= 0) return null
+  const color  = score >= 50 ? '#4a7c59' : score >= 10 ? '#ca8a04' : '#888'
+  const bg     = score >= 50 ? 'rgba(74,124,89,0.10)' : score >= 10 ? 'rgba(234,179,8,0.10)' : 'rgba(161,161,161,0.08)'
+  const border = score >= 50 ? 'rgba(74,124,89,0.3)' : score >= 10 ? 'rgba(234,179,8,0.3)' : 'rgba(161,161,161,0.25)'
+  return React.createElement(
+    'span',
+    { title: `Engagement score: ${score}`, style: { fontSize: '9px', fontWeight: '700', padding: '2px 5px', borderRadius: '4px', color, background: bg, border: `1px solid ${border}`, letterSpacing: '0.04em', whiteSpace: 'nowrap' } },
+    `🔥${score}`
+  )
+}
+
 const EMAIL_STATUS_META = {
   valid:      { label: '✓ valid',      color: '#10b981', bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)' },
   risky:      { label: '⚠ risky',      color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.25)' },
@@ -308,6 +320,7 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
         {isDecisionMaker && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(91,141,184,0.10)', color: '#5b8db8', border: '1px solid rgba(91,141,184,0.3)', letterSpacing: '0.3px', whiteSpace: 'nowrap' }}>DM</span>}
         {isSecurity && <span style={{ fontSize: '8px', fontWeight: '600', padding: '1px 5px', borderRadius: '3px', background: 'rgba(184,50,50,0.10)', color: 'var(--red)', border: '1px solid rgba(184,50,50,0.3)', letterSpacing: '0.3px' }}>SEC</span>}
         <IcpScoreBadge score={lead.icp_score} reason={lead.icp_score_reason} />
+        <EngagementBadge score={lead.engagement_score} />
       </div>
       {columns.map((col) => {
         const isEditing = editingCell && editingCell.leadId === lead.id && editingCell.field === col.key
@@ -401,12 +414,16 @@ export default function Leads() {
   const [savingSegment, setSavingSegment] = useState(false)
   const [segmentNameInput, setSegmentNameInput] = useState('')
   const [showSegmentInput, setShowSegmentInput] = useState(false)
+  const [showSegEnrollPicker, setShowSegEnrollPicker] = useState(false)
+  const [segEnrolling, setSegEnrolling] = useState(false)
+  const [sequences, setSequences] = useState([])
 
   // Advanced filters
   const [filterSeniority, setFilterSeniority]   = useState('')
   const [filterConnection, setFilterConnection] = useState('')
   const [filterMinScore, setFilterMinScore]     = useState(0)
   const [filterEmailStatus, setFilterEmailStatus] = useState('')
+  const [sortBy, setSortBy] = useState('default') // 'default' | 'hottest'
   const [showAdvanced, setShowAdvanced]         = useState(false)
   const [unverifiedCount, setUnverifiedCount]   = useState(0)
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false)
@@ -418,7 +435,14 @@ export default function Leads() {
   const [importMsg, setImportMsg] = useState('')
   const csvInputRef = useRef(null)
 
-  useEffect(() => { fetchLeads(); fetchSegments() }, [])
+  useEffect(() => { fetchLeads(); fetchSegments(); fetchSequences() }, [])
+
+  async function fetchSequences() {
+    try {
+      const r = await listSequences().catch(() => ({ data: [] }))
+      setSequences(r.data || [])
+    } catch {}
+  }
 
   async function fetchSegments() {
     try {
@@ -532,6 +556,7 @@ export default function Leads() {
   }
 
   function clearSegment() {
+    setShowSegEnrollPicker(false)
     setActiveSegmentId(null)
     setSearch('')
     setStatusFilter('all')
@@ -555,6 +580,17 @@ export default function Leads() {
       setSegmentNameInput('')
     } catch {}
     finally { setSavingSegment(false) }
+  }
+
+  async function handleSegEnrollSequence(seqId, seqName) {
+    setSegEnrolling(true)
+    setShowSegEnrollPicker(false)
+    try {
+      await enrollInSequence(seqId, filtered.map(l => l.id))
+      setImportMsg(`Enrolled ${filtered.length} lead${filtered.length !== 1 ? 's' : ''} in ${seqName}.`)
+      setTimeout(() => setImportMsg(''), 3000)
+    } catch (e) { console.error(e); setImportMsg('Enrollment failed.') }
+    finally { setSegEnrolling(false) }
   }
 
   async function handleDeleteSegment(id, e) {
@@ -733,6 +769,9 @@ export default function Leads() {
       (filterEmailStatus === 'unverified' ? !l.email_status && l.email : l.email_status === filterEmailStatus)
     return ms && mf && mstar && mv && msen && mconn && mscore && memail
   })
+  if (sortBy === 'hottest') {
+    filtered.sort((a, b) => (b.engagement_score || 0) - (a.engagement_score || 0))
+  }
 
   function toggleSelect(id) { setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]) }
   function toggleSelectAll() { setSelected(selected.length === filtered.length ? [] : filtered.map((l) => l.id)) }
@@ -916,6 +955,34 @@ export default function Leads() {
                   title="Delete segment">✕</span>
               </button>
             ))}
+
+            {/* Segment enroll button */}
+            {activeSegmentId && (
+              <div style={{ position: 'relative', marginLeft: 6 }}>
+                <button
+                  onClick={() => setShowSegEnrollPicker(v => !v)}
+                  disabled={segEnrolling || filtered.length === 0}
+                  style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(168,100,72,0.4)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: segEnrolling ? 'var(--text-muted)' : 'var(--accent)', cursor: segEnrolling || filtered.length === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap', letterSpacing: '0.04em', opacity: segEnrolling ? 0.6 : 1 }}>
+                  {segEnrolling ? 'Enrolling…' : `Enroll segment in sequence →`}
+                </button>
+                {showSegEnrollPicker && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, zIndex: 300, minWidth: 210, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+                    {sequences.length === 0
+                      ? <div style={{ padding: '9px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>No sequences yet</div>
+                      : sequences.map(seq => (
+                          <button key={seq.id}
+                            onClick={() => handleSegEnrollSequence(seq.id, seq.name)}
+                            style={{ padding: '9px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', color: 'var(--text)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', cursor: 'pointer', textAlign: 'left' }}>
+                            {seq.name}
+                          </button>
+                        ))}
+                    <div style={{ padding: '7px 14px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>
+                      {filtered.length} lead{filtered.length !== 1 ? 's' : ''} will be enrolled
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Save segment button */}
@@ -968,6 +1035,12 @@ export default function Leads() {
               style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${showAdvanced || filterSeniority || filterConnection || filterMinScore ? 'var(--accent)' : 'var(--border)'}`, background: 'transparent', fontFamily: 'var(--font-mono)', fontSize: 11, color: showAdvanced ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer' }}
             >
               Filters {(filterSeniority || filterConnection || filterMinScore) ? '(active)' : ''}
+            </button>
+            <button
+              onClick={() => setSortBy(s => s === 'hottest' ? 'default' : 'hottest')}
+              style={{ padding: '5px 12px', borderRadius: 6, border: `1px solid ${sortBy === 'hottest' ? 'rgba(202,138,4,0.5)' : 'var(--border)'}`, background: sortBy === 'hottest' ? 'rgba(234,179,8,0.08)' : 'transparent', fontFamily: 'var(--font-mono)', fontSize: 11, color: sortBy === 'hottest' ? '#ca8a04' : 'var(--text-muted)', cursor: 'pointer', fontWeight: sortBy === 'hottest' ? 700 : 400 }}
+            >
+              {sortBy === 'hottest' ? '🔥 Hottest' : 'Hottest'}
             </button>
           </div>
         </div>

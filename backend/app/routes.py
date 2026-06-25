@@ -221,6 +221,14 @@ async def check_urls_batch(payload: dict, authorization: str = Header(...)):
     return {"results": results}
 
 
+@router.get("/leads/hot")
+async def get_hot_leads(authorization: str = Header(...)):
+    """Return top 5 leads by engagement score for the dashboard hot leads widget."""
+    user_id = get_user_id(authorization)
+    res = supabase.table("leads").select("id,name,email,company,title,engagement_score,last_engaged_at").eq("user_id", user_id).gt("engagement_score", 0).order("engagement_score", desc=True).limit(5).execute()
+    return {"leads": res.data or []}
+
+
 @router.get("/leads/by-profile-url")
 async def get_lead_by_profile_url(url: str, authorization: str = Header(...)):
     """Used by the Chrome extension to check if a LinkedIn profile is already a lead."""
@@ -1699,6 +1707,25 @@ async def delete_task(task_id: str, authorization: str = Header(...)):
     validate_uuid(task_id)
     supabase.table("tasks").delete().eq("id", task_id).eq("user_id", user_id).execute()
     return {"ok": True}
+
+
+@router.post("/tasks")
+async def create_standalone_task(payload: dict, authorization: str = Header(...)):
+    """Create a standalone task not linked to a specific lead."""
+    user_id = get_user_id(authorization)
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title required")
+    row = supabase.table("tasks").insert({
+        "user_id":   user_id,
+        "lead_id":   payload.get("lead_id") or None,
+        "title":     title,
+        "body":      payload.get("body") or "",
+        "due_date":  payload.get("due_date") or None,
+        "priority":  payload.get("priority") or "medium",
+        "completed": False,
+    }).execute()
+    return {"task": row.data[0] if row.data else {}}
 
 
 # ─── EMAIL TEMPLATES ─────────────────────────────────────────────
@@ -8836,3 +8863,156 @@ async def admin_login_history(target_id: str, authorization: str = Header(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════
+# EMAIL WARM-UP
+# ═══════════════════════════════════════════════════════════════════
+
+import random as _random
+import datetime as _datetime_mod
+
+
+_WARMUP_SUBJECTS = [
+    "Quick check-in",
+    "Following up",
+    "Re: Our conversation",
+    "Touching base",
+    "A quick note",
+    "Just checking in",
+    "Re: Last week",
+    "Quick question",
+]
+
+_WARMUP_BODIES = [
+    "Hey, just wanted to reach out and see how things are going. Let me know if there's anything I can help with.",
+    "Hi there — just circling back on our last conversation. Hope all is well on your end!",
+    "Quick note to say hi and see if you'd like to connect soon. Always happy to chat.",
+    "Just wanted to follow up and make sure everything is going smoothly. Feel free to reach out anytime.",
+    "Hi! Hope you're having a great week. Let me know if there's anything useful I can share.",
+    "Touching base to see how things are going. Looking forward to staying in touch.",
+    "Just a quick hello — hope business is going well. Let me know if you ever want to catch up.",
+    "Hi, wanted to check in and see if there's anything worth discussing. Happy to jump on a call anytime.",
+]
+
+
+@router.get("/profile/warmup-config")
+async def get_warmup_config(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).maybe_single().execute()
+    if not res.data:
+        return {"config": None, "day": 0, "daily_target": 0}
+    cfg = res.data
+    # Compute current day since start_date
+    start = cfg.get("start_date")
+    if start:
+        try:
+            start_dt = _datetime_mod.datetime.fromisoformat(start.replace("Z", "+00:00"))
+            day = max(0, (_datetime_mod.datetime.now(_datetime_mod.timezone.utc) - start_dt).days)
+        except Exception:
+            day = 0
+    else:
+        day = 0
+    daily_target = min(2 + day * 2, 40)
+    cfg["current_day"] = day
+    cfg["daily_target"] = daily_target
+    return {"config": cfg}
+
+
+@router.patch("/profile/warmup-config")
+async def save_warmup_config(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    # Upsert
+    existing = supabase.table("warmup_configs").select("id").eq("user_id", user_id).maybe_single().execute()
+    data = {"user_id": user_id}
+    if "enabled" in payload:
+        data["enabled"] = bool(payload["enabled"])
+    if "partner_emails" in payload:
+        emails = [e.strip() for e in (payload["partner_emails"] or []) if e.strip()]
+        data["partner_emails"] = emails
+    if "start_date" in payload:
+        data["start_date"] = payload["start_date"]
+    if existing.data:
+        supabase.table("warmup_configs").update(data).eq("user_id", user_id).execute()
+    else:
+        supabase.table("warmup_configs").insert(data).execute()
+    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).maybe_single().execute()
+    return {"config": res.data}
+
+
+@router.post("/sequences/warmup-cron")
+async def warmup_cron(request: Request):
+    """Vercel cron endpoint — runs daily to send warm-up emails for all enabled users."""
+    import smtplib as _smtp_wu
+    from email.mime.text      import MIMEText      as _MIMEText_wu
+    from email.mime.multipart import MIMEMultipart as _MIMEMultipart_wu
+
+    cron_secret = os.environ.get("CRON_SECRET", "")
+    provided = request.headers.get("authorization", "").replace("Bearer ", "").strip()
+    if cron_secret and provided != cron_secret:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    configs = supabase.table("warmup_configs").select("*").eq("enabled", True).execute()
+    results = []
+
+    for cfg in (configs.data or []):
+        user_id       = cfg["user_id"]
+        partner_emails = cfg.get("partner_emails") or []
+        if not partner_emails:
+            results.append({"user_id": user_id, "skipped": "no partner emails"})
+            continue
+
+        start = cfg.get("start_date")
+        try:
+            start_dt = _datetime_mod.datetime.fromisoformat(start.replace("Z", "+00:00"))
+            day = max(0, (_datetime_mod.datetime.now(_datetime_mod.timezone.utc) - start_dt).days)
+        except Exception:
+            day = 0
+
+        daily_target = min(2 + day * 2, 40)
+
+        # Get SMTP config for user
+        profile_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
+        smtp = (profile_res.data or {}).get("smtp_config") or {}
+        if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
+            results.append({"user_id": user_id, "skipped": "no smtp config"})
+            continue
+
+        smtp_host  = smtp.get("smtp_host", "smtp.gmail.com")
+        smtp_port  = int(smtp.get("smtp_port", 587))
+        from_email = smtp.get("from_email") or smtp["smtp_user"]
+        from_name  = smtp.get("from_name") or ""
+
+        sent_count = 0
+        errors     = []
+        for i in range(daily_target):
+            to_email = partner_emails[i % len(partner_emails)]
+            subject  = _random.choice(_WARMUP_SUBJECTS)
+            body     = _random.choice(_WARMUP_BODIES)
+            try:
+                msg            = _MIMEMultipart_wu("alternative")
+                msg["Subject"] = subject
+                msg["From"]    = f"{from_name} <{from_email}>" if from_name else from_email
+                msg["To"]      = to_email
+                msg.attach(_MIMEText_wu(body, "plain"))
+                with _smtp_wu.SMTP(smtp_host, smtp_port, timeout=15) as srv:
+                    srv.ehlo()
+                    srv.starttls()
+                    srv.login(smtp["smtp_user"], smtp["smtp_pass"])
+                    srv.sendmail(from_email, to_email, msg.as_string())
+                sent_count += 1
+                # Log the warmup send
+                supabase.table("warmup_logs").insert({
+                    "user_id":  user_id,
+                    "to_email": to_email,
+                    "subject":  subject,
+                    "day":      day,
+                }).execute()
+            except Exception as e:
+                errors.append(str(e))
+
+        # Update daily_target in config
+        supabase.table("warmup_configs").update({"daily_target": daily_target}).eq("user_id", user_id).execute()
+        results.append({"user_id": user_id, "day": day, "target": daily_target, "sent": sent_count, "errors": errors})
+
+    return {"ok": True, "results": results}

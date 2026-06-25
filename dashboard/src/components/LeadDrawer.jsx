@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate, enrichLeadLinkedIn, sendLeadEmail, verifyLeadEmail } from '../services/api'
+import { scoreLeadICP, draftEmail, updateLead, deleteLead, starLead, updateConnectionStatus, getLeadSignals, trackEmail, logActivity, getTemplates, createTemplate, enrichLeadLinkedIn, sendLeadEmail, verifyLeadEmail, generateIcebreaker } from '../services/api'
 import CompanySignals from './CompanySignals'
 import EmailTimeline from './EmailTimeline'
 import ActivityFeed from './ActivityFeed'
@@ -134,6 +134,8 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
   const [liEnrichResult, setLiEnrichResult] = useState(null)
   const [verifying, setVerifying]       = useState(false)
   const [verifyResult, setVerifyResult] = useState(lead?.email_status ? { status: lead.email_status, score: lead.email_score } : null)
+  const [icebreaker, setIcebreaker] = useState(null)
+  const [iceLoading, setIceLoading] = useState(false)
   const activityRef = useRef(null)
 
   useEffect(() => {
@@ -174,6 +176,18 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
       logActivity(L.id, 'email_drafted', { subject: r.data.subject }).catch(() => {})
       activityRef.current?.refresh()
     } catch (e) { console.error(e) } finally { setDrafting(false) }
+  }
+
+  async function handleIcebreaker() {
+    setIceLoading(true)
+    try {
+      const r = await generateIcebreaker(L.id)
+      setIcebreaker(r.data.icebreaker)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIceLoading(false)
+    }
   }
 
   async function handleTrackCopy() {
@@ -501,12 +515,18 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
             <p style={{ fontFamily: SANS, fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, marginTop: -6 }}>
               Generate a hyper-personalized cold email in 2 seconds based on this lead's profile and company context.
             </p>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <button
                 onClick={handleDraft} disabled={drafting}
                 style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 16px', background: drafting ? 'var(--surface)' : '#4a7c59', color: drafting ? 'var(--text-muted)' : '#fff', border: 'none', borderRadius: 5, cursor: drafting ? 'default' : 'pointer', transition: 'all 0.15s' }}
               >
                 {drafting ? 'Writing…' : draft ? 'Regenerate' : 'Write AI Email'}
+              </button>
+              <button
+                onClick={handleIcebreaker} disabled={iceLoading}
+                style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', padding: '8px 14px', background: iceLoading ? 'var(--surface)' : 'rgba(124,58,237,0.12)', color: iceLoading ? 'var(--text-muted)' : '#7c3aed', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 5, cursor: iceLoading ? 'default' : 'pointer', transition: 'all 0.15s' }}
+              >
+                {iceLoading ? 'Generating…' : '✦ Icebreaker'}
               </button>
               <button
                 onClick={handleLoadTemplates}
@@ -515,6 +535,16 @@ export default function LeadDrawer({ lead, onClose, onUpdate, onDelete }) {
                 Templates
               </button>
             </div>
+
+            {icebreaker && (
+              <div style={{ marginTop: 10, marginBottom: 14, padding: '10px 14px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.25)', borderRadius: 6 }}>
+                <p style={{ fontFamily: MONO, fontSize: 11, color: 'var(--text)', margin: '0 0 8px', lineHeight: 1.6 }}>{icebreaker}</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => navigator.clipboard.writeText(icebreaker)} style={{ fontFamily: MONO, fontSize: 10, padding: '3px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-muted)', cursor: 'pointer' }}>Copy</button>
+                  {draft && <button onClick={() => setDraft(d => ({ ...d, body: icebreaker + '\n\n' + (d.body || '') }))} style={{ fontFamily: MONO, fontSize: 10, padding: '3px 10px', background: 'none', border: '1px solid rgba(124,58,237,0.4)', borderRadius: 4, color: '#7c3aed', cursor: 'pointer' }}>Insert into email</button>}
+                </div>
+              </div>
+            )}
 
             {/* Template picker */}
             {showTplPicker && (
