@@ -2932,6 +2932,206 @@ async def fetch_company_funding(company_id: str, authorization: str = Header(...
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── DEEP ENRICH ──────────────────────────────────────────────
+
+@router.post("/companies/{company_id}/deep-enrich")
+async def deep_enrich_company(company_id: str, authorization: str = Header(...)):
+    """Run all 8 enrichment jobs for a company: tech stack, jobs, email pattern,
+    news, revenue estimate, social profiles, traffic estimate, review presence."""
+    user_id = get_user_id(authorization)
+    try:
+        co_res = supabase.table("companies").select(
+            "id,name,website,size,classification,industry,linkedin_url"
+        ).eq("id", company_id).eq("user_id", user_id).single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if not co_res.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = co_res.data
+    name = company.get("name", "").strip()
+    website = (company.get("website") or "").strip()
+    if not website.startswith("http"):
+        website = "https://" + website if website else ""
+    emp = company.get("size") or ""
+    industry = company.get("industry") or ""
+    classification = company.get("classification") or ""
+
+    from urllib.parse import urlparse as _deup
+    domain = ""
+    if website:
+        try:
+            _h = _deup(website).netloc.lower().replace("www.", "")
+            domain = _h
+        except Exception:
+            pass
+
+    from .company_enrichment import (
+        detect_tech_stack, fetch_job_openings, detect_email_pattern,
+        fetch_recent_news, estimate_revenue, extract_social_profiles,
+        fetch_traffic_estimate, fetch_review_presence,
+    )
+    import concurrent.futures as _cf
+
+    results: dict = {}
+    errors: dict = {}
+
+    def _run(key, fn, *args):
+        try:
+            return key, fn(*args), None
+        except Exception as e:
+            return key, None, str(e)
+
+    jobs_map = {
+        "tech_stack":      (detect_tech_stack,      website),
+        "job_openings":    (fetch_job_openings,      website, name),
+        "email_pattern":   (detect_email_pattern,    domain),
+        "recent_news":     (fetch_recent_news,       name, domain, website),
+        "revenue_estimate":(estimate_revenue,        emp, industry, classification),
+        "social_profiles": (extract_social_profiles, website),
+        "traffic_estimate":(fetch_traffic_estimate,  domain),
+        "review_presence": (fetch_review_presence,   name, domain),
+    }
+
+    with _cf.ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {
+            pool.submit(_run, k, fn, *args): k
+            for k, (fn, *args) in jobs_map.items()
+        }
+        for fut in _cf.as_completed(futures):
+            key, val, err = fut.result()
+            if err:
+                errors[key] = err
+            elif val is not None and val != "" and val != [] and val != {}:
+                results[key] = val
+
+    # Persist all collected results + timestamp
+    if results:
+        import datetime as _dt
+        results["enriched_at"] = _dt.datetime.utcnow().isoformat()
+        supabase.table("companies").update(results).eq("id", company_id).eq("user_id", user_id).execute()
+
+    posthog.capture(user_id, "company_deep_enriched", {
+        "company": name,
+        "fields_enriched": list(results.keys()),
+        "errors": list(errors.keys()),
+    })
+    return {"success": True, "enriched": results, "errors": errors}
+
+
+# ─── BULK DEEP ENRICH ─────────────────────────────────────────
+
+@router.post("/companies/bulk-deep-enrich")
+async def bulk_deep_enrich_companies(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Run all 8 enrichment jobs for multiple companies in parallel (5 workers)."""
+    user_id = get_user_id(authorization)
+    company_ids = payload.get("company_ids", [])
+
+    import threading as _bde_threading
+    import queue as _bde_queue
+    import json as _bde_json
+    import datetime as _bde_dt
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from fastapi.responses import StreamingResponse
+    from urllib.parse import urlparse as _bde_up
+
+    from .company_enrichment import (
+        detect_tech_stack, fetch_job_openings, detect_email_pattern,
+        fetch_recent_news, estimate_revenue, extract_social_profiles,
+        fetch_traffic_estimate, fetch_review_presence,
+    )
+
+    try:
+        if company_ids:
+            co_res = supabase.table("companies").select(
+                "id,name,website,size,classification,industry"
+            ).in_("id", company_ids).eq("user_id", user_id).execute()
+        else:
+            co_res = supabase.table("companies").select(
+                "id,name,website,size,classification,industry"
+            ).eq("user_id", user_id).execute()
+        companies_list = co_res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    def _enrich_one(company):
+        name = company.get("name", "").strip()
+        website = (company.get("website") or "").strip()
+        if website and not website.startswith("http"):
+            website = "https://" + website
+        emp = company.get("size") or ""
+        industry = company.get("industry") or ""
+        classification = company.get("classification") or ""
+        domain = ""
+        if website:
+            try:
+                domain = _bde_up(website).netloc.lower().replace("www.", "")
+            except Exception:
+                pass
+
+        results = {}
+        jobs_map = {
+            "tech_stack":      (detect_tech_stack,      website),
+            "job_openings":    (fetch_job_openings,      website, name),
+            "email_pattern":   (detect_email_pattern,    domain),
+            "recent_news":     (fetch_recent_news,       name, domain, website),
+            "revenue_estimate":(estimate_revenue,        emp, industry, classification),
+            "social_profiles": (extract_social_profiles, website),
+            "traffic_estimate":(fetch_traffic_estimate,  domain),
+            "review_presence": (fetch_review_presence,   name, domain),
+        }
+        import concurrent.futures as _cf2
+        with _cf2.ThreadPoolExecutor(max_workers=8) as inner:
+            futs = {inner.submit(fn, *args): k for k, (fn, *args) in jobs_map.items()}
+            for fut in _cf2.as_completed(futs):
+                k = futs[fut]
+                try:
+                    val = fut.result()
+                    if val is not None and val != "" and val != [] and val != {}:
+                        results[k] = val
+                except Exception:
+                    pass
+
+        if results:
+            results["enriched_at"] = _bde_dt.datetime.utcnow().isoformat()
+            supabase.table("companies").update(results).eq("id", company["id"]).eq("user_id", user_id).execute()
+
+        return {"id": company["id"], "name": name, "success": True, "fields": list(results.keys())}
+
+    total = len(companies_list)
+    result_queue = _bde_queue.Queue()
+
+    def _run_pool():
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(_enrich_one, c): c for c in companies_list}
+            for fut in as_completed(futures):
+                try:
+                    result_queue.put(fut.result())
+                except Exception as e:
+                    result_queue.put({"success": False, "fields": [], "message": str(e)})
+        result_queue.put(None)
+
+    _bde_threading.Thread(target=_run_pool, daemon=True).start()
+
+    import asyncio as _bde_asyncio
+
+    async def event_stream():
+        completed = 0
+        loop = _bde_asyncio.get_running_loop()
+        while True:
+            result = await loop.run_in_executor(None, result_queue.get)
+            if result is None:
+                break
+            completed += 1
+            result["_progress"] = {"completed": completed, "total": total}
+            yield _bde_json.dumps(result) + "\n"
+        posthog.capture(user_id, "companies_bulk_deep_enriched", {"total": total})
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
 # ─── BULK AUTOFILL (parallel) ─────────────────────────────────
 
 @router.post("/companies/bulk-autofill")
@@ -4863,6 +5063,69 @@ async def revoke_invite(invite_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     team_id = _require_admin(user_id)
     supabase.table("team_invites").update({"status": "revoked"}).eq("id", invite_id).eq("team_id", team_id).execute()
+    return {"ok": True}
+
+
+@router.post("/admin/create-user")
+async def create_user(payload: dict, authorization: str = Header(...)):
+    """Directly create a new user account (admin only). Sets email, password, name and role."""
+    user_id = get_user_id(authorization)
+    team_id = _require_admin(user_id)
+
+    email    = (payload.get("email") or "").strip().lower()
+    password = (payload.get("password") or "").strip()
+    name     = (payload.get("name") or "").strip()
+    role     = payload.get("role", "member")
+
+    if not email or not password:
+        raise HTTPException(status_code=422, detail="email and password are required")
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    if role not in ("member", "admin"):
+        raise HTTPException(status_code=422, detail="role must be 'member' or 'admin'")
+
+    # Create auth user using service-role client (bypasses email confirmation)
+    try:
+        resp = supabase.auth.admin.create_user({
+            "email": email,
+            "password": password,
+            "email_confirm": True,   # mark as confirmed immediately
+            "user_metadata": {"full_name": name},
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    new_id = resp.user.id if resp.user else None
+    if not new_id:
+        raise HTTPException(status_code=500, detail="User creation returned no ID")
+
+    # Upsert profile and assign to same team
+    supabase.table("profiles").upsert({
+        "id":        new_id,
+        "email":     email,
+        "full_name": name,
+        "role":      role,
+        "team_id":   team_id,
+    }).execute()
+
+    posthog.capture(user_id, "admin_user_created", {"new_user": email, "role": role})
+    return {"ok": True, "user_id": new_id, "email": email}
+
+
+@router.delete("/admin/users/{target_id}")
+async def delete_user(target_id: str, authorization: str = Header(...)):
+    """Permanently delete a user account (admin only)."""
+    validate_uuid(target_id, "target_id")
+    user_id = get_user_id(authorization)
+    _require_admin(user_id)
+    if target_id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    try:
+        supabase.auth.admin.delete_user(target_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    supabase.table("profiles").delete().eq("id", target_id).execute()
+    posthog.capture(user_id, "admin_user_deleted", {"deleted_id": target_id})
     return {"ok": True}
 
 
@@ -6956,3 +7219,1050 @@ async def test_webhook(webhook_id: str, authorization: str = Header(...)):
         return {"ok": r.status_code < 400, "status_code": r.status_code}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+# ─── LOOKALIKE FINDER ─────────────────────────────────────────
+
+@router.post("/companies/{company_id}/lookalike")
+async def find_lookalike_companies(company_id: str, authorization: str = Header(...)):
+    """Find similar companies based on industry, tech stack, and size."""
+    user_id = get_user_id(authorization)
+    try:
+        co_res = supabase.table("companies").select(
+            "id,name,website,industry,size,classification,tech_stack,headquarters"
+        ).eq("id", company_id).eq("user_id", user_id).single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = co_res.data
+    name = company.get("name", "")
+    industry = company.get("industry") or ""
+    size = company.get("size") or ""
+    hq = company.get("headquarters") or ""
+    tech_stack = company.get("tech_stack") or []
+    classification = company.get("classification") or ""
+
+    # Build search queries
+    queries = []
+    if industry:
+        queries.append(f'companies similar to "{name}" {industry} B2B software')
+    if tech_stack and isinstance(tech_stack, list) and len(tech_stack) > 0:
+        top_tech = ", ".join(tech_stack[:3])
+        queries.append(f'B2B companies using {top_tech} {industry}')
+    queries.append(f'alternatives to "{name}" competitors {industry}')
+
+    results = []
+    seen_domains = set()
+    try:
+        from ddgs import DDGS
+        import re as _lre
+        with DDGS() as d:
+            for q in queries:
+                if len(results) >= 12:
+                    break
+                for r in d.text(q, max_results=6):
+                    href = r.get("href") or ""
+                    title = (r.get("title") or "").strip()
+                    snippet = (r.get("body") or r.get("snippet") or "").strip()
+                    if not href or not title:
+                        continue
+                    # Skip the company itself and junk
+                    if name.lower() in href.lower():
+                        continue
+                    if any(s in href for s in ["linkedin.com", "twitter.com", "facebook.com", "reddit.com", "wikipedia.org", "youtube.com"]):
+                        continue
+                    try:
+                        from urllib.parse import urlparse as _lup
+                        dom = _lup(href).netloc.replace("www.", "").lower()
+                    except Exception:
+                        dom = href
+                    if not dom or dom in seen_domains:
+                        continue
+                    seen_domains.add(dom)
+                    results.append({"name": title[:80], "url": href, "domain": dom, "snippet": snippet[:150]})
+    except Exception:
+        pass
+
+    return {"lookalikes": results[:10]}
+
+
+# ─── LINKEDIN DM GENERATOR ────────────────────────────────────
+
+@router.post("/companies/{company_id}/generate-dm")
+async def generate_linkedin_dm(company_id: str, payload: dict = {}, authorization: str = Header(...)):
+    """Generate a personalised LinkedIn DM for this company using Groq."""
+    user_id = get_user_id(authorization)
+    try:
+        co_res = supabase.table("companies").select(
+            "id,name,website,industry,size,description,tech_stack,revenue_estimate,recent_news,job_openings"
+        ).eq("id", company_id).eq("user_id", user_id).single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = co_res.data
+    name = company.get("name", "")
+    industry = company.get("industry") or ""
+    desc = company.get("description") or ""
+    size = company.get("size") or ""
+    stack = company.get("tech_stack") or []
+    news = company.get("recent_news") or []
+    jobs = company.get("job_openings") or []
+    revenue = company.get("revenue_estimate") or ""
+    persona = payload.get("persona", "")  # optional target persona/role
+
+    stack_str = ", ".join(stack[:5]) if isinstance(stack, list) else ""
+    news_str = news[0].get("title", "") if isinstance(news, list) and news else ""
+    jobs_str = jobs[0].get("title", "") if isinstance(jobs, list) and jobs else ""
+
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(status_code=500, detail="Groq key not configured")
+
+    context = f"""Company: {name}
+Industry: {industry}
+Size: {size}
+Description: {desc[:300]}
+Tech stack: {stack_str}
+Recent news: {news_str}
+Open role: {jobs_str}
+Revenue est: {revenue}
+Target persona: {persona or 'decision maker'}"""
+
+    import requests as _dmr
+    res = _dmr.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+        json={
+            "model": "llama-3.1-8b-instant",
+            "messages": [{"role": "user", "content": (
+                f"Write a short, personalised LinkedIn cold outreach message (under 300 chars) to a {persona or 'decision maker'} at {name}.\n\n"
+                f"Context:\n{context}\n\n"
+                "Rules:\n"
+                "- Start with a specific, genuine observation about their company (not generic)\n"
+                "- One clear value prop sentence\n"
+                "- Soft CTA (open question, not 'book a call')\n"
+                "- No emojis. No 'I hope this finds you well'. Sound like a human.\n"
+                "- Under 300 characters total.\n"
+                "Return ONLY the message text."
+            )}],
+            "max_tokens": 120,
+            "temperature": 0.7,
+        },
+        timeout=12,
+    )
+    if res.status_code != 200:
+        raise HTTPException(status_code=500, detail="AI generation failed")
+    msg = res.json()["choices"][0]["message"]["content"].strip().strip('"')
+    posthog.capture(user_id, "linkedin_dm_generated", {"company": name})
+    return {"message": msg}
+
+
+# ─── COMPANY ACTIVITIES (TIMELINE) ───────────────────────────
+
+@router.get("/companies/{company_id}/activities")
+async def get_company_activities(company_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("company_activities").select("*")\
+        .eq("company_id", company_id).eq("user_id", user_id)\
+        .order("created_at", desc=True).limit(50).execute()
+    return {"activities": res.data or []}
+
+
+@router.post("/companies/{company_id}/activities")
+async def create_company_activity(company_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    row = {
+        "company_id": company_id,
+        "user_id": user_id,
+        "type": payload.get("type", "note"),
+        "note": payload.get("note", ""),
+        "metadata": payload.get("metadata") or {},
+    }
+    res = supabase.table("company_activities").insert(row).execute()
+    posthog.capture(user_id, "company_activity_logged", {"type": row["type"]})
+    return {"activity": res.data[0] if res.data else row}
+
+
+@router.delete("/company-activities/{activity_id}")
+async def delete_company_activity(activity_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("company_activities").delete()\
+        .eq("id", activity_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+# ─── DUPLICATE DETECTION ─────────────────────────────────────
+
+@router.post("/companies/find-duplicates")
+async def find_duplicate_companies(authorization: str = Header(...)):
+    """Find companies with the same root domain or very similar names."""
+    user_id = get_user_id(authorization)
+    res = supabase.table("companies").select("id,name,website").eq("user_id", user_id).execute()
+    companies_all = res.data or []
+
+    from urllib.parse import urlparse as _dup
+    import re as _dre
+
+    def _root(url):
+        if not url:
+            return ""
+        try:
+            h = _dup(url if "://" in url else "https://" + url).netloc.lower()
+            h = h.replace("www.", "")
+            parts = h.split(".")
+            return ".".join(parts[-2:]) if len(parts) >= 2 else h
+        except Exception:
+            return ""
+
+    def _slug(name):
+        return _dre.sub(r'[^a-z0-9]', '', (name or "").lower())
+
+    # Group by root domain
+    domain_map: dict = {}
+    for c in companies_all:
+        root = _root(c.get("website", ""))
+        if root:
+            domain_map.setdefault(root, []).append(c)
+
+    # Group by name slug (catch "Acme Inc" vs "Acme")
+    name_map: dict = {}
+    for c in companies_all:
+        slug = _slug(c.get("name", ""))
+        if len(slug) >= 4:
+            name_map.setdefault(slug, []).append(c)
+
+    groups = []
+    seen_pairs: set = set()
+
+    for bucket in list(domain_map.values()) + list(name_map.values()):
+        if len(bucket) < 2:
+            continue
+        key = frozenset(c["id"] for c in bucket)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        groups.append([{"id": c["id"], "name": c["name"], "website": c.get("website", "")} for c in bucket])
+
+    return {"groups": groups}
+
+
+@router.post("/companies/{company_id}/merge/{other_id}")
+async def merge_companies(company_id: str, other_id: str, authorization: str = Header(...)):
+    """Merge other_id into company_id (keep company_id, delete other_id)."""
+    user_id = get_user_id(authorization)
+    # Move leads from other → primary
+    try:
+        supabase.table("leads").update({"company_id": company_id})\
+            .eq("company_id", other_id).eq("user_id", user_id).execute()
+    except Exception:
+        pass
+    # Move activities
+    try:
+        supabase.table("company_activities").update({"company_id": company_id})\
+            .eq("company_id", other_id).eq("user_id", user_id).execute()
+    except Exception:
+        pass
+    # Delete the duplicate
+    supabase.table("companies").delete().eq("id", other_id).eq("user_id", user_id).execute()
+    posthog.capture(user_id, "companies_merged")
+    return {"ok": True}
+
+
+# ─── COMPANY ALERTS ───────────────────────────────────────────
+
+@router.get("/companies/alerts")
+async def get_company_alerts(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("company_alerts").select("*")\
+        .eq("user_id", user_id).order("created_at", desc=True).limit(50).execute()
+    return {"alerts": res.data or []}
+
+
+@router.patch("/companies/alerts/{alert_id}/seen")
+async def mark_alert_seen(alert_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("company_alerts").update({"seen": True})\
+        .eq("id", alert_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@router.post("/companies/alerts/refresh")
+async def refresh_company_alerts(authorization: str = Header(...)):
+    """Scan tracked Prospect companies for new news/funding/hiring spikes and store alerts."""
+    user_id = get_user_id(authorization)
+    cos = supabase.table("companies").select("id,name,website,industry,job_openings")\
+        .eq("user_id", user_id).eq("prospect_status", "Prospect").execute()
+    companies_to_scan = (cos.data or [])[:20]  # cap at 20
+
+    from ddgs import DDGS
+    import re as _are
+    new_alerts = []
+
+    for company in companies_to_scan:
+        name = company.get("name", "")
+        domain = ""
+        if company.get("website"):
+            try:
+                from urllib.parse import urlparse as _aup
+                domain = _aup(company["website"]).netloc.replace("www.", "").lower()
+            except Exception:
+                pass
+
+        # Check for recent news
+        try:
+            with DDGS() as d:
+                for r in d.text(f'"{name}" 2025 OR 2026 funding OR acquisition OR launch OR partnership', max_results=3):
+                    title = (r.get("title") or "").strip()
+                    href = r.get("href") or ""
+                    snippet = (r.get("body") or "").strip()
+                    if not title or not href:
+                        continue
+                    if any(s in href for s in ["linkedin.com", "facebook.com", "twitter.com"]):
+                        continue
+                    # Check if alert already exists for this url
+                    existing = supabase.table("company_alerts").select("id")\
+                        .eq("company_id", company["id"]).eq("url", href).execute()
+                    if existing.data:
+                        continue
+                    new_alerts.append({
+                        "company_id": company["id"],
+                        "user_id": user_id,
+                        "type": "news",
+                        "title": title[:200],
+                        "body": snippet[:400],
+                        "url": href,
+                        "seen": False,
+                    })
+                    break  # one alert per company per scan
+        except Exception:
+            continue
+
+    if new_alerts:
+        supabase.table("company_alerts").insert(new_alerts).execute()
+        # Fire webhooks for each alert
+        for alert in new_alerts:
+            try:
+                co_name = next((c["name"] for c in companies_to_scan if c["id"] == alert["company_id"]), "")
+                _fire_webhooks(user_id, "company.alert", {
+                    "company": co_name,
+                    "type": alert["type"],
+                    "title": alert["title"],
+                    "url": alert.get("url", ""),
+                })
+            except Exception:
+                pass
+
+    posthog.capture(user_id, "company_alerts_refreshed", {"new": len(new_alerts)})
+    return {"ok": True, "new_alerts": len(new_alerts)}
+
+
+# ─── COMPANY SEGMENTS ─────────────────────────────────────────
+
+@router.get("/company-segments")
+async def list_company_segments(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("company_segments").select("*")\
+        .eq("user_id", user_id).order("created_at", desc=True).execute()
+    return {"segments": res.data or []}
+
+
+@router.post("/company-segments")
+async def create_company_segment(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    row = {
+        "user_id": user_id,
+        "name": payload.get("name", "Untitled segment"),
+        "filters": payload.get("filters", {}),
+    }
+    res = supabase.table("company_segments").insert(row).execute()
+    posthog.capture(user_id, "company_segment_saved")
+    return {"segment": res.data[0] if res.data else row}
+
+
+@router.delete("/company-segments/{seg_id}")
+async def delete_company_segment(seg_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("company_segments").delete()\
+        .eq("id", seg_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+# ─── FEATURE FLAGS ────────────────────────────────────────────
+
+@router.get("/feature-flags")
+async def get_feature_flags():
+    """Public endpoint — returns all feature flags (enabled/disabled)."""
+    res = supabase.table("feature_flags").select("name,label,description,enabled,category")\
+        .order("category").order("label").execute()
+    return {"flags": res.data or []}
+
+
+@router.patch("/feature-flags/{name}")
+async def update_feature_flag(name: str, payload: dict, authorization: str = Header(...)):
+    """Admin-only: toggle a feature flag."""
+    user_id = get_user_id(authorization)
+    # Verify admin role
+    profile = supabase.table("profiles").select("role").eq("id", user_id).single().execute()
+    if not profile.data or profile.data.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    enabled = payload.get("enabled")
+    if enabled is None:
+        raise HTTPException(status_code=400, detail="enabled field required")
+    import datetime as _dt
+    supabase.table("feature_flags").update({
+        "enabled": bool(enabled),
+        "updated_at": _dt.datetime.utcnow().isoformat(),
+    }).eq("name", name).execute()
+    posthog.capture(user_id, "feature_flag_toggled", {"flag": name, "enabled": enabled})
+    return {"ok": True, "name": name, "enabled": bool(enabled)}
+
+
+# ─── ADMIN STATS ─────────────────────────────────────────────────
+
+@router.get("/admin/stats")
+async def admin_stats(authorization: str = Header(...)):
+    """Platform-wide stats for the admin dashboard."""
+    user_id = get_user_id(authorization)
+    profile = supabase.table("profiles").select("role").eq("id", user_id).single().execute()
+    if not profile.data or profile.data.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    day7 = (now - timedelta(days=7)).isoformat()
+    day30 = (now - timedelta(days=30)).isoformat()
+
+    def count(table, filters=None):
+        q = supabase.table(table).select("id", count="exact").limit(1)
+        if filters:
+            for col, val in filters.items():
+                q = q.gte(col, val)
+        return q.execute().count or 0
+
+    stats = {
+        "users": {
+            "total":    count("profiles"),
+            "last_7d":  count("profiles", {"created_at": day7}),
+            "last_30d": count("profiles", {"created_at": day30}),
+        },
+        "companies": {
+            "total":    count("companies"),
+            "last_7d":  count("companies", {"created_at": day7}),
+            "last_30d": count("companies", {"created_at": day30}),
+        },
+        "leads": {
+            "total":    count("leads"),
+            "last_7d":  count("leads", {"created_at": day7}),
+            "last_30d": count("leads", {"created_at": day30}),
+        },
+        "sequences": {
+            "total":       count("sequences"),
+            "enrollments": count("sequence_enrollments"),
+        },
+        "tasks":      {"total": count("tasks")},
+        "unsubscribes": {"total": count("unsubscribes")},
+        "email_clicks": {"total": count("email_clicks")},
+    }
+
+    # Recent users with activity summary
+    recent_users = supabase.table("profiles").select(
+        "id,email,full_name,role,created_at"
+    ).order("created_at", desc=True).limit(20).execute()
+
+    user_rows = []
+    for u in (recent_users.data or []):
+        co_count = count("companies", {}) if False else None  # skip per-user for perf
+        user_rows.append({
+            "id":         u.get("id"),
+            "email":      u.get("email"),
+            "name":       u.get("full_name") or "",
+            "role":       u.get("role") or "member",
+            "joined":     (u.get("created_at") or "")[:10],
+        })
+
+    # Per-user data counts (batch)
+    co_counts  = supabase.table("companies").select("user_id", count="exact").execute()
+    lead_counts = supabase.table("leads").select("user_id", count="exact").execute()
+
+    # Aggregate by user_id
+    co_by_user   = {}
+    lead_by_user = {}
+    for row in (supabase.table("companies").select("user_id").execute().data or []):
+        uid = row.get("user_id")
+        co_by_user[uid] = co_by_user.get(uid, 0) + 1
+    for row in (supabase.table("leads").select("user_id").execute().data or []):
+        uid = row.get("user_id")
+        lead_by_user[uid] = lead_by_user.get(uid, 0) + 1
+
+    for u in user_rows:
+        uid = u["id"]
+        u["companies"] = co_by_user.get(uid, 0)
+        u["leads"]     = lead_by_user.get(uid, 0)
+
+    return {"stats": stats, "recent_users": user_rows}
+
+
+# ── ADMIN HELPER ─────────────────────────────────────────────────────────────
+
+def _require_any_admin(user_id: str):
+    """Allow admin OR owner role (no team required)."""
+    res = supabase.table("profiles").select("role,email").eq("id", user_id).single().execute()
+    if not res.data or res.data.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return res.data
+
+
+# ── ADMIN: ALL USERS (searchable / paginated) ─────────────────────────────────
+
+@router.get("/admin/all-users")
+async def admin_all_users(
+    authorization: str = Header(...),
+    search: str = "",
+    role: str = "",
+    page: int = 0,
+):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    limit = 50
+    q = supabase.table("profiles").select(
+        "id,email,full_name,role,created_at,suspended"
+    ).order("created_at", desc=True).range(page * limit, (page + 1) * limit - 1)
+    if role:
+        q = q.eq("role", role)
+    rows = q.execute().data or []
+
+    if search:
+        s = search.lower()
+        rows = [r for r in rows if s in (r.get("email") or "").lower() or s in (r.get("full_name") or "").lower()]
+
+    all_cos   = supabase.table("companies").select("user_id").execute().data or []
+    all_leads = supabase.table("leads").select("user_id").execute().data or []
+    co_map, lead_map = {}, {}
+    for c in all_cos:
+        uid = c.get("user_id"); co_map[uid] = co_map.get(uid, 0) + 1
+    for l in all_leads:
+        uid = l.get("user_id"); lead_map[uid] = lead_map.get(uid, 0) + 1
+    for r in rows:
+        uid = r["id"]
+        r["companies"] = co_map.get(uid, 0)
+        r["leads"]     = lead_map.get(uid, 0)
+
+    total = supabase.table("profiles").select("id", count="exact").limit(1).execute().count or 0
+    return {"users": rows, "total": total, "page": page}
+
+
+@router.patch("/admin/users/{target_id}")
+async def admin_update_user(target_id: str, payload: dict, authorization: str = Header(...)):
+    validate_uuid(target_id, "target_id")
+    user_id = get_user_id(authorization)
+    admin   = _require_any_admin(user_id)
+    if target_id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot edit yourself here")
+    updates = {}
+    if "role" in payload:
+        if payload["role"] not in ("member", "admin", "owner"):
+            raise HTTPException(status_code=422, detail="Invalid role")
+        updates["role"] = payload["role"]
+    if "full_name" in payload:
+        updates["full_name"] = (payload["full_name"] or "").strip()
+    if "suspended" in payload:
+        updates["suspended"] = bool(payload["suspended"])
+    if not updates:
+        raise HTTPException(status_code=422, detail="No fields to update")
+    supabase.table("profiles").update(updates).eq("id", target_id).execute()
+    supabase.table("admin_audit_log").insert({
+        "admin_id": user_id,
+        "admin_email": admin.get("email", ""),
+        "action": "update_user",
+        "target": target_id,
+        "metadata": updates,
+    }).execute()
+    return {"ok": True}
+
+
+# ── ADMIN: AUDIT LOG ─────────────────────────────────────────────────────────
+
+@router.get("/admin/audit-logs")
+async def get_audit_logs(
+    authorization: str = Header(...),
+    page: int = 0,
+    action: str = "",
+):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    limit = 100
+    q = supabase.table("admin_audit_log").select(
+        "id,admin_email,action,target,metadata,created_at"
+    ).order("created_at", desc=True).range(page * limit, (page + 1) * limit - 1)
+    if action:
+        q = q.eq("action", action)
+    return {"logs": q.execute().data or [], "page": page}
+
+
+@router.post("/admin/audit-log")
+async def write_audit_log(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    admin   = _require_any_admin(user_id)
+    supabase.table("admin_audit_log").insert({
+        "admin_id":    user_id,
+        "admin_email": admin.get("email", ""),
+        "action":      payload.get("action", ""),
+        "target":      payload.get("target", ""),
+        "metadata":    payload.get("metadata", {}),
+    }).execute()
+    return {"ok": True}
+
+
+# ── ADMIN: ANNOUNCEMENTS ─────────────────────────────────────────────────────
+
+@router.get("/admin/announcements")
+async def list_announcements(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    res = supabase.table("announcements").select("*").order("created_at", desc=True).execute()
+    return res.data or []
+
+
+@router.post("/admin/announcements")
+async def create_announcement(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    admin   = _require_any_admin(user_id)
+    title = (payload.get("title") or "").strip()
+    body  = (payload.get("body") or "").strip()
+    kind  = payload.get("kind", "info")
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required")
+    if kind not in ("info", "warning", "success", "error"):
+        kind = "info"
+    supabase.table("announcements").insert({
+        "title": title, "body": body, "kind": kind,
+        "created_by": user_id, "active": True,
+    }).execute()
+    supabase.table("admin_audit_log").insert({
+        "admin_id": user_id, "admin_email": admin.get("email", ""),
+        "action": "announcement_created", "target": title, "metadata": {"kind": kind},
+    }).execute()
+    return {"ok": True}
+
+
+@router.patch("/admin/announcements/{ann_id}")
+async def update_announcement(ann_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    updates = {k: payload[k] for k in ("title", "body", "kind", "active") if k in payload}
+    if updates:
+        supabase.table("announcements").update(updates).eq("id", ann_id).execute()
+    return {"ok": True}
+
+
+@router.delete("/admin/announcements/{ann_id}")
+async def delete_announcement(ann_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    supabase.table("announcements").delete().eq("id", ann_id).execute()
+    return {"ok": True}
+
+
+# ── ADMIN: GROWTH CHART DATA ─────────────────────────────────────────────────
+
+@router.get("/admin/growth")
+async def admin_growth(authorization: str = Header(...)):
+    """Daily new users / companies / leads for the past 30 days."""
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    from datetime import datetime, timedelta
+    days = [(datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(29, -1, -1)]
+    start = (datetime.utcnow() - timedelta(days=30)).isoformat()
+
+    def counts_by_day(table):
+        rows = supabase.table(table).select("created_at").gte("created_at", start).execute().data or []
+        by_day = {}
+        for r in rows:
+            d = (r.get("created_at") or "")[:10]
+            if d:
+                by_day[d] = by_day.get(d, 0) + 1
+        return [by_day.get(d, 0) for d in days]
+
+    return {
+        "days":      days,
+        "users":     counts_by_day("profiles"),
+        "companies": counts_by_day("companies"),
+        "leads":     counts_by_day("leads"),
+    }
+
+
+# ── ADMIN: AUTH-USER HELPER ───────────────────────────────────────────────────
+
+def _list_all_auth_users():
+    try:
+        resp = supabase.auth.admin.list_users()
+        if isinstance(resp, list):
+            return resp
+        return getattr(resp, 'users', []) or []
+    except Exception:
+        return []
+
+
+# ── ADMIN: USER DETAIL ────────────────────────────────────────────────────────
+
+@router.get("/admin/user/{target_id}")
+async def admin_user_detail(target_id: str, authorization: str = Header(...)):
+    validate_uuid(target_id, "target_id")
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    profile = supabase.table("profiles").select("*").eq("id", target_id).single().execute()
+    if not profile.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Auth info (last sign in)
+    auth_info = {}
+    try:
+        auth_resp = supabase.auth.admin.get_user_by_id(target_id)
+        u = getattr(auth_resp, 'user', auth_resp)
+        auth_info = {
+            "last_sign_in": str(u.last_sign_in_at) if u.last_sign_in_at else None,
+            "email_confirmed": bool(getattr(u, 'email_confirmed_at', None)),
+        }
+    except Exception:
+        pass
+
+    def cnt(table):
+        return supabase.table(table).select("id", count="exact").eq("user_id", target_id).limit(1).execute().count or 0
+
+    return {
+        "profile": profile.data,
+        "auth": auth_info,
+        "counts": {
+            "companies": cnt("companies"),
+            "leads":     cnt("leads"),
+            "sequences": cnt("sequences"),
+            "tasks":     cnt("tasks"),
+        },
+        "recent_companies": (supabase.table("companies").select("id,name,domain,created_at").eq("user_id", target_id).order("created_at", desc=True).limit(8).execute().data or []),
+        "recent_leads":     (supabase.table("leads").select("id,first_name,last_name,email,company,created_at").eq("user_id", target_id).order("created_at", desc=True).limit(8).execute().data or []),
+        "recent_sequences": (supabase.table("sequences").select("id,name,created_at").eq("user_id", target_id).order("created_at", desc=True).limit(5).execute().data or []),
+    }
+
+
+# ── ADMIN: ENGAGEMENT (DAU/WAU/MAU + TOP USERS) ───────────────────────────────
+
+@router.get("/admin/engagement")
+async def admin_engagement(authorization: str = Header(...)):
+    from datetime import datetime, timedelta
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    now   = datetime.utcnow()
+    d1    = (now - timedelta(days=1)).isoformat()
+    d7    = (now - timedelta(days=7)).isoformat()
+    d30   = (now - timedelta(days=30)).isoformat()
+
+    all_users = _list_all_auth_users()
+
+    def sign_in(u):
+        v = getattr(u, 'last_sign_in_at', None)
+        return str(v) if v else ""
+
+    dau = sum(1 for u in all_users if sign_in(u) >= d1)
+    wau = sum(1 for u in all_users if sign_in(u) >= d7)
+    mau = sum(1 for u in all_users if sign_in(u) >= d30)
+    inactive_count = sum(1 for u in all_users if not sign_in(u) or sign_in(u) < d30)
+
+    profiles  = supabase.table("profiles").select("id,email,full_name,role").execute().data or []
+    co_rows   = supabase.table("companies").select("user_id").execute().data or []
+    lead_rows = supabase.table("leads").select("user_id").execute().data or []
+    co_map, lead_map = {}, {}
+    for r in co_rows:   uid = r.get("user_id"); co_map[uid]   = co_map.get(uid, 0) + 1
+    for r in lead_rows: uid = r.get("user_id"); lead_map[uid] = lead_map.get(uid, 0) + 1
+
+    for p in profiles:
+        uid = p["id"]
+        p["companies"] = co_map.get(uid, 0)
+        p["leads"]     = lead_map.get(uid, 0)
+
+    top_co   = sorted(profiles, key=lambda p: p["companies"], reverse=True)[:10]
+    top_lead = sorted(profiles, key=lambda p: p["leads"],     reverse=True)[:10]
+
+    return {"dau": dau, "wau": wau, "mau": mau, "inactive_count": inactive_count,
+            "top_by_companies": top_co, "top_by_leads": top_lead}
+
+
+# ── ADMIN: INACTIVE USERS ────────────────────────────────────────────────────
+
+@router.get("/admin/inactive-users")
+async def admin_inactive_users(authorization: str = Header(...), days: int = 30):
+    from datetime import datetime, timedelta
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    all_users = _list_all_auth_users()
+    inactive = []
+    for u in all_users:
+        si = str(getattr(u, 'last_sign_in_at', '') or '')
+        ca = str(getattr(u, 'created_at', '') or '')
+        if not si or si < cutoff:
+            inactive.append({"id": str(getattr(u, 'id', '')), "email": getattr(u, 'email', ''), "last_sign_in": si or None, "created_at": ca})
+    inactive.sort(key=lambda x: x.get("last_sign_in") or "")
+    return {"users": inactive, "count": len(inactive), "days": days}
+
+
+# ── ADMIN: EXPORT USERS CSV ──────────────────────────────────────────────────
+
+@router.get("/admin/export/users")
+async def export_users_csv(authorization: str = Header(...)):
+    import csv, io
+    from fastapi.responses import StreamingResponse
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    profiles  = supabase.table("profiles").select("id,email,full_name,role,created_at,suspended").order("created_at", desc=True).execute().data or []
+    co_rows   = supabase.table("companies").select("user_id").execute().data or []
+    lead_rows = supabase.table("leads").select("user_id").execute().data or []
+    co_map, lead_map = {}, {}
+    for r in co_rows:   uid = r.get("user_id"); co_map[uid]   = co_map.get(uid, 0) + 1
+    for r in lead_rows: uid = r.get("user_id"); lead_map[uid] = lead_map.get(uid, 0) + 1
+
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=["email","full_name","role","companies","leads","suspended","joined"])
+    w.writeheader()
+    for p in profiles:
+        uid = p["id"]
+        w.writerow({"email": p.get("email",""), "full_name": p.get("full_name",""), "role": p.get("role",""),
+                    "companies": co_map.get(uid,0), "leads": lead_map.get(uid,0),
+                    "suspended": p.get("suspended",False), "joined": (p.get("created_at",""))[:10]})
+    out.seek(0)
+    return StreamingResponse(iter([out.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": "attachment; filename=sonar-users.csv"})
+
+
+# ── ADMIN: SYSTEM HEALTH ─────────────────────────────────────────────────────
+
+@router.get("/admin/health-check")
+async def admin_health_check(authorization: str = Header(...)):
+    import time as _time
+    from datetime import datetime
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    checks = {}
+
+    # Database
+    t = _time.time()
+    try:
+        supabase.table("profiles").select("id").limit(1).execute()
+        checks["database"] = {"status": "ok", "latency_ms": round((_time.time()-t)*1000)}
+    except Exception as e:
+        checks["database"] = {"status": "error", "error": str(e)[:120]}
+
+    # External keys
+    for key_name, env_var in [("pdl","PDL_API_KEY"),("hunter","HUNTER_API_KEY"),("apollo","APOLLO_API_KEY"),("resend","RESEND_API_KEY"),("openai","OPENAI_API_KEY")]:
+        v = os.environ.get(env_var,"")
+        checks[key_name] = {"status": "configured" if v else "missing", "prefix": (v[:6]+"…") if v else None}
+
+    # Feature flags
+    try:
+        fc = supabase.table("feature_flags").select("id",count="exact").limit(1).execute().count or 0
+        checks["feature_flags"] = {"status": "ok", "count": fc}
+    except:
+        checks["feature_flags"] = {"status": "error"}
+
+    # User count
+    try:
+        uc = supabase.table("profiles").select("id",count="exact").limit(1).execute().count or 0
+        checks["users"] = {"status": "ok", "count": uc}
+    except:
+        checks["users"] = {"status": "error"}
+
+    return {"checks": checks, "timestamp": datetime.utcnow().isoformat()}
+
+
+# ── ADMIN: EMAIL BLAST ───────────────────────────────────────────────────────
+
+@router.post("/admin/email-blast")
+async def email_blast(payload: dict, authorization: str = Header(...)):
+    from datetime import datetime, timedelta
+    user_id = get_user_id(authorization)
+    admin   = _require_any_admin(user_id)
+
+    subject = (payload.get("subject") or "").strip()
+    body    = (payload.get("body") or "").strip()
+    segment = payload.get("segment", "all")   # all | active | inactive
+
+    if not subject or not body:
+        raise HTTPException(status_code=422, detail="subject and body are required")
+
+    resend_key = os.environ.get("RESEND_API_KEY","")
+    if not resend_key:
+        raise HTTPException(status_code=500, detail="RESEND_API_KEY not configured")
+
+    from_email = os.environ.get("EMAIL_FROM", "Sonar <noreply@sonarleads.io>")
+
+    profiles = supabase.table("profiles").select("id,email,full_name").eq("suspended", False).execute().data or []
+
+    if segment != "all":
+        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        auth_users = _list_all_auth_users()
+        active_ids = {str(getattr(u,'id','')) for u in auth_users if str(getattr(u,'last_sign_in_at','') or '') >= cutoff}
+        if segment == "active":
+            profiles = [p for p in profiles if p.get("id") in active_ids]
+        elif segment == "inactive":
+            profiles = [p for p in profiles if p.get("id") not in active_ids]
+
+    emails = [p for p in profiles if p.get("email")][:500]
+    if not emails:
+        raise HTTPException(status_code=422, detail="No recipients in selected segment")
+
+    sent = errors = 0
+    for p in emails:
+        html = f"""<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+<p style="font-size:15px;line-height:1.6;color:#111">{body.replace(chr(10),'<br>')}</p>
+<hr style="margin:24px 0;border:none;border-top:1px solid #eee">
+<p style="font-size:12px;color:#888">You're receiving this from the Sonar team.</p>
+</div>"""
+        try:
+            r = requests.post("https://api.resend.com/emails", json={"from": from_email, "to": [p["email"]], "subject": subject, "html": html},
+                              headers={"Authorization": f"Bearer {resend_key}"}, timeout=10)
+            if r.status_code in (200,201,202): sent += 1
+            else: errors += 1
+        except: errors += 1
+
+    supabase.table("admin_audit_log").insert({
+        "admin_id": user_id, "admin_email": admin.get("email",""),
+        "action": "email_blast", "target": f"{sent} recipients",
+        "metadata": {"subject": subject, "segment": segment, "sent": sent, "errors": errors},
+    }).execute()
+
+    return {"ok": True, "sent": sent, "errors": errors, "total": len(emails)}
+
+
+# ── ADMIN: CHANGELOG ─────────────────────────────────────────────────────────
+
+@router.get("/admin/changelog")
+async def admin_list_changelog(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    return supabase.table("changelog").select("*").order("created_at", desc=True).execute().data or []
+
+@router.post("/admin/changelog")
+async def admin_create_changelog(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    admin   = _require_any_admin(user_id)
+    title   = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required")
+    supabase.table("changelog").insert({
+        "title":     title,
+        "body":      (payload.get("body") or "").strip(),
+        "version":   (payload.get("version") or "").strip(),
+        "published": payload.get("published", True),
+        "created_by": user_id,
+    }).execute()
+    supabase.table("admin_audit_log").insert({
+        "admin_id": user_id, "admin_email": admin.get("email",""),
+        "action": "changelog_created", "target": title,
+    }).execute()
+    return {"ok": True}
+
+@router.patch("/admin/changelog/{entry_id}")
+async def admin_update_changelog(entry_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    updates = {k: payload[k] for k in ("title","body","version","published") if k in payload}
+    if updates:
+        supabase.table("changelog").update(updates).eq("id", entry_id).execute()
+    return {"ok": True}
+
+@router.delete("/admin/changelog/{entry_id}")
+async def admin_delete_changelog(entry_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    supabase.table("changelog").delete().eq("id", entry_id).execute()
+    return {"ok": True}
+
+
+# ── ADMIN: GLOBAL SEARCH ─────────────────────────────────────────────────────
+
+@router.get("/admin/search")
+async def admin_search(authorization: str = Header(...), q: str = ""):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    if not q or len(q.strip()) < 2:
+        return {"users": [], "companies": [], "leads": []}
+    s = q.strip()
+    users     = supabase.table("profiles").select("id,email,full_name,role").or_(f"email.ilike.%{s}%,full_name.ilike.%{s}%").limit(6).execute().data or []
+    companies = supabase.table("companies").select("id,name,domain").or_(f"name.ilike.%{s}%,domain.ilike.%{s}%").limit(6).execute().data or []
+    leads     = supabase.table("leads").select("id,first_name,last_name,email,company").or_(f"email.ilike.%{s}%,first_name.ilike.%{s}%,last_name.ilike.%{s}%,company.ilike.%{s}%").limit(6).execute().data or []
+    return {"users": users, "companies": companies, "leads": leads}
+
+
+# ── ADMIN: FEATURE ADOPTION ──────────────────────────────────────────────────
+
+@router.get("/admin/feature-adoption")
+async def admin_feature_adoption(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    total_users = max(supabase.table("profiles").select("id",count="exact").limit(1).execute().count or 1, 1)
+    features = [
+        ("Companies",   "companies"),
+        ("Leads",       "leads"),
+        ("Sequences",   "sequences"),
+        ("Tasks",       "tasks"),
+        ("Unsubscribes","unsubscribes"),
+    ]
+    result = []
+    for name, table in features:
+        try:
+            rows = supabase.table(table).select("user_id").execute().data or []
+            unique = len({r.get("user_id") for r in rows if r.get("user_id")})
+            total  = supabase.table(table).select("id",count="exact").limit(1).execute().count or 0
+            result.append({"name": name, "users_adopted": unique, "adoption_pct": round(unique/total_users*100,1), "total": total})
+        except:
+            result.append({"name": name, "users_adopted": 0, "adoption_pct": 0, "total": 0})
+    return {"features": result, "total_users": total_users}
+
+
+# ── ADMIN: RETENTION COHORTS ─────────────────────────────────────────────────
+
+@router.get("/admin/retention")
+async def admin_retention(authorization: str = Header(...)):
+    from datetime import datetime, timedelta
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+
+    now       = datetime.utcnow()
+    all_users = _list_all_auth_users()
+
+    cohorts = []
+    for w in range(7, -1, -1):
+        w_start = (now - timedelta(weeks=w+1)).isoformat()
+        w_end   = (now - timedelta(weeks=w)).isoformat()
+        label   = (now - timedelta(weeks=w+1)).strftime("%-m/%-d")
+        cohort  = [u for u in all_users if w_start <= str(getattr(u,'created_at','') or '') < w_end]
+        size    = len(cohort)
+        active  = sum(1 for u in cohort if str(getattr(u,'last_sign_in_at','') or '') >= (now - timedelta(weeks=1)).isoformat())
+        returned= sum(1 for u in cohort if str(getattr(u,'last_sign_in_at','') or '') > str(getattr(u,'created_at','') or ''))
+        cohorts.append({"week": label, "size": size, "retained": active, "returned": returned,
+                        "retention_pct": round(active/size*100,1) if size else 0})
+    return {"cohorts": cohorts}
+
+
+# ── ADMIN: LOGIN HISTORY (per user) ─────────────────────────────────────────
+
+@router.get("/admin/login-history/{target_id}")
+async def admin_login_history(target_id: str, authorization: str = Header(...)):
+    validate_uuid(target_id, "target_id")
+    user_id = get_user_id(authorization)
+    _require_any_admin(user_id)
+    try:
+        resp = supabase.auth.admin.get_user_by_id(target_id)
+        u    = getattr(resp, 'user', resp)
+        return {
+            "last_sign_in":     str(getattr(u,'last_sign_in_at','') or ''),
+            "created_at":       str(getattr(u,'created_at','') or ''),
+            "email_confirmed":  bool(getattr(u,'email_confirmed_at',None)),
+            "updated_at":       str(getattr(u,'updated_at','') or ''),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))

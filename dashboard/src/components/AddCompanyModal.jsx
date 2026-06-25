@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { prefillCompany, createCompany } from '../services/api'
+import { prefillCompany, createCompany, deepEnrichCompany } from '../services/api'
 
 const EMPTY_FORM = { name: '', website: '', linkedin_url: '', headquarters: '', followers: '', size: '', description: '' }
 
@@ -102,7 +102,7 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      await createCompany({
+      const created = await createCompany({
         name: form.name.trim(),
         website: form.website.trim() || null,
         linkedin_url: form.linkedin_url.trim() || null,
@@ -113,6 +113,9 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
       })
       setStep('saved')
       onRefresh()
+      // Trigger deep enrich silently in background — don't await or show errors
+      const newId = created?.data?.company?.id || created?.data?.id
+      if (newId) deepEnrichCompany(newId).catch(() => {})
     } catch (e) {
       const raw = e.response?.data?.detail || e.message || 'Save failed.'
       const msg = typeof raw === 'string' && raw.includes("'message'")

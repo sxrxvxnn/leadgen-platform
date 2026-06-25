@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useCallback, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
+import { FeatureFlagProvider } from './context/FeatureFlagContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppShell from './components/AppShell'
 import { PostHogProvider } from './components/PostHogProvider'
@@ -64,6 +65,13 @@ function AdminRoute({ children }) {
   return children
 }
 
+function FlaggedRoute({ flag, children }) {
+  const { isEnabled, loading } = useFeatureFlags()
+  if (loading) return null
+  if (!isEnabled(flag)) return <Navigate to="/dashboard" replace />
+  return children
+}
+
 function RootRedirect() {
   const { token, loading } = useAuth()
   if (loading) return null
@@ -91,6 +99,7 @@ export default function App() {
     <BrowserRouter>
       <PostHogProvider>
       <AuthProvider>
+        <FeatureFlagProvider>
         <BulkOpsProvider>
           {!loaderDone && <PageLoader onDone={handleLoaderDone} />}
           <ChunkErrorBoundary>
@@ -105,20 +114,20 @@ export default function App() {
 
               {/* App pages — sidebar layout */}
               <Route element={<AuthLayout />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/leads" element={<Leads />} />
-                <Route path="/companies" element={<Companies />} />
-                <Route path="/directory" element={<CompanyDirectory />} />
-                <Route path="/prospect" element={<Prospect />} />
-                <Route path="/email-finder" element={<EmailFinder />} />
-                <Route path="/database" element={<AdminRoute><Database /></AdminRoute>} />
-                <Route path="/sequences" element={<Sequences />} />
-                <Route path="/tasks"     element={<Tasks />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/targeting" element={<Targeting />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/unsubscribes" element={<Unsubscribes />} />
-                <Route path="/admin" element={<Admin />} />
+                <Route path="/dashboard"   element={<Dashboard />} />
+                <Route path="/leads"       element={<FlaggedRoute flag="page_leads"><Leads /></FlaggedRoute>} />
+                <Route path="/companies"   element={<FlaggedRoute flag="page_companies"><Companies /></FlaggedRoute>} />
+                <Route path="/directory"   element={<FlaggedRoute flag="page_discovery"><CompanyDirectory /></FlaggedRoute>} />
+                <Route path="/prospect"    element={<FlaggedRoute flag="page_prospect"><Prospect /></FlaggedRoute>} />
+                <Route path="/email-finder"element={<FlaggedRoute flag="page_email_finder"><EmailFinder /></FlaggedRoute>} />
+                <Route path="/database"    element={<AdminRoute><Database /></AdminRoute>} />
+                <Route path="/sequences"   element={<FlaggedRoute flag="page_sequences"><Sequences /></FlaggedRoute>} />
+                <Route path="/tasks"       element={<FlaggedRoute flag="page_tasks"><Tasks /></FlaggedRoute>} />
+                <Route path="/analytics"   element={<FlaggedRoute flag="page_analytics"><Analytics /></FlaggedRoute>} />
+                <Route path="/targeting"   element={<FlaggedRoute flag="page_targeting"><Targeting /></FlaggedRoute>} />
+                <Route path="/settings"    element={<Settings />} />
+                <Route path="/unsubscribes"element={<FlaggedRoute flag="page_unsubscribes"><Unsubscribes /></FlaggedRoute>} />
+                <Route path="/admin"       element={<Admin />} />
               </Route>
 
               <Route path="/icp" element={<Navigate to="/targeting" replace />} />
@@ -133,6 +142,7 @@ export default function App() {
           </Suspense>
           </ChunkErrorBoundary>
         </BulkOpsProvider>
+        </FeatureFlagProvider>
       </AuthProvider>
       </PostHogProvider>
     </BrowserRouter>
