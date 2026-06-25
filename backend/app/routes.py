@@ -8921,10 +8921,10 @@ _WARMUP_BODIES = [
 @router.get("/profile/warmup-config")
 async def get_warmup_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).maybe_single().execute()
+    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).limit(1).execute()
     if not res.data:
         return {"config": None, "day": 0, "daily_target": 0}
-    cfg = res.data
+    cfg = res.data[0]
     # Compute current day since start_date
     start = cfg.get("start_date")
     if start:
@@ -8945,7 +8945,7 @@ async def get_warmup_config(authorization: str = Header(...)):
 async def save_warmup_config(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     # Upsert
-    existing = supabase.table("warmup_configs").select("id").eq("user_id", user_id).maybe_single().execute()
+    existing = supabase.table("warmup_configs").select("id").eq("user_id", user_id).limit(1).execute()
     data = {"user_id": user_id}
     if "enabled" in payload:
         data["enabled"] = bool(payload["enabled"])
@@ -8957,9 +8957,10 @@ async def save_warmup_config(payload: dict, authorization: str = Header(...)):
     if existing.data:
         supabase.table("warmup_configs").update(data).eq("user_id", user_id).execute()
     else:
+        data.setdefault("start_date", _datetime_mod.datetime.now(_datetime_mod.timezone.utc).isoformat())
         supabase.table("warmup_configs").insert(data).execute()
-    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).maybe_single().execute()
-    return {"config": res.data}
+    res = supabase.table("warmup_configs").select("*").eq("user_id", user_id).limit(1).execute()
+    return {"config": res.data[0] if res.data else None}
 
 
 @router.post("/sequences/warmup-cron")
