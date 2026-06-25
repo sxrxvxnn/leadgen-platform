@@ -98,6 +98,7 @@ export default function Tasks() {
   const overdue = groups.overdue?.length || 0
 
   return (
+    <>
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
 
       {/* Header */}
@@ -185,6 +186,15 @@ export default function Tasks() {
         )}
       </div>
     </div>
+    <NewTaskModal
+      show={showForm}
+      onClose={() => { setShowForm(false); setTaskForm({ title: '', due_date: '', priority: 'medium', notes: '' }) }}
+      form={taskForm}
+      onChange={(field, val) => setTaskForm(f => ({ ...f, [field]: val }))}
+      onSubmit={handleCreate}
+      creating={creating}
+    />
+    </>
   )
 }
 
@@ -270,16 +280,6 @@ function NewTaskModal({ show, onClose, form, onChange, onSubmit, creating }) {
           </div>
         </form>
       </div>
-    </div>
-
-      <NewTaskModal
-        show={showForm}
-        onClose={() => { setShowForm(false); setTaskForm({ title: '', due_date: '', priority: 'medium', notes: '' }) }}
-        form={taskForm}
-        onChange={(field, val) => setTaskForm(f => ({ ...f, [field]: val }))}
-        onSubmit={handleCreate}
-        creating={creating}
-      />
     </div>
   )
 }
