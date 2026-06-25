@@ -6649,10 +6649,10 @@ async def import_leads_csv(request: Request, authorization: str = Header(...)):
 async def export_leads_csv(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     leads   = supabase.table("leads").select(
-        "name, email, title, company, phone, location, linkedin_url, status, connection_status, icp_score, deal_value, notes, created_at"
+        "name, email, email_status, email_score, title, company, phone, location, linkedin_url, status, connection_status, icp_score, deal_value, notes, created_at"
     ).eq("user_id", user_id).order("created_at", desc=True).execute().data or []
 
-    fields  = ["name", "email", "title", "company", "phone", "location",
+    fields  = ["name", "email", "email_status", "email_score", "title", "company", "phone", "location",
                 "linkedin_url", "status", "connection_status", "icp_score",
                 "deal_value", "notes", "created_at"]
     out     = _io.StringIO()
