@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-import { listEnrollments, unenrollLead, markReplied, getSequenceAnalytics } from '../services/api'
+import { listEnrollments, unenrollLead, markReplied, getSequenceAnalytics, getSequenceSendStats } from '../services/api'
 
 const STEP_TYPES = [
   { id: 'email',    label: 'Email'    },
@@ -426,6 +426,7 @@ export default function Sequences() {
   const navigate = useNavigate()
   const [sequences, setSequences] = useState([])
   const [loading, setLoading] = useState(true)
+  const [sendStats, setSendStats] = useState(null)
   const [showBuilder, setShowBuilder] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [showAiModal, setShowAiModal] = useState(false)
@@ -442,8 +443,12 @@ export default function Sequences() {
   async function load() {
     try {
       setLoading(true)
-      const res = await api.get('/sequences')
+      const [res, statsRes] = await Promise.all([
+        api.get('/sequences'),
+        getSequenceSendStats().catch(() => null),
+      ])
       setSequences(res.data.sequences || [])
+      if (statsRes) setSendStats(statsRes.data)
     } catch {
       setError('Failed to load sequences')
     } finally {
@@ -692,7 +697,18 @@ export default function Sequences() {
             <h1 style={s.title}>Sequences</h1>
             <p style={s.subtitle}>Multi-step outreach campaigns — email, LinkedIn, calls</p>
           </div>
-          <button style={s.btn} onClick={openNew}>+ New sequence</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {sendStats && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', background: 'var(--surface)', border: `1px solid ${sendStats.remaining === 0 ? '#e07070' : sendStats.remaining < 10 ? '#b07d2e40' : 'var(--border)'}`, borderRadius: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: sendStats.remaining === 0 ? '#e07070' : sendStats.remaining < 10 ? '#b07d2e' : '#4a7c59', flexShrink: 0 }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                  <span style={{ color: sendStats.remaining === 0 ? '#e07070' : 'var(--text)', fontWeight: 600 }}>{sendStats.sent_today}</span>
+                  <span>/{sendStats.daily_limit} emails today</span>
+                </span>
+              </div>
+            )}
+            <button style={s.btn} onClick={openNew}>+ New sequence</button>
+          </div>
         </div>
 
         {error && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#e07070', marginBottom: 16 }}>{error}</p>}
