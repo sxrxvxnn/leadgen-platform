@@ -352,4 +352,11 @@ export const updateFeatureFlag = (name, enabled) => api.patch(`/feature-flags/${
 // ─── DOMAIN HEALTH ────────────────────────────────────────────────
 export const checkDomainHealth = (domain) => api.get('/profile/domain-health', { params: { domain } })
 
+// ─── AI ICEBREAKER ────────────────────────────────────────────────
+export const generateIcebreaker = (leadId) => api.post(`/leads/${leadId}/ai-icebreaker`)
+
+// ─── SEQUENCE TEMPLATES ───────────────────────────────────────────
+export const listSequenceTemplates   = () => api.get('/sequences/templates')
+export const createFromTemplate      = (template_id, name) => api.post('/sequences/from-template', { template_id, name })
+
 export default api

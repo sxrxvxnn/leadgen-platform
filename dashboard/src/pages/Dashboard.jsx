@@ -260,8 +260,17 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {replies.slice(0, 5).map(r => {
-                  const lead = r.leads || {}
-                  const seq  = r.sequences || {}
+                  const lead      = r.leads || {}
+                  const seq       = r.sequences || {}
+                  const sentiment = r.reply_sentiment
+                  const sentimentMeta = {
+                    interested:     { label: 'INTERESTED', color: '#4a7c59', bg: 'rgba(74,124,89,0.12)', icon: '★' },
+                    not_interested: { label: 'NOT INTERESTED', color: '#e07070', bg: 'rgba(239,68,68,0.1)', icon: '✗' },
+                    ooo:            { label: 'OOO', color: '#ca8a04', bg: 'rgba(234,179,8,0.1)', icon: '✈' },
+                    wrong_person:   { label: 'WRONG PERSON', color: 'var(--text-muted)', bg: 'var(--surface)', icon: '⟳' },
+                    other:          { label: 'REPLIED', color: '#9b59b6', bg: 'rgba(155,89,182,0.1)', icon: '↩' },
+                  }
+                  const sm = sentimentMeta[sentiment] || sentimentMeta.other
                   return (
                     <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(155,89,182,0.06)', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 8 }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#9b59b618', border: '1px solid #9b59b640', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: MONO, fontSize: 13, color: '#9b59b6', fontWeight: 700 }}>
@@ -271,8 +280,8 @@ export default function Dashboard() {
                         <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lead.name || lead.email || 'Unknown'}</div>
                         <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)' }}>{lead.company || ''}{lead.company && lead.title ? ' · ' : ''}{lead.title || ''}</div>
                       </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontFamily: MONO, fontSize: 9, color: '#9b59b6', fontWeight: 600 }}>↩ REPLIED</div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                        <span style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 3, background: sm.bg, color: sm.color, letterSpacing: '0.06em' }}>{sm.icon} {sm.label}</span>
                         <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)' }}>{seq.name || ''}</div>
                       </div>
                     </div>
