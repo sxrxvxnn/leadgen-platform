@@ -24,7 +24,19 @@ function VariantLabel({ letter, color }) {
   )
 }
 
+const PREVIEW_LEAD = { name: 'Sarah Chen', first_name: 'Sarah', company: 'Acme Corp', title: 'VP of Sales', cal_link: 'https://cal.com/you/15min' }
+
+function previewText(text) {
+  return (text || '')
+    .replace(/\{\{name\}\}/g, PREVIEW_LEAD.name)
+    .replace(/\{\{first_name\}\}/g, PREVIEW_LEAD.first_name)
+    .replace(/\{\{company\}\}/g, PREVIEW_LEAD.company)
+    .replace(/\{\{title\}\}/g, PREVIEW_LEAD.title)
+    .replace(/\{\{cal_link\}\}/g, PREVIEW_LEAD.cal_link)
+}
+
 function StepCard({ step, index, onChange, onRemove }) {
+  const [previewMode, setPreviewMode] = useState(false)
   const abEnabled = step.subject_b !== undefined && step.subject_b !== null
 
   function toggleAB() {
@@ -55,6 +67,11 @@ function StepCard({ step, index, onChange, onRemove }) {
               A/B Test
             </button>
           )}
+          {step.type === 'email' && (
+            <button onClick={() => setPreviewMode(p => !p)} style={{ padding: '5px 10px', borderRadius: 6, border: previewMode ? '1.5px solid #5b8db8' : '1px solid var(--border)', background: previewMode ? '#5b8db818' : 'transparent', color: previewMode ? '#5b8db8' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+              {previewMode ? 'Edit' : 'Preview'}
+            </button>
+          )}
           <button onClick={onRemove} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Remove</button>
         </div>
 
@@ -67,6 +84,21 @@ function StepCard({ step, index, onChange, onRemove }) {
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>days before next step</span>
           </div>
         ) : (
+          previewMode && step.type === 'email' ? (
+            <div style={{ background: 'var(--bg)', border: '1px solid #5b8db840', borderRadius: 8, padding: 16 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5b8db8', marginBottom: 10 }}>
+                Preview for Sarah Chen · VP of Sales · Acme Corp
+              </div>
+              {step.subject && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+                  {previewText(step.subject)}
+                </div>
+              )}
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {previewText(step.body)}
+              </div>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {step.type === 'email' && abEnabled && <VariantLabel letter="A" color="#4a7c59" />}
             {step.type === 'email' && (
@@ -107,6 +139,7 @@ function StepCard({ step, index, onChange, onRemove }) {
               </div>
             )}
           </div>
+          )
         )}
       </div>
     </div>
