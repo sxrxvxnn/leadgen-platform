@@ -334,13 +334,17 @@ function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
         {(!seq.steps || seq.steps.length === 0) && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>No steps yet</span>}
       </div>
 
-      <div style={{ display: 'flex', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
         {[
-          { label: 'Steps', value: seq.steps?.length || 0 },
-          { label: 'Enrolled', value: seq.enrolled_count || 0 },
+          { label: 'Steps',     value: seq.steps?.length || 0,   color: 'var(--text)' },
+          { label: 'Enrolled',  value: seq.enrolled_count || 0,  color: 'var(--text)' },
+          { label: 'Active',    value: seq.active_count || 0,    color: '#4a7c59' },
+          { label: 'Replied',   value: seq.replied_count || 0,   color: seq.replied_count > 0 ? '#9b59b6' : 'var(--text-muted)' },
+          { label: 'Bounced',   value: seq.bounced_count || 0,   color: seq.bounced_count > 0 ? '#e07070' : 'var(--text-muted)' },
+          { label: 'Completed', value: seq.completed_count || 0, color: seq.completed_count > 0 ? '#0082F3' : 'var(--text-muted)' },
         ].map(m => (
           <div key={m.label}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{m.value}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: m.color }}>{m.value}</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{m.label}</div>
           </div>
         ))}
@@ -391,6 +395,10 @@ export default function Sequences() {
   const [loading, setLoading] = useState(true)
   const [showBuilder, setShowBuilder] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiForm, setAiForm] = useState({ product: '', persona: '', tone: 'professional', num_steps: 3 })
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ name: '', description: '', steps: [{ ...BLANK_STEP }] })
   const [saving, setSaving] = useState(false)
@@ -420,6 +428,23 @@ export default function Sequences() {
     setEditing(seq)
     setForm({ name: seq.name, description: seq.description || '', steps: seq.steps?.length ? seq.steps : [{ ...BLANK_STEP }] })
     setShowBuilder(true)
+  }
+
+  async function handleAiDraft(e) {
+    e.preventDefault()
+    if (!aiForm.product.trim()) return
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const res = await api.post('/sequences/ai-draft', aiForm)
+      const steps = res.data.steps || []
+      setForm(f => ({ ...f, steps }))
+      setShowAiModal(false)
+    } catch (err) {
+      setAiError(err?.response?.data?.detail || 'AI draft failed — try again.')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   async function handleSave(e) {
@@ -488,9 +513,14 @@ export default function Sequences() {
               <h1 style={{ ...s.title, margin: 0 }}>{editing ? 'Edit Sequence' : 'New Sequence'}</h1>
             </div>
             {!editing && (
-              <button type="button" onClick={() => setShowTemplateModal(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.05em' }}>
-                Start from template
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => setShowAiModal(true)} style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', border: 'none', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff', cursor: 'pointer', letterSpacing: '0.05em', fontWeight: 600 }}>
+                  ✦ AI Draft
+                </button>
+                <button type="button" onClick={() => setShowTemplateModal(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                  Start from template
+                </button>
+              </div>
             )}
           </div>
 
@@ -528,6 +558,61 @@ export default function Sequences() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {showAiModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={e => { if (e.target === e.currentTarget) setShowAiModal(false) }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid #7c3aed40', borderRadius: 16, padding: 32, width: 500 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>✦ AI Sequence Draft</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Generate a complete sequence with AI</div>
+                  </div>
+                  <button onClick={() => setShowAiModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+                </div>
+                <form onSubmit={handleAiDraft} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label style={{ ...s.label, display: 'block', marginBottom: 6 }}>What does your product do?</label>
+                    <textarea rows={3} required value={aiForm.product} onChange={e => setAiForm(f => ({ ...f, product: e.target.value }))}
+                      placeholder="e.g. Sonar helps sales teams find verified B2B leads and automate cold email outreach with personalized sequences."
+                      style={{ ...s.input, width: '100%', resize: 'vertical', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ ...s.label, display: 'block', marginBottom: 6 }}>Target persona</label>
+                    <input value={aiForm.persona} onChange={e => setAiForm(f => ({ ...f, persona: e.target.value }))}
+                      placeholder="e.g. VP of Sales at Series A–C SaaS companies in the US"
+                      style={{ ...s.input, width: '100%', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ ...s.label, display: 'block', marginBottom: 6 }}>Tone</label>
+                      <select value={aiForm.tone} onChange={e => setAiForm(f => ({ ...f, tone: e.target.value }))}
+                        style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}>
+                        <option value="professional">Professional</option>
+                        <option value="casual and direct">Casual & Direct</option>
+                        <option value="bold and provocative">Bold & Provocative</option>
+                        <option value="warm and empathetic">Warm & Empathetic</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ ...s.label, display: 'block', marginBottom: 6 }}>Steps</label>
+                      <select value={aiForm.num_steps} onChange={e => setAiForm(f => ({ ...f, num_steps: parseInt(e.target.value) }))}
+                        style={{ ...s.input, width: '100%', boxSizing: 'border-box' }}>
+                        <option value={2}>2 emails</option>
+                        <option value={3}>3 emails</option>
+                        <option value={4}>4 emails</option>
+                        <option value={5}>5 emails</option>
+                      </select>
+                    </div>
+                  </div>
+                  {aiError && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#e07070' }}>{aiError}</div>}
+                  <button type="submit" disabled={aiLoading} style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', border: 'none', borderRadius: 8, padding: '10px 20px', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#fff', cursor: aiLoading ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: aiLoading ? 0.7 : 1 }}>
+                    {aiLoading ? 'Generating…' : '✦ Generate sequence'}
+                  </button>
+                </form>
               </div>
             </div>
           )}

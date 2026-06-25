@@ -5311,6 +5311,73 @@ Respond in this exact JSON format (no markdown):
     return {"scored": scored, "total": len(leads)}
 
 
+# ─── AI SEQUENCE DRAFTING ────────────────────────────────────────────────────
+
+@router.post("/sequences/ai-draft")
+async def ai_draft_sequence(payload: dict, authorization: str = Header(...)):
+    """Generate a cold email sequence using AI (Groq llama-3.1-70b-versatile)."""
+    get_user_id(authorization)  # auth check
+
+    product   = (payload.get("product") or "").strip()[:500]
+    persona   = (payload.get("persona") or "").strip()[:300]
+    tone      = (payload.get("tone") or "professional").strip()
+    num_steps = min(max(int(payload.get("num_steps") or 3), 2), 5)
+
+    if not product:
+        raise HTTPException(status_code=422, detail="product is required")
+
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(status_code=503, detail="AI drafting not configured on this server.")
+
+    prompt = f"""You are an expert cold email copywriter for B2B SaaS.
+Write a {num_steps}-step cold email sequence with the following parameters:
+- Product/value prop: {product}
+- Target persona: {persona or "B2B decision makers"}
+- Tone: {tone}
+
+Rules:
+- Step 1 is sent on Day 0, subsequent steps add 3–5 day delays
+- Keep emails short (under 150 words each)
+- Use personalization tokens exactly as written: {{{{name}}}}, {{{{first_name}}}}, {{{{company}}}}, {{{{title}}}}, {{{{cal_link}}}}
+- No generic spam phrases ("hope this finds you well", "touching base")
+- Each email should have a clear single CTA
+- Last email should be a break-up email ("closing the loop")
+
+Return ONLY valid JSON in this exact structure, no explanation:
+{{
+  "steps": [
+    {{"delay_days": 0, "subject": "...", "body": "..."}},
+    {{"delay_days": 4, "subject": "Re: ...", "body": "..."}},
+    ...
+  ]
+}}"""
+
+    try:
+        import requests as _req, json as _j
+        r = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1800, "temperature": 0.7},
+            timeout=30,
+        )
+        d = r.json()
+        raw = d["choices"][0]["message"]["content"].strip()
+        # Strip markdown code fences if present
+        import re as _re2
+        raw = _re2.sub(r'^```(?:json)?\s*', '', raw)
+        raw = _re2.sub(r'\s*```$', '', raw)
+        data = _j.loads(raw)
+        steps = data.get("steps") or []
+        # Validate and ensure type field
+        for step in steps:
+            step["type"] = "email"
+            step.setdefault("delay_days", 0)
+        return {"steps": steps}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI draft failed: {str(e)}")
+
+
 # ─── PHASE 1: SEQUENCES CRUD ─────────────────────────────────────────────────
 
 @router.get("/sequences")
@@ -5321,8 +5388,13 @@ async def list_sequences(authorization: str = Header(...)):
     for seq in sequences:
         steps_res = supabase.table("sequence_steps").select("*").eq("sequence_id", seq["id"]).order("step_number").execute()
         seq["steps"] = steps_res.data or []
-        count_res = supabase.table("sequence_enrollments").select("id", count="exact").eq("sequence_id", seq["id"]).execute()
-        seq["enrolled_count"] = count_res.count or 0
+        enr_res = supabase.table("sequence_enrollments").select("id, status").eq("sequence_id", seq["id"]).execute()
+        enr = enr_res.data or []
+        seq["enrolled_count"] = len(enr)
+        seq["replied_count"]  = sum(1 for e in enr if e["status"] == "replied")
+        seq["bounced_count"]  = sum(1 for e in enr if e["status"] == "bounced")
+        seq["active_count"]   = sum(1 for e in enr if e["status"] == "active")
+        seq["completed_count"]= sum(1 for e in enr if e["status"] == "completed")
     return {"sequences": sequences}
 
 
@@ -5602,6 +5674,13 @@ async def process_sequence_cron(request: Request):
                             success   = False
                             error_msg = f"Hard bounce: {e}"
                             supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                            # Mark lead email as invalid + suppress future sends
+                            try:
+                                import datetime as _dt2
+                                supabase.table("leads").update({"email_status": "invalid", "email_score": 0, "email_verified_at": _dt2.datetime.now(_dt2.timezone.utc).isoformat()}).eq("id", enrollment["lead_id"]).execute()
+                                supabase.table("unsubscribes").upsert({"user_id": user_id, "email": lead_email, "reason": "hard_bounce"}, on_conflict="user_id,email").execute()
+                            except Exception:
+                                pass
                             # Hard bounce often signals a job change — flag it
                             try:
                                 supabase.table("job_change_alerts").insert({
@@ -5618,6 +5697,12 @@ async def process_sequence_cron(request: Request):
                             error_msg = str(e)
                             if _is_hard_bounce(e):
                                 supabase.table("sequence_enrollments").update({"status": "bounced", "last_error": error_msg}).eq("id", enr_id).execute()
+                                try:
+                                    import datetime as _dt2
+                                    supabase.table("leads").update({"email_status": "invalid", "email_score": 0, "email_verified_at": _dt2.datetime.now(_dt2.timezone.utc).isoformat()}).eq("id", enrollment["lead_id"]).execute()
+                                    supabase.table("unsubscribes").upsert({"user_id": user_id, "email": lead_email, "reason": "hard_bounce"}, on_conflict="user_id,email").execute()
+                                except Exception:
+                                    pass
                                 try:
                                     supabase.table("job_change_alerts").insert({
                                         "user_id": user_id, "lead_id": enrollment["lead_id"],
@@ -5910,7 +5995,7 @@ async def list_unsubscribes(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     try:
         res = supabase.table("unsubscribes").select("*")\
-            .eq("user_id", user_id).order("created_at", desc=True).execute()
+            .eq("user_id", user_id).order("unsubscribed_at", desc=True).execute()
         return {"unsubscribes": res.data or []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

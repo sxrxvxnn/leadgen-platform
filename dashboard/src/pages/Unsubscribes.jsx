@@ -150,10 +150,12 @@ export default function Unsubscribes() {
             >
               <span style={{ ...s.td, flex: 3, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)' }}>{item.email}</span>
               <span style={{ ...s.td, flex: 2, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-                {item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                {(item.unsubscribed_at || item.created_at) ? new Date(item.unsubscribed_at || item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
               </span>
               <span style={{ ...s.td, flex: 2 }}>
-                <span style={s.sourceBadge}>{item.source || 'sequence link'}</span>
+                <span style={{ ...s.sourceBadge, background: item.reason === 'hard_bounce' ? 'rgba(224,112,112,0.12)' : 'rgba(100,100,100,0.12)', color: item.reason === 'hard_bounce' ? '#e07070' : 'var(--text-muted)', border: item.reason === 'hard_bounce' ? '1px solid rgba(224,112,112,0.3)' : '1px solid var(--border)' }}>
+                  {item.reason === 'hard_bounce' ? 'Hard Bounce' : 'Unsubscribed'}
+                </span>
               </span>
               <div style={{ width: 80, display: 'flex', justifyContent: 'flex-end' }}>
                 <button
