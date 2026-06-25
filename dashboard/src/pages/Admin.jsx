@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import api from '../services/api'
+import api, { getFeatureFlags, updateFeatureFlag } from '../services/api'
 
 const CHANNELS = [
   { id: 'engineering', label: '#engineering', color: '#E7000B' },
@@ -36,9 +36,14 @@ export default function Admin() {
   const [ghFeedback, setGhFeedback] = useState(null)
   const [ghLog, setGhLog] = useState([])
 
+  // Feature flags
+  const [featureFlags, setFeatureFlags] = useState([])
+  const [flagsLoading, setFlagsLoading] = useState(true)
+  const [togglingFlag, setTogglingFlag] = useState(null)
+
   useEffect(() => {
     if (profile && profile.role !== 'admin') { navigate('/dashboard'); return }
-    if (profile) load()
+    if (profile) { load(); loadFlags() }
   }, [profile])
 
   async function load() {
@@ -52,6 +57,24 @@ export default function Admin() {
       setInvites(inv.data)
     } catch {}
     setLoading(false)
+  }
+
+  async function loadFlags() {
+    setFlagsLoading(true)
+    try {
+      const res = await getFeatureFlags()
+      setFeatureFlags(res.data?.flags || [])
+    } catch {}
+    setFlagsLoading(false)
+  }
+
+  async function handleToggleFlag(name, current) {
+    setTogglingFlag(name)
+    try {
+      await updateFeatureFlag(name, !current)
+      setFeatureFlags(prev => prev.map(f => f.name === name ? { ...f, enabled: !current } : f))
+    } catch {}
+    setTogglingFlag(null)
   }
 
   async function handleInvite(e) {
@@ -352,6 +375,50 @@ export default function Admin() {
             </div>
           )}
         </section>}
+
+        {/* ── Feature Flags ── */}
+        <section style={s.section}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h2 style={s.sectionTitle}>Feature Flags</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                Admin always sees all features · flags gate regular users only
+              </span>
+            </div>
+          </div>
+          {flagsLoading
+            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' }}>Loading…</p>
+            : (() => {
+                const categories = [...new Set(featureFlags.map(f => f.category))]
+                const catLabels = { enrichment: 'Enrichment', outreach: 'Outreach', ui: 'UI / Views', data: 'Data & Export' }
+                return categories.map(cat => (
+                  <div key={cat} style={{ marginBottom: 28 }}>
+                    <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>
+                      {catLabels[cat] || cat}
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 8 }}>
+                      {featureFlags.filter(f => f.category === cat).map(flag => (
+                        <div key={flag.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface)', border: `1px solid ${flag.enabled ? 'rgba(5,150,105,0.25)' : 'var(--border)'}`, borderRadius: 8, gap: 12, transition: 'border-color 0.15s' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: flag.enabled ? 'var(--text)' : 'var(--text-muted)', margin: 0, letterSpacing: '-0.01em' }}>{flag.label}</p>
+                            {flag.description && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: '3px 0 0', lineHeight: 1.4 }}>{flag.description}</p>}
+                          </div>
+                          {/* Toggle switch */}
+                          <button
+                            onClick={() => handleToggleFlag(flag.name, flag.enabled)}
+                            disabled={togglingFlag === flag.name}
+                            title={flag.enabled ? 'Click to disable for users' : 'Click to enable for users'}
+                            style={{ flexShrink: 0, width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', background: flag.enabled ? '#059669' : 'var(--border)', opacity: togglingFlag === flag.name ? 0.5 : 1 }}>
+                            <span style={{ position: 'absolute', top: 3, left: flag.enabled ? 20 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              })()
+          }
+        </section>
 
         {/* Pending invites */}
         {invites.length > 0 && (

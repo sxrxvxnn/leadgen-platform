@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useFeatureFlags } from '../context/FeatureFlagContext'
 import { useState, useEffect } from 'react'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
@@ -35,34 +36,34 @@ const ICONS = {
 const NAV_GROUPS = [
   {
     items: [
-      { label: 'Home',      path: '/dashboard', icon: 'home' },
-      { label: 'Prospect',     path: '/prospect',     icon: 'prospect' },
-      { label: 'Email Finder', path: '/email-finder', icon: 'email' },
-      { label: 'Database',    path: '/database',     icon: 'database', adminOnly: true },
-      { label: 'Discovery',    path: '/directory',    icon: 'directory' },
+      { label: 'Home',         path: '/dashboard',   icon: 'home' },
+      { label: 'Prospect',     path: '/prospect',    icon: 'prospect',  flag: 'page_prospect' },
+      { label: 'Email Finder', path: '/email-finder',icon: 'email',     flag: 'page_email_finder' },
+      { label: 'Database',     path: '/database',    icon: 'database',  adminOnly: true },
+      { label: 'Discovery',    path: '/directory',   icon: 'directory', flag: 'page_discovery' },
     ],
   },
   {
     label: 'Workspace',
     items: [
-      { label: 'Leads',     path: '/leads',     icon: 'leads' },
-      { label: 'Companies', path: '/companies', icon: 'companies' },
-      { label: 'Sequences', path: '/sequences', icon: 'sequences' },
-      { label: 'Tasks',     path: '/tasks',     icon: 'tasks' },
+      { label: 'Leads',     path: '/leads',     icon: 'leads',     flag: 'page_leads' },
+      { label: 'Companies', path: '/companies', icon: 'companies', flag: 'page_companies' },
+      { label: 'Sequences', path: '/sequences', icon: 'sequences', flag: 'page_sequences' },
+      { label: 'Tasks',     path: '/tasks',     icon: 'tasks',     flag: 'page_tasks' },
     ],
   },
   {
     label: 'Insights',
     items: [
-      { label: 'Analytics', path: '/analytics', icon: 'analytics' },
+      { label: 'Analytics', path: '/analytics', icon: 'analytics', flag: 'page_analytics' },
     ],
   },
   {
     label: 'Configure',
     items: [
-      { label: 'Targeting',     path: '/targeting',     icon: 'targeting' },
-      { label: 'Unsubscribes',  path: '/unsubscribes',  icon: 'unsubscribes' },
-      { label: 'Settings',      path: '/settings',      icon: 'settings' },
+      { label: 'Targeting',    path: '/targeting',    icon: 'targeting',    flag: 'page_targeting' },
+      { label: 'Unsubscribes', path: '/unsubscribes', icon: 'unsubscribes', flag: 'page_unsubscribes' },
+      { label: 'Settings',     path: '/settings',     icon: 'settings' },
     ],
   },
 ]
@@ -107,6 +108,7 @@ function NavItem({ label, path, icon, isActive }) {
 
 export default function Sidebar() {
   const { user, profile, logout } = useAuth()
+  const { isEnabled } = useFeatureFlags()
   const location = useLocation()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState('')
@@ -170,7 +172,11 @@ export default function Sidebar() {
                 {group.label}
               </p>
             )}
-            {group.items.filter(item => item.adminOnly ? isAdmin : true).map(item => (
+            {group.items.filter(item => {
+              if (item.adminOnly && !isAdmin) return false
+              if (item.flag && !isEnabled(item.flag)) return false
+              return true
+            }).map(item => (
               <NavItem key={item.path} {...item} isActive={isActive(item.path)} />
             ))}
           </div>

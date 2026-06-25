@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
+import { useFeatureFlags } from '../context/FeatureFlagContext'
 import { syncToDirectory } from '../services/companyDirectory'
 import DMFinder from '../components/DMFinder'
 import AddCompanyModal from '../components/AddCompanyModal'
@@ -243,6 +244,41 @@ function _domainOf(url) {
   } catch { return null }
 }
 
+// Rule-based ICP fit score for a company (0–100) using enrichment signals
+function scoreCompanyICP(company) {
+  let score = 30 // base
+  // Classification
+  if (company.classification === 'Product') score += 15
+  else if (company.classification === 'Hybrid') score += 8
+  // Size — mid-market sweet spot 51–5000
+  const sizeNums = (company.size || '').replace(/,/g, '').match(/\d+/g)
+  if (sizeNums) {
+    const emp = sizeNums.length >= 2 ? (parseInt(sizeNums[0]) + parseInt(sizeNums[1])) / 2 : parseInt(sizeNums[0])
+    if (emp >= 51 && emp <= 5000) score += 15
+    else if (emp > 5000) score += 8
+  }
+  // Revenue estimate present
+  if (company.revenue_estimate) score += 5
+  // Tech stack signals: enterprise buyers use sales/marketing tools
+  const stack = Array.isArray(company.tech_stack) ? company.tech_stack : []
+  const enterpriseTech = ['Salesforce', 'HubSpot', 'Marketo', 'Intercom', 'Zendesk', 'Segment', 'Stripe', 'Braintree']
+  if (stack.some(t => enterpriseTech.includes(t))) score += 10
+  if (stack.length >= 5) score += 5
+  // Reviews on G2/Capterra = legit software company
+  const reviews = company.review_presence || {}
+  if (Object.keys(reviews).length > 0) score += 10
+  // Active hiring = growing company
+  const jobs = Array.isArray(company.job_openings) ? company.job_openings : []
+  if (jobs.length >= 3) score += 5
+  else if (jobs.length >= 1) score += 3
+  // Social presence
+  const socials = company.social_profiles || {}
+  if (Object.keys(socials).length >= 2) score += 3
+  // Traffic
+  if (company.traffic_estimate) score += 2
+  return Math.min(score, 100)
+}
+
 function checkCompanyAccuracy(company) {
   // ── Tier 1: domain comparison (most reliable) ──────────────────────────────
   // linkedin_website = website that LinkedIn's own company page lists.
@@ -308,7 +344,7 @@ function checkCompanyAccuracy(company) {
   }
 }
 
-function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy }) {
+function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy, isEnabled }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
   const [notes, setNotes] = useState(company.notes || '')
@@ -328,6 +364,25 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const [showNotes, setShowNotes] = useState(false)
   const [fetchingFunding, setFetchingFunding] = useState(false)
   const [fundingResult, setFundingResult] = useState(null)
+  const [showDM, setShowDM] = useState(false)
+  const [dmText, setDmText] = useState('')
+  const [generatingDM, setGeneratingDM] = useState(false)
+  const [dmCopied, setDmCopied] = useState(false)
+  const [showLookalikes, setShowLookalikes] = useState(false)
+  const [lookalikes, setLookalikes] = useState(null)
+  const [loadingLookalikes, setLoadingLookalikes] = useState(false)
+  const [showActivity, setShowActivity] = useState(false)
+  const [activities, setActivities] = useState(null)
+  const [activityNote, setActivityNote] = useState('')
+  const [activityType, setActivityType] = useState('note')
+  const [savingActivity, setSavingActivity] = useState(false)
+  const [deepEnriching, setDeepEnriching] = useState(false)
+  const [enrichResult, setEnrichResult] = useState(null)
+  const [showEnrichCards, setShowEnrichCards] = useState(
+    !!(company.tech_stack?.length || company.job_openings?.length || company.email_pattern ||
+       company.recent_news?.length || company.revenue_estimate || company.social_profiles ||
+       company.traffic_estimate || company.review_presence)
+  )
 
   useEffect(() => {
     getCompanySignals(company.id).then(r => {
@@ -518,6 +573,76 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     }
   }
 
+  async function handleDeepEnrich() {
+    setDeepEnriching(true)
+    setEnrichResult(null)
+    try {
+      const res = await deepEnrichCompany(company.id)
+      const { enriched, errors } = res.data
+      if (enriched && Object.keys(enriched).length) {
+        onUpdate(company.id, enriched)
+        setEnrichResult({ ok: true, count: Object.keys(enriched).length })
+        setShowEnrichCards(true)
+      } else {
+        setEnrichResult({ ok: false, msg: 'No enrichment data found' })
+      }
+    } catch (e) {
+      setEnrichResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Enrich failed' })
+    } finally {
+      setDeepEnriching(false)
+    }
+  }
+
+  async function handleGenerateDM() {
+    setGeneratingDM(true)
+    setShowDM(true)
+    setDmText('')
+    try {
+      const res = await generateLinkedInDM(company.id)
+      setDmText(res.data.message || '')
+    } catch (e) {
+      setDmText('Failed to generate message.')
+    } finally {
+      setGeneratingDM(false)
+    }
+  }
+
+  async function handleLoadLookalikes() {
+    setShowLookalikes(true)
+    if (lookalikes !== null) return
+    setLoadingLookalikes(true)
+    try {
+      const res = await findLookalikesForCompany(company.id)
+      setLookalikes(res.data.lookalikes || [])
+    } catch { setLookalikes([]) }
+    finally { setLoadingLookalikes(false) }
+  }
+
+  async function handleLoadActivities() {
+    setShowActivity(v => !v)
+    if (activities !== null) return
+    try {
+      const res = await getCompanyActivities(company.id)
+      setActivities(res.data.activities || [])
+    } catch { setActivities([]) }
+  }
+
+  async function handleLogActivity() {
+    if (!activityNote.trim()) return
+    setSavingActivity(true)
+    try {
+      const res = await createCompanyActivity(company.id, { type: activityType, note: activityNote.trim() })
+      setActivities(prev => [res.data.activity, ...(prev || [])])
+      setActivityNote('')
+    } catch { }
+    finally { setSavingActivity(false) }
+  }
+
+  async function handleDeleteActivity(id) {
+    await deleteCompanyActivity(id)
+    setActivities(prev => (prev || []).filter(a => a.id !== id))
+  }
+
   async function handleEnrichPipeline() {
     setPipelining(true)
     setPipelineSteps([])
@@ -587,6 +712,19 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     ? String(company.followers).replace(/\s*followers?\s*/gi, '').trim()
     : '—'
 
+  // Only show ICP score when we have enrichment data to base it on
+  const hasEnrichmentData = !!(company.tech_stack?.length || company.revenue_estimate || company.review_presence || company.job_openings?.length)
+  const icpScore = hasEnrichmentData ? scoreCompanyICP(company) : null
+  const icpColor = icpScore >= 70 ? '#059669' : icpScore >= 45 ? '#d97706' : '#6b7280'
+
+  const enrichedAgo = (() => {
+    if (!company.enriched_at) return null
+    const diff = Math.floor((Date.now() - new Date(company.enriched_at).getTime()) / 86400000)
+    if (diff === 0) return 'Enriched today'
+    if (diff === 1) return 'Enriched yesterday'
+    return `Enriched ${diff}d ago`
+  })()
+
   const field = (label, value) => value ? (
     <div>
       <p style={card.fieldLabel}>{label}</p>
@@ -631,6 +769,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.03em', lineHeight: 1.1, margin: 0 }}>{company.name}</h3>
             {domain && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>· {domain}</span>}
             {isSuspicious && <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 600, color: '#92400e', letterSpacing: '0.04em' }}>⊘ mismatch</span>}
+            {icpScore !== null && isEnabled('icp_scoring') && (
+              <span title="Fit score based on enrichment data — tech stack, size, reviews, hiring activity" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 7px', background: `${icpColor}12`, border: `1px solid ${icpColor}35`, borderRadius: 4, color: icpColor, letterSpacing: '0.04em', userSelect: 'none' }}>
+                Fit {icpScore}
+              </span>
+            )}
+            {enrichedAgo && <span style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.01em' }}>· {enrichedAgo}</span>}
           </div>
           {cleanTagline && (
             <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -653,6 +797,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
                   ].filter(Boolean).join(' ')
                 : `⚠ ${analyzeResult.msg}`}
             </p>
+          )}
+          {enrichResult && !enrichResult.ok && (
+            <p style={{ fontSize: 11, margin: '4px 0 0', color: 'var(--accent)' }}>⚠ {enrichResult.msg}</p>
           )}
         </div>
 
@@ -693,6 +840,23 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             onClick={handleEnrichPipeline} disabled={pipelining} title="Website analysis + compliance + maps enrich">
             {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enrich'}
           </button>
+          {isEnabled('deep_enrich') && <button
+            style={{ ...card.actionBtn, color: deepEnriching ? 'var(--text-muted)' : '#7c3aed', borderColor: deepEnriching ? 'var(--border)' : 'rgba(124,58,237,0.35)', opacity: deepEnriching ? 0.6 : 1 }}
+            onClick={handleDeepEnrich} disabled={deepEnriching} title="Tech stack, jobs, news, revenue, social, traffic, reviews">
+            {deepEnriching ? 'Enriching…' : enrichResult?.ok ? `✓ ${enrichResult.count} fields` : 'Deep Enrich'}
+          </button>}
+          {isEnabled('linkedin_dm') && <button style={{ ...card.actionBtn, color: showDM ? '#0369a1' : 'var(--text-muted)', borderColor: showDM ? 'rgba(3,105,161,0.3)' : 'var(--border)' }}
+            onClick={handleGenerateDM} title="Generate LinkedIn DM">
+            {generatingDM ? 'Writing…' : 'DM'}
+          </button>}
+          {isEnabled('activity_timeline') && <button style={{ ...card.actionBtn, color: showActivity ? 'var(--text)' : 'var(--text-muted)' }}
+            onClick={handleLoadActivities} title="Activity log">
+            Activity
+          </button>}
+          {isEnabled('lookalike_finder') && <button style={{ ...card.actionBtn, color: showLookalikes ? '#059669' : 'var(--text-muted)', borderColor: showLookalikes ? 'rgba(5,150,105,0.3)' : 'var(--border)' }}
+            onClick={handleLoadLookalikes} title="Find similar companies">
+            Similar
+          </button>}
           <button
             style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
             onClick={() => setShowSignals(v => !v)}>
@@ -860,6 +1024,279 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       </div>
 
     </div>
+
+    {/* ── Deep Enrich sub-cards ── */}
+    {showEnrichCards && (
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+        {/* Row 1: Tech Stack + Email Pattern */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+          {/* Tech Stack */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #7c3aed', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Tech Stack</span>
+            </div>
+            {company.tech_stack?.length
+              ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {(Array.isArray(company.tech_stack) ? company.tech_stack : []).slice(0, 12).map(t => (
+                    <span key={t} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 7px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 4, color: '#7c3aed', letterSpacing: '0.02em' }}>{t}</span>
+                  ))}
+                  {company.tech_stack.length > 12 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{company.tech_stack.length - 12} more</span>}
+                </div>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
+            }
+          </div>
+
+          {/* Email Pattern */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #b45309', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Email Pattern</span>
+            </div>
+            {company.email_pattern
+              ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: '#b45309', margin: 0, letterSpacing: '-0.02em' }}>{company.email_pattern}@{domain || '…'}</p>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
+            }
+          </div>
+        </div>
+
+        {/* Row 2: Revenue Estimate + Traffic */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+          {/* Revenue Estimate */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #059669', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Revenue Estimate</span>
+            </div>
+            {company.revenue_estimate
+              ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: '#059669', margin: 0, letterSpacing: '-0.02em' }}>{company.revenue_estimate}</p>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
+            }
+          </div>
+
+          {/* Traffic Estimate */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0284c7', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Web Traffic</span>
+            </div>
+            {company.traffic_estimate
+              ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: '#0284c7', margin: 0, letterSpacing: '-0.02em' }}>{company.traffic_estimate}</p>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
+            }
+          </div>
+        </div>
+
+        {/* Row 3: Social Profiles + Review Presence */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+
+          {/* Social Profiles */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #db2777', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#db2777" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Social Profiles</span>
+            </div>
+            {company.social_profiles && Object.keys(company.social_profiles).length
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {Object.entries(company.social_profiles).map(([platform, url]) => (
+                    <a key={platform} href={url} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 12, color: '#db2777', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ textTransform: 'capitalize', minWidth: 68 }}>{platform}</span>
+                      <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↗</span>
+                    </a>
+                  ))}
+                </div>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
+            }
+          </div>
+
+          {/* Review Presence */}
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #d97706', borderRadius: 8, padding: '14px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Reviews</span>
+            </div>
+            {company.review_presence && Object.keys(company.review_presence).length
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {Object.entries(company.review_presence).map(([platform, data]) => (
+                    <a key={platform} href={data.url} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 12, color: '#d97706', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ textTransform: 'capitalize', minWidth: 72 }}>{platform}</span>
+                      {data.rating && <span style={{ color: 'var(--text)', fontWeight: 700 }}>★ {data.rating}</span>}
+                      {data.reviews && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({data.reviews} reviews)</span>}
+                    </a>
+                  ))}
+                </div>
+              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
+            }
+          </div>
+        </div>
+
+        {/* Row 4: Job Openings (full width) */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0369a1', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Open Roles</span>
+            {company.job_openings?.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '1px 6px', background: 'rgba(3,105,161,0.1)', borderRadius: 4, color: '#0369a1' }}>{company.job_openings.length}</span>}
+          </div>
+          {company.job_openings?.length
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(Array.isArray(company.job_openings) ? company.job_openings : []).slice(0, 8).map((job, idx) => (
+                  <a key={idx} href={job.url} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 12, color: '#0369a1', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>→</span>
+                    <span style={{ fontWeight: 500 }}>{job.title}</span>
+                  </a>
+                ))}
+                {company.job_openings.length > 8 && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>+{company.job_openings.length - 8} more roles</p>}
+              </div>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find open roles.</p>
+          }
+        </div>
+
+        {/* Row 5: Recent News (full width) */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #6d28d9', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
+              <path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Recent News</span>
+          </div>
+          {company.recent_news?.length
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(Array.isArray(company.recent_news) ? company.recent_news : []).slice(0, 4).map((item, idx) => (
+                  <div key={idx}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <a href={item.url} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 12, color: '#6d28d9', textDecoration: 'none', fontWeight: 600, lineHeight: 1.4 }}>
+                        {item.title}
+                      </a>
+                      {item.date && <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.date}</span>}
+                    </div>
+                    {item.snippet && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{item.snippet}</p>}
+                  </div>
+                ))}
+              </div>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find recent news.</p>
+          }
+        </div>
+
+      </div>
+    )}
+
+    {/* ── LinkedIn DM panel ── */}
+    {showDM && (
+      <div style={{ background: 'var(--bg)', border: '1px solid rgba(3,105,161,0.25)', borderLeft: '4px solid #0369a1', borderRadius: 8, padding: '14px 18px', marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>LinkedIn DM</span>
+          <button onClick={() => setShowDM(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>✕</button>
+        </div>
+        {generatingDM
+          ? <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Writing personalised message…</p>
+          : dmText
+            ? <>
+                <textarea
+                  value={dmText}
+                  onChange={e => setDmText(e.target.value)}
+                  style={{ width: '100%', fontSize: 13, lineHeight: 1.5, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)', resize: 'vertical', minHeight: 80, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={() => { navigator.clipboard.writeText(dmText); setDmCopied(true); setTimeout(() => setDmCopied(false), 2000) }}
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '5px 12px', background: dmCopied ? '#059669' : '#0369a1', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+                    {dmCopied ? '✓ Copied' : 'Copy'}
+                  </button>
+                  <button onClick={handleGenerateDM} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '5px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                    Regenerate
+                  </button>
+                </div>
+              </>
+            : null
+        }
+      </div>
+    )}
+
+    {/* ── Activity timeline ── */}
+    {showActivity && (
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: '4px solid var(--text-muted)', borderRadius: 8, padding: '14px 18px', marginTop: 8 }}>
+        <p style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', margin: '0 0 10px' }}>Activity Log</p>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          <select value={activityType} onChange={e => setActivityType(e.target.value)}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer' }}>
+            {['note','call','email','meeting','linkedin'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <input value={activityNote} onChange={e => setActivityNote(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleLogActivity()}
+            placeholder="Log a note, call, meeting…"
+            style={{ flex: 1, fontSize: 12, padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--surface)', color: 'var(--text)' }} />
+          <button onClick={handleLogActivity} disabled={savingActivity || !activityNote.trim()}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 12px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 5, cursor: 'pointer', opacity: !activityNote.trim() ? 0.4 : 1 }}>
+            Log
+          </button>
+        </div>
+        {activities === null
+          ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Loading…</p>
+          : activities.length === 0
+            ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No activity yet.</p>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+                {activities.map(a => (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 6px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-muted)', whiteSpace: 'nowrap', marginTop: 1 }}>{a.type}</span>
+                    <p style={{ flex: 1, fontSize: 12, color: 'var(--text)', margin: 0, lineHeight: 1.4 }}>{a.note}</p>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{new Date(a.created_at).toLocaleDateString()}</span>
+                    <button onClick={() => handleDeleteActivity(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+        }
+      </div>
+    )}
+
+    {/* ── Lookalike companies ── */}
+    {showLookalikes && (
+      <div style={{ background: 'var(--bg)', border: '1px solid rgba(5,150,105,0.25)', borderLeft: '4px solid #059669', borderRadius: 8, padding: '14px 18px', marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Similar companies to {company.name}</span>
+          <button onClick={() => setShowLookalikes(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>✕</button>
+        </div>
+        {loadingLookalikes
+          ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Searching…</p>
+          : !lookalikes?.length
+            ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No lookalikes found.</p>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {lookalikes.map((l, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <a href={l.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{l.domain}</span>
+                  </div>
+                ))}
+              </div>
+        }
+      </div>
+    )}
   </>
   )
 }
@@ -1019,6 +1456,7 @@ function AnalysisModal({ result, onClose }) {
 
 export default function Companies() {
   const { autofill, analyze, maps, runAutofill, runAnalyze, runMapsEnrich, registerLive, drainPending } = useBulkOps()
+  const { isEnabled } = useFeatureFlags()
 
   const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1035,6 +1473,18 @@ export default function Companies() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showBulkAdd, setShowBulkAdd] = useState(false)
   const [showSpreadsheet, setShowSpreadsheet] = useState(false)
+  const [bulkEnriching, setBulkEnriching] = useState(false)
+  const [bulkEnrichProgress, setBulkEnrichProgress] = useState(null)
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
+  const [alerts, setAlerts] = useState([])
+  const [showAlerts, setShowAlerts] = useState(false)
+  const [refreshingAlerts, setRefreshingAlerts] = useState(false)
+  const [dupeGroups, setDupeGroups] = useState(null)
+  const [showDupes, setShowDupes] = useState(false)
+  const [findingDupes, setFindingDupes] = useState(false)
+  const [segments, setSegments] = useState([])
+  const [showSegmentSave, setShowSegmentSave] = useState(false)
+  const [segmentName, setSegmentName] = useState('')
 
   // Register with BulkOpsContext while mounted so streaming results update local state live.
   // On unmount the context buffers results; on remount drainPending() catches up.
@@ -1050,7 +1500,11 @@ export default function Companies() {
     return () => registerLive(null)
   }, [])
 
-  useEffect(() => { fetchCompanies() }, [])
+  useEffect(() => {
+    fetchCompanies()
+    getCompanyAlerts().then(r => setAlerts(r.data.alerts || [])).catch(() => {})
+    listCompanySegments().then(r => setSegments(r.data.segments || [])).catch(() => {})
+  }, [])
 
   async function fetchCompanies() {
     try {
@@ -1107,11 +1561,32 @@ export default function Companies() {
   const needsDataCount = companies.filter(c => getMissingFields(c).length > 0).length
 
   function exportCompaniesCSV() {
-    const cols = ['name', 'classification', 'prospect_status', 'website_url', 'linkedin_url', 'headquarters', 'size', 'followers', 'revenue', 'compliance', 'company_type', 'description', 'notes']
-    const headers = ['Name', 'Classification', 'Status', 'Website', 'LinkedIn URL', 'HQ', 'Employees', 'Followers', 'Revenue', 'Compliance', 'Type', 'Description', 'Notes']
-    const rows = companies.map(c => cols.map(k => { const v = (c[k] || '').toString(); return v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v }).join(','))
+    const scalar = (v) => {
+      if (v === null || v === undefined) return ''
+      if (typeof v === 'object') {
+        // Arrays: join with semicolons. Objects: serialize key=value pairs
+        if (Array.isArray(v)) return v.map(item => typeof item === 'object' ? (item.title || item.url || JSON.stringify(item)) : item).join('; ')
+        return Object.entries(v).map(([k, val]) => `${k}: ${typeof val === 'object' ? JSON.stringify(val) : val}`).join('; ')
+      }
+      return v.toString()
+    }
+    const escape = (v) => { const s = scalar(v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
+
+    const cols = [
+      'name','classification','prospect_status','website','linkedin_url','headquarters','size',
+      'followers','revenue','compliance','company_type','industry','description','notes',
+      'email_pattern','revenue_estimate','traffic_estimate',
+      'tech_stack','job_openings','recent_news','social_profiles','review_presence','enriched_at'
+    ]
+    const headers = [
+      'Name','Classification','Status','Website','LinkedIn URL','HQ','Employees',
+      'Followers','Revenue/Funding','Compliance','Type','Industry','Description','Notes',
+      'Email Pattern','Revenue Estimate','Traffic',
+      'Tech Stack','Open Roles','Recent News','Social Profiles','Reviews','Enriched At'
+    ]
+    const rows = companies.map(c => cols.map(k => escape(c[k])).join(','))
     const csv = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a'); link.href = url; link.download = `companies-${new Date().toISOString().split('T')[0]}.csv`
     link.click(); URL.revokeObjectURL(url)
@@ -1140,6 +1615,86 @@ export default function Companies() {
     const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
     if (!targetIds.length) return
     runMapsEnrich(targetIds)
+  }
+
+  async function handleBulkDeepEnrich() {
+    if (bulkEnriching) return
+    const targetIds = selectedIds.length ? selectedIds : companies.map(c => c.id)
+    if (!targetIds.length) return
+    setBulkEnriching(true)
+    setBulkEnrichProgress({ completed: 0, total: targetIds.length })
+    try {
+      await bulkDeepEnrichCompanies(targetIds, (_, __, result) => {
+        if (result?._progress) setBulkEnrichProgress(result._progress)
+        if (result?.id && result?.fields?.length) {
+          // Refetch the updated company from server to get fresh enriched data
+          getCompanies().then(r => {
+            const fresh = r.data.companies.find(c => c.id === result.id)
+            if (fresh) setCompanies(prev => prev.map(c => c.id === result.id ? { ...c, ...fresh } : c))
+          }).catch(() => {})
+        }
+      })
+    } catch (e) { console.error(e) }
+    finally {
+      setBulkEnriching(false)
+      setBulkEnrichProgress(null)
+      fetchCompanies()
+    }
+  }
+
+  async function handleRefreshAlerts() {
+    setRefreshingAlerts(true)
+    try {
+      await refreshCompanyAlerts()
+      const r = await getCompanyAlerts()
+      setAlerts(r.data.alerts || [])
+    } catch { }
+    finally { setRefreshingAlerts(false) }
+  }
+
+  async function handleMarkAlertSeen(id) {
+    await markCompanyAlertSeen(id).catch(() => {})
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, seen: true } : a))
+  }
+
+  async function handleFindDupes() {
+    setFindingDupes(true)
+    setShowDupes(true)
+    try {
+      const r = await findDuplicateCompanies()
+      setDupeGroups(r.data.groups || [])
+    } catch { setDupeGroups([]) }
+    finally { setFindingDupes(false) }
+  }
+
+  async function handleMerge(keepId, deleteId) {
+    await mergeCompanies(keepId, deleteId)
+    setCompanies(prev => prev.filter(c => c.id !== deleteId))
+    setDupeGroups(prev => (prev || []).map(g => g.filter(c => c.id !== deleteId)).filter(g => g.length > 1))
+  }
+
+  async function handleSaveSegment() {
+    if (!segmentName.trim()) return
+    const filters = { search, classFilter, statusFilter, followerFilter, typeFilter, fillFilter }
+    const r = await createCompanySegment(segmentName.trim(), filters)
+    setSegments(prev => [r.data.segment, ...prev])
+    setSegmentName('')
+    setShowSegmentSave(false)
+  }
+
+  function handleLoadSegment(seg) {
+    const f = seg.filters || {}
+    if (f.search !== undefined) setSearch(f.search)
+    if (f.classFilter) setClassFilter(f.classFilter)
+    if (f.statusFilter) setStatusFilter(f.statusFilter)
+    if (f.followerFilter) setFollowerFilter(f.followerFilter)
+    if (f.typeFilter) setTypeFilter(f.typeFilter)
+    if (f.fillFilter) setFillFilter(f.fillFilter)
+  }
+
+  async function handleDeleteSegment(id) {
+    await deleteCompanySegment(id)
+    setSegments(prev => prev.filter(s => s.id !== id))
   }
 
   async function handleBulkDelete() {
@@ -1177,9 +1732,53 @@ export default function Companies() {
           </div>
         </div>
         <div style={{ position: 'relative', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* View toggle */}
+          {isEnabled('kanban_view') && (
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+            <button onClick={() => setViewMode('list')} style={{ ...s.heroBtn, border: 'none', borderRadius: 0, background: viewMode === 'list' ? 'var(--text)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-muted)', padding: '6px 12px' }}>List</button>
+            <button onClick={() => setViewMode('kanban')} style={{ ...s.heroBtn, border: 'none', borderRadius: 0, background: viewMode === 'kanban' ? 'var(--text)' : 'transparent', color: viewMode === 'kanban' ? '#fff' : 'var(--text-muted)', padding: '6px 12px' }}>Kanban</button>
+          </div>
+          )}
+          {/* Alert bell */}
+          {isEnabled('company_alerts') && <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowAlerts(v => !v)} style={{ ...s.heroBtn, position: 'relative' }}>
+              🔔{alerts.filter(a => !a.seen).length > 0 && <span style={{ position: 'absolute', top: 2, right: 2, width: 8, height: 8, background: '#E7000B', borderRadius: '50%', display: 'block' }} />}
+            </button>
+            {showAlerts && (
+              <div style={{ position: 'absolute', top: '110%', right: 0, width: 340, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', zIndex: 100, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14 }}>Company Alerts</span>
+                  <button onClick={handleRefreshAlerts} disabled={refreshingAlerts} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                    {refreshingAlerts ? 'Scanning…' : 'Refresh'}
+                  </button>
+                </div>
+                <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                  {alerts.length === 0
+                    ? <p style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>No alerts yet — click Refresh to scan your Prospects.</p>
+                    : alerts.map(a => {
+                        const co = companies.find(c => c.id === a.company_id)
+                        return (
+                          <div key={a.id} onClick={() => handleMarkAlertSeen(a.id)}
+                            style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: a.seen ? 'transparent' : 'rgba(231,0,11,0.03)', cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                              {!a.seen && <span style={{ width: 6, height: 6, background: '#E7000B', borderRadius: '50%', flexShrink: 0, marginTop: 5 }} />}
+                              <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{co?.name || 'Company'} — {a.type}</p>
+                                <a href={a.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>{a.title}</a>
+                                {a.body && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.3 }}>{a.body.substring(0, 100)}…</p>}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })
+                  }
+                </div>
+              </div>
+            )}
+          </div>}
           <button onClick={() => setShowBulkAdd(true)} style={s.heroBtn}>Bulk Add</button>
           <button onClick={() => setShowSpreadsheet(true)} style={s.heroBtn}>Spreadsheet</button>
-          <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: 'var(--text)', color: '#FFFFFF', border: 'none' }}>Export →</button>
+          {isEnabled('csv_export') && <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: 'var(--text)', color: '#FFFFFF', border: 'none' }}>Export →</button>}
         </div>
       </motion.div>
 
@@ -1187,13 +1786,13 @@ export default function Companies() {
         {/* Action toolbar — left-aligned chips */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
-          <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>
+          {isEnabled('find_dms') && <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>}
           <span style={{ width: '1px', height: '18px', background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
-          <button onClick={() => handleBulkAutofill(false)} disabled={autofill.running || analyze.running}
+          {isEnabled('bulk_autofill') && <button onClick={() => handleBulkAutofill(false)} disabled={autofill.running || analyze.running}
             style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: autofill.running || analyze.running ? 0.5 : 1 }}>
             {autofill.running ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-          </button>
-          {(() => {
+          </button>}
+          {isEnabled('bulk_autofill') && (() => {
             const pool = selectedIds.length ? companies.filter(c => selectedIds.includes(c.id)) : companies
             const incompleteCount = pool.filter(isIncomplete).length
             return incompleteCount > 0 && incompleteCount < pool.length ? (
@@ -1207,10 +1806,24 @@ export default function Companies() {
             style={{ ...s.secondaryBtn, color: '#7b6bae', borderColor: 'rgba(123,107,174,0.3)', opacity: analyze.running || autofill.running ? 0.5 : 1 }}>
             {analyze.running ? 'Analyzing…' : `⬡ Analyze All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
           </button>
+          {isEnabled('bulk_deep_enrich') && <button onClick={handleBulkDeepEnrich} disabled={bulkEnriching}
+            style={{ ...s.secondaryBtn, color: bulkEnriching ? 'var(--text-muted)' : '#7c3aed', borderColor: bulkEnriching ? 'var(--border)' : 'rgba(124,58,237,0.3)', opacity: bulkEnriching ? 0.6 : 1 }}>
+            {bulkEnriching
+              ? bulkEnrichProgress ? `Enriching… ${bulkEnrichProgress.completed}/${bulkEnrichProgress.total}` : 'Enriching…'
+              : `✦ Deep Enrich All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
+          </button>}
           <button onClick={runAccuracyCheck} disabled={companies.length === 0}
             style={{ ...s.secondaryBtn, color: '#92400e', borderColor: 'rgba(217,119,6,0.3)', opacity: companies.length === 0 ? 0.4 : 1 }}>
             ⊘ Check Accuracy
           </button>
+          {isEnabled('duplicate_detection') && <button onClick={handleFindDupes} disabled={findingDupes}
+            style={{ ...s.secondaryBtn, color: findingDupes ? 'var(--text-muted)' : '#b45309', borderColor: findingDupes ? 'var(--border)' : 'rgba(180,83,9,0.3)', opacity: findingDupes ? 0.6 : 1 }}>
+            {findingDupes ? 'Scanning…' : '⊕ Find Dupes'}
+          </button>}
+          {isEnabled('saved_segments') && <button onClick={() => setShowSegmentSave(v => !v)}
+            style={{ ...s.secondaryBtn, color: showSegmentSave ? 'var(--text)' : 'var(--text-muted)' }}>
+            ⊞ Save Filter
+          </button>}
           <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -1221,6 +1834,63 @@ export default function Companies() {
             Select all
           </label>
         </div>
+
+        {/* Segment save bar */}
+        {showSegmentSave && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 0', marginBottom: 4 }}>
+            <input value={segmentName} onChange={e => setSegmentName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveSegment()}
+              placeholder="Segment name (e.g. SaaS 51-200 US)…"
+              style={{ flex: 1, fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', color: 'var(--text)' }} />
+            <button onClick={handleSaveSegment} disabled={!segmentName.trim()}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '6px 14px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              Save
+            </button>
+          </div>
+        )}
+        {/* Saved segments chips */}
+        {segments.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+            {segments.map(seg => (
+              <div key={seg.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, fontSize: 11, color: 'var(--text)' }}>
+                <button onClick={() => handleLoadSegment(seg)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)', fontSize: 11, padding: 0 }}>{seg.name}</button>
+                <button onClick={() => handleDeleteSegment(seg.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Duplicates modal */}
+        {showDupes && (
+          <div style={{ background: 'var(--bg)', border: '1px solid rgba(180,83,9,0.25)', borderRadius: 10, padding: '16px 20px', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>Duplicate Companies</span>
+              <button onClick={() => setShowDupes(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+            </div>
+            {findingDupes
+              ? <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Scanning…</p>
+              : !dupeGroups?.length
+                ? <p style={{ fontSize: 13, color: '#4a7c59' }}>✓ No duplicates found.</p>
+                : dupeGroups.map((group, gi) => (
+                    <div key={gi} style={{ marginBottom: 12, padding: 12, background: 'rgba(180,83,9,0.04)', border: '1px solid rgba(180,83,9,0.15)', borderRadius: 8 }}>
+                      <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#b45309', margin: '0 0 8px', letterSpacing: '0.04em' }}>DUPLICATE GROUP</p>
+                      {group.map(c => (
+                        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{c.name}</p>
+                            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>{c.website}</p>
+                          </div>
+                          {group[0].id !== c.id && (
+                            <button onClick={() => handleMerge(group[0].id, c.id)}
+                              style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 10px', background: '#b45309', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+                              Merge into {group[0].name.split(' ')[0]}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+            }
+          </div>
+        )}
 
         {/* Filters row */}
         <div style={s.filters}>
@@ -1320,7 +1990,50 @@ export default function Companies() {
             <p style={s.emptyTitle}>No companies yet</p>
             <p style={s.emptyText}>Use the extension on LinkedIn company search to extract companies, or click <strong>+ Add Company</strong> above.</p>
           </div>
+        ) : viewMode === 'kanban' ? (
+          /* ── Kanban view ── */
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16 }}>
+            {PROSPECT_STATUSES.map(status => {
+              const col = filtered.filter(c => (c.prospect_status || 'To Review') === status)
+              return (
+                <div key={status} style={{ minWidth: 260, flexShrink: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{status}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface)', padding: '2px 6px', borderRadius: 4 }}>{col.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, maxHeight: '70vh', overflowY: 'auto' }}>
+                    {col.map(company => {
+                      const dom = company.website ? company.website.replace(/^https?:\/\//, '').split('/')[0] : null
+                      const clr = classificationColors[company.classification] || '#a1a1a1'
+                      return (
+                        <div key={company.id} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: `3px solid ${clr}`, borderRadius: 8, padding: '10px 12px', cursor: 'default' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <CompanyLogo domain={dom} name={company.name} size={28} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.name}</p>
+                              {dom && <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>{dom}</p>}
+                            </div>
+                          </div>
+                          {company.industry && <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 6px', fontFamily: 'var(--font-mono)' }}>{company.industry}</p>}
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {PROSPECT_STATUSES.filter(s => s !== status).map(s => (
+                              <button key={s} onClick={() => handleUpdate(company.id, { prospect_status: s })}
+                                style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 7px', border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                                → {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {col.length === 0 && <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>Empty</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         ) : (
+          /* ── List view ── */
           <div style={s.grid}>
             {filtered.map((company, i) => (
               <React.Fragment key={company.id}>
@@ -1343,6 +2056,7 @@ export default function Companies() {
                       selected={selectedIds.includes(company.id)}
                       onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
                       accuracy={accuracyMap[company.id]}
+                      isEnabled={isEnabled}
                     />
                   </div>
                 </motion.div>

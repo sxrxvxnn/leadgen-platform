@@ -190,6 +190,22 @@ export const autofillCompanyLinkedIn = (id) =>
     li_cookie: localStorage.getItem('liCookie') || '',
   })
 export const fetchCompanyFunding = (id) => api.post(`/companies/${id}/fetch-funding`)
+export const deepEnrichCompany = (id) => api.post(`/companies/${id}/deep-enrich`)
+export const bulkDeepEnrichCompanies = (companyIds = [], onProgress) =>
+  _streamingFetch('/companies/bulk-deep-enrich', { company_ids: companyIds }, onProgress)
+export const findLookalikesForCompany = (id) => api.post(`/companies/${id}/lookalike`)
+export const generateLinkedInDM = (id, persona = '') => api.post(`/companies/${id}/generate-dm`, { persona })
+export const getCompanyActivities = (id) => api.get(`/companies/${id}/activities`)
+export const createCompanyActivity = (id, data) => api.post(`/companies/${id}/activities`, data)
+export const deleteCompanyActivity = (actId) => api.delete(`/company-activities/${actId}`)
+export const findDuplicateCompanies = () => api.post('/companies/find-duplicates')
+export const mergeCompanies = (keepId, deleteId) => api.post(`/companies/${keepId}/merge/${deleteId}`)
+export const getCompanyAlerts = () => api.get('/companies/alerts')
+export const markCompanyAlertSeen = (id) => api.patch(`/companies/alerts/${id}/seen`)
+export const refreshCompanyAlerts = () => api.post('/companies/alerts/refresh')
+export const listCompanySegments = () => api.get('/company-segments')
+export const createCompanySegment = (name, filters) => api.post('/company-segments', { name, filters })
+export const deleteCompanySegment = (id) => api.delete(`/company-segments/${id}`)
 export const prefillCompany = (name, websiteUrl) =>
   api.post('/companies/prefill', {
     name,
@@ -325,5 +341,9 @@ export const saveCalConfig = (data) => api.patch('/profile/cal', data)
 export const listJobChangeAlerts = () => api.get('/job-change-alerts')
 export const markAllAlertsSeen   = () => api.patch('/job-change-alerts/mark-seen')
 export const dismissAlert        = (id) => api.delete(`/job-change-alerts/${id}`)
+
+// ─── FEATURE FLAGS ────────────────────────────────────────────────
+export const getFeatureFlags   = () => api.get('/feature-flags')
+export const updateFeatureFlag = (name, enabled) => api.patch(`/feature-flags/${name}`, { enabled })
 
 export default api
