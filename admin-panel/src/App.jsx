@@ -654,7 +654,7 @@ function Comms({token}) {
               <select style={sel({height:38})} value={blastSegment} onChange={e=>setBlastSegment(e.target.value)}>
                 <option value="all">All users</option>
                 <option value="active">Active (last 30d)</option>
-                <option value="inactive">Inactive (>30d)</option>
+                <option value="inactive">Inactive (&gt;30d)</option>
               </select>
             </div>
           </div>
