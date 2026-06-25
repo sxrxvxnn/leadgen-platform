@@ -1435,6 +1435,29 @@ _GIF_1x1 = base64.b64decode(
 )
 _API_BASE = os.getenv("API_BASE_URL", "https://leadgenengineplatform-api.vercel.app/api")
 
+# Approximate IANA timezone by 2-letter country code — used for timezone-aware sending
+_COUNTRY_TZ: dict = {
+    "US": "America/New_York", "GB": "Europe/London", "DE": "Europe/Berlin",
+    "FR": "Europe/Paris",     "NL": "Europe/Amsterdam", "SE": "Europe/Stockholm",
+    "AU": "Australia/Sydney", "CA": "America/Toronto",  "IN": "Asia/Kolkata",
+    "SG": "Asia/Singapore",   "JP": "Asia/Tokyo",       "AE": "Asia/Dubai",
+    "BR": "America/Sao_Paulo","MX": "America/Mexico_City","ZA": "Africa/Johannesburg",
+    "NG": "Africa/Lagos",     "KE": "Africa/Nairobi",   "EG": "Africa/Cairo",
+    "PK": "Asia/Karachi",     "BD": "Asia/Dhaka",       "PH": "Asia/Manila",
+    "ID": "Asia/Jakarta",     "TH": "Asia/Bangkok",     "VN": "Asia/Ho_Chi_Minh",
+    "CN": "Asia/Shanghai",    "KR": "Asia/Seoul",       "TW": "Asia/Taipei",
+    "NZ": "Pacific/Auckland", "ES": "Europe/Madrid",    "IT": "Europe/Rome",
+    "PL": "Europe/Warsaw",    "RU": "Europe/Moscow",    "TR": "Europe/Istanbul",
+    "IL": "Asia/Jerusalem",   "SA": "Asia/Riyadh",      "HK": "Asia/Hong_Kong",
+    "NO": "Europe/Oslo",      "DK": "Europe/Copenhagen","FI": "Europe/Helsinki",
+    "BE": "Europe/Brussels",  "CH": "Europe/Zurich",    "AT": "Europe/Vienna",
+    "PT": "Europe/Lisbon",    "IE": "Europe/Dublin",    "CZ": "Europe/Prague",
+    "HU": "Europe/Budapest",  "RO": "Europe/Bucharest", "UA": "Europe/Kyiv",
+    "GR": "Europe/Athens",    "MY": "Asia/Kuala_Lumpur","LK": "Asia/Colombo",
+    "AR": "America/Argentina/Buenos_Aires", "CO": "America/Bogota",
+    "CL": "America/Santiago", "PE": "America/Lima",
+}
+
 
 @router.post("/leads/{lead_id}/track-email")
 async def create_email_tracking(lead_id: str, payload: dict, authorization: str = Header(...)):
@@ -1506,20 +1529,26 @@ async def track_open(tracking_id: str):
     try:
         row = (
             supabase.table("email_tracking")
-            .select("open_count,first_opened_at")
+            .select("open_count,first_opened_at,lead_id")
             .eq("tracking_id", tracking_id)
             .maybe_single()
             .execute()
         )
         if row.data:
             now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
-            update = {
-                "open_count": (row.data.get("open_count") or 0) + 1,
-                "last_opened_at": now,
-            }
+            prev_opens = row.data.get("open_count") or 0
+            update = {"open_count": prev_opens + 1, "last_opened_at": now}
             if not row.data.get("first_opened_at"):
                 update["first_opened_at"] = now
             supabase.table("email_tracking").update(update).eq("tracking_id", tracking_id).execute()
+            # Boost engagement score on first open
+            if prev_opens == 0 and row.data.get("lead_id"):
+                try:
+                    cur = supabase.table("leads").select("engagement_score").eq("id", row.data["lead_id"]).maybe_single().execute()
+                    cur_score = (cur.data or {}).get("engagement_score") or 0
+                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 3), "last_engaged_at": now}).eq("id", row.data["lead_id"]).execute()
+                except Exception:
+                    pass
     except Exception:
         pass
     return Response(content=_GIF_1x1, media_type="image/gif", headers={
@@ -1538,12 +1567,18 @@ async def track_click(tracking_id: str, url: str):
             "url": url,
             "clicked_at": now,
         }).execute()
-        # Increment click_count on email_tracking
-        row = supabase.table("email_tracking").select("click_count").eq("tracking_id", tracking_id).maybe_single().execute()
+        row = supabase.table("email_tracking").select("click_count,lead_id").eq("tracking_id", tracking_id).maybe_single().execute()
         if row.data is not None:
-            supabase.table("email_tracking").update({
-                "click_count": (row.data.get("click_count") or 0) + 1
-            }).eq("tracking_id", tracking_id).execute()
+            prev_clicks = row.data.get("click_count") or 0
+            supabase.table("email_tracking").update({"click_count": prev_clicks + 1}).eq("tracking_id", tracking_id).execute()
+            # Boost engagement score on first link click (+5 for higher intent)
+            if prev_clicks == 0 and row.data.get("lead_id"):
+                try:
+                    cur = supabase.table("leads").select("engagement_score").eq("id", row.data["lead_id"]).maybe_single().execute()
+                    cur_score = (cur.data or {}).get("engagement_score") or 0
+                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 5), "last_engaged_at": now}).eq("id", row.data["lead_id"]).execute()
+                except Exception:
+                    pass
     except Exception:
         pass
     return RedirectResponse(url=url, status_code=302)
@@ -4655,6 +4690,49 @@ Reply ONLY with valid JSON (no markdown):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/leads/{lead_id}/ai-icebreaker")
+async def generate_ai_icebreaker(lead_id: str, authorization: str = Header(...)):
+    """Generate a personalized one-line opener for a cold email — specific to this lead's role & company."""
+    validate_uuid(lead_id)
+    user_id = get_user_id(authorization)
+    try:
+        lead_res = supabase.table("leads").select("name,title,company,location,about,experience").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
+        if not lead_res.data:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        lead = lead_res.data
+
+        exp_line = ""
+        if lead.get("experience"):
+            recent = (lead["experience"] or [])[:1]
+            if recent and recent[0].get("title"):
+                exp_line = f"\nPrevious role: {recent[0].get('title','')} at {recent[0].get('company','')}"
+
+        prompt = f"""Write ONE personalized opening sentence for a cold outreach email.
+
+Rules:
+- Specific to this person's role and company (reference their actual title or company work)
+- Sound human and natural — NOT AI-generated
+- Under 25 words
+- Do NOT use hollow openers: "I hope", "I noticed", "I came across", "I saw that", "I wanted to reach out"
+- No quotation marks in your reply
+
+Person:
+Name: {lead.get('name') or 'there'}
+Title: {lead.get('title') or '—'}
+Company: {lead.get('company') or '—'}
+Location: {lead.get('location') or '—'}{exp_line}
+
+Reply with ONLY the opening sentence."""
+
+        icebreaker = _call_ai(prompt, max_tokens=60, user_id=user_id, feature="icebreaker")
+        icebreaker = icebreaker.strip().strip('"').strip("'")
+        return {"icebreaker": icebreaker}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/leads/draft-cold")
 async def draft_cold_email(payload: dict, authorization: str = Header(...)):
     """Draft a cold reply for a sender who is not yet in the pipeline (used by Gmail sidebar)."""
@@ -5391,6 +5469,158 @@ async def sequence_send_stats(authorization: str = Header(...)):
     return {"sent_today": sent_today, "daily_limit": 50, "remaining": max(0, 50 - sent_today)}
 
 
+# ─── SEQUENCE TEMPLATES ──────────────────────────────────────────────────────
+
+_SEQUENCE_TEMPLATES = [
+    {
+        "id": "saas-cold-outreach", "name": "SaaS Cold Outreach",
+        "description": "3-step cadence for selling a SaaS product to decision makers. Soft ask → value proof → breakup.",
+        "tags": ["SaaS", "B2B", "Product"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Quick question, {{first_name}}",
+             "body": "Hi {{first_name}},\n\nI'll keep this short — I help companies like {{company}} [solve X] without [painful Y].\n\nWorth 15 minutes this week?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 3,
+             "subject": "Re: Quick question, {{first_name}}",
+             "body": "Hi {{first_name}},\n\nCircling back in case my last note got buried.\n\nAs a {{title}}, [specific pain point] is probably on your radar. We solved exactly that for [similar company].\n\nWorth a look?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 3, "type": "email", "delay_days": 5,
+             "subject": "Closing the loop",
+             "body": "Hi {{first_name}},\n\nLeaving the ball in your court. If timing isn't right, no worries.\n\nMy calendar is always open when you're ready: {{cal_link}}\n\n{{name}}"},
+        ],
+    },
+    {
+        "id": "agency-intro", "name": "Agency / Services Intro",
+        "description": "3-step value-first sequence for agencies introducing their services to prospects.",
+        "tags": ["Agency", "Services", "B2B"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Growth idea for {{company}}",
+             "body": "Hi {{first_name}},\n\nI came across {{company}} and had a few ideas for [specific growth lever].\n\nWe helped [similar client] achieve [result] in [timeframe].\n\nOpen to a 20-minute call?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 4,
+             "subject": "Re: Growth idea for {{company}}",
+             "body": "Hi {{first_name}},\n\nFollowing up from last week. I put together a quick teardown of {{company}}'s [specific area] — happy to share if useful.\n\nJust reply yes and I'll send it over.\n\n{{name}}"},
+            {"step_number": 3, "type": "email", "delay_days": 6,
+             "subject": "Last note — {{company}}",
+             "body": "Hi {{first_name}},\n\nThis will be my last email. If timing ever works, feel free to reach out.\n\n{{cal_link}}\n\nAll the best to you and the {{company}} team,\n{{name}}"},
+        ],
+    },
+    {
+        "id": "partnership-outreach", "name": "Partnership / BD Outreach",
+        "description": "3-step sequence for proposing integrations, co-marketing, or channel partnerships.",
+        "tags": ["Partnership", "BD", "Collaboration"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Partnership idea — {{company}} × [Your Co]",
+             "body": "Hi {{first_name}},\n\nI've been following {{company}}'s work and see a strong overlap with what we're doing at [Your Co].\n\nI think there's an opportunity to [co-market / integrate / refer customers] to mutual benefit.\n\nOpen to a 20-minute call?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 5,
+             "subject": "Re: Partnership idea",
+             "body": "Hi {{first_name}},\n\nDropping a quick follow-up. Here's a sketch of what a partnership could look like:\n\n• [Benefit 1]\n• [Benefit 2]\n• [Benefit 3]\n\nHappy to put together a brief if helpful.\n\n{{name}}"},
+            {"step_number": 3, "type": "email", "delay_days": 7,
+             "subject": "One last ping",
+             "body": "Hi {{first_name}},\n\nLast one from me — I know these land at the wrong time sometimes.\n\nIf partnerships ever become a priority at {{company}}, I'd love to reconnect.\n\n{{cal_link}}\n\nTake care,\n{{name}}"},
+        ],
+    },
+    {
+        "id": "re-engagement", "name": "Re-engagement",
+        "description": "2-step sequence to warm up leads who showed early interest but went cold.",
+        "tags": ["Re-engagement", "Warm leads"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Still relevant, {{first_name}}?",
+             "body": "Hi {{first_name}},\n\nWe connected a while back and I wanted to check in. A lot has changed — [specific update about your offering].\n\nIs this still something on your radar at {{company}}?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 5,
+             "subject": "Closing the loop",
+             "body": "Hi {{first_name}},\n\nJust closing the loop. If priorities have shifted, no problem at all.\n\nI'm here whenever the timing is better.\n\n{{cal_link}}\n\nBest,\n{{name}}"},
+        ],
+    },
+    {
+        "id": "new-role-congrats", "name": "New Role Congratulations",
+        "description": "2-step trigger sequence for leads who recently changed jobs — highest-converting outreach timing.",
+        "tags": ["Trigger", "Job change", "Warm"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Congrats on the new role, {{first_name}}",
+             "body": "Hi {{first_name}},\n\nCongratulations on your new role as {{title}} at {{company}}!\n\nFirst 90 days in a new seat are when [problem you solve] usually becomes a priority. Would love to show you how we help [outcome].\n\nWorth 15 minutes?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 5,
+             "subject": "Quick question for your new role",
+             "body": "Hi {{first_name}},\n\nFollowing up — I know first weeks in a new role are hectic.\n\nHappy to connect whenever works.\n\n{{cal_link}}\n\n{{name}}"},
+        ],
+    },
+    {
+        "id": "inbound-follow-up", "name": "Inbound Lead Follow-up",
+        "description": "3-step sequence for leads who signed up or showed interest but didn't convert.",
+        "tags": ["Inbound", "Follow-up", "Warm"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "Following up on your interest",
+             "body": "Hi {{first_name}},\n\nThanks for checking us out — wanted to reach out personally.\n\nI'd love to help you get [value] faster. Do you have 20 minutes this week?\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 2,
+             "subject": "Quick tip for {{company}}",
+             "body": "Hi {{first_name}},\n\nMost companies like {{company}} start with [use case] — it's the fastest path to value.\n\nWant me to walk you through it? 20 minutes.\n\n{{cal_link}}\n\n{{name}}"},
+            {"step_number": 3, "type": "email", "delay_days": 4,
+             "subject": "Checking in one last time",
+             "body": "Hi {{first_name}},\n\nIs [your offering] still on your radar, or should I check back at a different time?\n\nEither answer is fine.\n\n{{cal_link}}\n\n{{name}}"},
+        ],
+    },
+    {
+        "id": "event-invite", "name": "Event / Webinar Invite",
+        "description": "3-step invite sequence with a reminder and last-chance email.",
+        "tags": ["Event", "Webinar", "Invite"],
+        "steps": [
+            {"step_number": 1, "type": "email", "delay_days": 0,
+             "subject": "You might like this, {{first_name}}",
+             "body": "Hi {{first_name}},\n\nWe're hosting a [webinar/event] on [Topic] — built for [{{title}}s at companies like {{company}}].\n\nDate: [Date & Time]\nKey takeaways: [3 bullets]\n\nRegister here: [link]\n\nHope to see you there!\n{{name}}"},
+            {"step_number": 2, "type": "email", "delay_days": 3,
+             "subject": "Reminder: [Event] is [X days] away",
+             "body": "Hi {{first_name}},\n\nJust a reminder that [Event] is coming up on [Date]. [X] companies similar to {{company}} have already registered.\n\nGrab your spot: [link]\n\nSee you there,\n{{name}}"},
+            {"step_number": 3, "type": "email", "delay_days": 2,
+             "subject": "Last chance — [Event] today",
+             "body": "Hi {{first_name}},\n\nToday's the day! Join us here: [link]\n\nCan't make it live? Register anyway and we'll send the recording.\n\n{{name}}"},
+        ],
+    },
+]
+
+
+@router.get("/sequences/templates")
+async def list_sequence_templates(authorization: str = Header(...)):
+    """Return built-in sequence templates."""
+    get_user_id(authorization)
+    return {"templates": _SEQUENCE_TEMPLATES}
+
+
+@router.post("/sequences/from-template")
+async def create_sequence_from_template(payload: dict, authorization: str = Header(...)):
+    """Create a new sequence (with steps) from a built-in template."""
+    user_id = get_user_id(authorization)
+    template_id = payload.get("template_id", "")
+    tpl = next((t for t in _SEQUENCE_TEMPLATES if t["id"] == template_id), None)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    name = payload.get("name") or tpl["name"]
+    seq_res = supabase.table("sequences").insert({
+        "user_id": user_id,
+        "name":    name,
+        "active":  False,
+    }).execute()
+    seq = seq_res.data[0]
+    seq_id = seq["id"]
+
+    for step in tpl["steps"]:
+        supabase.table("sequence_steps").insert({
+            "sequence_id":  seq_id,
+            "user_id":      user_id,
+            "step_number":  step["step_number"],
+            "type":         step["type"],
+            "delay_days":   step["delay_days"],
+            "subject":      step.get("subject", ""),
+            "body":         step.get("body", ""),
+        }).execute()
+
+    posthog.capture(user_id, "sequence_created_from_template", {"template_id": template_id})
+    return {"sequence": seq, "steps_created": len(tpl["steps"])}
+
+
 # ─── PHASE 1: SEQUENCES CRUD ─────────────────────────────────────────────────
 
 @router.get("/sequences")
@@ -5511,7 +5741,7 @@ async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(.
 async def list_enrollments(seq_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     res = supabase.table("sequence_enrollments").select(
-        "id, lead_id, status, current_step, next_run_at, last_error, enrolled_at, completed_at, replied_at, ab_variant, leads(name, email, company, title)"
+        "id, lead_id, status, current_step, next_run_at, last_error, enrolled_at, completed_at, replied_at, ab_variant, reply_sentiment, ooo_resume_at, leads(name, email, company, title)"
     ).eq("sequence_id", seq_id).eq("user_id", user_id).order("enrolled_at", desc=True).execute()
     return {"enrollments": res.data or []}
 
@@ -5543,8 +5773,18 @@ async def process_sequence_cron(request: Request):
     now_iso = now.isoformat()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
+    # Auto-resume OOO-paused enrollments whose wait period has expired
+    try:
+        ooo_res = supabase.table("sequence_enrollments").select("id").eq("status", "paused").not_.is_("ooo_resume_at", "null").lte("ooo_resume_at", now_iso).execute()
+        for ooo_enr in (ooo_res.data or []):
+            supabase.table("sequence_enrollments").update({
+                "status": "active", "ooo_resume_at": None, "last_error": None,
+            }).eq("id", ooo_enr["id"]).execute()
+    except Exception:
+        pass
+
     due_res = supabase.table("sequence_enrollments").select(
-        "id, sequence_id, lead_id, user_id, status, current_step, leads(name, email, company, title)"
+        "id, sequence_id, lead_id, user_id, status, current_step, leads(name, email, company, title, timezone, location_country)"
     ).eq("status", "active").lte("next_run_at", now_iso).limit(50).execute()
     due = due_res.data or []
     processed = 0
@@ -5585,6 +5825,17 @@ async def process_sequence_cron(request: Request):
         msg = str(exc).lower()
         return any(k in msg for k in ("550", "551", "552", "553", "554", "user unknown", "no such user", "does not exist", "invalid address", "mailbox not found"))
 
+    skipped_tz = 0
+
+    def _in_business_hours(tz_name: str) -> bool:
+        """Return True if it's Mon–Fri 8am–6pm in the given IANA timezone."""
+        try:
+            import zoneinfo as _zi
+            local = now.astimezone(_zi.ZoneInfo(tz_name))
+            return local.weekday() < 5 and 8 <= local.hour < 18
+        except Exception:
+            return True  # Unknown TZ → don't block
+
     for enrollment in due:
         enr_id     = enrollment["id"]
         seq_id     = enrollment["sequence_id"]
@@ -5596,6 +5847,12 @@ async def process_sequence_cron(request: Request):
         lead_email = lead.get("email") or ""
         lead_company = lead.get("company") or ""
         lead_title = lead.get("title") or ""
+
+        # Timezone-aware sending: skip if outside business hours for this lead
+        lead_tz = lead.get("timezone") or _COUNTRY_TZ.get((lead.get("location_country") or "").upper(), "")
+        if lead_tz and not _in_business_hours(lead_tz):
+            skipped_tz += 1
+            continue
 
         try:
             steps_res = supabase.table("sequence_steps").select("*").eq("sequence_id", seq_id).order("step_number").execute()
@@ -5783,7 +6040,7 @@ async def process_sequence_cron(request: Request):
             except Exception:
                 pass
 
-    return {"processed": processed, "errors": errors, "total_due": len(due), "skipped_rate_limit": skipped_rate}
+    return {"processed": processed, "errors": errors, "total_due": len(due), "skipped_rate_limit": skipped_rate, "skipped_timezone": skipped_tz}
 
 
 # ─── REPLY DETECTION CRON ────────────────────────────────────────────────────
@@ -5861,13 +6118,60 @@ async def check_sequence_replies(request: Request):
                 errors += 1
                 continue
 
+            # Groq key for reply classification
+            _groq_key_reply = os.environ.get("GROQ_API_KEY", "")
+
+            def _classify_reply(body_text: str) -> str:
+                """Classify a reply body into one of: interested, not_interested, ooo, wrong_person, other."""
+                if not _groq_key_reply or not body_text.strip():
+                    return "other"
+                try:
+                    import urllib.request as _ureq3, json as _jl3
+                    classify_prompt = (
+                        "Classify this email reply into exactly ONE category:\n"
+                        "interested – wants to continue or learn more\n"
+                        "not_interested – declines, unsubscribes, or says no\n"
+                        "ooo – out-of-office auto-reply\n"
+                        "wrong_person – not the right contact\n"
+                        "other – anything else\n\n"
+                        f"Reply:\n{body_text[:600]}\n\n"
+                        "Reply with ONLY the category name."
+                    )
+                    pl = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": classify_prompt}], "max_tokens": 10, "temperature": 0}
+                    req = _ureq3.Request("https://api.groq.com/openai/v1/chat/completions",
+                        data=_jl3.dumps(pl).encode(),
+                        headers={"Authorization": f"Bearer {_groq_key_reply}", "Content-Type": "application/json"},
+                        method="POST")
+                    with _ureq3.urlopen(req, timeout=8) as r:
+                        resp = _jl3.loads(r.read())
+                    raw_cat = resp["choices"][0]["message"]["content"].strip().lower().split()[0]
+                    return raw_cat if raw_cat in ("interested", "not_interested", "ooo", "wrong_person", "other") else "other"
+                except Exception:
+                    return "other"
+
+            def _extract_body(msg) -> str:
+                """Extract plain-text body from a parsed email message."""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/plain":
+                            try:
+                                return part.get_payload(decode=True).decode("utf-8", errors="ignore")[:1500]
+                            except Exception:
+                                pass
+                    return ""
+                try:
+                    return (msg.get_payload(decode=True) or b"").decode("utf-8", errors="ignore")[:1500]
+                except Exception:
+                    return ""
+
             try:
                 _, data = mail.search(None, f'SINCE {since}')
                 nums = data[0].split() if data and data[0] else []
 
                 for num in nums:
                     try:
-                        _, raw_data = mail.fetch(num, "(RFC822.HEADER)")
+                        # Fetch full message so we can read the body for AI classification
+                        _, raw_data = mail.fetch(num, "(RFC822)")
                         if not raw_data or not raw_data[0]:
                             continue
                         raw = raw_data[0][1]
@@ -5888,7 +6192,7 @@ async def check_sequence_replies(request: Request):
                         enr_id  = matched["enrollment_id"]
                         lead_id = matched["lead_id"]
 
-                        # Check enrollment is still active before marking replied
+                        # Check enrollment is still active/paused before processing
                         enr_res = supabase.table("sequence_enrollments")\
                             .select("status")\
                             .eq("id", enr_id)\
@@ -5897,16 +6201,55 @@ async def check_sequence_replies(request: Request):
                         if enr_status not in ("active", "paused"):
                             continue
 
-                        supabase.table("sequence_enrollments").update({
-                            "status":     "replied",
-                            "replied_at": now.isoformat(),
-                        }).eq("id", enr_id).execute()
+                        # AI-classify the reply
+                        reply_body   = _extract_body(parsed)
+                        sentiment    = _classify_reply(reply_body)
+
+                        if sentiment == "ooo":
+                            # Pause and auto-resume in 14 days
+                            resume_at = (now + _dt.timedelta(days=14)).isoformat()
+                            supabase.table("sequence_enrollments").update({
+                                "status":         "paused",
+                                "reply_sentiment": "ooo",
+                                "ooo_resume_at":   resume_at,
+                                "last_error":      "OOO reply detected — auto-resuming in 14 days",
+                            }).eq("id", enr_id).execute()
+                        else:
+                            supabase.table("sequence_enrollments").update({
+                                "status":          "replied",
+                                "replied_at":      now.isoformat(),
+                                "reply_sentiment": sentiment,
+                            }).eq("id", enr_id).execute()
+
+                            # Auto-unsubscribe on explicit "not interested"
+                            if sentiment == "not_interested":
+                                try:
+                                    lead_email_res = supabase.table("leads").select("email").eq("id", lead_id).maybe_single().execute()
+                                    lead_email_addr = (lead_email_res.data or {}).get("email", "")
+                                    if lead_email_addr:
+                                        supabase.table("unsubscribes").upsert(
+                                            {"user_id": uid, "email": lead_email_addr, "reason": "not_interested"},
+                                            on_conflict="user_id,email"
+                                        ).execute()
+                                except Exception:
+                                    pass
+
+                        # Boost lead engagement score for any reply (+20)
+                        try:
+                            cur_e = supabase.table("leads").select("engagement_score").eq("id", lead_id).maybe_single().execute()
+                            cur_es = (cur_e.data or {}).get("engagement_score") or 0
+                            supabase.table("leads").update({
+                                "engagement_score": min(100, cur_es + 20),
+                                "last_engaged_at":  now.isoformat(),
+                            }).eq("id", lead_id).execute()
+                        except Exception:
+                            pass
 
                         supabase.table("lead_activity").insert({
                             "lead_id":    lead_id,
                             "user_id":    uid,
                             "event_type": "email_reply_detected",
-                            "data":       {"enrollment_id": enr_id, "detected_via": "imap"},
+                            "data":       {"enrollment_id": enr_id, "detected_via": "imap", "sentiment": sentiment},
                         }).execute()
 
                         found += 1
@@ -6335,7 +6678,7 @@ async def dashboard_summary(authorization: str = Header(...)):
     tracking       = tracking_res.data or []
     tasks_res      = supabase.table("tasks").select("id,title,due_date,completed,priority,leads(name,company)").eq("user_id", user_id).eq("completed", False).lte("due_date", today_end).order("due_date").limit(8).execute()
     activity_res   = supabase.table("lead_activity").select("id,event_type,data,created_at,leads(name,company)").eq("user_id", user_id).order("created_at", desc=True).limit(15).execute()
-    replies_res    = supabase.table("sequence_enrollments").select("id,replied_at,lead_id,sequence_id,leads(id,name,email,company,title),sequences(name)").eq("user_id", user_id).eq("status", "replied").order("replied_at", desc=True).limit(10).execute()
+    replies_res    = supabase.table("sequence_enrollments").select("id,replied_at,lead_id,sequence_id,reply_sentiment,leads(id,name,email,company,title),sequences(name)").eq("user_id", user_id).eq("status", "replied").order("replied_at", desc=True).limit(10).execute()
 
     emails_sent    = len(tracking)
     unique_opens   = sum(1 for t in tracking if (t.get("open_count") or 0) > 0)

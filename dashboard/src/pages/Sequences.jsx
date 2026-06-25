@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-import { listEnrollments, unenrollLead, markReplied, getSequenceAnalytics, getSequenceSendStats } from '../services/api'
+import { listEnrollments, unenrollLead, markReplied, getSequenceAnalytics, getSequenceSendStats, listSequenceTemplates, createFromTemplate, generateIcebreaker } from '../services/api'
 
 const STEP_TYPES = [
   { id: 'email',    label: 'Email'    },
@@ -304,8 +304,14 @@ function EnrollmentPanel({ seq }) {
                               </div>
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Step {stepN}/{totalSteps}</span>
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: STATUS_DOT[enr.status] || 'var(--text-muted)' }}>{STATUS_LABEL[enr.status] || enr.status?.toUpperCase()}</span>
+                              {enr.reply_sentiment && enr.status === 'replied' && (() => {
+                                const SM = { interested: ['★ INTERESTED','#4a7c59','rgba(74,124,89,0.12)'], not_interested: ['✗ NOT INTERESTED','#e07070','rgba(239,68,68,0.1)'], ooo: ['✈ OOO','#ca8a04','rgba(234,179,8,0.1)'], wrong_person: ['⟳ WRONG PERSON','var(--text-muted)','var(--surface)'] }
+                                const [lbl, c, bg] = SM[enr.reply_sentiment] || []
+                                return lbl ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: bg, color: c, letterSpacing: '0.04em' }}>{lbl}</span> : null
+                              })()}
                               {enr.ab_variant && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: enr.ab_variant === 'A' ? '#4a7c5918' : '#b07d2e18', border: `1px solid ${enr.ab_variant === 'A' ? '#4a7c5940' : '#b07d2e40'}`, color: enr.ab_variant === 'A' ? '#4a7c59' : '#b07d2e' }}>V{enr.ab_variant}</span>}
                               {enr.status === 'active' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Next: {nextRun}</span>}
+                              {enr.status === 'paused' && enr.ooo_resume_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#ca8a04' }}>OOO — resumes {new Date(enr.ooo_resume_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
                               {enr.status === 'replied' && enr.replied_at && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>Replied {new Date(enr.replied_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
                             </div>
                             {enr.last_error && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#e07070', marginTop: 3 }}>{enr.last_error}</div>}
@@ -429,6 +435,9 @@ export default function Sequences() {
   const [sendStats, setSendStats] = useState(null)
   const [showBuilder, setShowBuilder] = useState(false)
   const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [serverTemplates, setServerTemplates] = useState([])
+  const [tplLoading, setTplLoading] = useState(false)
+  const [tplCreating, setTplCreating] = useState('')
   const [showAiModal, setShowAiModal] = useState(false)
   const [aiForm, setAiForm] = useState({ product: '', persona: '', tone: 'professional', num_steps: 3 })
   const [aiLoading, setAiLoading] = useState(false)
@@ -571,7 +580,14 @@ export default function Sequences() {
                 <button type="button" onClick={() => setShowAiModal(true)} style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', border: 'none', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#fff', cursor: 'pointer', letterSpacing: '0.05em', fontWeight: 600 }}>
                   ✦ AI Draft
                 </button>
-                <button type="button" onClick={() => setShowTemplateModal(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                <button type="button" onClick={async () => {
+                  setShowTemplateModal(true)
+                  if (serverTemplates.length === 0) {
+                    setTplLoading(true)
+                    try { const r = await listSequenceTemplates(); setServerTemplates(r.data.templates || []) } catch {}
+                    setTplLoading(false)
+                  }
+                }} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer', letterSpacing: '0.05em' }}>
                   Start from template
                 </button>
               </div>
@@ -581,37 +597,56 @@ export default function Sequences() {
           {showTemplateModal && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onClick={e => { if (e.target === e.currentTarget) setShowTemplateModal(false) }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 540, maxHeight: '80vh', overflowY: 'auto' }}>
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 32, width: 580, maxHeight: '82vh', overflowY: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                   <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Templates</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Select a template to pre-fill your sequence</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Sequence Templates</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>One click to create — all steps pre-written, ready to customize.</div>
                   </div>
                   <button onClick={() => setShowTemplateModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {SEQUENCE_TEMPLATES.map((tpl, i) => (
-                    <button key={i} type="button" onClick={() => {
-                      setForm({ name: tpl.name, description: tpl.description, steps: tpl.steps.map(s => ({ ...s })) })
-                      setShowTemplateModal(false)
-                    }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, padding: '16px 18px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{tpl.name}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>{tpl.steps.length} steps</span>
+                {tplLoading ? (
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>Loading templates…</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {serverTemplates.map(tpl => (
+                      <div key={tpl.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px 18px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{tpl.name}</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 6px' }}>{tpl.steps.length} steps</span>
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{tpl.description}</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {tpl.tags.map(t => (
+                              <span key={t} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '2px 7px', borderRadius: 20, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>{t}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                          <button onClick={async () => {
+                            setTplCreating(tpl.id)
+                            try {
+                              await createFromTemplate(tpl.id)
+                              await load()
+                              setShowTemplateModal(false)
+                            } catch { alert('Failed to create sequence from template') }
+                            setTplCreating('')
+                          }} disabled={!!tplCreating} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '8px 14px', background: tplCreating === tpl.id ? '#4a7c59' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: tplCreating ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                            {tplCreating === tpl.id ? 'Creating…' : 'Use template'}
+                          </button>
+                          <button onClick={() => {
+                            setForm({ name: tpl.name, description: tpl.description || '', steps: tpl.steps.map(s => ({ ...s })) })
+                            setShowTemplateModal(false)
+                            setShowBuilder(true)
+                          }} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '6px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Customize
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>{tpl.description}</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
-                        {tpl.steps.map((step, si) => (
-                          <span key={si} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 6px', borderRadius: 4, background: step.type === 'email' ? 'rgba(231,0,11,0.1)' : step.type === 'linkedin' ? 'rgba(0,119,181,0.12)' : 'rgba(180,180,180,0.12)', color: step.type === 'email' ? '#E7000B' : step.type === 'linkedin' ? '#0077B5' : 'var(--text-muted)' }}>
-                            {step.type === 'email' ? 'Email' : step.type === 'linkedin' ? 'LinkedIn' : 'Call'}{si > 0 ? ` +${step.delay_days}d` : ' Day 0'}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
