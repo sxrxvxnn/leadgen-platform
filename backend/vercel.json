@@ -1,6 +1,8 @@
 {
   "version": 2,
-  "alias": ["leadgenengineplatform-api.vercel.app"],
+  "alias": [
+    "leadgenengineplatform-api.vercel.app"
+  ],
   "functions": {
     "api/index.py": {
       "maxDuration": 60
@@ -24,6 +26,10 @@
     {
       "path": "/api/cron/scrape-github",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/sequences/warmup-cron",
+      "schedule": "0 8 * * *"
     }
   ]
 }

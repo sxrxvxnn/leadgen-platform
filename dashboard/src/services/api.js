@@ -302,6 +302,7 @@ export const getUnverifiedCount   = () => api.get('/leads/unverified-count')
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
 export const getDashboardSummary = () => api.get('/dashboard/summary')
+export const getHotLeads = () => api.get('/leads/hot')
 
 // ─── SMTP EMAIL SENDING ───────────────────────────────────────────
 export const sendLeadEmail = (id, payload) => api.post(`/leads/${id}/send-email`, payload)
@@ -351,6 +352,13 @@ export const updateFeatureFlag = (name, enabled) => api.patch(`/feature-flags/${
 
 // ─── DOMAIN HEALTH ────────────────────────────────────────────────
 export const checkDomainHealth = (domain) => api.get('/profile/domain-health', { params: { domain } })
+
+// ─── STANDALONE TASKS ─────────────────────────────────────────────
+export const createStandaloneTask = (data) => api.post('/tasks', data)
+
+// ─── EMAIL WARM-UP ─────────────────────────────────────────────────
+export const getWarmupConfig  = () => api.get('/profile/warmup-config')
+export const saveWarmupConfig = (data) => api.patch('/profile/warmup-config', data)
 
 // ─── AI ICEBREAKER ────────────────────────────────────────────────
 export const generateIcebreaker = (leadId) => api.post(`/leads/${leadId}/ai-icebreaker`)
