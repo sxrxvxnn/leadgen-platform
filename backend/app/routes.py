@@ -5059,6 +5059,10 @@ async def setup_profile(payload: dict, authorization: str = Header(...)):
 
     update: dict = {"mode": mode, "onboarding_complete": True}
 
+    name = (payload.get("name") or "").strip()
+    if name:
+        update["full_name"] = name
+
     if mode == "team":
         team_name = (payload.get("team_name") or "").strip()
         if not team_name:
@@ -8975,9 +8979,20 @@ async def warmup_cron(request: Request):
 
     for cfg in (configs.data or []):
         user_id       = cfg["user_id"]
-        partner_emails = cfg.get("partner_emails") or []
+        partner_emails = list(cfg.get("partner_emails") or [])
         if not partner_emails:
-            results.append({"user_id": user_id, "skipped": "no partner emails"})
+            # Auto-pool: borrow from_email of other warmup-enabled users who have SMTP configured
+            pool_res = supabase.table("warmup_configs").select("user_id").eq("enabled", True).neq("user_id", user_id).execute()
+            pool_ids = [r["user_id"] for r in (pool_res.data or [])]
+            if pool_ids:
+                pool_profiles = supabase.table("profiles").select("smtp_config").in_("id", pool_ids).execute()
+                for p in (pool_profiles.data or []):
+                    smtp_cfg = (p.get("smtp_config") or {})
+                    email = smtp_cfg.get("from_email") or smtp_cfg.get("smtp_user")
+                    if email:
+                        partner_emails.append(email)
+        if not partner_emails:
+            results.append({"user_id": user_id, "skipped": "no pool members"})
             continue
 
         start = cfg.get("start_date")

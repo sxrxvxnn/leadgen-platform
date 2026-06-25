@@ -54,6 +54,7 @@ export default function Onboarding() {
       await api.post('/profile/setup', {
         mode: selectedMode,
         team_name: tName || undefined,
+        name: name.trim() || undefined,
       })
       setLoading(false)
       return true
