@@ -5378,6 +5378,19 @@ Return ONLY valid JSON in this exact structure, no explanation:
         raise HTTPException(status_code=500, detail=f"AI draft failed: {str(e)}")
 
 
+# ─── SEND STATS ──────────────────────────────────────────────────────────────
+
+@router.get("/sequences/send-stats")
+async def sequence_send_stats(authorization: str = Header(...)):
+    """Return today's email send count and daily limit for the dashboard."""
+    import datetime as _dt
+    user_id = get_user_id(authorization)
+    today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    ct = supabase.table("email_tracking").select("id", count="exact").eq("user_id", user_id).gte("created_at", today_start).execute()
+    sent_today = ct.count or 0
+    return {"sent_today": sent_today, "daily_limit": 50, "remaining": max(0, 50 - sent_today)}
+
+
 # ─── PHASE 1: SEQUENCES CRUD ─────────────────────────────────────────────────
 
 @router.get("/sequences")
@@ -5528,6 +5541,7 @@ async def process_sequence_cron(request: Request):
 
     now = _dt.datetime.now(_dt.timezone.utc)
     now_iso = now.isoformat()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
     due_res = supabase.table("sequence_enrollments").select(
         "id, sequence_id, lead_id, user_id, status, current_step, leads(name, email, company, title)"
@@ -5535,6 +5549,18 @@ async def process_sequence_cron(request: Request):
     due = due_res.data or []
     processed = 0
     errors = 0
+
+    # Pre-compute per-user daily send counts to enforce rate limiting
+    _DAILY_LIMIT = 50
+    unique_uids = list({e["user_id"] for e in due})
+    user_sent_today: dict = {}
+    for _uid in unique_uids:
+        try:
+            ct = supabase.table("email_tracking").select("id", count="exact").eq("user_id", _uid).gte("created_at", today_start).execute()
+            user_sent_today[_uid] = ct.count or 0
+        except Exception:
+            user_sent_today[_uid] = 0
+    skipped_rate = 0
 
     def _personalize(text, name, first, company, title, cal_link=""):
         return (
@@ -5589,6 +5615,10 @@ async def process_sequence_cron(request: Request):
                 if not lead_email:
                     error_msg = "Lead has no email"
                     success   = False
+                elif user_sent_today.get(user_id, 0) >= _DAILY_LIMIT:
+                    # Rate limit hit — skip this enrollment; cron will retry it tomorrow
+                    skipped_rate += 1
+                    continue
                 else:
                     # Check unsubscribe
                     unsub = supabase.table("unsubscribes").select("id").eq("user_id", user_id).eq("email", lead_email).maybe_single().execute()
@@ -5647,6 +5677,9 @@ async def process_sequence_cron(request: Request):
                                 srv.starttls()
                                 srv.login(smtp["smtp_user"], smtp["smtp_pass"])
                                 srv.sendmail(from_email, lead_email, msg.as_string())
+
+                            # Increment per-user daily counter
+                            user_sent_today[user_id] = user_sent_today.get(user_id, 0) + 1
 
                             # Record in email_tracking for analytics
                             supabase.table("email_tracking").insert({
@@ -5750,7 +5783,7 @@ async def process_sequence_cron(request: Request):
             except Exception:
                 pass
 
-    return {"processed": processed, "errors": errors, "total_due": len(due)}
+    return {"processed": processed, "errors": errors, "total_due": len(due), "skipped_rate_limit": skipped_rate}
 
 
 # ─── REPLY DETECTION CRON ────────────────────────────────────────────────────

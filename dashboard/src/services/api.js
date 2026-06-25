@@ -318,6 +318,7 @@ export const listEnrollments     = (seqId) => api.get(`/sequences/${seqId}/enrol
 export const unenrollLead        = (seqId, enrollmentId) => api.delete(`/sequences/${seqId}/enrollments/${enrollmentId}`)
 export const markReplied         = (seqId, enrollmentId) => api.patch(`/sequences/${seqId}/enrollments/${enrollmentId}/reply`)
 export const getSequenceAnalytics= (seqId) => api.get(`/sequences/${seqId}/analytics`)
+export const getSequenceSendStats= () => api.get('/sequences/send-stats')
 
 // ─── PROFILE SMTP CONFIG ──────────────────────────────────────────
 export const getSmtpConfig    = () => api.get('/profile/smtp-config')
