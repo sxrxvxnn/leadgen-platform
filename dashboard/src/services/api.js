@@ -367,4 +367,8 @@ export const generateIcebreaker = (leadId) => api.post(`/leads/${leadId}/ai-iceb
 export const listSequenceTemplates   = () => api.get('/sequences/templates')
 export const createFromTemplate      = (template_id, name) => api.post('/sequences/from-template', { template_id, name })
 
+// ─── ADMIN-MANAGED CONTENT (PUBLIC) ───────────────────────────────
+export const getActiveAnnouncements = () => api.get('/announcements/active')
+export const getPublicChangelog     = () => api.get('/changelog/public')
+
 export default api

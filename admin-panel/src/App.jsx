@@ -857,7 +857,7 @@ function FeatureFlags({token}) {
   const api=useApi(token)
   const [flags,setFlags]=useState([]), [loading,setLoading]=useState(true), [toggling,setToggling]=useState(null), [msg,flash]=useFlash()
   useEffect(()=>{axios.get(`${API_BASE}/feature-flags`).then(r=>setFlags(r.data?.flags||[])).catch(()=>{}).finally(()=>setLoading(false))},[])
-  async function toggle(name,current){
+  async function handleToggleFlag(name,current){
     setToggling(name)
     try{
       await api('patch',`/feature-flags/${name}`,{enabled:!current})
@@ -888,7 +888,7 @@ function FeatureFlags({token}) {
             <Label style={{color:flag.enabled?C.text:C.muted,fontSize:12}}>{flag.label}</Label>
             {flag.description&&<Sub style={{marginTop:3}}>{flag.description}</Sub>}
           </div>
-          <button onClick={()=>toggle(flag.name,flag.enabled)} disabled={toggling===flag.name} style={toggle(flag.enabled)}>
+          <button onClick={()=>handleToggleFlag(flag.name,flag.enabled)} disabled={toggling===flag.name} style={toggle(flag.enabled)}>
             <span style={knob(flag.enabled)}/>
           </button>
         </div>)}
