@@ -8778,6 +8778,24 @@ async def admin_delete_changelog(entry_id: str, authorization: str = Header(...)
     return {"ok": True}
 
 
+# ── PUBLIC: ANNOUNCEMENTS & CHANGELOG ────────────────────────────────────────
+
+@router.get("/announcements/active")
+async def public_active_announcements():
+    """Public — returns active announcements for the main dashboard banner."""
+    res = supabase.table("announcements").select("id,title,body,kind") \
+        .eq("active", True).order("created_at", desc=True).execute()
+    return res.data or []
+
+
+@router.get("/changelog/public")
+async def public_changelog():
+    """Public — returns published changelog entries for the main dashboard."""
+    res = supabase.table("changelog").select("id,title,body,version,created_at") \
+        .eq("published", True).order("created_at", desc=True).limit(10).execute()
+    return res.data or []
+
+
 # ── ADMIN: GLOBAL SEARCH ─────────────────────────────────────────────────────
 
 @router.get("/admin/search")

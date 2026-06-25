@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { useAuth } from '../context/AuthContext'
-import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert, getHotLeads } from '../services/api'
+import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert, getHotLeads, getPublicChangelog } from '../services/api'
 import { Skeleton } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
 
@@ -128,6 +128,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [jobAlerts, setJobAlerts] = useState([])
   const [hotLeads, setHotLeads] = useState([])
+  const [changelog, setChangelog] = useState([])
+  const [showChangelog, setShowChangelog] = useState(false)
 
   useEffect(() => {
     getDashboardSummary()
@@ -139,6 +141,9 @@ export default function Dashboard() {
       .catch(() => {})
     getHotLeads()
       .then(r => setHotLeads(r.data.leads || []))
+      .catch(() => {})
+    getPublicChangelog()
+      .then(r => setChangelog(Array.isArray(r.data) ? r.data : []))
       .catch(() => {})
   }, [])
 
@@ -171,7 +176,36 @@ export default function Dashboard() {
             Good {timeGreeting()}, {displayName}
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {changelog.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowChangelog(v => !v)}
+                style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '6px 12px', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                ✦ What's New
+                <span style={{ background: '#E7000B', color: '#fff', fontFamily: MONO, fontSize: 8, fontWeight: 700, borderRadius: 10, padding: '1px 5px' }}>{changelog.length}</span>
+              </button>
+              {showChangelog && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 320, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 16px 48px rgba(0,0,0,0.4)', zIndex: 200, overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>What's New</p>
+                    <button onClick={() => setShowChangelog(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16 }}>×</button>
+                  </div>
+                  {changelog.slice(0, 5).map((entry, i) => (
+                    <div key={entry.id} style={{ padding: '12px 16px', borderBottom: i < Math.min(changelog.length, 5) - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                        {entry.version && <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, color: '#60a5fa', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 4, padding: '1px 6px' }}>{entry.version}</span>}
+                        <span style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)' }}>{entry.created_at ? new Date(entry.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''}</span>
+                      </div>
+                      <p style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: 'var(--text)', margin: '0 0 3px' }}>{entry.title}</p>
+                      {entry.body && <p style={{ fontFamily: SANS, fontSize: 11, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>{entry.body}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {[
             { label: 'Prospect', path: '/prospect' },
             { label: 'Add Lead', path: '/leads' },
