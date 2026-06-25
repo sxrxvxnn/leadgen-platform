@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getLeads, updateLead, deleteLead, bulkDeleteLeads, bulkScoreLeads, bulkEnrichLeads, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence, listSegments, createSegment, deleteSegment } from '../services/api'
+import { getLeads, updateLead, deleteLead, bulkDeleteLeads, bulkScoreLeads, bulkEnrichLeads, starLead, updateConnectionStatus, scoreLeadICP, draftEmail, importLeadsCSV, exportLeadsCSV, listSequences, enrollInSequence, listSegments, createSegment, deleteSegment, bulkVerifyEmails, getUnverifiedCount } from '../services/api'
 import SpreadsheetView from '../components/SpreadsheetView'
 import { SkeletonRow } from '../components/Skeleton'
 import LeadDrawer from '../components/LeadDrawer'
@@ -47,7 +47,7 @@ const connectionStatusColors = {
   'Transferred to Rejah':    '#5b8db8',
 }
 
-function BulkActionBar({ count, totalFiltered, onClearSelection, onSelectAll, onDelete, onExport, onStatusChange, onConnectionChange, onEnrollSequence, onScoreICP, onFindEmails, loading, loadingLabel }) {
+function BulkActionBar({ count, totalFiltered, onClearSelection, onSelectAll, onDelete, onExport, onStatusChange, onConnectionChange, onEnrollSequence, onScoreICP, onFindEmails, onVerifyEmails, loading, loadingLabel }) {
   const [showStatus, setShowStatus] = useState(false)
   const [showConnection, setShowConnection] = useState(false)
   const [showSequences, setShowSequences] = useState(false)
@@ -91,6 +91,7 @@ function BulkActionBar({ count, totalFiltered, onClearSelection, onSelectAll, on
 
           <button style={btn()} onClick={onScoreICP}>Score ICP</button>
           <button style={btn()} onClick={onFindEmails}>Find Emails</button>
+          <button style={btn({ color: '#10b981', borderColor: 'rgba(16,185,129,0.3)' })} onClick={onVerifyEmails}>Verify Emails</button>
 
           <div style={{ position: 'relative' }}>
             <button style={btn()} onClick={openSequences}>Sequence ↓</button>
@@ -209,6 +210,29 @@ function IcpScoreBadge({ score, reason }) {
   )
 }
 
+const EMAIL_STATUS_META = {
+  valid:      { label: '✓ valid',      color: '#10b981', bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)' },
+  risky:      { label: '⚠ risky',      color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.25)' },
+  unknown:    { label: '? unknown',    color: '#6b7280', bg: 'rgba(107,114,128,0.08)', border: 'rgba(107,114,128,0.2)' },
+  role:       { label: '⊘ role',       color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.2)' },
+  disposable: { label: '✕ disposable', color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)'  },
+  invalid:    { label: '✕ invalid',    color: '#ef4444', bg: 'rgba(239,68,68,0.08)',  border: 'rgba(239,68,68,0.2)'  },
+  catch_all:  { label: '~ catch-all',  color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.25)' },
+}
+
+function EmailVerificationBadge({ status, score, reason }) {
+  if (!status) return null
+  const m = EMAIL_STATUS_META[status] || EMAIL_STATUS_META.unknown
+  return (
+    <span
+      title={reason ? `${reason}${score != null ? ` · ${score}% deliverability` : ''}` : score != null ? `${score}% deliverability` : ''}
+      style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0, letterSpacing: '0.04em', cursor: 'default', whiteSpace: 'nowrap', color: m.color, background: m.bg, border: `1px solid ${m.border}` }}
+    >
+      {m.label}
+    </span>
+  )
+}
+
 function EmailDraftModal({ lead, draft, onClose }) {
   const [copied, setCopied] = React.useState(false)
   if (!draft) return null
@@ -294,20 +318,23 @@ function LeadRow({ lead, columns, editingCell, editValue, setEditValue, onStartE
             {!isEditing && col.key === 'status' && <StatusBadge status={lead.status} />}
             {!isEditing && col.key === 'name' && <span style={{ fontSize: '13px', color: 'var(--text)', fontWeight: '500', textDecoration: onRowClick ? 'underline' : 'none', textDecorationColor: 'var(--border-strong)', textUnderlineOffset: 3 }}>{lead.name || '—'}</span>}
             {!isEditing && col.key === 'email' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</span>
-                {lead.email && lead.email_provider && (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
-                    background: lead.email_provider === 'web'  ? 'rgba(139,92,246,0.12)'
-                              : lead.email_provider === 'smtp' ? 'rgba(16,185,129,0.12)'
-                              : lead.email_provider === 'site' ? 'rgba(59,130,246,0.12)'
-                              : 'rgba(107,114,128,0.12)',
-                    color:      lead.email_provider === 'web'  ? '#8b5cf6'
-                              : lead.email_provider === 'smtp' ? '#10b981'
-                              : lead.email_provider === 'site' ? '#3b82f6'
-                              : '#6b7280',
-                  }}>{lead.email_provider}</span>
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</span>
+                  {lead.email && lead.email_provider && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 3, flexShrink: 0,
+                      background: lead.email_provider === 'web'  ? 'rgba(139,92,246,0.12)'
+                                : lead.email_provider === 'smtp' ? 'rgba(16,185,129,0.12)'
+                                : lead.email_provider === 'site' ? 'rgba(59,130,246,0.12)'
+                                : 'rgba(107,114,128,0.12)',
+                      color:      lead.email_provider === 'web'  ? '#8b5cf6'
+                                : lead.email_provider === 'smtp' ? '#10b981'
+                                : lead.email_provider === 'site' ? '#3b82f6'
+                                : '#6b7280',
+                    }}>{lead.email_provider}</span>
+                  )}
+                </div>
+                {lead.email && <EmailVerificationBadge status={lead.email_status} score={lead.email_score} />}
               </div>
             )}
             {!isEditing && col.key !== 'status' && col.key !== 'name' && col.key !== 'email' && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lead[col.key] || '—'}</span>}
@@ -376,10 +403,13 @@ export default function Leads() {
   const [showSegmentInput, setShowSegmentInput] = useState(false)
 
   // Advanced filters
-  const [filterSeniority, setFilterSeniority] = useState('')
+  const [filterSeniority, setFilterSeniority]   = useState('')
   const [filterConnection, setFilterConnection] = useState('')
-  const [filterMinScore, setFilterMinScore] = useState(0)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [filterMinScore, setFilterMinScore]     = useState(0)
+  const [filterEmailStatus, setFilterEmailStatus] = useState('')
+  const [showAdvanced, setShowAdvanced]         = useState(false)
+  const [unverifiedCount, setUnverifiedCount]   = useState(0)
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(false)
   const [scoringAll, setScoringAll] = useState(false)
   const [scoreMsg, setScoreMsg] = useState('')
   const [selectedLead, setSelectedLead] = useState(null)
@@ -401,6 +431,8 @@ export default function Leads() {
     try {
       const res = await getLeads()
       setLeads(res.data.leads)
+      // Check how many have email but no verification status
+      getUnverifiedCount().then(r => setUnverifiedCount(r.data?.count || 0)).catch(() => {})
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }
@@ -551,6 +583,27 @@ export default function Leads() {
     finally { setBulkLoading(false); setBulkLabel('') }
   }
 
+  async function handleBulkVerifyEmails(ids) {
+    const targets = (ids || selected).filter(id => leads.find(l => l.id === id)?.email)
+    if (!targets.length) { setImportMsg('No emails to verify in selection.'); setTimeout(() => setImportMsg(''), 3000); return }
+    setBulkLoading(true); setBulkLabel(`Verifying ${targets.length} emails…`)
+    try {
+      const res = await bulkVerifyEmails(targets)
+      const { summary } = res.data
+      // Update local lead state with new statuses
+      res.data.results.forEach(r => {
+        if (r.status !== 'skipped' && r.status !== 'error') {
+          setLeads(prev => prev.map(l => l.id === r.lead_id ? { ...l, email_status: r.status, email_score: r.score } : l))
+        }
+      })
+      setImportMsg(`Verified ${summary.verified}: ${summary.valid} valid · ${summary.risky} risky · ${summary.invalid} invalid · ${summary.role} role`)
+      setUnverifiedCount(prev => Math.max(0, prev - summary.verified))
+      setSelected([])
+      setTimeout(() => setImportMsg(''), 8000)
+    } catch (e) { console.error(e); setImportMsg('Verification failed.') }
+    finally { setBulkLoading(false); setBulkLabel('') }
+  }
+
   async function handleImportCSV(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -676,7 +729,9 @@ export default function Leads() {
     const msen = !filterSeniority || (SENIORITY_MAP[filterSeniority] && SENIORITY_MAP[filterSeniority].test(l.title || ''))
     const mconn = !filterConnection || l.connection_status === filterConnection
     const mscore = !filterMinScore || (l.icp_score != null && l.icp_score >= filterMinScore)
-    return ms && mf && mstar && mv && msen && mconn && mscore
+    const memail = !filterEmailStatus ||
+      (filterEmailStatus === 'unverified' ? !l.email_status && l.email : l.email_status === filterEmailStatus)
+    return ms && mf && mstar && mv && msen && mconn && mscore && memail
   })
 
   function toggleSelect(id) { setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]) }
@@ -767,9 +822,29 @@ export default function Leads() {
             onEnrollSequence={handleBulkEnrollSequence}
             onScoreICP={handleBulkScoreICP}
             onFindEmails={handleBulkFindEmails}
+            onVerifyEmails={() => handleBulkVerifyEmails()}
             loading={bulkLoading}
             loadingLabel={bulkLabel}
           />
+        )}
+
+        {/* Unverified emails banner */}
+        {unverifiedCount > 0 && !verifyBannerDismissed && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', marginBottom: 14, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', flexShrink: 0 }} />
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', flex: 1 }}>
+              <strong>{unverifiedCount}</strong> lead{unverifiedCount !== 1 ? 's have' : ' has'} an email with no verification status
+            </span>
+            <button
+              onClick={() => {
+                const ids = leads.filter(l => l.email && !l.email_status).map(l => l.id)
+                handleBulkVerifyEmails(ids.slice(0, 200))
+              }}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, padding: '5px 12px', background: '#10b981', border: 'none', borderRadius: 5, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              Verify all{unverifiedCount > 200 ? ' (first 200)' : ''}
+            </button>
+            <button onClick={() => setVerifyBannerDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px' }}>✕</button>
+          </div>
         )}
 
         <div style={{ ...s.viewTabs, justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
@@ -895,8 +970,23 @@ export default function Leads() {
                 <option value={85}>85+ (Excellent)</option>
               </select>
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Email status</label>
+              <select value={filterEmailStatus} onChange={e => setFilterEmailStatus(e.target.value)}
+                style={{ padding: '6px 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', outline: 'none' }}>
+                <option value="">Any</option>
+                <option value="unverified">Unverified (has email)</option>
+                <option value="valid">✓ Valid</option>
+                <option value="risky">⚠ Risky</option>
+                <option value="unknown">? Unknown</option>
+                <option value="role">⊘ Role address</option>
+                <option value="catch_all">~ Catch-all</option>
+                <option value="invalid">✕ Invalid</option>
+                <option value="disposable">✕ Disposable</option>
+              </select>
+            </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button onClick={() => { setFilterSeniority(''); setFilterConnection(''); setFilterMinScore(0) }}
+              <button onClick={() => { setFilterSeniority(''); setFilterConnection(''); setFilterMinScore(0); setFilterEmailStatus('') }}
                 style={{ padding: '6px 12px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>
                 Clear filters
               </button>
