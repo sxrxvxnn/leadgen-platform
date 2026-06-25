@@ -539,14 +539,19 @@ export default function Settings() {
                   </span>
                 </div>
 
-                <Field label="Partner emails" hint="Comma-separated list of email addresses you control (your own backup accounts). Warm-up emails will be sent here daily.">
+                <Field label="Partner emails" hint="Comma-separated list of email addresses to send warm-up emails to. Leave blank to automatically use the Sonar warmup network — other platform users who have warm-up enabled.">
                   <input
                     value={warmupEmails}
                     onChange={e => setWarmupEmails(e.target.value)}
-                    placeholder="backup@gmail.com, personal@outlook.com"
+                    placeholder="Leave blank for auto network, or add: backup@gmail.com, personal@outlook.com"
                     style={s.input}
                   />
                 </Field>
+                {warmupEnabled && !warmupEmails.trim() && (
+                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#4a7c59', margin: '-10px 0 14px', lineHeight: 1.5 }}>
+                    ✓ Auto network active — warm-up emails will be sent to other Sonar users in the pool.
+                  </p>
+                )}
 
                 {warmup?.config?.start_date && (
                   <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4 }}>
