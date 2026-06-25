@@ -847,6 +847,41 @@ export default function Leads() {
           </div>
         )}
 
+        {/* Data quality bar — only show when there are leads with emails */}
+        {leads.length > 0 && leads.some(l => l.email) && (() => {
+          const withEmail = leads.filter(l => l.email)
+          const valid     = withEmail.filter(l => l.email_status === 'valid').length
+          const risky     = withEmail.filter(l => l.email_status === 'risky').length
+          const invalid   = withEmail.filter(l => l.email_status === 'invalid').length
+          const role      = withEmail.filter(l => l.email_status === 'role').length
+          const unverif   = withEmail.filter(l => !l.email_status).length
+          const total     = withEmail.length
+          const score     = total > 0 ? Math.round((valid * 1 + risky * 0.5) / total * 100) : 0
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', marginBottom: 10, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Data Quality</span>
+              <div style={{ flex: 1, height: 4, background: 'var(--bg)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                <div style={{ width: `${valid / total * 100}%`, background: '#4a7c59', height: '100%' }} />
+                <div style={{ width: `${risky / total * 100}%`, background: '#b07d2e', height: '100%' }} />
+                <div style={{ width: `${invalid / total * 100}%`, background: '#e07070', height: '100%' }} />
+                <div style={{ width: `${role / total * 100}%`, background: '#5b8db8', height: '100%' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+                {[
+                  { label: 'Valid',   val: valid,   color: '#4a7c59' },
+                  { label: 'Risky',   val: risky,   color: '#b07d2e' },
+                  { label: 'Invalid', val: invalid,  color: '#e07070' },
+                  { label: 'Role',    val: role,     color: '#5b8db8' },
+                  { label: 'Unknown', val: unverif,  color: 'var(--text-muted)' },
+                ].map(({ label, val, color }) => val > 0 ? (
+                  <span key={label} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color, fontWeight: 600 }}>{val} {label}</span>
+                ) : null)}
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: score >= 70 ? '#4a7c59' : score >= 40 ? '#b07d2e' : '#e07070', flexShrink: 0 }}>{score}%</span>
+            </div>
+          )
+        })()}
+
         <div style={{ ...s.viewTabs, justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Built-in tabs */}

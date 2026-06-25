@@ -58,15 +58,16 @@ function StatCard({ label, value, suffix = '', note, color, trend, loading, onCl
 
 function ActivityIcon({ type }) {
   const icons = {
-    email_sent:       { icon: '✉', color: '#5b8db8' },
-    email_opened:     { icon: '👁', color: '#4a7c59' },
-    email_clicked:    { icon: '🔗', color: '#4a7c59' },
-    linkedin_connect: { icon: 'in', color: '#0082F3' },
-    note:             { icon: '✎', color: '#a86448' },
-    status_change:    { icon: '→', color: '#9b59b6' },
-    call:             { icon: '☎', color: '#a86448' },
-    enriched:         { icon: '⚡', color: '#e7a000' },
-    task_created:     { icon: '✓', color: '#888' },
+    email_sent:            { icon: '✉', color: '#5b8db8' },
+    email_opened:          { icon: '👁', color: '#4a7c59' },
+    email_clicked:         { icon: '🔗', color: '#4a7c59' },
+    email_reply_detected:  { icon: '↩', color: '#9b59b6' },
+    linkedin_connect:      { icon: 'in', color: '#0082F3' },
+    note:                  { icon: '✎', color: '#a86448' },
+    status_change:         { icon: '→', color: '#9b59b6' },
+    call:                  { icon: '☎', color: '#a86448' },
+    enriched:              { icon: '⚡', color: '#e7a000' },
+    task_created:          { icon: '✓', color: '#888' },
   }
   const { icon, color } = icons[type] || { icon: '·', color: '#888' }
   return (
@@ -80,15 +81,16 @@ function ActivityItem({ event }) {
   const lead = event.leads || {}
   const name = lead.name || lead.company || 'a lead'
   const labels = {
-    email_sent:    `Email sent to ${name}`,
-    email_opened:  `${name} opened your email`,
-    email_clicked: `${name} clicked a link`,
-    note:          `Note added for ${name}`,
-    status_change: `${name} status updated`,
-    enriched:      `${name} enriched`,
-    task_created:  `Task created for ${name}`,
-    call:          `Call logged with ${name}`,
-    linkedin_connect: `LinkedIn connection to ${name}`,
+    email_sent:           `Email sent to ${name}`,
+    email_opened:         `${name} opened your email`,
+    email_clicked:        `${name} clicked a link`,
+    email_reply_detected: `${name} replied to your sequence`,
+    note:                 `Note added for ${name}`,
+    status_change:        `${name} status updated`,
+    enriched:             `${name} enriched`,
+    task_created:         `Task created for ${name}`,
+    call:                 `Call logged with ${name}`,
+    linkedin_connect:     `LinkedIn connection to ${name}`,
   }
   const label = labels[event.event_type] || `Activity for ${name}`
   const time  = event.created_at ? new Date(event.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
@@ -150,8 +152,9 @@ export default function Dashboard() {
   const displayName = localStorage.getItem(nameKey) || localStorage.getItem('fullName') || user?.email?.split('@')[0] || 'there'
   const L = data?.leads        || {}
   const S = data?.sequences    || {}
-  const tasks    = data?.tasks_due_today || []
-  const activity = data?.recent_activity || []
+  const tasks    = data?.tasks_due_today  || []
+  const activity = data?.recent_activity  || []
+  const replies  = data?.recent_replies   || []
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -241,6 +244,40 @@ export default function Dashboard() {
                     <p style={{ fontFamily: DISPLAY, fontSize: 26, fontWeight: 700, color: m.color, margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>{m.value}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Replies inbox — show when there are replied leads */}
+          {!loading && replies.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <p style={{ fontFamily: MONO, fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Replies Inbox</p>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: '#9b59b618', border: '1px solid #9b59b640', color: '#9b59b6' }}>{replies.length}</span>
+                </div>
+                <button onClick={() => navigate('/sequences')} style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>View sequences →</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {replies.slice(0, 5).map(r => {
+                  const lead = r.leads || {}
+                  const seq  = r.sequences || {}
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(155,89,182,0.06)', border: '1px solid rgba(155,89,182,0.2)', borderRadius: 8 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#9b59b618', border: '1px solid #9b59b640', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: MONO, fontSize: 13, color: '#9b59b6', fontWeight: 700 }}>
+                        {(lead.name || '?')[0].toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: MONO, fontSize: 12, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lead.name || lead.email || 'Unknown'}</div>
+                        <div style={{ fontFamily: MONO, fontSize: 10, color: 'var(--text-muted)' }}>{lead.company || ''}{lead.company && lead.title ? ' · ' : ''}{lead.title || ''}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontFamily: MONO, fontSize: 9, color: '#9b59b6', fontWeight: 600 }}>↩ REPLIED</div>
+                        <div style={{ fontFamily: MONO, fontSize: 9, color: 'var(--text-muted)' }}>{seq.name || ''}</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
