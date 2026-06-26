@@ -7449,6 +7449,75 @@ import hashlib as _hashlib
 import json as _json
 import time as _time
 
+# ── Sonar-first search helpers ────────────────────────────────────────────────
+
+def _sonar_contact_to_pdl(c: dict) -> dict:
+    """Map a sonar_contacts row to a PDL-compatible person dict for the Prospect UI."""
+    email = c.get("email")
+    loc_parts = [l for l in [c.get("location_locality"), c.get("location_country")] if l]
+    return {
+        "id":                 f"sonar_{c['id']}",
+        "full_name":          c.get("full_name") or f"{c.get('first_name','')} {c.get('last_name','')}".strip() or None,
+        "first_name":         c.get("first_name"),
+        "last_name":          c.get("last_name"),
+        "job_title":          c.get("job_title"),
+        "job_company_name":   c.get("job_company_name"),
+        "job_company_website":c.get("job_company_website"),
+        "location_names":     loc_parts,
+        "location_locality":  c.get("location_locality"),
+        "location_region":    c.get("location_region"),
+        "location_country":   c.get("location_country"),
+        "linkedin_url":       c.get("linkedin_url"),
+        "github_url":         c.get("github_url"),
+        "twitter_url":        c.get("twitter_url"),
+        "work_email":         email,
+        "emails":             [{"address": email, "type": "work"}] if email else [],
+        "phone_numbers":      [],
+        "bio":                c.get("bio"),
+        "profile_pic_url":    c.get("profile_pic_url"),
+        "_sonar":             True,
+    }
+
+
+def _sonar_prospect_search(payload: dict, page: int, per_page: int) -> dict:
+    """Search sonar_contacts with the same filters as the PDL query."""
+    titles    = [t.strip() for t in (payload.get("titles") or []) if t.strip()]
+    companies = [c.strip() for c in (payload.get("companies") or []) if c.strip()]
+    locations = [l.strip() for l in (payload.get("locations") or []) if l.strip()]
+    keywords  = (payload.get("keywords") or "").strip()
+
+    q = supabase.table("sonar_contacts").select("*", count="exact")
+
+    # AND between filter groups, OR within each group (mirrors PDL SQL logic)
+    if keywords:
+        q = q.ilike("job_title", f"%{keywords.lower()}%")
+    if titles:
+        q = q.or_(",".join(f"job_title.ilike.%{t.lower()}%" for t in titles))
+    if companies:
+        q = q.or_(",".join(f"job_company_name.ilike.%{c.lower()}%" for c in companies))
+    if locations:
+        loc_parts = []
+        for loc in locations:
+            ll = loc.lower()
+            loc_parts += [f"location_locality.ilike.%{ll}%", f"location_country.ilike.%{ll}%"]
+        q = q.or_(",".join(loc_parts))
+
+    # Must have at least a name to be useful
+    q = q.not_.is_("full_name", "null")
+
+    offset = (page - 1) * per_page
+    try:
+        result = q.order("followers", desc=True).range(offset, offset + per_page - 1).execute()
+        total = result.count or 0
+        people = [_sonar_contact_to_pdl(c) for c in (result.data or [])]
+    except Exception as e:
+        print(f"[Sonar search] error: {e}")
+        total  = 0
+        people = []
+
+    return {"people": people, "total": total}
+
+
 _PDL_CACHE_TTL = 3600  # 1 hour
 
 # Nested cache: query_key → {page: {result, scroll_token, ts}}
@@ -7511,20 +7580,59 @@ def _build_pdl_sql(payload: dict) -> str:
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     _check_user_rate_limit(user_id, "people-search", limit=30, window_minutes=60)
+
+    page     = max(1, int(payload.get("page", 1)))
+    per_page = 10
+
+    # ── Sonar-first: always query our proprietary DB ──────────────────────────
+    sonar = _sonar_prospect_search(payload, page, per_page)
+    sonar_people = sonar["people"]
+    sonar_total  = sonar["total"]
+
+    # If Sonar has enough results on its own, return them — no PDL call needed
+    if sonar_total >= per_page:
+        total_pages = max(1, (sonar_total + per_page - 1) // per_page)
+        return {
+            "people":      sonar_people,
+            "total":       sonar_total,
+            "page":        page,
+            "total_pages": min(total_pages, 40),
+            "has_more":    page < total_pages,
+            "cached":      False,
+            "source":      "sonar",
+        }
+
+    # ── PDL fallback (or top-up) — blend Sonar results in on page 1 ─────────
     if not _PDL_KEY:
+        if sonar_people:
+            return {
+                "people":      sonar_people,
+                "total":       sonar_total,
+                "page":        page,
+                "total_pages": max(1, (sonar_total + per_page - 1) // per_page),
+                "has_more":    False,
+                "cached":      False,
+                "source":      "sonar",
+            }
         raise HTTPException(status_code=503, detail="Prospect search not configured — add PDL_API_KEY to Vercel env vars.")
 
-    page      = max(1, int(payload.get("page", 1)))
-    per_page  = 10
     query_key = _pdl_query_key(payload)
     q_cache   = _pdl_scroll_cache.get(query_key, {})
 
-    # Return cached result for this page if still fresh
+    # Return cached PDL result for this page if still fresh
     page_entry = q_cache.get(page)
     if page_entry and _time.time() - page_entry["ts"] < _PDL_CACHE_TTL:
-        return {**page_entry["result"], "cached": True}
+        cached_result = page_entry["result"]
+        # Prepend any Sonar results not already in cache (page 1 only)
+        if page == 1 and sonar_people:
+            existing_ids = {p.get("id") for p in cached_result.get("people", [])}
+            extras = [p for p in sonar_people if p["id"] not in existing_ids]
+            if extras:
+                merged = extras + cached_result["people"]
+                cached_result = {**cached_result, "people": merged[:per_page]}
+        return {**cached_result, "cached": True}
 
-    # Need scroll_token from previous page to paginate
+    # Need scroll_token from previous page to paginate PDL
     scroll_token = None
     if page > 1:
         prev = q_cache.get(page - 1)
@@ -7534,12 +7642,8 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
         if not scroll_token:
             raise HTTPException(status_code=400, detail="No more results available.")
 
-    sql = _build_pdl_sql(payload)
-    body = {
-        "sql":    sql,
-        "size":   per_page,
-        "pretty": False,
-    }
+    sql  = _build_pdl_sql(payload)
+    body = {"sql": sql, "size": per_page, "pretty": False}
     if scroll_token:
         body["scroll_token"] = scroll_token
 
@@ -7556,19 +7660,28 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
                 status_code=502,
                 detail=data.get("error", {}).get("message") or "PDL search failed",
             )
-        total        = data.get("total", 0)
-        people       = data.get("data", [])
-        new_scroll   = data.get("scroll_token")
-        total_pages  = max(1, (total + per_page - 1) // per_page)
+        total       = data.get("total", 0)
+        pdl_people  = data.get("data", [])
+        new_scroll  = data.get("scroll_token")
+        total_pages = max(1, (total + per_page - 1) // per_page)
+
+        # On page 1: prepend Sonar results, cap at per_page
+        if page == 1 and sonar_people:
+            pdl_ids = {p.get("id") for p in pdl_people}
+            extras  = [p for p in sonar_people if p["id"] not in pdl_ids]
+            merged_people = (extras + pdl_people)[:per_page]
+        else:
+            merged_people = pdl_people
+
         result = {
-            "people":      people,
-            "total":       total,
+            "people":      merged_people,
+            "total":       total + sonar_total,
             "page":        page,
             "total_pages": min(total_pages, 40),
-            "has_more":    bool(new_scroll and len(people) == per_page),
+            "has_more":    bool(new_scroll and len(pdl_people) == per_page),
             "cached":      False,
+            "source":      "pdl+sonar" if sonar_people else "pdl",
         }
-        # Cache result + scroll_token for next page
         if query_key not in _pdl_scroll_cache:
             _pdl_scroll_cache[query_key] = {}
         _pdl_scroll_cache[query_key][page] = {
@@ -7748,6 +7861,7 @@ async def delete_webhook(webhook_id: str, authorization: str = Header(...)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 from app.github_scraper import run_scrape_job, SCRAPE_QUERIES
+from app.hn_scraper import run_hn_scrape_job
 import threading as _db_thread
 
 _scrape_lock = _db_thread.Lock()
@@ -7860,6 +7974,117 @@ async def cron_scrape_github(request: Request):
     _scrape_state["last_run"]    = datetime.utcnow().isoformat() + "Z"
     _scrape_state["query_index"] = (qi + 1) % len(SCRAPE_QUERIES)
     return {"ok": True, **result}
+
+
+@router.post("/cron/scrape-hn")
+async def cron_scrape_hn(request: Request):
+    """Scrape the latest 'Ask HN: Who is hiring?' thread (runs weekly)."""
+    verify_cron_auth(request)
+    result = run_hn_scrape_job(supabase, max_posts=200)
+    return {"ok": True, **result}
+
+
+@router.post("/cron/enrich-contacts")
+async def cron_enrich_contacts(request: Request):
+    """
+    Auto-enrich Sonar contacts that have a domain but no email.
+    Runs daily — processes up to 40 contacts per invocation to stay within timeout.
+    """
+    verify_cron_auth(request)
+
+    rows = (
+        supabase.table("sonar_contacts")
+        .select("id,first_name,last_name,domain,job_company_name")
+        .is_("email", "null")
+        .not_.is_("domain", "null")
+        .not_.is_("first_name", "null")
+        .not_.is_("last_name", "null")
+        .order("scraped_at", desc=True)
+        .limit(40)
+        .execute()
+    ).data or []
+
+    enriched = skipped = errors = 0
+    for row in rows:
+        fn     = (row.get("first_name") or "").strip()
+        ln     = (row.get("last_name") or "").strip()
+        domain = (row.get("domain") or "").strip()
+        if not fn or not ln or not domain:
+            skipped += 1
+            continue
+        try:
+            hit = _find_email(fn, ln, domain, row.get("job_company_name") or "")
+            if hit.get("email"):
+                supabase.table("sonar_contacts").update({
+                    "email":          hit["email"],
+                    "email_score":    hit.get("email_score"),
+                    "email_provider": hit.get("email_provider"),
+                    "updated_at":     datetime.utcnow().isoformat() + "Z",
+                }).eq("id", row["id"]).execute()
+                enriched += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            print(f"[EnrichCron] error {row['id']}: {e}")
+            errors += 1
+
+    return {"ok": True, "enriched": enriched, "skipped": skipped, "errors": errors, "processed": len(rows)}
+
+
+@router.post("/cron/refresh-contacts")
+async def cron_refresh_contacts(request: Request):
+    """
+    Re-fetch profiles for GitHub contacts not updated in 90+ days.
+    Runs weekly — keeps the Sonar DB fresh.
+    """
+    verify_cron_auth(request)
+
+    from app.github_scraper import _enrich_profile
+
+    cutoff = datetime.utcnow().isoformat() + "Z"
+    # We'll filter in Python since supabase-py interval arithmetic is awkward
+    rows = (
+        supabase.table("sonar_contacts")
+        .select("id,source,source_id,updated_at")
+        .eq("source", "github")
+        .order("updated_at", desc=False)
+        .limit(50)
+        .execute()
+    ).data or []
+
+    refreshed = skipped = errors = 0
+    from datetime import timedelta
+    cutoff_dt = datetime.utcnow() - timedelta(days=90)
+
+    for row in rows:
+        updated_raw = row.get("updated_at") or ""
+        try:
+            updated_dt = datetime.fromisoformat(updated_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            updated_dt = datetime(2000, 1, 1)
+
+        if updated_dt > cutoff_dt:
+            skipped += 1
+            continue
+
+        username = row.get("source_id") or ""
+        if not username:
+            skipped += 1
+            continue
+
+        try:
+            profile = _enrich_profile(username)
+            if profile:
+                profile["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                supabase.table("sonar_contacts").update(profile).eq("id", row["id"]).execute()
+                refreshed += 1
+            else:
+                skipped += 1
+        except Exception as e:
+            print(f"[RefreshCron] error {row['id']}: {e}")
+            errors += 1
+
+    return {"ok": True, "refreshed": refreshed, "skipped": skipped, "errors": errors}
 
 
 @router.post("/webhooks/{webhook_id}/test")
