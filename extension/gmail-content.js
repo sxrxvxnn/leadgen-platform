@@ -19,6 +19,40 @@ function getToken() {
   })
 }
 
+function _jwtExp(token) {
+  try { return (JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0) * 1000 } catch { return 0 }
+}
+
+async function _refreshToken() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['refresh_token'], async (s) => {
+      if (!s.refresh_token) { reject(new Error('No refresh token')); return }
+      try {
+        const r = await fetch(GMAIL_API_BASE + '/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: s.refresh_token })
+        })
+        if (!r.ok) { reject(new Error('Refresh failed')); return }
+        const data = await r.json()
+        chrome.storage.local.set({ token: data.access_token, refresh_token: data.refresh_token })
+        _token = data.access_token
+        resolve(data.access_token)
+      } catch (e) { reject(e) }
+    })
+  })
+}
+
+async function getValidToken() {
+  const token = await getToken()
+  if (!token) return null
+  const exp = _jwtExp(token)
+  if (exp > 0 && Date.now() > exp - 60_000) {
+    try { return await _refreshToken() } catch { return null }
+  }
+  return token
+}
+
 // ─── STYLES ──────────────────────────────────────────────────
 function injectStyles() {
   if (document.getElementById(STYLES_ID)) return
@@ -310,10 +344,12 @@ function extractSubject() {
 
 // ─── LEAD LOOKUP ─────────────────────────────────────────────
 async function loadLead(email) {
-  if (!_token) {
+  const tok = await getValidToken()
+  if (!tok) {
     setBody('<div class="sg-status err">Not signed in. Open the Sonar extension popup and sign in.</div>')
     return
   }
+  _token = tok
 
   setBody(`<div class="sg-status"><span class="sg-spinner"></span> Looking up ${email}…</div>`)
 
@@ -321,15 +357,25 @@ async function loadLead(email) {
     const r = await fetch(`${GMAIL_API_BASE}/leads/by-email?email=${encodeURIComponent(email)}`, {
       headers: { Authorization: 'Bearer ' + _token }
     })
+    if (r.status === 401) {
+      // Token expired — try one refresh
+      try {
+        _token = await _refreshToken()
+        const r2 = await fetch(`${GMAIL_API_BASE}/leads/by-email?email=${encodeURIComponent(email)}`, {
+          headers: { Authorization: 'Bearer ' + _token }
+        })
+        if (!r2.ok) throw new Error('HTTP ' + r2.status)
+        const data2 = await r2.json()
+        if (!data2.lead) renderNotFound(email); else renderLead(data2.lead)
+        return
+      } catch {
+        setBody('<div class="sg-status err">Session expired. Open the Sonar popup and sign in again.</div>')
+        return
+      }
+    }
     if (!r.ok) throw new Error('HTTP ' + r.status)
     const data = await r.json()
-    const lead = data.lead
-
-    if (!lead) {
-      renderNotFound(email)
-    } else {
-      renderLead(lead)
-    }
+    if (!data.lead) renderNotFound(email); else renderLead(data.lead)
   } catch (e) {
     setBody(`<div class="sg-status err">Error: ${e.message}</div>`)
   }
@@ -655,7 +701,7 @@ function detectAndLoad() {
 
 // ─── INIT ────────────────────────────────────────────────────
 async function init() {
-  _token = await getToken()
+  _token = await getValidToken()
   injectStyles()
   createPanel()
 
