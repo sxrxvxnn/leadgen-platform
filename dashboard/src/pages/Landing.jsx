@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, Component } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import './Landing.css'
@@ -13,6 +13,12 @@ import Globe, { LANDING_MARKERS } from '../components/Globe'
 import Globe3D from '../components/ui/3d-globe'
 import { MacbookScroll } from '../components/ui/MacbookScroll'
 import { ParallaxHeroImages } from '../components/ui/ParallaxHeroImages'
+
+class GlobeBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? null : this.props.children }
+}
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -579,7 +585,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="lp-globe-wrap">
-              <Globe3D style={{ width: '100%' }} />
+              <GlobeBoundary><Globe3D style={{ width: '100%' }} /></GlobeBoundary>
             </div>
           </motion.div>
         </div>
