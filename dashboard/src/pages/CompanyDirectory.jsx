@@ -3,6 +3,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { prefillCompany, createCompany, mapsDiscover, bulkCreateCompanies } from '../services/api'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
 // Leaflet default icon fix for bundlers
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -181,10 +183,11 @@ export default function CompanyDiscovery() {
     if (val.trim().length < 2) { setSuggestions([]); setShowSugg(false); return }
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(val.trim())}`)
+        const res = await fetch(`${API_BASE}/company-suggest?q=${encodeURIComponent(val.trim())}`)
         const data = await res.json()
-        setSuggestions(data.slice(0, 8))
-        setShowSugg(data.length > 0)
+        const list = Array.isArray(data) ? data : []
+        setSuggestions(list.slice(0, 8))
+        setShowSugg(list.length > 0)
       } catch { setSuggestions([]); setShowSugg(false) }
     }, 280)
   }

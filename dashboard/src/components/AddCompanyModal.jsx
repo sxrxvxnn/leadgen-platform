@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { prefillCompany, createCompany, deepEnrichCompany } from '../services/api'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+
 const EMPTY_FORM = { name: '', website: '', linkedin_url: '', headquarters: '', followers: '', size: '', description: '' }
 
 export default function AddCompanyModal({ onClose, onRefresh }) {
@@ -27,10 +29,11 @@ export default function AddCompanyModal({ onClose, onRefresh }) {
     if (val.trim().length < 2) { setSuggestions([]); setShowSugg(false); return }
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(val.trim())}`)
+        const res = await fetch(`${API_BASE}/company-suggest?q=${encodeURIComponent(val.trim())}`)
         const data = await res.json()
-        setSuggestions(data.slice(0, 7))
-        setShowSugg(data.length > 0)
+        const list = Array.isArray(data) ? data : []
+        setSuggestions(list.slice(0, 7))
+        setShowSugg(list.length > 0)
       } catch { setSuggestions([]); setShowSugg(false) }
     }, 280)
   }
