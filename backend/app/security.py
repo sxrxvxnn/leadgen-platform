@@ -236,6 +236,7 @@ def sanitize_text(value: str | None, max_len: int = 500, field: str = "field") -
 
 
 # ─── In-process path-based rate limiter ───────────────────────────────────────
+async def path_rate_limit_middleware(request: Request, call_next):
     """Sliding-window rate limiter applied to every route by path category."""
     path = request.url.path
     if path in _SKIP_PATHS:
