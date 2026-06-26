@@ -170,81 +170,83 @@ function injectPanelStyles() {
   const style = document.createElement('style')
   style.id = 'sonar-panel-styles'
   style.textContent = `
-    #sonar-root *, #sonar-root *::before, #sonar-root *::after { box-sizing: border-box; margin: 0; padding: 0; font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace; }
-    #sonar-tab { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:2147483646; width:30px; height:76px; background:#111; border:1px solid #2a2a2a; border-right:none; border-radius:8px 0 0 8px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, width .15s; }
-    #sonar-tab:hover { background:#1c1c1c; width:34px; }
+    @import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap');
+
+    #sonar-root *, #sonar-root *::before, #sonar-root *::after { box-sizing:border-box; margin:0; padding:0; font-family:'Host Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+    #sonar-tab { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:2147483646; width:30px; height:76px; background:#fff; border:1px solid #e5e7eb; border-right:none; border-radius:8px 0 0 8px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s,width .15s; box-shadow:-2px 0 8px rgba(0,0,0,.07); }
+    #sonar-tab:hover { background:#f9fafb; width:34px; }
     #sonar-tab svg { display:block; }
-    #sonar-panel { position:fixed; right:-304px; top:0; height:100vh; width:304px; background:#0f0f0f; border-left:1px solid #222; z-index:2147483647; transition:right .28s cubic-bezier(.22,1,.36,1); overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scrollbar-width:thin; scrollbar-color:#2a2a2a transparent; }
+    #sonar-panel { position:fixed; right:-304px; top:0; height:100vh; width:304px; background:#fff; border-left:1px solid #e5e7eb; z-index:2147483647; transition:right .28s cubic-bezier(.22,1,.36,1); overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scrollbar-width:thin; scrollbar-color:#e5e7eb transparent; box-shadow:-8px 0 32px rgba(0,0,0,.08); }
     #sonar-panel::-webkit-scrollbar { width:4px; }
     #sonar-panel::-webkit-scrollbar-track { background:transparent; }
-    #sonar-panel::-webkit-scrollbar-thumb { background:#2a2a2a; border-radius:2px; }
+    #sonar-panel::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:2px; }
     #sonar-panel.open { right:0; }
-    .sp-hd { display:flex; align-items:center; justify-content:space-between; padding:13px 14px; border-bottom:1px solid #1e1e1e; flex-shrink:0; }
+    .sp-hd { display:flex; align-items:center; justify-content:space-between; padding:13px 14px; border-bottom:1px solid #e5e7eb; flex-shrink:0; background:#fff; }
     .sp-brand { display:flex; align-items:center; gap:8px; }
     .sp-logo { width:20px; height:20px; background:#E7000B; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .sp-name-text { font-size:12px; font-weight:700; letter-spacing:.12em; color:#fff; text-transform:uppercase; }
-    .sp-x { background:none; border:none; color:#444; font-size:18px; cursor:pointer; padding:0; line-height:1; transition:color .15s; }
-    .sp-x:hover { color:#fff; }
-    .sp-sec { padding:13px 14px; border-bottom:1px solid #181818; flex-shrink:0; }
+    .sp-name-text { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:800; letter-spacing:.14em; color:#111827; text-transform:uppercase; }
+    .sp-x { background:none; border:none; color:#9ca3af; font-size:18px; cursor:pointer; padding:2px 4px; line-height:1; transition:color .15s; border-radius:4px; }
+    .sp-x:hover { color:#111827; background:#f3f4f6; }
+    .sp-sec { padding:13px 14px; border-bottom:1px solid #f3f4f6; flex-shrink:0; }
     .sp-sec:last-child { border-bottom:none; }
-    .sp-lbl { font-size:8px; font-weight:700; letter-spacing:.16em; color:#444; text-transform:uppercase; margin-bottom:8px; display:block; }
-    .sp-person-name { font-size:14px; font-weight:700; color:#fff; margin-bottom:3px; line-height:1.25; }
-    .sp-person-sub { font-size:10px; color:#888; margin-bottom:2px; line-height:1.4; }
+    .sp-lbl { font-size:9px; font-weight:700; letter-spacing:.12em; color:#9ca3af; text-transform:uppercase; margin-bottom:8px; display:block; }
+    .sp-person-name { font-size:14px; font-weight:700; color:#111827; margin-bottom:3px; line-height:1.25; }
+    .sp-person-sub { font-size:11px; color:#6b7280; margin-bottom:2px; line-height:1.4; }
     .sp-status-row { display:flex; align-items:center; gap:7px; margin-bottom:9px; }
     .sp-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-    .sp-dot.in { background:#22c55e; box-shadow:0 0 7px rgba(34,197,94,.45); }
-    .sp-dot.out { background:#3a3a3a; }
-    .sp-status-label { font-size:11px; font-weight:700; color:#fff; }
+    .sp-dot.in { background:#16a34a; box-shadow:0 0 7px rgba(22,163,74,.35); }
+    .sp-dot.out { background:#d1d5db; }
+    .sp-status-label { font-size:11px; font-weight:700; color:#111827; }
     .sp-chips { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:4px; }
-    .sp-chip { display:inline-block; font-size:8px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:3px 7px; border-radius:3px; border:1px solid; white-space:nowrap; }
-    .sp-chip.stage { background:rgba(255,255,255,.04); border-color:#2a2a2a; color:#666; }
-    .sp-chip.icp-hi { background:rgba(34,197,94,.1); border-color:rgba(34,197,94,.3); color:#22c55e; }
-    .sp-chip.icp-md { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.25); color:#fbbf24; }
-    .sp-chip.icp-lo { background:rgba(100,100,100,.08); border-color:#2a2a2a; color:#555; }
-    .sp-chip.ok { background:rgba(34,197,94,.08); border-color:rgba(34,197,94,.25); color:#22c55e; }
-    .sp-chip.warn { background:rgba(251,191,36,.08); border-color:rgba(251,191,36,.25); color:#fbbf24; }
-    .sp-chip.bad { background:rgba(239,68,68,.08); border-color:rgba(239,68,68,.25); color:#ef4444; }
-    .sp-chip.seq { background:rgba(96,165,250,.08); border-color:rgba(96,165,250,.2); color:#60a5fa; }
+    .sp-chip { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:999px; border:1px solid; white-space:nowrap; }
+    .sp-chip.stage { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
+    .sp-chip.icp-hi { background:rgba(22,163,74,.08); border-color:rgba(22,163,74,.25); color:#16a34a; }
+    .sp-chip.icp-md { background:rgba(217,119,6,.08); border-color:rgba(217,119,6,.25); color:#d97706; }
+    .sp-chip.icp-lo { background:#f3f4f6; border-color:#e5e7eb; color:#9ca3af; }
+    .sp-chip.ok  { background:rgba(22,163,74,.08); border-color:rgba(22,163,74,.25); color:#16a34a; }
+    .sp-chip.warn { background:rgba(217,119,6,.08); border-color:rgba(217,119,6,.25); color:#d97706; }
+    .sp-chip.bad  { background:rgba(220,38,38,.07); border-color:rgba(220,38,38,.22); color:#dc2626; }
+    .sp-chip.seq  { background:rgba(37,99,235,.07); border-color:rgba(37,99,235,.2); color:#2563eb; }
     .sp-email-row { display:flex; align-items:center; gap:8px; }
-    .sp-email-addr { font-size:11px; color:#ddd; flex:1; word-break:break-all; }
-    .sp-copy { background:none; border:1px solid #2a2a2a; border-radius:3px; color:#555; font-size:9px; padding:3px 7px; cursor:pointer; font-family:inherit; flex-shrink:0; transition:border-color .15s,color .15s; }
-    .sp-copy:hover { border-color:#444; color:#aaa; }
-    .sp-btn { display:flex; align-items:center; justify-content:space-between; width:100%; padding:9px 13px; border-radius:6px; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; transition:all .15s; margin-bottom:6px; border:none; }
+    .sp-email-addr { font-size:11px; color:#374151; flex:1; word-break:break-all; font-weight:500; }
+    .sp-copy { background:#f9fafb; border:1px solid #e5e7eb; border-radius:5px; color:#6b7280; font-size:9px; font-weight:600; padding:3px 9px; cursor:pointer; font-family:inherit; flex-shrink:0; transition:border-color .15s,color .15s; }
+    .sp-copy:hover { border-color:#d1d5db; color:#111827; }
+    .sp-btn { display:flex; align-items:center; justify-content:space-between; width:100%; padding:9px 13px; border-radius:7px; font-family:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; margin-bottom:6px; border:none; }
     .sp-btn:last-child { margin-bottom:0; }
     .sp-btn:disabled { opacity:.35; cursor:not-allowed; }
     .sp-btn.pri { background:#E7000B; color:#fff; }
-    .sp-btn.pri:hover:not(:disabled) { background:#c50009; box-shadow:0 0 18px rgba(231,0,11,.28); }
-    .sp-btn.sec { background:#161616; color:#888; border:1px solid #252525; }
-    .sp-btn.sec:hover:not(:disabled) { border-color:#3a3a3a; color:#ddd; }
-    .sp-btn.ok { background:rgba(34,197,94,.08); color:#22c55e; border:1px solid rgba(34,197,94,.2); }
-    .sp-btn.warn { background:rgba(251,191,36,.08); color:#fbbf24; border:1px solid rgba(251,191,36,.2); }
-    .sp-seq-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #181818; }
+    .sp-btn.pri:hover:not(:disabled) { background:#c50009; box-shadow:0 4px 14px rgba(231,0,11,.22); }
+    .sp-btn.sec { background:#f9fafb; color:#374151; border:1px solid #e5e7eb; }
+    .sp-btn.sec:hover:not(:disabled) { border-color:#d1d5db; color:#111827; background:#f3f4f6; }
+    .sp-btn.ok   { background:rgba(22,163,74,.07); color:#16a34a; border:1px solid rgba(22,163,74,.2); }
+    .sp-btn.warn { background:rgba(217,119,6,.07); color:#d97706; border:1px solid rgba(217,119,6,.2); }
+    .sp-seq-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f9fafb; }
     .sp-seq-row:last-child { border-bottom:none; }
-    .sp-seq-nm { font-size:10px; color:#999; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; }
-    .sp-enroll { font-size:8px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:rgba(231,0,11,.08); border:1px solid rgba(231,0,11,.2); color:#E7000B; border-radius:3px; padding:4px 8px; cursor:pointer; font-family:inherit; transition:background .15s; flex-shrink:0; }
-    .sp-enroll:hover { background:rgba(231,0,11,.18); }
+    .sp-seq-nm { font-size:11px; color:#374151; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; }
+    .sp-enroll { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; background:rgba(231,0,11,.07); border:1px solid rgba(231,0,11,.2); color:#E7000B; border-radius:999px; padding:4px 10px; cursor:pointer; font-family:inherit; transition:background .15s; flex-shrink:0; }
+    .sp-enroll:hover { background:rgba(231,0,11,.14); }
     .sp-enroll:disabled { opacity:.35; cursor:not-allowed; }
-    .sp-load { display:flex; align-items:center; justify-content:center; padding:24px; color:#333; font-size:9px; letter-spacing:.1em; gap:8px; }
-    .sp-note { font-size:9px; color:#444; line-height:1.6; }
-    .sp-divider { height:1px; background:#1a1a1a; margin:8px 0; }
-    .sp-ft { margin-top:auto; padding:11px 14px; border-top:1px solid #181818; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
-    .sp-ft a { font-size:9px; color:#444; text-decoration:none; letter-spacing:.06em; transition:color .15s; }
-    .sp-ft a:hover { color:#888; }
-    .sp-ft-v { font-size:8px; color:#2a2a2a; letter-spacing:.04em; }
+    .sp-load { display:flex; align-items:center; justify-content:center; padding:24px; color:#9ca3af; font-size:11px; gap:8px; font-weight:500; }
+    .sp-note { font-size:11px; color:#6b7280; line-height:1.6; }
+    .sp-divider { height:1px; background:#f3f4f6; margin:8px 0; }
+    .sp-ft { margin-top:auto; padding:11px 14px; border-top:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:#fff; }
+    .sp-ft a { font-size:11px; color:#9ca3af; text-decoration:none; font-weight:500; transition:color .15s; }
+    .sp-ft a:hover { color:#111827; }
+    .sp-ft-v { font-size:10px; color:#d1d5db; }
     @keyframes sp-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-    .sp-spinner { display:inline-block; width:10px; height:10px; border:1.5px solid #2a2a2a; border-top-color:#E7000B; border-radius:50%; animation:sp-spin .75s linear infinite; }
+    .sp-spinner { display:inline-block; width:10px; height:10px; border:1.5px solid #e5e7eb; border-top-color:#E7000B; border-radius:50%; animation:sp-spin .75s linear infinite; }
 
-    /* Search results inline */
-    .snr-btn { display:inline-flex; align-items:center; gap:3px; padding:4px 9px; border-radius:4px; font-family:'SF Mono',ui-monospace,monospace; font-size:10px; font-weight:600; letter-spacing:.04em; cursor:pointer; transition:all .15s; border:1px solid; white-space:nowrap; vertical-align:middle; }
-    .snr-btn.add { color:#E7000B; border-color:rgba(231,0,11,.3); background:rgba(231,0,11,.06); }
-    .snr-btn.add:hover { background:rgba(231,0,11,.14); border-color:#E7000B; }
-    .snr-btn.in { color:#22c55e; border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.06); cursor:default; pointer-events:none; }
-    .snr-btn.load { color:#2a2a2a; border-color:#2a2a2a; background:none; cursor:wait; }
+    /* Search results inline buttons */
+    .snr-btn { display:inline-flex; align-items:center; gap:3px; padding:4px 10px; border-radius:999px; font-family:'Host Grotesk',sans-serif; font-size:10px; font-weight:600; cursor:pointer; transition:all .15s; border:1px solid; white-space:nowrap; vertical-align:middle; }
+    .snr-btn.add  { color:#E7000B; border-color:rgba(231,0,11,.3); background:rgba(231,0,11,.06); }
+    .snr-btn.add:hover { background:rgba(231,0,11,.12); border-color:#E7000B; }
+    .snr-btn.in   { color:#16a34a; border-color:rgba(22,163,74,.3); background:rgba(22,163,74,.06); cursor:default; pointer-events:none; }
+    .snr-btn.load { color:#d1d5db; border-color:#e5e7eb; background:#fff; cursor:wait; }
 
     /* Company page quick-add */
-    #sonar-company-btn { position:fixed; bottom:24px; right:24px; z-index:2147483646; display:flex; align-items:center; gap:8px; padding:11px 18px; background:#0f0f0f; border:1px solid #2a2a2a; border-radius:8px; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; color:#fff; letter-spacing:.06em; box-shadow:0 4px 24px rgba(0,0,0,.5); transition:border-color .15s,box-shadow .15s; }
-    #sonar-company-btn:hover { border-color:#444; box-shadow:0 4px 32px rgba(0,0,0,.7); }
-    #sonar-company-btn.added { color:#22c55e; border-color:rgba(34,197,94,.3); }
+    #sonar-company-btn { position:fixed; bottom:24px; right:24px; z-index:2147483646; display:flex; align-items:center; gap:8px; padding:11px 18px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer; font-family:'Host Grotesk',sans-serif; font-size:12px; font-weight:700; color:#111827; box-shadow:0 4px 16px rgba(0,0,0,.1); transition:border-color .15s,box-shadow .15s; }
+    #sonar-company-btn:hover { border-color:#d1d5db; box-shadow:0 6px 24px rgba(0,0,0,.14); }
+    #sonar-company-btn.added { color:#16a34a; border-color:rgba(22,163,74,.3); }
   `
   document.head.appendChild(style)
 }
@@ -284,7 +286,7 @@ function createPanel() {
       <div id="sonar-body"><div class="sp-load"><span class="sp-spinner"></span> <span>Loading…</span></div></div>
       <div class="sp-ft">
         <a href="${DASHBOARD_URL}" target="_blank">Open dashboard →</a>
-        <span class="sp-ft-v">v1.3</span>
+        <span class="sp-ft-v">v1.5</span>
       </div>
     </div>
   `
@@ -326,7 +328,7 @@ async function loadPanel() {
     setBody(`
       <div class="sp-sec">
         <span class="sp-lbl">Status</span>
-        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#555">Not signed in</span></div>
+        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#6b7280">Not signed in</span></div>
         <p class="sp-note">Open the Sonar extension popup to sign in, then refresh this page.</p>
       </div>`)
     return
@@ -349,8 +351,8 @@ async function loadPanel() {
       <span class="sp-lbl">Profile</span>
       <div class="sp-person-name">${pageData.name || '—'}</div>
       ${pageData.title ? `<div class="sp-person-sub">${pageData.title}</div>` : ''}
-      ${pageData.company ? `<div class="sp-person-sub" style="color:#666">${pageData.company}</div>` : ''}
-      ${pageData.location ? `<div class="sp-person-sub" style="color:#444;margin-top:2px">${pageData.location}</div>` : ''}
+      ${pageData.company ? `<div class="sp-person-sub" style="color:#6b7280">${pageData.company}</div>` : ''}
+      ${pageData.location ? `<div class="sp-person-sub" style="color:#9ca3af;margin-top:2px">${pageData.location}</div>` : ''}
     </div>`
 
     if (lead) {
@@ -365,7 +367,7 @@ async function loadPanel() {
       if (companyChanged) {
         html += `<div style="margin:0 0 10px;padding:10px 12px;background:rgba(176,125,46,0.08);border:1px solid rgba(176,125,46,0.3);border-radius:7px">
           <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#b07d2e;margin-bottom:5px">Job Change Detected</div>
-          <div style="font-size:10px;color:#bbb;line-height:1.5">${lead.company} <span style="color:#b07d2e">→</span> ${pageData.company}</div>
+          <div style="font-size:10px;color:#374151;line-height:1.5">${lead.company} <span style="color:#b07d2e">→</span> ${pageData.company}</div>
           <button id="sp-flag-jobchange" data-lid="${lead.id}" data-old-company="${lead.company || ''}" data-old-title="${lead.title || ''}" data-new-company="${pageData.company || ''}" data-new-title="${pageData.title || ''}" style="margin-top:8px;padding:4px 10px;background:rgba(176,125,46,0.15);border:1px solid rgba(176,125,46,0.35);border-radius:4px;color:#b07d2e;font-size:9px;font-weight:700;letter-spacing:.06em;cursor:pointer;font-family:inherit">Flag in Sonar</button>
         </div>`
       }
@@ -406,7 +408,7 @@ async function loadPanel() {
       // ── Not in pipeline
       html += `<div class="sp-sec">
         <span class="sp-lbl">Pipeline</span>
-        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#555">Not in Sonar</span></div>
+        <div class="sp-status-row"><div class="sp-dot out"></div><span class="sp-status-label" style="color:#6b7280">Not in Sonar</span></div>
         <button class="sp-btn pri" id="sp-add"><span>Add to pipeline</span><span>+</span></button>
         <button class="sp-btn sec" id="sp-find-email"><span>Find email</span><span>◎</span></button>
       </div>`
@@ -435,9 +437,9 @@ async function loadPanel() {
       html += `<div class="sp-sec">
         <span class="sp-lbl">LinkedIn</span>
         <div style="display:flex;gap:16px">
-          ${pageData.connections ? `<div><div style="font-size:11px;color:#ddd;font-weight:700">${pageData.connections}</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Connections</div></div>` : ''}
-          ${pageData.followers ? `<div><div style="font-size:11px;color:#ddd;font-weight:700">${pageData.followers}</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Followers</div></div>` : ''}
-          ${pageData.appointment === 'Yes' ? `<div><div style="font-size:11px;color:#22c55e;font-weight:700">Yes</div><div style="font-size:8px;color:#444;letter-spacing:.08em;text-transform:uppercase;margin-top:2px">Booking link</div></div>` : ''}
+          ${pageData.connections ? `<div><div style="font-size:11px;color:#111827;font-weight:700">${pageData.connections}</div><div style="font-size:9px;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">Connections</div></div>` : ''}
+          ${pageData.followers ? `<div><div style="font-size:11px;color:#111827;font-weight:700">${pageData.followers}</div><div style="font-size:9px;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">Followers</div></div>` : ''}
+          ${pageData.appointment === 'Yes' ? `<div><div style="font-size:11px;color:#16a34a;font-weight:700">Yes</div><div style="font-size:9px;color:#9ca3af;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">Booking link</div></div>` : ''}
         </div>
       </div>`
     }
@@ -545,7 +547,7 @@ function wirePanelHandlers(pageData, lead, token) {
       const res = await fetchAPI(`/leads/${lead.id}/draft-email`, 'POST', {}, token)
       const section = document.getElementById('sp-draft-result')
       if (section && res.subject && res.body) {
-        section.innerHTML = `<div class="sp-sec"><span class="sp-lbl">AI Draft</span><div style="font-size:10px;color:#E7000B;margin-bottom:6px">${res.subject}</div><div style="font-size:9px;color:#888;line-height:1.6;white-space:pre-wrap">${res.body.substring(0, 300)}${res.body.length > 300 ? '…' : ''}</div><button class="sp-copy" data-copy="${encodeURIComponent(res.subject + '\n\n' + res.body)}" style="margin-top:8px">Copy draft</button></div>`
+        section.innerHTML = `<div class="sp-sec"><span class="sp-lbl">AI Draft</span><div style="font-size:11px;color:#E7000B;margin-bottom:6px;font-weight:600">${res.subject}</div><div style="font-size:11px;color:#6b7280;line-height:1.6;white-space:pre-wrap">${res.body.substring(0, 300)}${res.body.length > 300 ? '…' : ''}</div><button class="sp-copy" data-copy="${encodeURIComponent(res.subject + '\n\n' + res.body)}" style="margin-top:8px">Copy draft</button></div>`
         document.querySelectorAll('.sp-copy[data-copy]').forEach(b => {
           b.addEventListener('click', () => { navigator.clipboard.writeText(decodeURIComponent(b.dataset.copy)).catch(() => {}); const o = b.textContent; b.textContent = 'Copied!'; setTimeout(() => b.textContent = o, 1500) })
         })
@@ -567,7 +569,7 @@ function wirePanelHandlers(pageData, lead, token) {
           leadId = res.lead?.id
         }
         await fetchAPI(`/sequences/${btn.dataset.seq}/enroll`, 'POST', { lead_ids: [leadId] }, token)
-        btn.textContent = '✓'; btn.style.cssText += ';background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22c55e'
+        btn.textContent = '✓'; btn.style.cssText += ';background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.25);color:#16a34a'
       } catch { btn.textContent = '!'; btn.disabled = false }
     })
   })
@@ -621,7 +623,7 @@ async function injectSearchButtons() {
         btn.innerHTML = '✓ In Sonar'
         if (hit.lead?.icp_score != null) {
           const score = hit.lead.icp_score
-          const color = score >= 70 ? '#22c55e' : score >= 40 ? '#fbbf24' : '#666'
+          const color = score >= 70 ? '#16a34a' : score >= 40 ? '#d97706' : '#9ca3af'
           btn.innerHTML += ` <span style="opacity:.7;color:${color}">· ICP ${score}</span>`
         }
       } else {
