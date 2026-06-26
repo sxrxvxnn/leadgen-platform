@@ -454,10 +454,12 @@ export default function Leads() {
   async function fetchLeads() {
     try {
       const res = await getLeads()
-      setLeads(res.data.leads)
-      // Check how many have email but no verification status
+      setLeads(res.data?.leads || [])
       getUnverifiedCount().then(r => setUnverifiedCount(r.data?.count || 0)).catch(() => {})
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+      setLeads([])
+    }
     finally { setLoading(false) }
   }
 
@@ -626,8 +628,7 @@ export default function Leads() {
     try {
       const res = await bulkVerifyEmails(targets)
       const { summary } = res.data
-      // Update local lead state with new statuses
-      res.data.results.forEach(r => {
+      ;(res.data.results || []).forEach(r => {
         if (r.status !== 'skipped' && r.status !== 'error') {
           setLeads(prev => prev.map(l => l.id === r.lead_id ? { ...l, email_status: r.status, email_score: r.score } : l))
         }
