@@ -21,12 +21,34 @@ function _jwtExpiresAt(token) {
   try { return (JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0) * 1000 } catch { return 0 }
 }
 
+async function _refreshToken() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(['refresh_token'], async (s) => {
+      if (!s.refresh_token) { reject(new Error('No refresh token')); return }
+      try {
+        const r = await fetch(API_BASE_URL + '/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: s.refresh_token })
+        })
+        if (!r.ok) { reject(new Error('Refresh failed')); return }
+        const data = await r.json()
+        chrome.storage.local.set({ token: data.access_token, refresh_token: data.refresh_token })
+        resolve(data.access_token)
+      } catch (e) { reject(e) }
+    })
+  })
+}
+
 async function getValidToken() {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.get(['token'], (s) => {
+    chrome.storage.local.get(['token'], async (s) => {
       if (!s.token) { reject(new Error('No token')); return }
       const exp = _jwtExpiresAt(s.token)
-      if (exp > 0 && Date.now() > exp - 60_000) { reject(new Error('Expired')); return }
+      if (exp > 0 && Date.now() > exp - 60_000) {
+        try { resolve(await _refreshToken()) } catch { reject(new Error('Expired')) }
+        return
+      }
       resolve(s.token)
     })
   })
@@ -79,7 +101,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     const r = await fetch(API_BASE_URL + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
     if (!r.ok) throw new Error('Invalid credentials')
     const data = await r.json()
-    chrome.storage.local.set({ token: data.access_token, userEmail: email }, () => initMain(data.access_token, email))
+    chrome.storage.local.set({ token: data.access_token, refresh_token: data.refresh_token, userEmail: email }, () => initMain(data.access_token, email))
   } catch {
     errEl.textContent = 'Invalid email or password.'; errEl.className = 'err-msg show'
     btn.disabled = false; btn.querySelector('span').textContent = 'Sign in'
