@@ -228,7 +228,7 @@ function applyProfileCard(entry) {
     document.getElementById('pcSub').textContent = [lead.title, lead.company].filter(Boolean).join(' · ')
     const badges = document.getElementById('pcBadges')
     let html = '<span class="pc-badge in">In Sonar</span>'
-    if (lead.stage) html += `<span class="pc-badge stage">${lead.stage}</span>`
+    if (lead.status) html += `<span class="pc-badge stage">${lead.status}</span>`
     if (lead.icp_score != null) {
       const cls = lead.icp_score >= 70 ? 'icp-hi' : lead.icp_score >= 40 ? 'icp-md' : 'stage'
       html += `<span class="pc-badge ${cls}">ICP ${lead.icp_score}</span>`

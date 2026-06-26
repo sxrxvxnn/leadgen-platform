@@ -297,7 +297,7 @@ async def get_lead_by_email(email: str, authorization: str = Header(...)):
         raise HTTPException(status_code=400, detail="Valid email required")
     try:
         res = supabase.table("leads")\
-            .select("id, name, title, company, location, email, email_provider, stage, icp_score, icp_score_reason, email_score, email_status, profile_url, starred, status, connection_status")\
+            .select("id, name, title, company, location, email, email_provider, icp_score, icp_score_reason, email_score, email_status, profile_url, starred, status, connection_status")\
             .eq("user_id", user_id)\
             .ilike("email", email.strip())\
             .limit(1)\
