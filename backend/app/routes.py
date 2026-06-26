@@ -27,6 +27,7 @@ from .security import (
     log_auth_success, log_auth_failure, log_signup,
     log_password_reset_request, log_password_reset_success,
     log_token_refresh, log_bulk_op, log_suspicious,
+    validate_external_url, verify_cron_auth, sanitize_text,
 )
 
 router = APIRouter()
@@ -866,6 +867,8 @@ async def prefill_company(
 
     if not name:
         raise HTTPException(status_code=400, detail="Company name is required")
+    if website_url:
+        validate_external_url(website_url, "website_url")
 
     from .company_prefill import (
         search_company_website, extract_linkedin_url_from_html,
@@ -5810,6 +5813,7 @@ async def unenroll_lead(seq_id: str, enrollment_id: str, authorization: str = He
 @router.post("/sequences/process-cron")
 async def process_sequence_cron(request: Request):
     """Cron endpoint — processes all due sequence enrollments."""
+    verify_cron_auth(request)
     import datetime as _dt
     import smtplib as _smtplib
     import urllib.parse as _urlparse
@@ -6100,6 +6104,7 @@ async def process_sequence_cron(request: Request):
 @router.post("/sequences/check-replies")
 async def check_sequence_replies(request: Request):
     """Cron: IMAP-poll each user's inbox for replies to sequence emails."""
+    verify_cron_auth(request)
     import imaplib as _imap
     import email as _email_lib
     import datetime as _dt
@@ -7660,8 +7665,9 @@ async def create_webhook(payload: dict, authorization: str = Header(...)):
     url = (payload.get("url") or "").strip()
     name = (payload.get("name") or "").strip()
     events = payload.get("events") or []
-    if not url or not url.startswith("http"):
+    if not url:
         raise HTTPException(status_code=400, detail="Valid URL required")
+    validate_external_url(url, "url")
     if not events:
         raise HTTPException(status_code=400, detail="At least one event required")
     unknown = [e for e in events if e not in WEBHOOK_EVENTS]
@@ -7805,11 +7811,7 @@ async def database_scrape(authorization: str = Header(...)):
 @router.post("/cron/scrape-github")
 async def cron_scrape_github(request: Request):
     """Vercel cron endpoint — runs daily to grow the contact database."""
-    secret = os.environ.get("CRON_SECRET", "")
-    if secret:
-        auth = request.headers.get("authorization", "")
-        if auth != f"Bearer {secret}":
-            raise HTTPException(status_code=401, detail="Unauthorized")
+    verify_cron_auth(request)
 
     qi     = _scrape_state.get("query_index", 0)
     result = run_scrape_job(supabase, query_index=qi, max_users=100)
@@ -8985,6 +8987,7 @@ async def save_warmup_config(payload: dict, authorization: str = Header(...)):
 @router.post("/sequences/warmup-cron")
 async def warmup_cron(request: Request):
     """Vercel cron endpoint — runs daily to send warm-up emails for all enabled users."""
+    verify_cron_auth(request)
     import smtplib as _smtp_wu
     from email.mime.text      import MIMEText      as _MIMEText_wu
     from email.mime.multipart import MIMEMultipart as _MIMEMultipart_wu

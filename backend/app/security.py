@@ -1,10 +1,15 @@
-"""Security utilities: structured audit logging, UUID validation, rate-limit middleware."""
+"""Security utilities: structured audit logging, UUID validation, rate-limit middleware,
+SSRF protection, cron authentication, and input sanitisation."""
+import ipaddress as _ip
 import json
 import logging
+import os
 import re
+import socket as _socket
 import time
 from collections import defaultdict, deque
 from typing import Any
+from urllib.parse import urlparse as _urlparse
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -118,7 +123,119 @@ def _path_limit(path: str) -> int:
     return 200
 
 
-async def path_rate_limit_middleware(request: Request, call_next):
+# ─── SSRF protection ──────────────────────────────────────────────────────────
+_PRIVATE_NETS = [
+    _ip.ip_network("10.0.0.0/8"),
+    _ip.ip_network("172.16.0.0/12"),
+    _ip.ip_network("192.168.0.0/16"),
+    _ip.ip_network("127.0.0.0/8"),
+    _ip.ip_network("169.254.0.0/16"),   # link-local + cloud metadata (169.254.169.254)
+    _ip.ip_network("100.64.0.0/10"),    # carrier-grade NAT
+    _ip.ip_network("0.0.0.0/8"),
+    _ip.ip_network("::1/128"),
+    _ip.ip_network("fc00::/7"),
+    _ip.ip_network("fe80::/10"),
+]
+
+_BLOCKED_HOSTS = frozenset({
+    "localhost", "127.0.0.1", "::1",
+    "169.254.169.254",               # AWS/Azure/DO metadata
+    "metadata.google.internal",      # GCP metadata
+    "100.100.100.200",               # Alibaba Cloud metadata
+    "fd00:ec2::254",                 # AWS IPv6 metadata
+})
+
+
+def _ip_is_safe(addr: str) -> bool:
+    try:
+        ip_obj = _ip.ip_address(addr)
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_unspecified:
+            return False
+        for net in _PRIVATE_NETS:
+            if ip_obj in net:
+                return False
+        return True
+    except ValueError:
+        return True  # not an IP literal; handled by hostname block
+
+
+def validate_external_url(url: str, field: str = "url") -> str:
+    """SSRF guard — validate a user-supplied URL is safe for server-side fetching.
+    Blocks private/loopback/link-local IPs and known cloud metadata endpoints.
+    Raises HTTPException 422 on bad input, 403 on SSRF risk."""
+    if not url or len(url) > 2048:
+        raise HTTPException(status_code=422, detail=f"{field}: URL missing or exceeds maximum length")
+    try:
+        parsed = _urlparse(url)
+    except Exception:
+        raise HTTPException(status_code=422, detail=f"{field}: malformed URL")
+
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=422, detail=f"{field}: only http/https URLs are permitted")
+
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if not hostname:
+        raise HTTPException(status_code=422, detail=f"{field}: URL has no hostname")
+    if hostname in _BLOCKED_HOSTS:
+        log_suspicious("ssrf_blocked_host", ip="?", path=url)
+        raise HTTPException(status_code=403, detail=f"{field}: target not permitted")
+
+    # IP literal — check directly without DNS
+    try:
+        _ip.ip_address(hostname)
+        if not _ip_is_safe(hostname):
+            log_suspicious("ssrf_blocked_ip", ip="?", path=url)
+            raise HTTPException(status_code=403, detail=f"{field}: target not permitted")
+        return url
+    except ValueError:
+        pass  # hostname, not an IP literal
+
+    # Resolve and check all returned IPs (catches SSRF via DNS pointing to internal IPs)
+    try:
+        addrs = _socket.getaddrinfo(hostname, None, 0, _socket.SOCK_STREAM)
+        for _, _, _, _, sockaddr in addrs:
+            if not _ip_is_safe(sockaddr[0]):
+                log_suspicious("ssrf_blocked_resolved_ip", ip="?", path=url)
+                raise HTTPException(status_code=403, detail=f"{field}: target not permitted")
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # DNS failure at validation time — let the actual fetch fail naturally
+
+    return url
+
+
+# ─── Cron job authentication ───────────────────────────────────────────────────
+
+def verify_cron_auth(request: Request) -> None:
+    """Verify the request originates from Vercel's cron runner via CRON_SECRET env var.
+    Set CRON_SECRET in Vercel env; Vercel automatically passes it as Authorization: Bearer.
+    No-op in development when CRON_SECRET is not set."""
+    secret = os.getenv("CRON_SECRET")
+    if not secret:
+        return  # Dev mode — skip enforcement
+    auth = request.headers.get("authorization", "")
+    if auth != f"Bearer {secret}":
+        log_suspicious(
+            "unauthorized_cron_trigger",
+            ip=request.client.host if request.client else "?",
+            path=str(request.url.path),
+        )
+        raise HTTPException(status_code=401, detail="Cron authentication required")
+
+
+# ─── Input sanitisation ───────────────────────────────────────────────────────
+
+def sanitize_text(value: str | None, max_len: int = 500, field: str = "field") -> str:
+    """Strip whitespace and enforce a maximum length on text input.
+    Raises 422 if the value exceeds max_len characters."""
+    val = (value or "").strip()
+    if len(val) > max_len:
+        raise HTTPException(status_code=422, detail=f"{field} exceeds maximum length ({max_len} chars)")
+    return val
+
+
+# ─── In-process path-based rate limiter ───────────────────────────────────────
     """Sliding-window rate limiter applied to every route by path category."""
     path = request.url.path
     if path in _SKIP_PATHS:
