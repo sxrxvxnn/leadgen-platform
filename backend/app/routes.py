@@ -9556,3 +9556,68 @@ async def mark_all_notifications_seen(authorization: str = Header(...)):
     supabase.table("job_change_alerts").update({"seen": True}).eq("user_id", user_id).eq("seen", False).execute()
     supabase.table("company_alerts").update({"seen": True}).eq("user_id", user_id).eq("seen", False).execute()
     return {"ok": True}
+
+
+# ─── COMPANY AUTOCOMPLETE ─────────────────────────────────────────────────────
+
+@router.get("/company-suggest")
+async def company_suggest(q: str = ""):
+    """Company name autocomplete. Proxies Clearbit → DDG fallback.
+    Returns [{name, domain, logo}] — no auth required (public suggestions)."""
+    import requests as _rq
+    q = q.strip()
+    if not q or len(q) < 2:
+        return []
+
+    # 1. Try Clearbit autocomplete (may still work server-side)
+    try:
+        r = _rq.get(
+            "https://autocomplete.clearbit.com/v1/companies/suggest",
+            params={"query": q},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, list) and data:
+                return [
+                    {
+                        "name":   c.get("name", ""),
+                        "domain": c.get("domain", ""),
+                        "logo":   c.get("logo", ""),
+                    }
+                    for c in data[:7]
+                ]
+    except Exception:
+        pass
+
+    # 2. DDG fallback — search for company and extract name/domain
+    results = []
+    try:
+        from ddgs import DDGS
+        with DDGS() as d:
+            for hit in d.text(f'{q} company site:linkedin.com/company OR site:crunchbase.com', max_results=8):
+                title = (hit.get("title") or "").split(" - ")[0].split(" | ")[0].strip()
+                href  = hit.get("href") or ""
+                # Extract domain from the result URL
+                from urllib.parse import urlparse as _up
+                _parsed = _up(href)
+                domain  = _parsed.netloc.lower().replace("www.", "")
+                if not title or len(title) > 60:
+                    continue
+                if "linkedin.com" in domain or "crunchbase.com" in domain:
+                    # Extract company name from LinkedIn URL: linkedin.com/company/beagle-security
+                    _li = re.search(r'linkedin\.com/company/([a-z0-9-]+)', href)
+                    if _li:
+                        domain = ""  # don't set linkedin as the company domain
+                results.append({
+                    "name":   title,
+                    "domain": domain,
+                    "logo":   f"https://logo.clearbit.com/{domain}" if domain else "",
+                })
+                if len(results) >= 6:
+                    break
+    except Exception:
+        pass
+
+    return results
