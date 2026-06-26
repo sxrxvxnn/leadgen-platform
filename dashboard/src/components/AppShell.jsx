@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import BottomNav from './BottomNav'
+import MobileHeader from './MobileHeader'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { getActiveAnnouncements } from '../services/api'
 
 const KIND_STYLE = {
@@ -12,6 +15,7 @@ const KIND_STYLE = {
 
 export default function AppShell() {
   const [banners, setBanners] = useState([])
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const dismissed = JSON.parse(sessionStorage.getItem('dismissed_banners') || '[]')
@@ -31,12 +35,23 @@ export default function AppShell() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Sidebar />
-      <main style={{ flex: 1, minWidth: 0, overflowX: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {!isMobile && <Sidebar />}
+
+      <main style={{
+        flex: 1,
+        minWidth: 0,
+        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        // On mobile, content starts below the fixed header
+        paddingTop: isMobile ? 52 : 0,
+      }}>
+        {isMobile && <MobileHeader />}
+
         {banners.map(ann => {
           const s = KIND_STYLE[ann.kind] || KIND_STYLE.info
           return (
-            <div key={ann.id} style={{ background: s.bg, borderBottom: `1px solid ${s.border}`, padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            <div key={ann.id} style={{ background: s.bg, borderBottom: `1px solid ${s.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
               <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: s.color, fontWeight: 600, flex: 1, margin: 0 }}>
                 {ann.title}{ann.body ? ` — ${ann.body}` : ''}
               </p>
@@ -47,7 +62,10 @@ export default function AppShell() {
             </div>
           )
         })}
+
         <Outlet />
+
+        {isMobile && <BottomNav />}
       </main>
     </div>
   )
