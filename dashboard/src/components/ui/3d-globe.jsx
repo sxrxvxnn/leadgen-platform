@@ -83,7 +83,9 @@ export default function Globe({ style }) {
   }, [])
 
   useEffect(() => {
-    import('react-globe.gl').then(m => setGlobeGL(() => m.default))
+    import('react-globe.gl')
+      .then(m => setGlobeGL(() => m.default))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
