@@ -24,23 +24,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Heavy 3D/globe lib — isolate so it doesn't bloat other chunks
-          if (id.includes('react-globe') || id.includes('three') || id.includes('cobe')) {
-            return 'vendor-globe'
-          }
-          // React core
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
-            return 'vendor-react'
-          }
-          // Routing + auth
-          if (id.includes('react-router') || id.includes('react-router-dom')) {
-            return 'vendor-router'
-          }
-          // Animation libs
-          if (id.includes('motion') || id.includes('framer-motion')) {
-            return 'vendor-motion'
-          }
-          // All other node_modules → one vendor chunk
+          // All node_modules → one vendor chunk (avoids circular dependency crashes)
           if (id.includes('node_modules')) {
             return 'vendor'
           }
