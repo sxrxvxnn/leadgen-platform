@@ -88,6 +88,56 @@ function applyStats(stats) {
 
 function invalidateStatsCache() { chrome.storage.session.remove('statsCache') }
 
+// ─── OAUTH ────────────────────────────────────────────────────
+
+const SUPABASE_URL = 'https://gzvrjsacjjalfrjmozjp.supabase.co'
+
+async function handleOAuth(provider) {
+  const btn = document.getElementById(provider === 'google' ? 'googleBtn' : 'linkedinBtn')
+  const errEl = document.getElementById('loginError')
+  if (btn) { btn.disabled = true; btn.querySelector('span:last-child') && (btn.lastChild.textContent = '') }
+  errEl.className = 'err-msg'
+
+  const redirectUrl = chrome.identity.getRedirectURL('oauth')
+  const supabaseProvider = provider === 'linkedin' ? 'linkedin_oidc' : provider
+  const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=${supabaseProvider}&redirect_to=${encodeURIComponent(redirectUrl)}&skip_http_redirect=true`
+
+  chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
+    if (btn) btn.disabled = false
+    if (chrome.runtime.lastError || !responseUrl) {
+      errEl.textContent = 'Sign-in cancelled or failed. Try again.'
+      errEl.className = 'err-msg show'
+      return
+    }
+    try {
+      const url = new URL(responseUrl)
+      // Tokens may be in hash fragment or as query params depending on Supabase version
+      const params = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.search.slice(1))
+      const accessToken  = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      if (!accessToken) {
+        errEl.textContent = 'No token returned. Make sure this extension\'s redirect URL is added to Supabase.'
+        errEl.className = 'err-msg show'
+        return
+      }
+      let email = ''
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+        email = payload.email || ''
+      } catch {}
+      chrome.storage.local.set({ token: accessToken, refresh_token: refreshToken || '', userEmail: email }, () => {
+        initMain(accessToken, email)
+      })
+    } catch {
+      errEl.textContent = 'Error processing login. Try email sign-in instead.'
+      errEl.className = 'err-msg show'
+    }
+  })
+}
+
+document.getElementById('googleBtn').addEventListener('click', () => handleOAuth('google'))
+document.getElementById('linkedinBtn').addEventListener('click', () => handleOAuth('linkedin'))
+
 // ─── LOGIN ───────────────────────────────────────────────────
 
 document.getElementById('loginBtn').addEventListener('click', async () => {

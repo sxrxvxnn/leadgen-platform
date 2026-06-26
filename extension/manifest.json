@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Sonar",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Extract leads from LinkedIn and see pipeline data in Gmail — powered by Sonar.",
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "identity"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",

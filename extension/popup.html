@@ -3,31 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <title>Sonar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:      #0f0f0f;
-      --s1:      #161616;
-      --s2:      #1e1e1e;
-      --border:  #242424;
-      --b2:      #2e2e2e;
-      --text:    #ffffff;
-      --soft:    #aaaaaa;
-      --muted:   #555555;
-      --dim:     #333333;
-      --red:     #E7000B;
-      --red-dim: rgba(231,0,11,.08);
-      --red-glow:rgba(231,0,11,.22);
-      --green:   #22c55e;
-      --blue:    #60a5fa;
-      --amber:   #fbbf24;
+      --bg:       #ffffff;
+      --s1:       #f9fafb;
+      --s2:       #f3f4f6;
+      --border:   #e5e7eb;
+      --b2:       #d1d5db;
+      --text:     #111827;
+      --soft:     #374151;
+      --muted:    #6b7280;
+      --dim:      #9ca3af;
+      --red:      #E7000B;
+      --red-dim:  rgba(231,0,11,.08);
+      --red-glow: rgba(231,0,11,.18);
+      --green:    #16a34a;
+      --blue:     #2563eb;
+      --amber:    #d97706;
+      --linkedin: #0a66c2;
     }
 
     body {
       width: 340px;
       background: var(--bg);
-      font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', ui-monospace, monospace;
+      font-family: 'Host Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: var(--text);
       -webkit-font-smoothing: antialiased;
       overflow: hidden;
@@ -36,10 +40,10 @@
     .screen { display: none; }
     .screen.active { display: flex; flex-direction: column; }
 
-    /* ── SHARED HEADER ──────────────────────────────────────── */
+    /* ── HEADER ─────────────────────────────────────────────── */
     .hd {
-      display: flex; align-items: center; gap: 10px;
-      padding: 13px 16px;
+      display: flex; align-items: center; gap: 9px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
     }
@@ -51,135 +55,211 @@
       flex-shrink: 0;
     }
     .brand {
-      font-size: 12px; font-weight: 700;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px; font-weight: 800;
       letter-spacing: .14em; text-transform: uppercase; color: var(--text);
+    }
+    .hd-badge {
+      margin-left: auto;
+      font-family: 'Host Grotesk', sans-serif;
+      font-size: 10px; font-weight: 600; letter-spacing: .04em;
+      padding: 2px 8px; border-radius: 999px;
+      background: var(--red-dim); color: var(--red); border: 1px solid rgba(231,0,11,.18);
     }
     .online-dot {
       width: 6px; height: 6px; border-radius: 50%;
-      background: var(--dim); margin-left: auto; flex-shrink: 0; transition: background .2s;
+      background: var(--border); margin-left: auto; flex-shrink: 0; transition: background .2s;
     }
-    .online-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5); }
+    .online-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(22,163,74,.35); }
 
     /* ── LOGIN ──────────────────────────────────────────────── */
-    #loginScreen { min-height: 380px; }
-    .login-body { padding: 28px 18px 20px; flex: 1; display: flex; flex-direction: column; }
+    #loginScreen { min-height: 420px; }
+
+    .login-body {
+      padding: 24px 18px 20px; flex: 1;
+      display: flex; flex-direction: column;
+    }
+
     .login-headline {
-      font-family: 'Arial Narrow', 'Impact', Arial, sans-serif;
-      font-size: 42px; font-weight: 900; line-height: 1;
-      letter-spacing: .01em; text-transform: uppercase; color: var(--text);
-      margin-bottom: 4px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 38px; font-weight: 900; line-height: 1;
+      letter-spacing: -.01em; text-transform: uppercase; color: var(--text);
+      margin-bottom: 3px;
     }
     .login-headline em { color: var(--red); font-style: normal; }
-    .login-sub { font-size: 10px; color: var(--muted); letter-spacing: .06em; margin-bottom: 24px; }
-    .field { margin-bottom: 11px; }
-    .lbl { display: block; font-size: 8px; font-weight: 700; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+    .login-sub {
+      font-size: 12px; color: var(--muted); margin-bottom: 20px; font-weight: 500;
+    }
+
+    /* Social buttons */
+    .social-btns { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+    .btn-social {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 9px;
+      padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--soft);
+      font-family: 'Host Grotesk', sans-serif;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .btn-social:hover { background: var(--s1); border-color: var(--b2); color: var(--text); }
+    .btn-social:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-social svg { flex-shrink: 0; }
+    .btn-social.google:hover { border-color: #4285f4; }
+    .btn-social.linkedin:hover { border-color: var(--linkedin); }
+
+    /* Divider */
+    .divider {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .divider span {
+      font-size: 11px; color: var(--dim); font-weight: 500; letter-spacing: .04em;
+    }
+
+    /* Form */
+    .field { margin-bottom: 10px; }
+    .lbl {
+      display: block; font-size: 11px; font-weight: 600;
+      color: var(--soft); margin-bottom: 5px;
+    }
     .inp {
       width: 100%; padding: 9px 12px;
-      background: var(--s1); border: 1px solid var(--border); border-radius: 5px;
-      font-family: inherit; font-size: 12px; color: var(--text); outline: none;
-      transition: border-color .15s;
+      background: var(--s1); border: 1px solid var(--border); border-radius: 7px;
+      font-family: 'Host Grotesk', sans-serif; font-size: 13px; color: var(--text); outline: none;
+      transition: border-color .15s, box-shadow .15s;
     }
     .inp::placeholder { color: var(--dim); }
-    .inp:focus { border-color: var(--red); }
+    .inp:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-dim); }
+
     .err-msg {
-      font-size: 10px; color: #ef4444; margin-bottom: 12px; display: none;
-      padding: 7px 10px; background: rgba(239,68,68,.06); border: 1px solid rgba(239,68,68,.16); border-radius: 5px;
+      font-size: 11px; color: #dc2626; margin-bottom: 10px; display: none;
+      padding: 8px 11px; background: rgba(220,38,38,.05); border: 1px solid rgba(220,38,38,.2);
+      border-radius: 7px; font-weight: 500;
     }
     .err-msg.show { display: block; }
 
     /* ── BUTTONS ────────────────────────────────────────────── */
     .btn {
       width: 100%; display: flex; align-items: center; justify-content: space-between;
-      font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .06em;
-      text-transform: uppercase; padding: 10px 14px; border-radius: 6px;
+      font-family: 'Host Grotesk', sans-serif; font-size: 13px; font-weight: 700;
+      padding: 10px 14px; border-radius: 8px;
       cursor: pointer; transition: all .15s; border: none; text-align: left;
     }
-    .btn:disabled { opacity: .3; cursor: not-allowed; }
-    .btn.pri { background: var(--red); color: #fff; }
-    .btn.pri:hover:not(:disabled) { background: #c50009; box-shadow: 0 0 18px var(--red-glow); }
-    .btn.sec { background: var(--s1); color: var(--soft); border: 1px solid var(--border); margin-top: 7px; }
-    .btn.sec:hover:not(:disabled) { border-color: var(--b2); color: var(--text); }
-    .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--border); margin-top: 7px; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn.pri { background: var(--red); color: #fff; margin-top: 8px; }
+    .btn.pri:hover:not(:disabled) { background: #c50009; box-shadow: 0 4px 16px var(--red-glow); }
+    .btn.sec {
+      background: var(--s1); color: var(--soft);
+      border: 1px solid var(--border); margin-top: 6px;
+    }
+    .btn.sec:hover:not(:disabled) { border-color: var(--b2); color: var(--text); background: var(--s2); }
+    .btn.ghost {
+      background: none; color: var(--muted);
+      border: 1px solid var(--border); margin-top: 6px;
+    }
     .btn.ghost:hover:not(:disabled) { border-color: var(--b2); color: var(--soft); }
 
     /* ── MAIN SCREEN ────────────────────────────────────────── */
-    #mainScreen { min-height: 460px; }
+    #mainScreen { min-height: 440px; }
 
-    /* Stats row */
+    /* Stats */
     .stats-row {
       display: grid; grid-template-columns: repeat(3, 1fr);
       border-bottom: 1px solid var(--border);
     }
     .stat-cell {
       padding: 12px 14px; border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; gap: 3px;
+      display: flex; flex-direction: column; gap: 2px;
     }
     .stat-cell:last-child { border-right: none; }
-    .stat-val { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -.02em; line-height: 1; }
-    .stat-lbl { font-size: 8px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+    .stat-val {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 22px; font-weight: 800; color: var(--text);
+      letter-spacing: -.02em; line-height: 1;
+    }
+    .stat-lbl {
+      font-size: 9px; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+    }
 
     /* Page badge */
     .page-strip {
       display: flex; align-items: center; gap: 8px;
-      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      padding: 9px 16px; border-bottom: 1px solid var(--border);
       background: var(--s1);
     }
-    .page-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); flex-shrink: 0; }
-    .page-dot.li { background: #0077b5; }
+    .page-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .page-dot.li { background: var(--linkedin); }
     .page-dot.ok { background: var(--green); }
-    #pageTypeLabel { font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-    #pageTypeLabel.li { color: #0077b5; }
+    #pageTypeLabel {
+      font-size: 10px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    #pageTypeLabel.li { color: var(--linkedin); }
     #pageTypeLabel.ok { color: var(--green); }
 
-    /* Profile card (shown on profile pages) */
+    /* Profile card */
     .profile-card {
-      padding: 13px 16px; border-bottom: 1px solid var(--border);
-      display: none;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      display: none; background: var(--bg);
     }
     .profile-card.show { display: block; }
     .pc-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
-    .pc-sub { font-size: 10px; color: var(--muted); }
+    .pc-sub { font-size: 11px; color: var(--muted); }
     .pc-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
-    .pc-badge { font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid; }
-    .pc-badge.in { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.25); color: var(--green); }
+    .pc-badge {
+      font-size: 9px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid;
+    }
+    .pc-badge.in    { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25); color: var(--green); }
     .pc-badge.stage { background: var(--s2); border-color: var(--border); color: var(--muted); }
-    .pc-badge.icp-hi { background: rgba(34,197,94,.08); border-color: rgba(34,197,94,.25); color: var(--green); }
-    .pc-badge.icp-md { background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.25); color: var(--amber); }
+    .pc-badge.icp-hi { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.25); color: var(--green); }
+    .pc-badge.icp-md { background: rgba(217,119,6,.08); border-color: rgba(217,119,6,.25); color: var(--amber); }
 
     /* Status message */
     .status-msg {
-      font-size: 11px; line-height: 1.5; padding: 9px 12px; border-radius: 6px;
-      display: none; border: 1px solid transparent; margin: 0 16px 0; font-family: inherit;
+      font-size: 12px; line-height: 1.5; padding: 9px 12px; border-radius: 7px;
+      display: none; border: 1px solid transparent; margin: 0 16px; font-weight: 500;
     }
     .status-msg.show { display: block; }
-    .status-msg.ok { background: rgba(34,197,94,.06); border-color: rgba(34,197,94,.18); color: var(--green); }
-    .status-msg.err { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.16); color: #ef4444; }
+    .status-msg.ok  { background: rgba(22,163,74,.06); border-color: rgba(22,163,74,.2); color: var(--green); }
+    .status-msg.err { background: rgba(220,38,38,.05); border-color: rgba(220,38,38,.2); color: #dc2626; }
 
     /* Body */
-    .main-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+    .main-body {
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1;
+    }
 
     .tip {
-      font-size: 9px; color: var(--muted); line-height: 1.65; padding: 8px 11px;
-      background: var(--s1); border-radius: 5px; border-left: 2px solid var(--border);
+      font-size: 11px; color: var(--muted); line-height: 1.6; padding: 9px 12px;
+      background: var(--s1); border-radius: 7px; border-left: 3px solid var(--border);
       display: none;
     }
 
-    /* ── FOOTER ─────────────────────────────────────────────── */
+    /* Footer */
     .ft {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 11px 16px 13px; border-top: 1px solid var(--border);
+      padding: 10px 16px 12px; border-top: 1px solid var(--border);
     }
     .ft-link {
-      background: none; border: none; font-family: inherit; font-size: 10px;
-      letter-spacing: .04em; color: var(--muted); cursor: pointer; padding: 0;
+      background: none; border: none;
+      font-family: 'Host Grotesk', sans-serif;
+      font-size: 11px; font-weight: 600;
+      color: var(--muted); cursor: pointer; padding: 0;
       transition: color .15s;
     }
-    .ft-link:hover { color: var(--soft); }
+    .ft-link:hover { color: var(--text); }
 
-    @keyframes fade-in { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
-    .login-body, .main-body, .stats-row { animation: fade-in .22s ease both; }
-    .stats-row { animation-delay: .04s; }
-    .main-body { animation-delay: .08s; }
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .login-body  { animation: fade-in .2s ease both; }
+    .stats-row   { animation: fade-in .2s ease .04s both; }
+    .main-body   { animation: fade-in .2s ease .08s both; }
   </style>
 </head>
 <body>
@@ -189,23 +269,55 @@
   <div class="hd">
     <div class="logo">
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.5"/>
-        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.85"/>
+        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.6"/>
+        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.9"/>
         <circle cx="8" cy="8" r="1.5" fill="#fff"/>
         <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
       </svg>
     </div>
     <span class="brand">Sonar</span>
-    <div class="online-dot" id="loginDot"></div>
+    <span class="hd-badge">Beta</span>
   </div>
 
   <div class="login-body">
     <h1 class="login-headline">Sign<br/><em>in.</em></h1>
     <p class="login-sub">Connect to your Sonar pipeline</p>
+
+    <!-- Social login buttons -->
+    <div class="social-btns">
+      <button class="btn-social google" id="googleBtn">
+        <!-- Google "G" icon -->
+        <svg width="17" height="17" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
+          <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
+          <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" fill="#FBBC05"/>
+          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <button class="btn-social linkedin" id="linkedinBtn">
+        <!-- LinkedIn icon -->
+        <svg width="17" height="17" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="18" height="18" rx="3" fill="#0A66C2"/>
+          <path d="M5.12 7.27H3V15h2.12V7.27ZM4.06 6.38c.68 0 1.23-.56 1.23-1.25a1.24 1.24 0 1 0-2.46 0c0 .69.55 1.25 1.23 1.25ZM15 15h-2.12v-3.73c0-.89-.02-2.03-1.24-2.03-1.24 0-1.43.97-1.43 1.97V15H8.1V7.27h2.03v1.04h.03c.28-.54.97-1.11 2-1.11 2.14 0 2.54 1.41 2.54 3.24V15Z" fill="white"/>
+        </svg>
+        Continue with LinkedIn
+      </button>
+    </div>
+
+    <div class="divider"><span>or</span></div>
+
     <div class="err-msg" id="loginError"></div>
-    <div class="field"><label class="lbl">Email</label><input class="inp" type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email" /></div>
-    <div class="field"><label class="lbl">Password</label><input class="inp" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" /></div>
-    <button class="btn pri" id="loginBtn" style="margin-top:10px"><span>Sign in</span><span>→</span></button>
+    <div class="field">
+      <label class="lbl">Email</label>
+      <input class="inp" type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label class="lbl">Password</label>
+      <input class="inp" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="btn pri" id="loginBtn"><span>Sign in</span><span>→</span></button>
   </div>
 </div>
 
@@ -214,8 +326,8 @@
   <div class="hd">
     <div class="logo">
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.5"/>
-        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.85"/>
+        <circle cx="8" cy="8" r="7" stroke="#fff" stroke-width="1.3" opacity="0.6"/>
+        <circle cx="8" cy="8" r="4" stroke="#fff" stroke-width="1.3" opacity="0.9"/>
         <circle cx="8" cy="8" r="1.5" fill="#fff"/>
         <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
       </svg>
@@ -246,22 +358,21 @@
     <span id="pageTypeLabel">Detecting page…</span>
   </div>
 
-  <!-- Profile card (shown on profile pages) -->
+  <!-- Profile card -->
   <div class="profile-card" id="profileCard">
     <div class="pc-name" id="pcName">—</div>
     <div class="pc-sub" id="pcSub"></div>
     <div class="pc-badges" id="pcBadges"></div>
   </div>
 
-  <!-- Status messages -->
-  <div style="padding:0 0 0 0">
+  <!-- Status -->
+  <div style="padding: 10px 0 4px">
     <div class="status-msg" id="statusMsg"></div>
   </div>
 
-  <!-- Body -->
+  <!-- Actions -->
   <div class="main-body">
     <p class="tip" id="peopleTip">Visit the company page first to capture size &amp; followers, then come back to extract people.</p>
-
     <button class="btn sec" id="enrichProfileBtn" style="display:none">
       <span>Sync full profile data</span><span>↑</span>
     </button>
