@@ -95,14 +95,29 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             if pricing:
                 pricing_text = pricing.get_text(separator=' ', strip=True)[:500]
 
-            login_keywords = ['sign in', 'log in', 'login', 'sign up', 'get started',
-                             'start free', 'try free', 'create account', 'register',
-                             'free trial', 'start trial', 'get access', 'book a demo',
-                             'request demo', 'schedule demo']
-            has_login = any(k.lower() in full_text.lower() for k in login_keywords)
+            # Only true login/auth signals — exclude demo CTAs which are common on service sites
+            login_strong_keywords = [
+                'sign in', 'log in', 'login', 'sign up',
+                'create account', 'register',
+                'free trial', 'start free trial', 'try for free',
+                'start free', 'try free',
+            ]
+            # Pricing signals are the most reliable product indicator
+            pricing_keywords = [
+                'per month', 'per year', '/month', '/year',
+                'billed monthly', 'billed annually',
+                'pricing plan', 'choose a plan', 'upgrade plan',
+                'subscription plan', 'monthly plan', 'annual plan',
+                'per user', 'per seat',
+            ]
+            full_lower = full_text.lower()
+            has_login = any(k in full_lower for k in login_strong_keywords)
+            has_pricing_text = any(k in full_lower for k in pricing_keywords)
+            if has_pricing_text and not pricing_text:
+                pricing_text = "PRICING SIGNALS FOUND IN PAGE TEXT"
             login_buttons = soup.find_all(
                 ['a', 'button'],
-                string=re.compile(r'sign in|log in|login|sign up|get started|start free|try free|free trial|start trial|get access', re.I)
+                string=re.compile(r'sign in|log in|login|sign up|start free|try free|free trial|start trial|create account', re.I)
             )
             has_login = has_login or len(login_buttons) > 0
 
@@ -151,6 +166,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             'pricing': pricing_text,
             'full_text': full_text,
             'has_login_detected': has_login,
+            'has_pricing_detected': has_pricing_text if not fast else False,
             'compliance_detected': found_compliance,
             'meta_description': meta_description,
             'first_para': first_para,
@@ -162,7 +178,8 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
 
 
 def build_analysis_prompt(website_data: dict, company_name: str) -> str:
-    pre_detected_login = website_data.get('has_login_detected', False)
+    pre_detected_login   = website_data.get('has_login_detected', False)
+    pre_detected_pricing = website_data.get('has_pricing_detected', False)
     pre_detected_compliance = website_data.get('compliance_detected', [])
 
     content = f"""HEADER/NAV:
@@ -170,18 +187,22 @@ def build_analysis_prompt(website_data: dict, company_name: str) -> str:
 {website_data.get('nav', '')[:300]}
 
 HERO/MAIN CONTENT:
-{website_data.get('hero', '')[:1000]}
+{website_data.get('hero', '')[:1200]}
 
 FOOTER:
 {website_data.get('footer', '')[:500]}
 
 PRICING SECTION:
-{website_data.get('pricing', '')[:300]}"""
+{website_data.get('pricing', '')[:500]}
+
+ADDITIONAL PAGE TEXT (first 800 chars):
+{website_data.get('full_text', '')[:800]}"""
 
     return f"""Analyze the website of company "{company_name}".
 
-FACTS CONFIRMED BY HTML SCRAPING (treat as 100% accurate):
-- Login/signup buttons found: {pre_detected_login}
+FACTS CONFIRMED BY HTML SCRAPING (treat as ground truth):
+- Actual login/signup buttons detected: {pre_detected_login}
+- Subscription pricing text detected (/month, /year, per-seat, etc.): {pre_detected_pricing}
 - Compliance standards found: {pre_detected_compliance}
 
 WEBSITE CONTENT:
@@ -189,27 +210,45 @@ WEBSITE CONTENT:
 
 Return ONLY this JSON (no markdown, no explanation):
 {{
-  "company_type": "Product" or "Services" or "Hybrid",
-  "company_type_reason": "one sentence",
+  "company_type": "Product" or "Service" or "Hybrid",
+  "company_type_reason": "one sentence explaining the evidence",
   "classification": "one of: Fintech, Healthtech, SaaS, Cybersecurity, IT Services, E-commerce, Edtech, Logistics, Manufacturing, Banking, Insurance, VC / Investment, Media, Consulting, Retail, Real Estate, Government, Non-profit, Other",
   "is_saas": true or false,
+  "is_saas_reason": "one sentence",
   "target_market": "B2B" or "B2C" or "Both" or "Unknown",
   "has_login": true or false,
   "login_evidence": "what login elements were found",
   "compliance": ["array of compliance standards"],
   "compliance_evidence": "what compliance text was found",
-  "products_or_services": ["list max 5"],
-  "website_summary": "2-3 sentence summary"
+  "products_or_services": ["list the actual product names or service names, max 5, be specific"],
+  "website_summary": "2-3 sentence summary of what the company does"
 }}
 
-CLASSIFICATION RULES (follow exactly):
-- "Product" = company sells a software product subscribers pay to USE (has pricing plans, trials, subscriptions). The customer buys access to the software itself.
-- "Service" = company sells time/expertise/people. They build custom software, consult, staff teams, do outsourcing. The customer buys the work, not a product.
-- "Hybrid" = company BOTH sells its own software product (with pricing) AND offers services/consulting.
-- Most Indian IT companies (Kerala, Bangalore etc.) are Service even if they say "platform" or "solution" — these words mean nothing without a pricing page.
-- If login pre-detected as true AND pricing/trial language exists → Product or Hybrid
-- If login pre-detected as true but it is a CLIENT PORTAL for a services firm → still Service
-- Always include all pre-detected compliance in compliance array"""
+CLASSIFICATION RULES — read every rule carefully:
+
+company_type:
+- "Product" = the company sells software that customers pay to ACCESS or USE. Must have: pricing plans, free trial, subscription, or self-serve sign-up. The customer pays to use the product, not to hire the company.
+- "Service" = the company sells expertise, time, or people. They build things FOR clients (custom software, consulting, staffing, outsourcing, digital agencies). No self-serve pricing — customers contact them for a quote.
+- "Hybrid" = the company BOTH sells its own priced product AND offers professional services/consulting. Both revenue streams are clearly present.
+- When uncertain between Product and Service: if there is NO subscription pricing page and NO self-serve trial → default to Service.
+- Most Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) are Service even if they mention "platform" or "solution" — without a pricing page these words mean nothing.
+
+is_saas:
+- true ONLY when ALL of these are true: (1) company_type is Product or Hybrid, (2) the product is delivered over the internet/cloud, (3) customers pay on a subscription basis (monthly/annual/per-seat pricing).
+- false when: company_type is Service, OR the product is on-premise/downloadable/one-time license, OR pricing is enterprise-only with no self-serve plans.
+- IMPORTANT: "Service" company_type always means is_saas must be false. A consulting firm is never SaaS.
+
+classification:
+- Use "SaaS" only as the classification when the primary product is a generic cloud SaaS platform and no other industry label fits better.
+- Prefer the specific vertical: a SaaS cybersecurity company → "Cybersecurity", not "SaaS". A SaaS HR tool → "Other" or best fit.
+- "IT Services" = outsourcing, consulting, staffing, custom software development firms.
+
+products_or_services:
+- List the ACTUAL named products or specific services the company offers (e.g. "Vulnerability scanner", "Staff augmentation", "HRMS platform", "Mobile app development").
+- Do NOT list generic buzzwords like "Digital transformation", "Innovation", "Solutions". Be specific.
+- Always include all pre-detected compliance in compliance array
+- If login pre-detected as true AND pricing pre-detected as true → Product or Hybrid (strong signal)
+- If login pre-detected as true BUT pricing pre-detected as false → could be a client portal for a Service company — look for service keywords before defaulting to Product"""
 
 
 def parse_ai_response(content: str) -> dict:
@@ -227,6 +266,17 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
     if website_data.get('compliance_detected'):
         existing = result.get('compliance', [])
         result['compliance'] = list(set(website_data['compliance_detected'] + existing))
+
+    # Enforce consistency: Service companies are never SaaS
+    company_type = result.get('company_type', '')
+    if company_type == 'Service':
+        result['is_saas'] = False
+
+    # If no subscription pricing detected and company_type is still Product, verify
+    if not website_data.get('has_pricing_detected') and company_type == 'Product':
+        # Downgrade confidence — let the caller decide; don't force-flip here
+        result['_low_pricing_confidence'] = True
+
     return result
 
 
@@ -393,8 +443,12 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         ]).lower()
 
     # ── Structural signals (most reliable) ────────────────────────
-    has_login   = bool(website_data and website_data.get("has_login_detected"))
-    has_pricing = bool(website_data and website_data.get("pricing", "").strip())
+    has_login        = bool(website_data and website_data.get("has_login_detected"))
+    # has_pricing: either a dedicated pricing section was scraped OR subscription text found in page
+    has_pricing      = bool(website_data and (
+        website_data.get("pricing", "").strip() or
+        website_data.get("has_pricing_detected")
+    ))
     site_loaded = bool(website_data)  # could we even fetch the site?
 
     # ── Product signals ────────────────────────────────────────────
