@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, Component } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import './Landing.css'
@@ -9,8 +9,14 @@ import { InfiniteMarquee } from '../components/ui/InfiniteMarquee'
 import { WobbleCard, BentoCard } from '../components/ui/WobbleCard'
 import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
-import Globe, { LANDING_MARKERS } from '../components/Globe'
+import Globe3D from '../components/ui/3d-globe'
 import { MacbookScroll } from '../components/ui/MacbookScroll'
+
+class GlobeBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false } }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? null : this.props.children }
+}
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -566,7 +572,9 @@ export default function Landing() {
               </div>
             </div>
             <div className="lp-globe-wrap">
-              <Globe size={480} markers={LANDING_MARKERS} markerColor={[0.906, 0, 0.043]} />
+              <GlobeBoundary>
+                <Globe3D style={{ width: '100%' }} />
+              </GlobeBoundary>
             </div>
           </motion.div>
         </div>
