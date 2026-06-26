@@ -2494,7 +2494,7 @@ async def analyze_company_website(
             )
 
         # ── Step 4: merge rule result with AI result ────────────────
-        # Normalize AI "Services" → "Service" for consistency
+        # Normalize "Services" → "Service" for consistency
         ai_type = result.get("company_type", "")
         if ai_type == "Services": result["company_type"] = "Service"
 
@@ -2507,6 +2507,16 @@ async def analyze_company_website(
         else:
             result["company_type_confidence"] = "AI"
 
+        # Enforce logical consistency: Service → is_saas must be false
+        is_saas_val = result.get("is_saas")
+        if final_type == "Service":
+            is_saas_val = False
+        elif is_saas_val is None:
+            # If no AI answer, infer from pricing detection
+            has_pricing_det = bool(website_data and website_data.get("has_pricing_detected"))
+            is_saas_val = bool(final_type in ("Product", "Hybrid") and has_pricing_det)
+        result["is_saas"] = is_saas_val
+
         # Merge compliance from website scraping + AI
         scraped_compliance = website_data.get("compliance_detected", []) if website_data else []
         ai_compliance      = result.get("compliance", [])
@@ -2518,13 +2528,18 @@ async def analyze_company_website(
         # ── Step 5: save to DB ─────────────────────────────────────
         update_data = {}
         if final_type:
-            update_data["company_type"] = final_type          # Product / Service / Hybrid
+            update_data["company_type"] = final_type
         if merged_compliance:
             update_data["compliance"] = ", ".join(merged_compliance)
         if result.get("website_summary") and not company.get("description"):
             update_data["description"] = result["website_summary"]
-        if result.get("is_saas") is not None:
-            update_data["is_saas"] = bool(result["is_saas"])
+        update_data["is_saas"] = bool(is_saas_val) if is_saas_val is not None else False
+
+        # Save products_or_services to specialties (only if not already set by LinkedIn)
+        pos = result.get("products_or_services", [])
+        if pos and isinstance(pos, list) and not company.get("specialties"):
+            update_data["specialties"] = ", ".join(str(p) for p in pos[:5] if p)
+
         if update_data:
             supabase.table("companies").update(update_data).eq("id", company_id).eq("user_id", user_id).execute()
 
