@@ -469,7 +469,7 @@ function renderLead(lead) {
       <div class="sg-email">${lead.email || ''}</div>
       <div class="sg-badges">
         <span class="sg-badge sg-badge-in">In Sonar</span>
-        ${lead.stage ? `<span class="sg-badge sg-badge-stage">${lead.stage}</span>` : ''}
+        ${lead.status ? `<span class="sg-badge sg-badge-stage">${lead.status}</span>` : ''}
         ${lead.icp_score != null ? `<span class="sg-badge sg-badge-${icpCls}" title="${lead.icp_score_reason || ''}">ICP ${lead.icp_score}</span>` : ''}
         ${lead.starred ? `<span class="sg-badge sg-badge-score-hi">Starred</span>` : ''}
       </div>
