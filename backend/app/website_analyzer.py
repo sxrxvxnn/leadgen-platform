@@ -42,16 +42,54 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
         )
         meta_description = (meta_desc_tag.get('content', '') if meta_desc_tag else '').strip()
 
-        # Extract LinkedIn company URL from page links (before soup is modified)
+        # ── HTML-level signals (before decompose, anchor tags survive) ────────
         linkedin_url_in_html = None
+        has_app_store_link  = False
+        has_play_store_link = False
+        has_web_app_link    = False
+
+        try:
+            from urllib.parse import urlparse as _urlparse
+            _parsed    = _urlparse(url)
+            _base_dom  = _parsed.netloc.replace('www.', '').split(':')[0]  # e.g. "way.com"
+        except Exception:
+            _base_dom = ''
+
         for a_tag in soup.find_all('a', href=True):
-            href = a_tag.get('href', '')
-            m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
-            if m:
-                slug = m.group(1)
-                if slug not in ('linkedin', 'company', 'showcase', 'school', ''):
-                    linkedin_url_in_html = f'https://www.linkedin.com/company/{slug}/'
-                    break
+            href = a_tag.get('href', '') or ''
+
+            # LinkedIn company URL
+            if not linkedin_url_in_html:
+                m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+                if m:
+                    slug = m.group(1)
+                    if slug not in ('linkedin', 'company', 'showcase', 'school', ''):
+                        linkedin_url_in_html = f'https://www.linkedin.com/company/{slug}/'
+
+            # App Store (iOS)
+            if not has_app_store_link and re.search(r'apps\.apple\.com|itunes\.apple\.com', href, re.I):
+                has_app_store_link = True
+
+            # Google Play Store
+            if not has_play_store_link and re.search(r'play\.google\.com/store/apps', href, re.I):
+                has_play_store_link = True
+
+            # Web app: link to app./dashboard./console./portal. subdomain of this domain
+            if not has_web_app_link and _base_dom:
+                if re.search(
+                    r'https?://(app|dashboard|portal|workspace|console|my|account)\.' + re.escape(_base_dom),
+                    href, re.I
+                ):
+                    has_web_app_link = True
+
+            # Web app: internal link to /login /signin /dashboard /app /console /workspace
+            if not has_web_app_link and re.search(
+                r'(?:^|/)(?:login|signin|sign-in|sign_in|signup|sign-up|register|dashboard|app|console|workspace)(?:/|$|\?)',
+                href, re.I
+            ):
+                has_web_app_link = True
+
+        has_mobile_app = has_app_store_link or has_play_store_link
 
         for tag in soup(['script', 'style', 'noscript', 'svg', 'img']):
             tag.decompose()
@@ -167,6 +205,10 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             'full_text': full_text,
             'has_login_detected': has_login,
             'has_pricing_detected': has_pricing_text if not fast else False,
+            'has_mobile_app': has_mobile_app,
+            'has_app_store_link': has_app_store_link,
+            'has_play_store_link': has_play_store_link,
+            'has_web_app_link': has_web_app_link,
             'compliance_detected': found_compliance,
             'meta_description': meta_description,
             'first_para': first_para,
@@ -180,6 +222,10 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
 def build_analysis_prompt(website_data: dict, company_name: str) -> str:
     pre_detected_login   = website_data.get('has_login_detected', False)
     pre_detected_pricing = website_data.get('has_pricing_detected', False)
+    pre_detected_mobile  = website_data.get('has_mobile_app', False)
+    pre_detected_webapp  = website_data.get('has_web_app_link', False)
+    pre_detected_appstore  = website_data.get('has_app_store_link', False)
+    pre_detected_playstore = website_data.get('has_play_store_link', False)
     pre_detected_compliance = website_data.get('compliance_detected', [])
 
     content = f"""HEADER/NAV:
@@ -200,9 +246,13 @@ ADDITIONAL PAGE TEXT (first 800 chars):
 
     return f"""Analyze the website of company "{company_name}".
 
-FACTS CONFIRMED BY HTML SCRAPING (treat as ground truth):
-- Actual login/signup buttons detected: {pre_detected_login}
-- Subscription pricing text detected (/month, /year, per-seat, etc.): {pre_detected_pricing}
+FACTS CONFIRMED BY HTML SCRAPING (treat as 100% ground truth — these are from actual HTML links, not guesses):
+- Login/signup page or button found: {pre_detected_login}
+- Subscription pricing text found (/month, /year, per-seat, billed annually): {pre_detected_pricing}
+- iOS App Store link found on page: {pre_detected_appstore}
+- Google Play Store link found on page: {pre_detected_playstore}
+- Mobile app present (App Store OR Play Store): {pre_detected_mobile}
+- Web app link found (app.domain, /dashboard, /login, /console): {pre_detected_webapp}
 - Compliance standards found: {pre_detected_compliance}
 
 WEBSITE CONTENT:
@@ -224,19 +274,21 @@ Return ONLY this JSON (no markdown, no explanation):
   "website_summary": "2-3 sentence summary of what the company does"
 }}
 
-CLASSIFICATION RULES — read every rule carefully:
+CLASSIFICATION RULES — follow exactly:
 
 company_type:
-- "Product" = the company sells software that customers pay to ACCESS or USE. Must have: pricing plans, free trial, subscription, or self-serve sign-up. The customer pays to use the product, not to hire the company.
-- "Service" = the company sells expertise, time, or people. They build things FOR clients (custom software, consulting, staffing, outsourcing, digital agencies). No self-serve pricing — customers contact them for a quote.
-- "Hybrid" = the company BOTH sells its own priced product AND offers professional services/consulting. Both revenue streams are clearly present.
-- When uncertain between Product and Service: if there is NO subscription pricing page and NO self-serve trial → default to Service.
-- Most Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) are Service even if they mention "platform" or "solution" — without a pricing page these words mean nothing.
+- "Product" = the company has built software (web app, mobile app, SaaS platform) that end-users or businesses USE directly. They own the product. Signals: App Store/Play Store links, web app login, self-serve signup, subscription pricing. The customer pays to access the product.
+- "Service" = the company sells expertise, time, or people. They BUILD things for clients or provide consulting/staffing/outsourcing. No product of their own that customers use. Customers contact them for a quote, not self-serve.
+- "Hybrid" = company BOTH has its own software product AND offers services/consulting. Both must be clearly present.
+- Mobile app detected (App Store or Play Store link) → STRONG Product signal. Use "Product" unless clear evidence they built the app for a client.
+- Web app link detected (/login, /dashboard, app.domain.com) → STRONG Product signal. Same exception for client portals.
+- Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) that say "platform" or "solution" WITHOUT a login link or app link → Service (these are marketing words, not products).
 
 is_saas:
-- true ONLY when ALL of these are true: (1) company_type is Product or Hybrid, (2) the product is delivered over the internet/cloud, (3) customers pay on a subscription basis (monthly/annual/per-seat pricing).
-- false when: company_type is Service, OR the product is on-premise/downloadable/one-time license, OR pricing is enterprise-only with no self-serve plans.
-- IMPORTANT: "Service" company_type always means is_saas must be false. A consulting firm is never SaaS.
+- true when: company_type is Product or Hybrid AND the product is cloud-delivered AND subscription pricing exists (monthly/annual/per-seat). Mobile apps with subscription or in-app purchases = SaaS.
+- true also when: App Store or Play Store link detected AND the app has subscription tiers.
+- false when: company_type is Service (always), OR product is downloadable/one-time license/on-premise, OR no pricing model is visible.
+- IMPORTANT: Service = is_saas must be false, no exceptions.
 
 classification:
 - Use "SaaS" only as the classification when the primary product is a generic cloud SaaS platform and no other industry label fits better.
@@ -260,22 +312,29 @@ def parse_ai_response(content: str) -> dict:
 
 
 def force_override_with_scraped(result: dict, website_data: dict) -> dict:
-    """Always override AI result with ground truth HTML scraping data."""
+    """Override AI result with hard ground-truth facts from HTML scraping."""
     if website_data.get('has_login_detected'):
         result['has_login'] = True
     if website_data.get('compliance_detected'):
         existing = result.get('compliance', [])
         result['compliance'] = list(set(website_data['compliance_detected'] + existing))
 
-    # Enforce consistency: Service companies are never SaaS
-    company_type = result.get('company_type', '')
-    if company_type == 'Service':
-        result['is_saas'] = False
+    # Mobile app detected → must be Product or Hybrid, never pure Service
+    if website_data.get('has_mobile_app'):
+        if result.get('company_type') == 'Service':
+            result['company_type'] = 'Product'
+            result['company_type_reason'] = (
+                result.get('company_type_reason', '') +
+                ' [Override: App Store/Play Store link found — company ships its own app.]'
+            )
 
-    # If no subscription pricing detected and company_type is still Product, verify
-    if not website_data.get('has_pricing_detected') and company_type == 'Product':
-        # Downgrade confidence — let the caller decide; don't force-flip here
-        result['_low_pricing_confidence'] = True
+    # Normalise "Services" → "Service"
+    if result.get('company_type') == 'Services':
+        result['company_type'] = 'Service'
+
+    # Enforce consistency: Service companies are never SaaS
+    if result.get('company_type') == 'Service':
+        result['is_saas'] = False
 
     return result
 
@@ -442,14 +501,15 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
             website_data.get("full_text", "")[:2000],
         ]).lower()
 
-    # ── Structural signals (most reliable) ────────────────────────
+    # ── Structural signals (most reliable — from HTML, not text) ──────────
     has_login        = bool(website_data and website_data.get("has_login_detected"))
-    # has_pricing: either a dedicated pricing section was scraped OR subscription text found in page
     has_pricing      = bool(website_data and (
         website_data.get("pricing", "").strip() or
         website_data.get("has_pricing_detected")
     ))
-    site_loaded = bool(website_data)  # could we even fetch the site?
+    has_mobile_app   = bool(website_data and website_data.get("has_mobile_app"))
+    has_web_app      = bool(website_data and website_data.get("has_web_app_link"))
+    site_loaded      = bool(website_data)
 
     # ── Product signals ────────────────────────────────────────────
     # Strong: self-serve pricing/trial language — only product companies use these
@@ -514,54 +574,69 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     has_for_client = any(s in text for s in for_client_signals)
     p_weak_count   = 0 if has_for_client else sum(1 for s in product_weak if s in text)
 
-    # ── Scoring ────────────────────────────────────────────────────
-    # Structural product signals (most reliable)
-    if has_login:   p_strong_count += 3
-    if has_pricing: p_strong_count += 2
+    # ── Scoring — HTML-level signals weighted highest ───────────────
+    if has_mobile_app:   p_strong_count += 5  # App Store/Play Store link = ships own product
+    if has_web_app:      p_strong_count += 3  # /login or app. subdomain = has web product
+    if has_login:        p_strong_count += 2
+    if has_pricing:      p_strong_count += 2
 
     p_score = p_strong_count * 2 + p_weak_count
     s_score = s_strong_count * 2 + s_weak_count
 
     # ── Decision tree ──────────────────────────────────────────────
 
-    # Tier 1: Structural + keyword combination → very high confidence
+    # Tier 0 (new): Mobile app detected = very strong Product signal
+    # Service companies don't have App Store links under their own brand
+    if has_mobile_app and s_strong_count == 0:
+        return "Product", "High"
+    if has_mobile_app and s_strong_count >= 1:
+        return "Hybrid", "High"
+
+    # Tier 1: Web app + pricing OR web app + login = Product
+    if has_web_app and has_pricing and s_strong_count == 0:
+        return "Product", "High"
+    if has_web_app and has_pricing and s_strong_count >= 1:
+        return "Hybrid", "High"
+    if has_web_app and has_login and s_strong_count == 0:
+        return "Product", "High"
+
+    # Tier 2: Login + pricing without app links — still Product (was Tier 1 before)
     if has_login and has_pricing and s_strong_count == 0:
         return "Product", "High"
     if has_login and has_pricing and s_strong_count >= 1:
         return "Hybrid", "High"
 
-    # Tier 2: Strong explicit service keywords → high confidence
+    # Tier 3: Strong explicit service keywords → high confidence
     if s_strong_count >= 2:
         return "Service", "High"
-    if s_strong_count >= 1 and not has_login and not has_pricing:
+    if s_strong_count >= 1 and not has_login and not has_pricing and not has_mobile_app and not has_web_app:
         return "Service", "High"
 
-    # Tier 3: Strong product keywords without service signals
+    # Tier 4: Strong product text keywords without service signals
     if p_strong_count >= 5 and s_score == 0:
         return "Product", "High"
     if p_strong_count >= 3 and s_score <= 1:
         return "Product", "Medium"
-    if has_login and p_strong_count >= 1 and s_strong_count == 0:
+    if (has_login or has_web_app) and p_strong_count >= 1 and s_strong_count == 0:
         return "Product", "Medium"
 
-    # Tier 4: One explicit service keyword with some product language → Hybrid
+    # Tier 5: One explicit service keyword with some product language → Hybrid
     if s_strong_count >= 1 and p_score >= 3:
         return "Hybrid", "Medium"
 
-    # Tier 5: Weak signals
+    # Tier 6: Weak signals only
     if s_score >= 4 and p_score <= 1:
         return "Service", "Medium"
     if p_score >= 4 and s_score == 0:
         return "Product", "Medium"
-    if s_weak_count >= 2 and not has_login and not has_pricing and p_strong_count == 0:
+    if s_weak_count >= 2 and not has_login and not has_pricing and not has_mobile_app and not has_web_app and p_strong_count == 0:
         return "Service", "Medium"
 
-    # Tier 6: Site loaded with real content but no product signals → lean Service
-    # Rationale: product companies NEED login + pricing on their site by definition.
-    # Only fire if we got substantial text (not a JS shell that returned near-empty content).
+    # Tier 7: Site loaded with content but zero product signals → lean Service
+    # Only fires if NO app, login, pricing, or web-app links were found.
     meaningful_content = site_loaded and len(text.strip()) > 200
-    if meaningful_content and not has_login and not has_pricing and p_strong_count == 0:
-        return "Service", "Low"   # AI will verify, but bias is correct for Indian IT context
+    if meaningful_content and not has_login and not has_pricing and not has_mobile_app and not has_web_app and p_strong_count == 0:
+        return "Service", "Low"
 
     return None, "Low"
 
