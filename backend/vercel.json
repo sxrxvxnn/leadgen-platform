@@ -30,6 +30,18 @@
     {
       "path": "/api/sequences/warmup-cron",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/scrape-hn",
+      "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/cron/enrich-contacts",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-contacts",
+      "schedule": "0 5 * * 0"
     }
   ]
 }
