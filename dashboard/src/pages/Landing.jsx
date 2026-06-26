@@ -11,7 +11,6 @@ import { FloatingNavbar } from '../components/ui/FloatingNavbar'
 import { AnimatedButton } from '../components/ui/AnimatedButton'
 import Globe, { LANDING_MARKERS } from '../components/Globe'
 import { MacbookScroll } from '../components/ui/MacbookScroll'
-import { ParallaxHeroImages } from '../components/ui/ParallaxHeroImages'
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 28 },
@@ -222,17 +221,6 @@ export default function Landing() {
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="lp-hero" style={{ position: 'relative', overflow: 'hidden' }}>
         <BackgroundBeams style={{ zIndex: 0 }} />
-        <ParallaxHeroImages
-          style={{ zIndex: 0 }}
-          images={[
-            '/ss-dashboard.png',
-            '/ss-companies.png',
-            '/ss-icp.png',
-            '/ss-leads.png',
-            '/ss-settings.png',
-            '/ss-dashboard.png',
-          ]}
-        />
         <div className="lp-container lp-hero-center" style={{ position: 'relative', zIndex: 1 }}>
 
           {/* Announcement pill */}
