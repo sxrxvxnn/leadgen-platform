@@ -32,7 +32,10 @@ def check_app_store_presence(company_name: str, domain: str = '') -> dict:
         if res.status_code == 200:
             data = res.json()
             results = data.get('results', [])
-            domain_root = domain.replace('www.', '').split('/')[0].lower() if domain else ''
+            # Properly parse domain from full URL or bare domain
+            from urllib.parse import urlparse as _itup
+            _parsed_domain = _itup(domain).netloc if domain and domain.startswith('http') else domain
+            domain_root = (_parsed_domain or domain or '').lower().replace('www.', '').split('/')[0].split(':')[0]
 
             for app in results:
                 app_name   = (app.get('trackName', '') or '').lower()
@@ -40,9 +43,10 @@ def check_app_store_presence(company_name: str, domain: str = '') -> dict:
                 seller_url = (app.get('sellerUrl', '') or '').lower()
 
                 search_lower = search_term.lower()
-                # Match by: app/seller name contains company keywords, or seller URL matches domain
+                # Match by name/seller OR by seller URL containing the company domain
                 name_match   = search_lower in app_name or app_name in search_lower
-                seller_match = search_lower in seller or (domain_root and domain_root in seller_url)
+                domain_match = bool(domain_root and len(domain_root) > 3 and domain_root in seller_url)
+                seller_match = search_lower in seller or domain_match
 
                 if name_match or seller_match:
                     result['has_ios_app'] = True
@@ -794,12 +798,15 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
 
     # ── Decision tree ──────────────────────────────────────────────
 
-    # Tier 0 (new): Mobile app detected = very strong Product signal
-    # Service companies don't have App Store links under their own brand
-    if has_mobile_app and s_strong_count == 0:
+    # Tier 0 (ABSOLUTE): Mobile app confirmed = company ships own product.
+    # A company with its own App Store / Play Store app is NEVER a pure Service.
+    # Text signals (even from a wrong LinkedIn description) cannot override this.
+    # Exception: if there are 3+ strong service keywords AND no other product signals,
+    # classify Hybrid so the AI can refine (but still not Service).
+    if has_mobile_app:
+        if s_strong_count >= 3 and not has_login and not has_web_app and not has_pricing:
+            return "Hybrid", "High"
         return "Product", "High"
-    if has_mobile_app and s_strong_count >= 1:
-        return "Hybrid", "High"
 
     # Tier 1: Web app + pricing OR web app + login = Product
     if has_web_app and has_pricing and s_strong_count == 0:

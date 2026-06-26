@@ -2465,19 +2465,44 @@ async def analyze_company_website(
         website_data = fetch_website_content(website) if website else None
 
         # ── Step 1b: iTunes Search API fallback ────────────────────
-        # Many SPAs/React sites have App Store links inside JS bundles
-        # that requests-based scraping can't see. The iTunes Search API
-        # is free, no auth, and definitively confirms a mobile app exists.
-        if website_data and not website_data.get('has_mobile_app'):
-            app_check = check_app_store_presence(company_name, website)
+        # Many SPAs/React sites have App Store links inside JS bundles.
+        # Always run this check — pass clean domain (not full URL) so domain matching works.
+        _clean_domain = (website_data.get("resolved_domain") or "") if website_data else ""
+        if not _clean_domain and website:
+            try:
+                from urllib.parse import urlparse as _up_wd
+                _pp = _up_wd(website if website.startswith("http") else "https://" + website)
+                _clean_domain = _pp.netloc.lower().replace("www.", "")
+            except Exception:
+                pass
+
+        if not (website_data and website_data.get('has_mobile_app')):
+            app_check = check_app_store_presence(company_name, _clean_domain)
             if app_check.get('has_ios_app'):
+                if website_data is None:
+                    website_data = {}
                 website_data['has_mobile_app']    = True
                 website_data['has_app_store_link'] = True
                 website_data['_itunes_app_name']   = app_check.get('app_name', '')
 
         # ── Step 2: rule-based product/service classification ──────
+        # Don't pass company description to classifier if it came from a potentially wrong
+        # LinkedIn match — trust website signals over stored description text.
+        _li_website   = company.get("linkedin_website", "")
+        _stored_web   = company.get("website", "")
+        _description_ok = True
+        if _li_website and _stored_web:
+            try:
+                from urllib.parse import urlparse as _up_li
+                _li_dom = _up_li(_li_website).netloc.lower().replace("www.", "") if _li_website.startswith("http") else _li_website.replace("www.", "").split("/")[0]
+                _sw_dom = _up_li(_stored_web).netloc.lower().replace("www.", "") if _stored_web.startswith("http") else _stored_web.replace("www.", "").split("/")[0]
+                if _li_dom and _sw_dom and _li_dom != _sw_dom:
+                    _description_ok = False  # LinkedIn pointed to a different domain — don't trust description
+            except Exception:
+                pass
+
         rule_type, rule_confidence = classify_company_type_rules(
-            website_data, company.get("description", "")
+            website_data, company.get("description", "") if _description_ok else ""
         )
 
         # ── Step 3: AI analysis — Gemini → OpenRouter → OpenAI → Groq ──
