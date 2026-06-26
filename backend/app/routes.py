@@ -439,19 +439,30 @@ async def bulk_score_leads_selected(payload: dict, authorization: str = Header(.
     results = []
     for lead in leads_data:
         try:
-            prompt = f"""Rate this B2B lead against the ICP on a scale of 0-100.
+            prompt = f"""You are an expert B2B sales qualification analyst at Sonar, a B2B lead intelligence platform. Your job is to score how well a lead matches an Ideal Customer Profile (ICP) with precision and commercial judgment.
 
-ICP:
+ICP CRITERIA:
 {icp_text}
 
-Lead:
+LEAD PROFILE:
 - Name: {lead.get('name','')}
 - Title: {lead.get('title','')}
 - Company: {lead.get('company','')}
 - Location: {lead.get('location','')}
 - About: {(lead.get('about') or '')[:300]}
 
-Reply with JSON only: {{"score": <0-100>, "reason": "<one sentence>"}}"""
+SCORING RUBRIC:
+- 85–100: Exceptional fit — title, company, and signals all align; likely has budget and pain
+- 65–84: Strong fit — most criteria match; worth immediate outreach
+- 45–64: Moderate fit — partial match; worth nurturing but not top priority
+- 20–44: Weak fit — few criteria match; low priority
+- 0–19: Poor fit — disqualified by role, industry, or company stage
+
+Penalise heavily for: wrong industry, too junior a title, company too large/small, wrong geography (if specified in ICP).
+Reward for: exact title match, company in growth stage, signals of pain matching ICP pain points.
+
+Reply ONLY with valid JSON (no markdown):
+{{"score": <integer 0-100>, "reason": "<one concise sentence explaining the score, naming the specific matching or mismatching criteria>"}}"""
             raw = _call_ai(prompt, max_tokens=120, user_id=user_id, feature="bulk_icp_score")
             import json as _json, re as _re
             m = _re.search(r'\{.*\}', raw, _re.DOTALL)
@@ -1387,26 +1398,40 @@ async def detect_company_signals(
     for r in raw_results[:10]:
         search_ctx += f"- {r['title']}: {r['body'][:180]}\n"
 
-    prompt = f"""You are a sales intelligence AI. Identify buying signals for a cybersecurity/compliance service.
+    prompt = f"""You are a senior B2B sales intelligence analyst at Sonar. Your job is to identify specific, credible buying signals that indicate a company may be ready to purchase a B2B lead intelligence and outbound automation tool.
 
-Company: {name}
+COMPANY PROFILE:
+Name: {name}
 Industry: {co.get('industry') or 'Unknown'}
 Size: {co.get('size') or 'Unknown'}
 Description: {(co.get('description') or '')[:300]}
 
-{"Search results:\n" + search_ctx if search_ctx else "Infer signals from industry and company size."}
+{"RECENT INTELLIGENCE:\n" + search_ctx if search_ctx else "Note: No recent search data — infer signals from industry norms, company size, and description."}
 
-Return 3-5 buying signals as a JSON array only:
+SIGNAL TYPES TO LOOK FOR:
+- hiring: Sales, marketing, SDR, or RevOps job openings indicate active growth
+- funding: Recent funding rounds = new budget to spend
+- compliance: SOC2, ISO, GDPR work signals security tool purchases
+- growth: Expansion into new markets, product launches, partnerships
+- news: Leadership changes, acquisitions, or press coverage showing momentum
+
+RULES:
+- Each signal must be specific to THIS company, not generic industry advice
+- relevance_score: 85-100 = strong signal, 60-84 = moderate, 40-59 = weak
+- title: punchy, under 70 chars, state the signal clearly
+- description: 1-2 sentences explaining WHY this is a buying signal for a lead intelligence tool
+- Return exactly 3-5 signals, ordered by relevance_score descending
+
+Return ONLY a valid JSON array (no markdown, no explanation):
 [
   {{
     "signal_type": "hiring",
-    "title": "Title under 70 chars",
-    "description": "1-2 sentence explanation of why this is a buying signal",
-    "relevance_score": 80,
+    "title": "<signal title under 70 chars>",
+    "description": "<1-2 sentences on why this matters>",
+    "relevance_score": <integer 40-100>,
     "source_url": ""
   }}
-]
-Signal types: hiring, funding, compliance, news, growth. Return only the JSON array."""
+]"""
 
     import json as _json, re as _re
     raw = _call_ai(prompt, max_tokens=900, user_id=user_id, feature="company_signals")
@@ -4623,25 +4648,29 @@ async def score_lead_icp(lead_id: str, authorization: str = Header(...)):
             if titles:
                 exp_summary = f"\nPast roles: {', '.join(titles)}"
 
-        prompt = f"""You are a B2B sales qualification expert. Score this lead against the Ideal Customer Profile (ICP).
+        prompt = f"""You are an expert B2B sales qualification analyst at Sonar, a B2B lead intelligence platform. Score this lead against the Ideal Customer Profile with commercial precision — not generous, not conservative.
 
 ICP CRITERIA:
 {chr(10).join(criteria_lines)}
 
-LEAD:
+LEAD PROFILE:
 Name: {lead.get('name', '—')}
 Title: {lead.get('title', '—')}
 Company: {lead.get('company', '—')}
 Location: {lead.get('location', '—')}
 About: {(lead.get('about') or '')[:300]}{exp_summary}
 
-Score from 0–100 based on how well this lead matches the ICP. Be precise and honest.
-- 80–100: Strong fit — matches role, industry, and likely has pain points
-- 50–79: Moderate fit — partial match
-- 0–49: Weak fit — unlikely match
+SCORING RUBRIC:
+- 85–100: Exceptional — title, company size, industry, and pain signals all match
+- 65–84: Strong — most key criteria align; clear outreach priority
+- 45–64: Moderate — partial match; nurture but not urgent
+- 20–44: Weak — one or two criteria match but overall poor fit
+- 0–19: Disqualified — wrong industry, seniority, or company type
+
+Be specific: name the exact matching or failing criteria in your reason. Never give a vague reason like "partial match."
 
 Reply ONLY with valid JSON (no markdown):
-{{"score": <integer 0-100>, "reason": "<one concise sentence explaining the score>"}}"""
+{{"score": <integer 0-100>, "reason": "<one sentence naming the specific criteria that determined this score>"}}"""
 
         import re as _re, json as _json
         raw = _call_ai(prompt, max_tokens=120, user_id=user_id, feature="icp-scoring")
@@ -4707,9 +4736,9 @@ async def draft_outreach_email(
             bits = [f"{e.get('title','')} at {e.get('company','')}" for e in recent if e.get("title")]
             if bits: exp_summary = f"\nRecent experience: {', '.join(bits)}"
 
-        prompt = f"""Write a personalized B2B cold outreach email. Be {tone}, concise (under 120 words body), and specific to this person. Do NOT use generic openers like "I hope this email finds you well."
+        prompt = f"""You are an elite B2B cold email copywriter. Write a highly personalised outreach email for Sonar (a B2B lead intelligence platform that finds prospects, enriches company data, and automates sequences).
 
-LEAD:
+RECIPIENT:
 Name: {lead.get('name', 'there')}
 Title: {lead.get('title', '—')}
 Company: {lead.get('company', '—')}
@@ -4721,8 +4750,20 @@ COMPANY CONTEXT:
 
 {sender_block}
 
+TONE: {tone}
+
+RULES (strictly follow all):
+1. Subject: max 8 words, no clickbait, no ALL CAPS, no emojis
+2. Opening line: reference something specific to their role or company — NOT "I hope this email finds you well", "I came across your profile", or any generic opener
+3. Body: 3–4 sentences max, under 120 words total
+4. One clear pain point relevant to their title and industry
+5. One sentence on what Sonar does and why it's relevant to them specifically
+6. CTA: soft ask — NOT "schedule a demo", use "worth a quick chat?" or "open to a 15-min call?"
+7. Sign off with sender name if provided
+8. Sound like a human, not a sales robot
+
 Reply ONLY with valid JSON (no markdown):
-{{"subject": "<email subject line>", "body": "<email body with \\n for line breaks>"}}"""
+{{"subject": "<subject line>", "body": "<email body with \\n for line breaks>"}}"""
 
         import re as _re, json as _json
         raw = _call_ai(prompt, max_tokens=400, user_id=user_id, feature="email-draft")
@@ -9072,3 +9113,109 @@ async def warmup_cron(request: Request):
         results.append({"user_id": user_id, "day": day, "target": daily_target, "sent": sent_count, "errors": errors})
 
     return {"ok": True, "results": results}
+
+
+# ─── UNIFIED NOTIFICATIONS ────────────────────────────────────────────────────
+
+@router.get("/notifications")
+async def get_notifications(authorization: str = Header(...)):
+    """Aggregate all alert types into a single notification feed."""
+    user_id = get_user_id(authorization)
+
+    notifications = []
+
+    # Job change alerts
+    try:
+        jca = supabase.table("job_change_alerts") \
+            .select("id, lead_id, old_title, old_company, new_title, new_company, seen, created_at, leads(name, profile_url)") \
+            .eq("user_id", user_id).order("created_at", desc=True).limit(30).execute()
+        for a in (jca.data or []):
+            lead = a.get("leads") or {}
+            name = lead.get("name") or "A lead"
+            notifications.append({
+                "id": a["id"],
+                "type": "job_change",
+                "title": f"{name} changed jobs",
+                "body": f"{a.get('old_title','?')} at {a.get('old_company','?')} → {a.get('new_title','?')} at {a.get('new_company','?')}",
+                "seen": a.get("seen", False),
+                "created_at": a["created_at"],
+                "link": "/leads",
+                "meta": {"lead_id": a.get("lead_id"), "profile_url": lead.get("profile_url")},
+            })
+    except Exception:
+        pass
+
+    # Company alerts
+    try:
+        ca = supabase.table("company_alerts") \
+            .select("id, type, title, body, url, seen, created_at") \
+            .eq("user_id", user_id).order("created_at", desc=True).limit(30).execute()
+        for a in (ca.data or []):
+            notifications.append({
+                "id": a["id"],
+                "type": a.get("type", "company_alert"),
+                "title": a.get("title", "Company alert"),
+                "body": a.get("body", ""),
+                "seen": a.get("seen", False),
+                "created_at": a["created_at"],
+                "link": a.get("url") or "/companies",
+                "meta": {},
+            })
+    except Exception:
+        pass
+
+    # Sequence replies
+    try:
+        replies = supabase.table("sequence_emails") \
+            .select("id, replied_at, enrollment_id, sequence_enrollments(lead_id, leads(name))") \
+            .eq("sequence_enrollments.user_id", user_id) \
+            .not_.is_("replied_at", "null") \
+            .order("replied_at", desc=True).limit(20).execute()
+        for r in (replies.data or []):
+            enrollment = r.get("sequence_enrollments") or {}
+            lead = enrollment.get("leads") or {}
+            name = lead.get("name") or "A prospect"
+            notifications.append({
+                "id": r["id"],
+                "type": "sequence_reply",
+                "title": f"{name} replied to your sequence",
+                "body": "They responded to one of your outreach emails.",
+                "seen": False,
+                "created_at": r["replied_at"],
+                "link": "/sequences",
+                "meta": {"enrollment_id": r.get("enrollment_id")},
+            })
+    except Exception:
+        pass
+
+    # Sort by created_at desc
+    notifications.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    unseen = sum(1 for n in notifications if not n.get("seen"))
+
+    return {"notifications": notifications[:50], "unseen": unseen}
+
+
+@router.patch("/notifications/{notification_id}/seen")
+async def mark_notification_seen(notification_id: str, payload: dict, authorization: str = Header(...)):
+    """Mark a single notification as seen across any alert table."""
+    user_id = get_user_id(authorization)
+    ntype = payload.get("type", "")
+    validate_uuid(notification_id, "notification_id")
+
+    if ntype == "job_change":
+        supabase.table("job_change_alerts").update({"seen": True}) \
+            .eq("id", notification_id).eq("user_id", user_id).execute()
+    elif ntype in ("company_alert", "funding", "hiring", "compliance", "news", "growth"):
+        supabase.table("company_alerts").update({"seen": True}) \
+            .eq("id", notification_id).eq("user_id", user_id).execute()
+
+    return {"ok": True}
+
+
+@router.post("/notifications/mark-all-seen")
+async def mark_all_notifications_seen(authorization: str = Header(...)):
+    """Mark all unread notifications as seen."""
+    user_id = get_user_id(authorization)
+    supabase.table("job_change_alerts").update({"seen": True}).eq("user_id", user_id).eq("seen", False).execute()
+    supabase.table("company_alerts").update({"seen": True}).eq("user_id", user_id).eq("seen", False).execute()
+    return {"ok": True}

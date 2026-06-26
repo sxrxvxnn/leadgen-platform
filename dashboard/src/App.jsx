@@ -35,6 +35,7 @@ const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Privacy         = lazy(() => import('./pages/Privacy'))
 const Terms           = lazy(() => import('./pages/Terms'))
 const BookingPage     = lazy(() => import('./pages/BookingPage'))
+const Notifications   = lazy(() => import('./pages/Notifications'))
 
 class ChunkErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { errored: false } }
@@ -125,9 +126,10 @@ export default function App() {
                 <Route path="/tasks"       element={<FlaggedRoute flag="page_tasks"><Tasks /></FlaggedRoute>} />
                 <Route path="/analytics"   element={<FlaggedRoute flag="page_analytics"><Analytics /></FlaggedRoute>} />
                 <Route path="/targeting"   element={<FlaggedRoute flag="page_targeting"><Targeting /></FlaggedRoute>} />
-                <Route path="/settings"    element={<Settings />} />
-                <Route path="/unsubscribes"element={<FlaggedRoute flag="page_unsubscribes"><Unsubscribes /></FlaggedRoute>} />
-                <Route path="/admin"       element={<Admin />} />
+                <Route path="/settings"      element={<Settings />} />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/unsubscribes"  element={<FlaggedRoute flag="page_unsubscribes"><Unsubscribes /></FlaggedRoute>} />
+                <Route path="/admin"         element={<Admin />} />
               </Route>
 
               <Route path="/icp" element={<Navigate to="/targeting" replace />} />

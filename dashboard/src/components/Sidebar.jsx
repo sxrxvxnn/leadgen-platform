@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { useFeatureFlags } from '../context/FeatureFlagContext'
 import { useState, useEffect } from 'react'
 
+const API = import.meta.env.VITE_API_URL || 'https://leadgenengineplatform-api.vercel.app'
+
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
 const DISPLAY = "var(--font-display, 'Barlow Condensed', sans-serif)"
@@ -29,8 +31,9 @@ const ICONS = {
   email:     ['M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z', 'M22 6l-10 7L2 6'],
   database:  ['M12 2C6.48 2 2 4.24 2 7s4.48 5 10 5 10-2.24 10-5-4.48-5-10-5z', 'M2 17c0 2.76 4.48 5 10 5s10-2.24 10-5', 'M2 12c0 2.76 4.48 5 10 5s10-2.24 10-5'],
   tasks:     ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'],
-  analytics:    'M18 20V10M12 20V4M6 20v-6',
-  unsubscribes: ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2', 'M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z'],
+  analytics:     'M18 20V10M12 20V4M6 20v-6',
+  unsubscribes:  ['M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2', 'M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z'],
+  notifications: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
 }
 
 const NAV_GROUPS = [
@@ -61,14 +64,15 @@ const NAV_GROUPS = [
   {
     label: 'Configure',
     items: [
-      { label: 'Targeting',    path: '/targeting',    icon: 'targeting',    flag: 'page_targeting' },
-      { label: 'Unsubscribes', path: '/unsubscribes', icon: 'unsubscribes', flag: 'page_unsubscribes' },
-      { label: 'Settings',     path: '/settings',     icon: 'settings' },
+      { label: 'Targeting',      path: '/targeting',      icon: 'targeting',      flag: 'page_targeting' },
+      { label: 'Notifications',  path: '/notifications',  icon: 'notifications',  badge: true },
+      { label: 'Unsubscribes',   path: '/unsubscribes',   icon: 'unsubscribes',   flag: 'page_unsubscribes' },
+      { label: 'Settings',       path: '/settings',       icon: 'settings' },
     ],
   },
 ]
 
-function NavItem({ label, path, icon, isActive }) {
+function NavItem({ label, path, icon, isActive, unreadCount }) {
   const [hovered, setHovered] = useState(false)
   const color = isActive ? 'var(--text)' : hovered ? 'var(--text-secondary)' : 'var(--text-muted)'
 
@@ -93,25 +97,29 @@ function NavItem({ label, path, icon, isActive }) {
       <span style={{ color, flexShrink: 0 }}>
         <Icon d={ICONS[icon]} color={color} size={15} />
       </span>
-      <span style={{
-        fontFamily: SANS,
-        fontSize: 13,
-        fontWeight: isActive ? 600 : 400,
-        color,
-        letterSpacing: '0.01em',
-      }}>
+      <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: isActive ? 600 : 400, color, letterSpacing: '0.01em', flex: 1 }}>
         {label}
       </span>
+      {unreadCount > 0 && (
+        <span style={{
+          fontFamily: MONO, fontSize: 9, fontWeight: 700,
+          background: '#E7000B', color: '#fff',
+          borderRadius: 8, padding: '1px 5px', lineHeight: 1.6, flexShrink: 0,
+        }}>
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
     </Link>
   )
 }
 
 export default function Sidebar() {
-  const { user, profile, logout } = useAuth()
+  const { user, profile, logout, session } = useAuth()
   const { isEnabled } = useFeatureFlags()
   const location = useLocation()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState('')
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
 
   useEffect(() => {
     function update() {
@@ -123,6 +131,23 @@ export default function Sidebar() {
     window.addEventListener('nameUpdated', update)
     return () => window.removeEventListener('nameUpdated', update)
   }, [user])
+
+  // Poll unread notification count every 2 minutes
+  useEffect(() => {
+    if (!session?.access_token) return
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch(`${API}/api/notifications`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        })
+        const data = await res.json()
+        setUnreadNotifs(data.unseen || 0)
+      } catch (_) {}
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 120000)
+    return () => clearInterval(interval)
+  }, [session])
 
   const isActive = (path) => location.pathname === path
   const isAdmin  = profile?.role === 'admin'
@@ -177,7 +202,12 @@ export default function Sidebar() {
               if (item.flag && !isEnabled(item.flag)) return false
               return true
             }).map(item => (
-              <NavItem key={item.path} {...item} isActive={isActive(item.path)} />
+              <NavItem
+                key={item.path}
+                {...item}
+                isActive={isActive(item.path)}
+                unreadCount={item.badge ? unreadNotifs : 0}
+              />
             ))}
           </div>
         ))}
