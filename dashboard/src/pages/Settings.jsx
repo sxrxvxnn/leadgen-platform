@@ -285,7 +285,7 @@ export default function Settings() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: '10px',
                   padding: '8px 10px', border: 'none',
-                  cursor: 'pointer', borderRadius: '6px', textAlign: 'left',
+                  cursor: 'pointer', textAlign: 'left',
                   transition: 'background 0.15s',
                   background: activeSection === sec.id ? 'var(--surface)' : 'transparent',
                   borderRadius: 0,

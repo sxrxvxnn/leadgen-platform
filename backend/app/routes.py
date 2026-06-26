@@ -186,6 +186,25 @@ def get_user_id(authorization: str) -> str:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
+def _check_user_rate_limit(user_id: str, endpoint: str, limit: int, window_minutes: int = 60) -> None:
+    """Raise 429 if user has exceeded `limit` calls to `endpoint` in the past `window_minutes`.
+    Non-blocking: DB errors are silently swallowed so a Supabase hiccup never blocks a real request."""
+    import datetime as _rl_dt
+    since = (_rl_dt.datetime.now(_rl_dt.timezone.utc) - _rl_dt.timedelta(minutes=window_minutes)).isoformat()
+    try:
+        res = supabase.table("rate_limit_log").select("id", count="exact").eq("user_id", user_id).eq("endpoint", endpoint).gte("called_at", since).execute()
+        if (res.count or 0) >= limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit reached — max {limit} calls per {window_minutes} minutes for this operation. Please wait and try again."
+            )
+        supabase.table("rate_limit_log").insert({"user_id": user_id, "endpoint": endpoint}).execute()
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Allow through if the rate-limit table is unavailable
+
+
 # ─── LEADS ROUTES ────────────────────────────────────────────
 
 @router.get("/leads")
@@ -3089,6 +3108,7 @@ async def bulk_deep_enrich_companies(
 ):
     """Run all 8 enrichment jobs for multiple companies in parallel (5 workers)."""
     user_id = get_user_id(authorization)
+    _check_user_rate_limit(user_id, "bulk-deep-enrich", limit=3, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _bde_threading
@@ -3203,6 +3223,7 @@ async def bulk_autofill_companies(
 ):
     """Autofill data for multiple companies in parallel (20 workers)."""
     user_id = get_user_id(authorization)
+    _check_user_rate_limit(user_id, "bulk-autofill", limit=5, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _threading
@@ -3840,6 +3861,7 @@ async def bulk_analyze_companies(
     from fastapi.responses import StreamingResponse
 
     user_id = get_user_id(authorization)
+    _check_user_rate_limit(user_id, "bulk-analyze", limit=5, window_minutes=60)
     company_ids = payload.get("company_ids", [])
     gemini_key      = payload.get("gemini_key")      or os.getenv("GEMINI_API_KEY", "")
     openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
@@ -7443,7 +7465,8 @@ def _build_pdl_sql(payload: dict) -> str:
 
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
-    get_user_id(authorization)
+    user_id = get_user_id(authorization)
+    _check_user_rate_limit(user_id, "people-search", limit=30, window_minutes=60)
     if not _PDL_KEY:
         raise HTTPException(status_code=503, detail="Prospect search not configured — add PDL_API_KEY to Vercel env vars.")
 
