@@ -897,7 +897,15 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         ) : field('Type', null)}
 
         {field('HQ', company.headquarters)}
-        {followersDisplay !== '—' ? field('Followers', followersDisplay) : null}
+        {followersDisplay !== '—' || empCount ? (
+          <div>
+            <p style={card.fieldLabel}>Followers</p>
+            <p style={card.fieldValue}>
+              {followersDisplay !== '—' ? followersDisplay : '—'}
+              {empCount && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}> · {empCount} emp.</span>}
+            </p>
+          </div>
+        ) : null}
         {company.website && (
           <div>
             <p style={card.fieldLabel}>Website</p>
@@ -987,27 +995,9 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     </div>
 
     {/* ── Sub-cards: Employee Count + Funding ── */}
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+    <div style={{ marginTop: 8 }}>
 
-      {/* Employee Count */}
-      <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0d9488', borderRadius: 8, padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Employee count</span>
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-          Headcount data for <strong style={{ color: 'var(--text)' }}>{domain || company.name}</strong>.
-        </p>
-        {empCount
-          ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color: '#0d9488', margin: 0, letterSpacing: '-0.03em' }}>{empCount}</p>
-          : <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Not available — run Fill LI to populate.</p>
-        }
-      </div>
-
-      {/* Company Funding */}
+      {/* Company Funding — full width now that employee count is in the info grid */}
       <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #16a34a', borderRadius: 8, padding: '16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
