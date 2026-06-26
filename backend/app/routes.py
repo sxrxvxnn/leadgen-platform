@@ -2519,14 +2519,52 @@ async def analyze_company_website(
         else:
             result["company_type_confidence"] = "AI"
 
-        # Enforce logical consistency: Service → is_saas must be false
+        # ── is_saas determination ──────────────────────────────────
+        # Logic: SaaS = product delivered over internet with recurring billing.
+        # Key insight: web login and mobile apps ARE the delivery mechanism.
+        # Absence of pricing TEXT on website does NOT mean Non-SaaS —
+        # enterprise SaaS hides pricing, mobile apps price via App Store.
+        # Non-SaaS signals: on-premise, downloadable, one-time purchase.
         is_saas_val = result.get("is_saas")
+
         if final_type == "Service":
+            # Hard rule: a services company is never SaaS
             is_saas_val = False
-        elif is_saas_val is None:
-            # If no AI answer, infer from pricing detection
-            has_pricing_det = bool(website_data and website_data.get("has_pricing_detected"))
-            is_saas_val = bool(final_type in ("Product", "Hybrid") and has_pricing_det)
+
+        elif final_type in ("Product", "Hybrid"):
+            has_mobile  = bool(website_data and website_data.get("has_mobile_app"))
+            has_web_app = bool(website_data and website_data.get("has_web_app_link"))
+            has_login   = bool(website_data and website_data.get("has_login_detected"))
+            has_pricing = bool(website_data and website_data.get("has_pricing_detected"))
+
+            # Explicit Non-SaaS signals in page text
+            full_lower  = (website_data.get("full_text", "") if website_data else "").lower()
+            non_saas_signals = [
+                "on-premise", "on premise", "on-prem",
+                "installed locally", "local installation",
+                "download and install", "downloadable software",
+                "one-time license", "perpetual license",
+                "desktop app", "windows app", "mac app",
+            ]
+            has_non_saas_signal = any(s in full_lower for s in non_saas_signals)
+
+            if has_non_saas_signal:
+                # Explicit evidence of non-cloud delivery → not SaaS
+                is_saas_val = False
+            elif is_saas_val is not None:
+                # AI already gave an answer — trust it (AI saw the content)
+                pass
+            elif has_mobile or has_web_app or has_login:
+                # Web/mobile delivery is confirmed → default to SaaS
+                # (SaaS companies routinely hide pricing or use App Store billing)
+                is_saas_val = True
+            elif has_pricing:
+                # Subscription pricing text without login/app — unusual but SaaS
+                is_saas_val = True
+            else:
+                # Product but no delivery mechanism detected — stay None (unknown)
+                is_saas_val = None
+
         result["is_saas"] = is_saas_val
 
         # Merge compliance from website scraping + AI
