@@ -70,17 +70,36 @@ _TECH_SIGS: dict[str, list[str]] = {
 }
 
 
+_HEADER_TECH_SIGS: dict[str, list[str]] = {
+    "Next.js":     ["x-powered-by: next.js", "x-nextjs"],
+    "Vercel":      ["x-vercel-id", "x-vercel-cache", "server: vercel"],
+    "Cloudflare":  ["cf-ray", "server: cloudflare"],
+    "Fastly":      ["x-served-by: cache", "fastly-restarts"],
+    "AWS CloudFront": ["x-amz-cf-id", "x-amz-cf-pop"],
+    "Nginx":       ["server: nginx"],
+    "Apache":      ["server: apache"],
+    "WordPress":   ["x-pingback", "x-powered-by: php", "link: <https://api.w.org/>"],
+    "Shopify":     ["x-shopify-stage", "x-shopid"],
+    "Ghost":       ["x-ghost-cache-status"],
+}
+
+
 def detect_tech_stack(website_url: str) -> list[str]:
     if not website_url:
         return []
     try:
         r = requests.get(website_url, headers=_HEADERS, timeout=12, allow_redirects=True)
         html = r.text
-        headers_text = " ".join(f"{k}: {v}" for k, v in r.headers.items())
-        body = (html + headers_text).lower()
+        # Include HTTP response headers in scan (catches Next.js, Vercel, Cloudflare even on SPAs)
+        headers_text = " ".join(f"{k.lower()}: {v.lower()}" for k, v in r.headers.items())
+        body = html.lower()
+        combined = body + " " + headers_text
         found = []
         for tech, sigs in _TECH_SIGS.items():
-            if any(s.lower() in body for s in sigs):
+            if any(s.lower() in combined for s in sigs):
+                found.append(tech)
+        for tech, sigs in _HEADER_TECH_SIGS.items():
+            if tech not in found and any(s.lower() in headers_text for s in sigs):
                 found.append(tech)
         return found
     except Exception:
@@ -93,7 +112,13 @@ def fetch_job_openings(website_url: str, company_name: str) -> list[dict]:
     if not website_url:
         return []
     from urllib.parse import urlparse, urljoin
-    base = f"{urlparse(website_url).scheme}://{urlparse(website_url).netloc}"
+    # Resolve redirects first (e.g. waycom.io → way.com) so career pages resolve correctly
+    try:
+        _r = requests.get(website_url, headers=_HEADERS, timeout=8, allow_redirects=True)
+        _final = _r.url
+    except Exception:
+        _final = website_url
+    base = f"{urlparse(_final).scheme}://{urlparse(_final).netloc}"
 
     career_slugs = [
         "/careers", "/jobs", "/join", "/join-us", "/work-with-us",
@@ -236,11 +261,15 @@ def _is_article_url(href: str, listing_url: str) -> bool:
 
 def _scrape_blog_page(url: str, base_domain: str) -> list[dict]:
     """Scrape a blog/news listing page and extract only article links + titles."""
-    from urllib.parse import urljoin
+    from urllib.parse import urljoin, urlparse
     try:
         r = requests.get(url, headers=_HEADERS, timeout=10, allow_redirects=True)
         if r.status_code != 200:
             return []
+        # After redirect (e.g. waycom.io → way.com) use the resolved domain
+        resolved_domain = urlparse(r.url).netloc.lower().replace("www.", "")
+        if resolved_domain and resolved_domain != base_domain:
+            base_domain = resolved_domain
         # Confirm page has article-listing signals
         page_lower = r.text.lower()
         if not any(kw in page_lower for kw in ["article", "post", "read more", "published", "blog"]):
@@ -320,8 +349,14 @@ def fetch_recent_news(company_name: str, domain: str = "", website_url: str = ""
     # ── Step 1: Scrape company's own blog/news pages ──────────────────────────
     base_url = website_url or (f"https://{domain}" if domain else "")
     if base_url:
+        # Resolve redirects to get the real domain (e.g. waycom.io → way.com)
+        try:
+            _r = requests.get(base_url, headers=_HEADERS, timeout=8, allow_redirects=True)
+            base_url = _r.url
+        except Exception:
+            pass
         parsed = urlparse(base_url)
-        base_domain = parsed.netloc or domain or ""
+        base_domain = parsed.netloc.lower().replace("www.", "") or domain or ""
         base_root = f"{parsed.scheme}://{parsed.netloc}"
 
         blog_slugs = ["/blog", "/news", "/press", "/articles", "/insights",
@@ -458,22 +493,46 @@ _SOCIAL_PATTERNS = {
 _SOCIAL_SKIP = {"sharer", "share", "login", "signup", "intent", "home", "watch", "results", "search"}
 
 
-def extract_social_profiles(website_url: str) -> dict:
+def extract_social_profiles(website_url: str, company_name: str = "") -> dict:
     if not website_url:
         return {}
+    result = {}
+    # Step 1: scrape website HTML (works for server-rendered sites)
     try:
         r = requests.get(website_url, headers=_HEADERS, timeout=10, allow_redirects=True)
+        # Scan raw HTML + also fetch the final redirected URL's base page
         html = r.text
-        result = {}
         for platform, pat in _SOCIAL_PATTERNS.items():
             for m in pat.finditer(html):
                 handle = m.group(1).rstrip("/").lower()
                 if handle and handle not in _SOCIAL_SKIP and len(handle) > 1:
                     result[platform] = m.group(0).split("?")[0]
                     break
-        return result
     except Exception:
-        return {}
+        pass
+
+    # Step 2: DDG fallback for SPAs where social links are in JS bundles
+    if len(result) < 2:
+        try:
+            from ddgs import DDGS
+            domain = website_url.replace("https://", "").replace("http://", "").split("/")[0]
+            search_term = company_name or domain
+            with DDGS() as d:
+                for res in d.text(f'"{search_term}" social media twitter instagram linkedin', max_results=8):
+                    snippet = (res.get("body") or "") + " " + (res.get("title") or "") + " " + (res.get("href") or "")
+                    for platform, pat in _SOCIAL_PATTERNS.items():
+                        if platform not in result:
+                            for m in pat.finditer(snippet):
+                                handle = m.group(1).rstrip("/").lower()
+                                if handle and handle not in _SOCIAL_SKIP and len(handle) > 1:
+                                    result[platform] = m.group(0).split("?")[0]
+                                    break
+                    if len(result) >= 3:
+                        break
+        except Exception:
+            pass
+
+    return result
 
 
 # ─── 7. Traffic Estimate ─────────────────────────────────────────────────────

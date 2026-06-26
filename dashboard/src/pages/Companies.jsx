@@ -171,13 +171,22 @@ function EditableWebsite({ value, onSave }) {
 
 // ─── COMPANY LOGO ─────────────────────────────────────────────
 
-function CompanyLogo({ domain, name, size = 52 }) {
+function CompanyLogo({ domain, altDomain, name, size = 52 }) {
   const initials = (name || '').split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
   const hue = (name || 'A').charCodeAt(0) % 360
   const [stage, setStage] = useState(0)
 
+  // Build ordered list of (src, imgSize) to try
+  const alt = altDomain && altDomain !== domain ? altDomain : null
+  const srcs = [
+    [`https://logo.clearbit.com/${domain}`, Math.round(size * 0.7)],
+    ...(alt ? [[`https://logo.clearbit.com/${alt}`, Math.round(size * 0.7)]] : []),
+    [`https://www.google.com/s2/favicons?domain=${domain}&sz=64`, Math.round(size * 0.55)],
+    ...(alt ? [[`https://www.google.com/s2/favicons?domain=${alt}&sz=64`, Math.round(size * 0.55)]] : []),
+  ]
+
   const r = Math.round(size * 0.22)
-  if (!domain || stage === 2) {
+  if (!domain || stage >= srcs.length) {
     return (
       <div style={{ width: size, height: size, borderRadius: r, background: `hsl(${hue},40%,22%)`, border: `1px solid hsl(${hue},40%,32%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: Math.round(size * 0.33), fontWeight: 700, color: `hsl(${hue},65%,72%)` }}>{initials}</span>
@@ -185,15 +194,12 @@ function CompanyLogo({ domain, name, size = 52 }) {
     )
   }
 
-  const src = stage === 0
-    ? `https://logo.clearbit.com/${domain}`
-    : `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
-
+  const [src, imgSize] = srcs[stage]
   return (
     <div style={{ width: size, height: size, borderRadius: r, background: '#F8F8F8', border: '1px solid rgba(196,193,189,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
       <img
         src={src} alt={name}
-        style={{ width: stage === 0 ? Math.round(size * 0.7) : Math.round(size * 0.55), height: stage === 0 ? Math.round(size * 0.7) : Math.round(size * 0.55), objectFit: 'contain' }}
+        style={{ width: imgSize, height: imgSize, objectFit: 'contain' }}
         onError={() => setStage(s => s + 1)}
       />
     </div>
@@ -761,7 +767,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', padding: '18px 22px 14px', gap: 14 }}>
-        <CompanyLogo domain={domain} name={company.name} size={58} />
+        <CompanyLogo
+          domain={domain}
+          altDomain={company.linkedin_website ? company.linkedin_website.replace(/^https?:\/\//, '').split('/')[0] : null}
+          name={company.name}
+          size={58}
+        />
 
         {/* Name + domain + tagline */}
         <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
@@ -2010,7 +2021,7 @@ export default function Companies() {
                       return (
                         <div key={company.id} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderLeft: `3px solid ${clr}`, borderRadius: 8, padding: '10px 12px', cursor: 'default' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <CompanyLogo domain={dom} name={company.name} size={28} />
+                            <CompanyLogo domain={dom} altDomain={company.linkedin_website ? company.linkedin_website.replace(/^https?:\/\//, '').split('/')[0] : null} name={company.name} size={28} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{company.name}</p>
                               {dom && <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: 0 }}>{dom}</p>}
