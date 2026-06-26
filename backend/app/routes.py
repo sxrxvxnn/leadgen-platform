@@ -3155,13 +3155,15 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
         except Exception as e:
             return key, None, str(e)
 
+    _hunter_key = os.getenv("HUNTER_API_KEY", "")
+
     jobs_map = {
         "tech_stack":      (detect_tech_stack,      website),
         "job_openings":    (fetch_job_openings,      website, name),
-        "email_pattern":   (detect_email_pattern,    domain),
+        "email_pattern":   (detect_email_pattern,    domain, _hunter_key),
         "recent_news":     (fetch_recent_news,       name, domain, website),
         "revenue_estimate":(estimate_revenue,        emp, industry, classification),
-        "social_profiles": (extract_social_profiles, website),
+        "social_profiles": (extract_social_profiles, website, name),
         "traffic_estimate":(fetch_traffic_estimate,  domain),
         "review_presence": (fetch_review_presence,   name, domain),
     }
@@ -3247,13 +3249,14 @@ async def bulk_deep_enrich_companies(
                 pass
 
         results = {}
+        _h_key = os.getenv("HUNTER_API_KEY", "")
         jobs_map = {
             "tech_stack":      (detect_tech_stack,      website),
             "job_openings":    (fetch_job_openings,      website, name),
-            "email_pattern":   (detect_email_pattern,    domain),
+            "email_pattern":   (detect_email_pattern,    domain, _h_key),
             "recent_news":     (fetch_recent_news,       name, domain, website),
             "revenue_estimate":(estimate_revenue,        emp, industry, classification),
-            "social_profiles": (extract_social_profiles, website),
+            "social_profiles": (extract_social_profiles, website, name),
             "traffic_estimate":(fetch_traffic_estimate,  domain),
             "review_presence": (fetch_review_presence,   name, domain),
         }
