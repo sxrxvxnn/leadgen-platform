@@ -2,6 +2,10 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import json
+from .prompt_security import (
+    sanitize_scraped_text, sanitize_company_name, sanitize_description,
+    validate_ai_output, SYSTEM_INSTRUCTION,
+)
 
 
 def fetch_website_content(url: str, fast: bool = False) -> dict:
@@ -219,32 +223,42 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
         return None
 
 
+def build_content_block(website_data: dict) -> str:
+    """Build the sanitized website content section for the AI prompt."""
+    return (
+        f"HEADER/NAV:\n"
+        f"{sanitize_scraped_text(website_data.get('header', ''), 500)}\n"
+        f"{sanitize_scraped_text(website_data.get('nav', ''), 300)}\n\n"
+        f"HERO/MAIN CONTENT:\n"
+        f"{sanitize_scraped_text(website_data.get('hero', ''), 1200)}\n\n"
+        f"FOOTER:\n"
+        f"{sanitize_scraped_text(website_data.get('footer', ''), 500)}\n\n"
+        f"PRICING SECTION:\n"
+        f"{sanitize_scraped_text(website_data.get('pricing', ''), 500)}\n\n"
+        f"ADDITIONAL PAGE TEXT:\n"
+        f"{sanitize_scraped_text(website_data.get('full_text', ''), 800)}"
+    )
+
+
 def build_analysis_prompt(website_data: dict, company_name: str) -> str:
-    pre_detected_login   = website_data.get('has_login_detected', False)
-    pre_detected_pricing = website_data.get('has_pricing_detected', False)
-    pre_detected_mobile  = website_data.get('has_mobile_app', False)
-    pre_detected_webapp  = website_data.get('has_web_app_link', False)
+    """
+    Build the user-turn content for AI classification.
+    Instructions live in SYSTEM_INSTRUCTION (system role).
+    This function returns only the sanitized content + schema.
+    """
+    safe_name = sanitize_company_name(company_name)
+
+    pre_detected_login     = website_data.get('has_login_detected', False)
+    pre_detected_pricing   = website_data.get('has_pricing_detected', False)
+    pre_detected_mobile    = website_data.get('has_mobile_app', False)
+    pre_detected_webapp    = website_data.get('has_web_app_link', False)
     pre_detected_appstore  = website_data.get('has_app_store_link', False)
     pre_detected_playstore = website_data.get('has_play_store_link', False)
     pre_detected_compliance = website_data.get('compliance_detected', [])
 
-    content = f"""HEADER/NAV:
-{website_data.get('header', '')[:500]}
-{website_data.get('nav', '')[:300]}
+    content = build_content_block(website_data)
 
-HERO/MAIN CONTENT:
-{website_data.get('hero', '')[:1200]}
-
-FOOTER:
-{website_data.get('footer', '')[:500]}
-
-PRICING SECTION:
-{website_data.get('pricing', '')[:500]}
-
-ADDITIONAL PAGE TEXT (first 800 chars):
-{website_data.get('full_text', '')[:800]}"""
-
-    return f"""Analyze the website of company "{company_name}".
+    return f"""Analyze the website of company "{safe_name}".
 
 FACTS CONFIRMED BY HTML SCRAPING (treat as 100% ground truth — these are from actual HTML links, not guesses):
 - Login/signup page or button found: {pre_detected_login}
@@ -343,14 +357,16 @@ def analyze_with_gemini(website_data: dict, company_name: str, gemini_key: str) 
     """Use Google Gemini 2.0 Flash — free, accurate, generous quota."""
     if not gemini_key or not website_data:
         return {}
-    prompt = build_analysis_prompt(website_data, company_name)
+    user_content = build_analysis_prompt(website_data, company_name)
     try:
         res = requests.post(
             f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}',
             headers={'Content-Type': 'application/json'},
             json={
-                'contents': [{'parts': [{'text': prompt}]}],
-                'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 800}
+                # system_instruction keeps instructions out of the content turn
+                'system_instruction': {'parts': [{'text': SYSTEM_INSTRUCTION}]},
+                'contents': [{'role': 'user', 'parts': [{'text': user_content}]}],
+                'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 900, 'responseMimeType': 'application/json'},
             },
             timeout=30
         )
@@ -358,7 +374,7 @@ def analyze_with_gemini(website_data: dict, company_name: str, gemini_key: str) 
         if 'error' in data:
             return {}
         content = data['candidates'][0]['content']['parts'][0]['text']
-        result = parse_ai_response(content)
+        result = validate_ai_output(parse_ai_response(content))
         return force_override_with_scraped(result, website_data)
     except Exception:
         return {}
@@ -368,16 +384,20 @@ def analyze_with_openai(website_data: dict, company_name: str, openai_key: str) 
     """Use GPT-4o — most accurate but paid."""
     if not openai_key or not website_data:
         return {}
-    prompt = build_analysis_prompt(website_data, company_name)
+    user_content = build_analysis_prompt(website_data, company_name)
     try:
         res = requests.post(
             'https://api.openai.com/v1/chat/completions',
             headers={'Authorization': f'Bearer {openai_key}', 'Content-Type': 'application/json'},
             json={
                 'model': 'gpt-4o',
-                'messages': [{'role': 'user', 'content': prompt}],
-                'max_tokens': 800,
-                'temperature': 0.1
+                'messages': [
+                    {'role': 'system', 'content': SYSTEM_INSTRUCTION},
+                    {'role': 'user',   'content': user_content},
+                ],
+                'max_tokens': 900,
+                'temperature': 0.1,
+                'response_format': {'type': 'json_object'},
             },
             timeout=30
         )
@@ -385,7 +405,7 @@ def analyze_with_openai(website_data: dict, company_name: str, openai_key: str) 
         if 'error' in data:
             return {'_openai_error': data['error'].get('message', 'unknown error')}
         content = data['choices'][0]['message']['content']
-        result = parse_ai_response(content)
+        result = validate_ai_output(parse_ai_response(content))
         return force_override_with_scraped(result, website_data)
     except Exception:
         return {}
@@ -395,12 +415,28 @@ def analyze_with_groq(website_data: dict, company_name: str, industry: str, desc
     """Use Groq Llama 70B — free, fast, good for classification."""
     if not groq_key:
         return {}
-    prompt = build_analysis_prompt(website_data, company_name) if website_data else f"""Company: {company_name}
-Industry: {industry or 'Unknown'}
-Description: {description or 'No description'}
 
-Return ONLY this JSON:
-{{"company_type": "Product" or "Services" or "Hybrid", "company_type_reason": "one sentence", "classification": "one of: Fintech, Healthtech, SaaS, Cybersecurity, IT Services, E-commerce, Edtech, Logistics, Manufacturing, Banking, Insurance, VC / Investment, Media, Consulting, Retail, Real Estate, Government, Non-profit, Other", "is_saas": true or false, "target_market": "B2B" or "B2C" or "Both" or "Unknown", "has_login": false, "login_evidence": "No website analyzed", "compliance": [], "compliance_evidence": "No website analyzed", "products_or_services": [], "website_summary": "Based on company name and industry only."}}"""
+    safe_name = sanitize_company_name(company_name)
+    if website_data:
+        user_content = build_analysis_prompt(website_data, company_name)
+    else:
+        safe_industry = sanitize_scraped_text(industry or 'Unknown', 100)
+        safe_desc     = sanitize_description(description or '')
+        user_content = (
+            f'Company: {safe_name}\n'
+            f'Industry: {safe_industry}\n'
+            f'Description: {safe_desc}\n\n'
+            f'Return ONLY this JSON:\n'
+            f'{{"company_type": "Product" or "Service" or "Hybrid", '
+            f'"company_type_reason": "one sentence", '
+            f'"classification": "one of: Fintech, Healthtech, SaaS, Cybersecurity, IT Services, '
+            f'E-commerce, Edtech, Logistics, Manufacturing, Banking, Insurance, '
+            f'VC / Investment, Media, Consulting, Retail, Real Estate, Government, Non-profit, Other", '
+            f'"is_saas": true or false, '
+            f'"target_market": "B2B" or "B2C" or "Both" or "Unknown", '
+            f'"has_login": false, "compliance": [], "products_or_services": [], '
+            f'"website_summary": "Based on company name and industry only."}}'
+        )
 
     try:
         res = requests.post(
@@ -408,9 +444,13 @@ Return ONLY this JSON:
             headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
             json={
                 'model': 'llama-3.3-70b-versatile',
-                'messages': [{'role': 'user', 'content': prompt}],
-                'max_tokens': 800,
-                'temperature': 0.1
+                'messages': [
+                    {'role': 'system', 'content': SYSTEM_INSTRUCTION},
+                    {'role': 'user',   'content': user_content},
+                ],
+                'max_tokens': 900,
+                'temperature': 0.1,
+                'response_format': {'type': 'json_object'},
             },
             timeout=20
         )
@@ -418,7 +458,7 @@ Return ONLY this JSON:
         if 'error' in data or 'choices' not in data:
             return {}
         content = data['choices'][0]['message']['content']
-        result = parse_ai_response(content)
+        result = validate_ai_output(parse_ai_response(content))
         if website_data:
             result = force_override_with_scraped(result, website_data)
         return result
@@ -444,10 +484,24 @@ def analyze_with_openrouter(
     """Use OpenRouter — 400+ models via one API, OpenAI-compatible format."""
     if not openrouter_key:
         return {}
-    prompt = build_analysis_prompt(website_data, company_name) if website_data else f"""Company: {company_name}
 
-Return ONLY this JSON:
-{{"company_type": "Product" or "Services" or "Hybrid", "company_type_reason": "one sentence", "classification": "one of: Fintech, Healthtech, SaaS, Cybersecurity, IT Services, E-commerce, Edtech, Logistics, Manufacturing, Banking, Insurance, VC / Investment, Media, Consulting, Retail, Real Estate, Government, Non-profit, Other", "is_saas": true or false, "target_market": "B2B" or "B2C" or "Both" or "Unknown", "has_login": false, "login_evidence": "", "compliance": [], "compliance_evidence": "", "products_or_services": [], "website_summary": "Based on company name only."}}"""
+    safe_name = sanitize_company_name(company_name)
+    if website_data:
+        user_content = build_analysis_prompt(website_data, company_name)
+    else:
+        user_content = (
+            f'Company: {safe_name}\n\n'
+            f'Return ONLY this JSON:\n'
+            f'{{"company_type": "Product" or "Service" or "Hybrid", '
+            f'"company_type_reason": "one sentence", '
+            f'"classification": "one of: Fintech, Healthtech, SaaS, Cybersecurity, IT Services, '
+            f'E-commerce, Edtech, Logistics, Manufacturing, Banking, Insurance, '
+            f'VC / Investment, Media, Consulting, Retail, Real Estate, Government, Non-profit, Other", '
+            f'"is_saas": true or false, '
+            f'"target_market": "B2B" or "B2C" or "Both" or "Unknown", '
+            f'"has_login": false, "compliance": [], "products_or_services": [], '
+            f'"website_summary": "Based on company name only."}}'
+        )
 
     try:
         res = requests.post(
@@ -460,8 +514,11 @@ Return ONLY this JSON:
             },
             json={
                 'model': model,
-                'messages': [{'role': 'user', 'content': prompt}],
-                'max_tokens': 800,
+                'messages': [
+                    {'role': 'system', 'content': SYSTEM_INSTRUCTION},
+                    {'role': 'user',   'content': user_content},
+                ],
+                'max_tokens': 900,
                 'temperature': 0.1,
             },
             timeout=30,
@@ -470,7 +527,7 @@ Return ONLY this JSON:
         if 'error' in data or 'choices' not in data:
             return {}
         content = data['choices'][0]['message']['content']
-        result = parse_ai_response(content)
+        result = validate_ai_output(parse_ai_response(content))
         if website_data:
             result = force_override_with_scraped(result, website_data)
         return result
@@ -490,15 +547,15 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     - 'platform', 'dashboard', 'solution' are NOT product signals — service companies use them constantly
     - Indian IT companies (Technopark context) default to Service when ambiguous
     """
-    text = description.lower()
+    text = sanitize_description(description).lower()
     if website_data:
         text += " " + " ".join([
-            website_data.get("header", ""),
-            website_data.get("hero", ""),
-            website_data.get("nav", ""),
-            website_data.get("footer", ""),
-            website_data.get("pricing", ""),
-            website_data.get("full_text", "")[:2000],
+            sanitize_scraped_text(website_data.get("header", ""), 500),
+            sanitize_scraped_text(website_data.get("hero", ""), 800),
+            sanitize_scraped_text(website_data.get("nav", ""), 300),
+            sanitize_scraped_text(website_data.get("footer", ""), 500),
+            sanitize_scraped_text(website_data.get("pricing", ""), 300),
+            sanitize_scraped_text(website_data.get("full_text", "")[:2000], 2000),
         ]).lower()
 
     # ── Structural signals (most reliable — from HTML, not text) ──────────
