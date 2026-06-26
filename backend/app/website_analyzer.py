@@ -363,10 +363,11 @@ company_type:
 - Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) that say "platform" or "solution" WITHOUT a login link or app link → Service (these are marketing words, not products).
 
 is_saas:
-- true when: company_type is Product or Hybrid AND the product is cloud-delivered AND subscription pricing exists (monthly/annual/per-seat). Mobile apps with subscription or in-app purchases = SaaS.
-- true also when: App Store or Play Store link detected AND the app has subscription tiers.
-- false when: company_type is Service (always), OR product is downloadable/one-time license/on-premise, OR no pricing model is visible.
-- IMPORTANT: Service = is_saas must be false, no exceptions.
+- RULE 1: company_type = Service → is_saas MUST be false. Always.
+- RULE 2: If a web login, web app, OR mobile app is confirmed → default is_saas = true UNLESS there is explicit evidence of on-premise / one-time license / downloadable desktop software.
+- RULE 3: Absence of a visible pricing page does NOT mean Non-SaaS. Enterprise SaaS hides pricing ("Contact Sales"). Mobile apps price via App Store. Treat these as SaaS.
+- Non-SaaS signals (only these justify is_saas = false for a Product): "on-premise", "on-prem", "installed locally", "perpetual license", "one-time license", "desktop application", "download and install".
+- In short: web app or mobile app → SaaS. On-premise software → Non-SaaS. No software at all → Non-SaaS.
 
 classification:
 - Use "SaaS" only as the classification when the primary product is a generic cloud SaaS platform and no other industry label fits better.
@@ -410,9 +411,24 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
     if result.get('company_type') == 'Services':
         result['company_type'] = 'Service'
 
-    # Enforce consistency: Service companies are never SaaS
+    # Hard rule: Service → never SaaS
     if result.get('company_type') == 'Service':
         result['is_saas'] = False
+
+    # If Product/Hybrid and AI said non-SaaS, check if web/mobile delivery
+    # contradicts that — a web login or mobile app IS SaaS delivery by definition
+    elif result.get('company_type') in ('Product', 'Hybrid') and result.get('is_saas') is False:
+        has_mobile  = website_data.get('has_mobile_app')
+        has_web_app = website_data.get('has_web_app_link')
+        has_login   = website_data.get('has_login_detected')
+        full_lower  = website_data.get('full_text', '').lower()
+        non_saas_override = any(s in full_lower for s in [
+            'on-premise', 'on premise', 'on-prem',
+            'one-time license', 'perpetual license',
+            'desktop app', 'installed locally',
+        ])
+        if (has_mobile or has_web_app or has_login) and not non_saas_override:
+            result['is_saas'] = True
 
     return result
 
