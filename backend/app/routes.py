@@ -75,7 +75,7 @@ async def ensure_profile(request: Request, authorization: str = Header(...)):
     body = await request.json()
     email     = (body.get("email")     or "").strip()
     full_name = (body.get("full_name") or "").strip()
-    res = supabase.table("profiles").select("id").eq("id", user_id).maybe_single().execute()
+    res = supabase.table("profiles").select("id").eq("id", user_id).limit(1).execute()
     if res.data:
         return {"status": "exists"}
     try:
@@ -184,6 +184,12 @@ def get_user_id(authorization: str) -> str:
         return user.user.id
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def _first(res) -> dict | None:
+    """Return the first row from a Supabase limit(1) query, or None.
+    Replaces .maybe_single()/.single() which raise 406 on 0 rows in supabase-py 2.x."""
+    return res.data[0] if res.data else None
 
 
 def _check_user_rate_limit(user_id: str, endpoint: str, limit: int, window_minutes: int = 60) -> None:
@@ -1554,26 +1560,26 @@ async def get_email_opens(lead_id: str, authorization: str = Header(...)):
 @router.get("/track/open/{tracking_id}")
 async def track_open(tracking_id: str):
     try:
-        row = (
+        row = _first(
             supabase.table("email_tracking")
             .select("open_count,first_opened_at,lead_id")
             .eq("tracking_id", tracking_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if row.data:
+        if row:
             now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
-            prev_opens = row.data.get("open_count") or 0
+            prev_opens = row.get("open_count") or 0
             update = {"open_count": prev_opens + 1, "last_opened_at": now}
-            if not row.data.get("first_opened_at"):
+            if not row.get("first_opened_at"):
                 update["first_opened_at"] = now
             supabase.table("email_tracking").update(update).eq("tracking_id", tracking_id).execute()
             # Boost engagement score on first open
-            if prev_opens == 0 and row.data.get("lead_id"):
+            if prev_opens == 0 and row.get("lead_id"):
                 try:
-                    cur = supabase.table("leads").select("engagement_score").eq("id", row.data["lead_id"]).maybe_single().execute()
-                    cur_score = (cur.data or {}).get("engagement_score") or 0
-                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 3), "last_engaged_at": now}).eq("id", row.data["lead_id"]).execute()
+                    cur = _first(supabase.table("leads").select("engagement_score").eq("id", row["lead_id"]).limit(1).execute())
+                    cur_score = (cur or {}).get("engagement_score") or 0
+                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 3), "last_engaged_at": now}).eq("id", row["lead_id"]).execute()
                 except Exception:
                     pass
     except Exception:
@@ -1594,16 +1600,16 @@ async def track_click(tracking_id: str, url: str):
             "url": url,
             "clicked_at": now,
         }).execute()
-        row = supabase.table("email_tracking").select("click_count,lead_id").eq("tracking_id", tracking_id).maybe_single().execute()
-        if row.data is not None:
-            prev_clicks = row.data.get("click_count") or 0
+        row = _first(supabase.table("email_tracking").select("click_count,lead_id").eq("tracking_id", tracking_id).limit(1).execute())
+        if row is not None:
+            prev_clicks = row.get("click_count") or 0
             supabase.table("email_tracking").update({"click_count": prev_clicks + 1}).eq("tracking_id", tracking_id).execute()
             # Boost engagement score on first link click (+5 for higher intent)
-            if prev_clicks == 0 and row.data.get("lead_id"):
+            if prev_clicks == 0 and row.get("lead_id"):
                 try:
-                    cur = supabase.table("leads").select("engagement_score").eq("id", row.data["lead_id"]).maybe_single().execute()
-                    cur_score = (cur.data or {}).get("engagement_score") or 0
-                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 5), "last_engaged_at": now}).eq("id", row.data["lead_id"]).execute()
+                    cur = _first(supabase.table("leads").select("engagement_score").eq("id", row["lead_id"]).limit(1).execute())
+                    cur_score = (cur or {}).get("engagement_score") or 0
+                    supabase.table("leads").update({"engagement_score": min(100, cur_score + 5), "last_engaged_at": now}).eq("id", row["lead_id"]).execute()
                 except Exception:
                     pass
     except Exception:
@@ -2926,13 +2932,10 @@ async def autofill_company_from_linkedin(
 async def fetch_company_funding(company_id: str, authorization: str = Header(...)):
     """Search the web for company funding data and save to the revenue field."""
     user_id = get_user_id(authorization)
-    try:
-        co_res = supabase.table("companies").select("id,name,website").eq("id", company_id).eq("user_id", user_id).single().execute()
-    except Exception:
-        raise HTTPException(status_code=404, detail="Company not found")
+    co_res = supabase.table("companies").select("id,name,website").eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
-    company = co_res.data
+    company = co_res.data[0]
     name = company.get("name", "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Company name not set")
@@ -3020,15 +3023,12 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
     """Run all 8 enrichment jobs for a company: tech stack, jobs, email pattern,
     news, revenue estimate, social profiles, traffic estimate, review presence."""
     user_id = get_user_id(authorization)
-    try:
-        co_res = supabase.table("companies").select(
-            "id,name,website,size,classification,industry,linkedin_url"
-        ).eq("id", company_id).eq("user_id", user_id).single().execute()
-    except Exception:
-        raise HTTPException(status_code=404, detail="Company not found")
+    co_res = supabase.table("companies").select(
+        "id,name,website,size,classification,industry,linkedin_url"
+    ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
-    company = co_res.data
+    company = co_res.data[0]
     name = company.get("name", "").strip()
     website = (company.get("website") or "").strip()
     if not website.startswith("http"):
@@ -4745,10 +4745,10 @@ async def generate_ai_icebreaker(lead_id: str, authorization: str = Header(...))
     validate_uuid(lead_id)
     user_id = get_user_id(authorization)
     try:
-        lead_res = supabase.table("leads").select("name,title,company,location,about,experience").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
+        lead_res = supabase.table("leads").select("name,title,company,location,about,experience").eq("id", lead_id).eq("user_id", user_id).limit(1).execute()
         if not lead_res.data:
             raise HTTPException(status_code=404, detail="Lead not found")
-        lead = lead_res.data
+        lead = lead_res.data[0]
 
         exp_line = ""
         if lead.get("experience"):
@@ -5024,17 +5024,17 @@ async def get_profile(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     res = supabase.table("profiles").select(
         "id,email,full_name,mode,role,team_id,onboarding_complete,cal_link,cal_slug"
-    ).eq("id", user_id).single().execute()
+    ).eq("id", user_id).limit(1).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return res.data
+    return res.data[0]
 
 
 @router.get("/profile/cal")
 async def get_cal_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    res = supabase.table("profiles").select("cal_link,cal_slug,full_name").eq("id", user_id).maybe_single().execute()
-    data = res.data or {}
+    res = supabase.table("profiles").select("cal_link,cal_slug,full_name").eq("id", user_id).limit(1).execute()
+    data = res.data[0] if res.data else {}
     return {"cal_link": data.get("cal_link"), "cal_slug": data.get("cal_slug"), "full_name": data.get("full_name")}
 
 
@@ -5050,7 +5050,7 @@ async def save_cal_config(payload: dict, authorization: str = Header(...)):
 
     if cal_slug:
         # Check uniqueness (ignore self)
-        existing = supabase.table("profiles").select("id").eq("cal_slug", cal_slug).neq("id", user_id).maybe_single().execute()
+        existing = supabase.table("profiles").select("id").eq("cal_slug", cal_slug).neq("id", user_id).limit(1).execute()
         if existing.data:
             raise HTTPException(status_code=409, detail="That slug is already taken. Try another.")
 
@@ -5066,10 +5066,10 @@ async def save_cal_config(payload: dict, authorization: str = Header(...)):
 async def public_book_page(slug: str):
     """Public endpoint — returns profile info for the /book/:slug booking page."""
     slug = slug.strip().lower()
-    res = supabase.table("profiles").select("full_name,cal_link,cal_slug").eq("cal_slug", slug).maybe_single().execute()
-    if not res.data or not res.data.get("cal_link"):
+    profile = _first(supabase.table("profiles").select("full_name,cal_link,cal_slug").eq("cal_slug", slug).limit(1).execute())
+    if not profile or not profile.get("cal_link"):
         raise HTTPException(status_code=404, detail="Booking page not found")
-    return {"full_name": res.data.get("full_name") or "Someone", "cal_link": res.data["cal_link"], "slug": slug}
+    return {"full_name": profile.get("full_name") or "Someone", "cal_link": profile["cal_link"], "slug": slug}
 
 
 @router.post("/profile/setup")
@@ -5105,10 +5105,10 @@ async def setup_profile(payload: dict, authorization: str = Header(...)):
 # ─── ADMIN ROUTES ───────────────────────────────────────────
 
 def _require_admin(user_id: str):
-    res = supabase.table("profiles").select("role,team_id").eq("id", user_id).single().execute()
-    if not res.data or res.data.get("role") != "admin":
+    row = _first(supabase.table("profiles").select("role,team_id").eq("id", user_id).limit(1).execute())
+    if not row or row.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    team_id = res.data.get("team_id")
+    team_id = row.get("team_id")
     if not team_id:
         raise HTTPException(status_code=403, detail="Not part of a team")
     return team_id
@@ -5517,7 +5517,7 @@ async def sequence_send_stats(authorization: str = Header(...)):
     import datetime as _dt
     user_id = get_user_id(authorization)
     today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    ct = supabase.table("email_tracking").select("id", count="exact").eq("user_id", user_id).gte("created_at", today_start).execute()
+    ct = supabase.table("email_tracking").select("id", count="exact").eq("user_id", user_id).gte("sent_at", today_start).execute()
     sent_today = ct.count or 0
     return {"sent_today": sent_today, "daily_limit": 50, "remaining": max(0, 50 - sent_today)}
 
@@ -5931,14 +5931,13 @@ async def process_sequence_cron(request: Request):
                     continue
                 else:
                     # Check unsubscribe
-                    unsub = supabase.table("unsubscribes").select("id").eq("user_id", user_id).eq("email", lead_email).maybe_single().execute()
+                    unsub = supabase.table("unsubscribes").select("id").eq("user_id", user_id).eq("email", lead_email).limit(1).execute()
                     if unsub.data:
                         supabase.table("sequence_enrollments").update({"status": "unsubscribed", "last_error": "Unsubscribed"}).eq("id", enr_id).execute()
                         processed += 1
                         continue
 
-                    profile_res = supabase.table("profiles").select("smtp_config,cal_link,cal_slug").eq("id", user_id).maybe_single().execute()
-                    profile_data = profile_res.data or {}
+                    profile_data = _first(supabase.table("profiles").select("smtp_config,cal_link,cal_slug").eq("id", user_id).limit(1).execute()) or {}
                     smtp = profile_data.get("smtp_config") or {}
                     cal_slug = profile_data.get("cal_slug") or ""
                     cal_link = profile_data.get("cal_link") or ""
@@ -6137,8 +6136,8 @@ async def check_sequence_replies(request: Request):
 
     for uid in user_ids:
         try:
-            profile_res = supabase.table("profiles").select("smtp_config").eq("id", uid).maybe_single().execute()
-            smtp = (profile_res.data or {}).get("smtp_config") or {}
+            profile_res = _first(supabase.table("profiles").select("smtp_config").eq("id", uid).limit(1).execute()) or {}
+            smtp = profile_res.get("smtp_config") or {}
             if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
                 continue
 
@@ -6246,11 +6245,11 @@ async def check_sequence_replies(request: Request):
                         lead_id = matched["lead_id"]
 
                         # Check enrollment is still active/paused before processing
-                        enr_res = supabase.table("sequence_enrollments")\
+                        enr_row = _first(supabase.table("sequence_enrollments")\
                             .select("status")\
                             .eq("id", enr_id)\
-                            .maybe_single().execute()
-                        enr_status = (enr_res.data or {}).get("status")
+                            .limit(1).execute())
+                        enr_status = (enr_row or {}).get("status")
                         if enr_status not in ("active", "paused"):
                             continue
 
@@ -6277,8 +6276,8 @@ async def check_sequence_replies(request: Request):
                             # Auto-unsubscribe on explicit "not interested"
                             if sentiment == "not_interested":
                                 try:
-                                    lead_email_res = supabase.table("leads").select("email").eq("id", lead_id).maybe_single().execute()
-                                    lead_email_addr = (lead_email_res.data or {}).get("email", "")
+                                    lead_email_row = _first(supabase.table("leads").select("email").eq("id", lead_id).limit(1).execute())
+                                    lead_email_addr = (lead_email_row or {}).get("email", "")
                                     if lead_email_addr:
                                         supabase.table("unsubscribes").upsert(
                                             {"user_id": uid, "email": lead_email_addr, "reason": "not_interested"},
@@ -6289,8 +6288,8 @@ async def check_sequence_replies(request: Request):
 
                         # Boost lead engagement score for any reply (+20)
                         try:
-                            cur_e = supabase.table("leads").select("engagement_score").eq("id", lead_id).maybe_single().execute()
-                            cur_es = (cur_e.data or {}).get("engagement_score") or 0
+                            cur_e = _first(supabase.table("leads").select("engagement_score").eq("id", lead_id).limit(1).execute())
+                            cur_es = (cur_e or {}).get("engagement_score") or 0
                             supabase.table("leads").update({
                                 "engagement_score": min(100, cur_es + 20),
                                 "last_engaged_at":  now.isoformat(),
@@ -6618,16 +6617,16 @@ async def mark_enrollment_replied(seq_id: str, enrollment_id: str, authorization
     user_id = get_user_id(authorization)
     validate_uuid(enrollment_id)
     now = _dt.datetime.now(_dt.timezone.utc).isoformat()
-    enroll = supabase.table("sequence_enrollments").select("lead_id, sequence_id").eq("id", enrollment_id).eq("user_id", user_id).maybe_single().execute()
+    enroll = _first(supabase.table("sequence_enrollments").select("lead_id, sequence_id").eq("id", enrollment_id).eq("user_id", user_id).limit(1).execute())
     supabase.table("sequence_enrollments").update({
         "status": "replied", "replied_at": now
     }).eq("id", enrollment_id).eq("user_id", user_id).execute()
-    if enroll.data:
-        lead = supabase.table("leads").select("name, email, company").eq("id", enroll.data["lead_id"]).maybe_single().execute()
+    if enroll:
+        lead = _first(supabase.table("leads").select("name, email, company").eq("id", enroll["lead_id"]).limit(1).execute())
         _fire_webhooks(user_id, "sequence.replied", {
             "enrollment_id": enrollment_id,
-            "sequence_id": enroll.data.get("sequence_id"),
-            "lead": lead.data or {},
+            "sequence_id": enroll.get("sequence_id"),
+            "lead": lead or {},
         })
     return {"ok": True}
 
@@ -6637,8 +6636,8 @@ async def mark_enrollment_replied(seq_id: str, enrollment_id: str, authorization
 @router.get("/profile/smtp-config")
 async def get_smtp_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
-    config = (res.data or {}).get("smtp_config") or {}
+    res = _first(supabase.table("profiles").select("smtp_config").eq("id", user_id).limit(1).execute()) or {}
+    config = res.get("smtp_config") or {}
     # Mask password before returning
     masked = {**config}
     if masked.get("smtp_pass"):
@@ -6653,8 +6652,8 @@ async def save_smtp_config(payload: dict, authorization: str = Header(...)):
     config = {k: v for k, v in payload.items() if k in allowed_keys}
     # If password is masked placeholder, keep existing
     if config.get("smtp_pass") == "••••••••":
-        existing_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
-        existing = (existing_res.data or {}).get("smtp_config") or {}
+        existing_res = _first(supabase.table("profiles").select("smtp_config").eq("id", user_id).limit(1).execute()) or {}
+        existing = existing_res.get("smtp_config") or {}
         config["smtp_pass"] = existing.get("smtp_pass", "")
     supabase.table("profiles").update({"smtp_config": config}).eq("id", user_id).execute()
     return {"ok": True}
@@ -6672,8 +6671,8 @@ async def delete_smtp_config(authorization: str = Header(...)):
 @router.get("/profile/enrichment-config")
 async def get_enrichment_config(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    res  = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
-    cfg  = (res.data or {}).get("enrichment_config") or {}
+    res  = _first(supabase.table("profiles").select("enrichment_config").eq("id", user_id).limit(1).execute()) or {}
+    cfg  = res.get("enrichment_config") or {}
     # Mask keys — return placeholder if set
     return {
         "hunter_key_set":  bool(cfg.get("hunter_key") or os.getenv("HUNTER_API_KEY")),
@@ -6687,8 +6686,8 @@ async def get_enrichment_config(authorization: str = Header(...)):
 @router.patch("/profile/enrichment-config")
 async def save_enrichment_config(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    res  = supabase.table("profiles").select("enrichment_config").eq("id", user_id).maybe_single().execute()
-    existing = (res.data or {}).get("enrichment_config") or {}
+    res  = _first(supabase.table("profiles").select("enrichment_config").eq("id", user_id).limit(1).execute()) or {}
+    existing = res.get("enrichment_config") or {}
     updated  = dict(existing)
     # Only overwrite keys that are explicitly provided (don't wipe with masked value)
     for k in ("hunter_key", "apollo_key"):
@@ -6775,8 +6774,7 @@ async def verify_lead_email(lead_id: str, authorization: str = Header(...)):
     """Verify lead email deliverability — full pipeline (MX, disposable, catch-all, SMTP)."""
     user_id = get_user_id(authorization)
     validate_uuid(lead_id)
-    lead_res = supabase.table("leads").select("email").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
-    lead     = lead_res.data or {}
+    lead     = _first(supabase.table("leads").select("email").eq("id", lead_id).eq("user_id", user_id).limit(1).execute()) or {}
     email    = lead.get("email")
     if not email:
         raise HTTPException(status_code=422, detail="Lead has no email address")
@@ -7167,12 +7165,12 @@ async def enrich_lead_linkedin(lead_id: str, authorization: str = Header(...)):
     if not _PROXYCURL_KEY:
         raise HTTPException(status_code=503, detail="LinkedIn enrichment not configured on this server.")
 
-    lead = supabase.table("leads").select("*") \
-        .eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
-    if not lead.data:
+    lead = _first(supabase.table("leads").select("*") \
+        .eq("id", lead_id).eq("user_id", user_id).limit(1).execute())
+    if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    li_url = lead.data.get("linkedin_url") or lead.data.get("profile_url")
+    li_url = lead.get("linkedin_url") or lead.get("profile_url")
     if not li_url:
         raise HTTPException(status_code=400, detail="No LinkedIn URL on this lead")
 
@@ -7191,16 +7189,16 @@ async def enrich_lead_linkedin(lead_id: str, authorization: str = Header(...)):
         raise HTTPException(status_code=502, detail=data.get("description", "Proxycurl failed"))
 
     upd: dict = {}
-    if not lead.data.get("name")     and data.get("full_name"):   upd["name"]  = data["full_name"]
-    if not lead.data.get("location") and data.get("city"):
+    if not lead.get("name")     and data.get("full_name"):   upd["name"]  = data["full_name"]
+    if not lead.get("location") and data.get("city"):
         upd["location"] = ", ".join(p for p in [data.get("city"), data.get("country_full_name")] if p)
-    if not lead.data.get("about")    and data.get("summary"):     upd["about"] = data["summary"]
+    if not lead.get("about")    and data.get("summary"):     upd["about"] = data["summary"]
 
     experiences = data.get("experiences") or []
     current = next((e for e in experiences if not e.get("ends_at")), None)
     if current:
-        if not lead.data.get("company") and current.get("company"): upd["company"] = current["company"]
-        if not lead.data.get("title")   and current.get("title"):   upd["title"]   = current["title"]
+        if not lead.get("company") and current.get("company"): upd["company"] = current["company"]
+        if not lead.get("title")   and current.get("title"):   upd["title"]   = current["title"]
 
     if upd:
         supabase.table("leads").update(upd).eq("id", lead_id).execute()
@@ -7228,11 +7226,11 @@ async def send_lead_email(lead_id: str, payload: dict, authorization: str = Head
     validate_uuid(lead_id)
     user_id = get_user_id(authorization)
 
-    lead = supabase.table("leads").select("email, name").eq("id", lead_id).eq("user_id", user_id).maybe_single().execute()
-    if not lead.data:
+    lead = _first(supabase.table("leads").select("email, name").eq("id", lead_id).eq("user_id", user_id).limit(1).execute())
+    if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    to_email = lead.data.get("email")
+    to_email = lead.get("email")
     if not to_email:
         raise HTTPException(status_code=400, detail="Lead has no email address")
 
@@ -7782,8 +7780,8 @@ async def database_scrape(authorization: str = Header(...)):
     Runs synchronously with a small batch — keep max_users low enough to finish within Vercel's 60s Hobby limit.
     """
     user_id = get_user_id(authorization)
-    profile = supabase.table("profiles").select("role").eq("id", user_id).maybe_single().execute()
-    if (profile.data or {}).get("role") not in ("admin",):
+    profile = _first(supabase.table("profiles").select("role").eq("id", user_id).limit(1).execute()) or {}
+    if profile.get("role") not in ("admin",):
         raise HTTPException(status_code=403, detail="Admin only")
 
     if _scrape_state.get("running"):
@@ -7825,10 +7823,10 @@ async def cron_scrape_github(request: Request):
 async def test_webhook(webhook_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     validate_uuid(webhook_id)
-    hook = supabase.table("webhooks").select("*").eq("id", webhook_id).eq("user_id", user_id).single().execute()
+    hook = supabase.table("webhooks").select("*").eq("id", webhook_id).eq("user_id", user_id).limit(1).execute()
     if not hook.data:
         raise HTTPException(status_code=404, detail="Webhook not found")
-    h = hook.data
+    h = hook.data[0]
     body = json.dumps({
         "event": "test",
         "data": {"message": "This is a test payload from Sonar.", "webhook_id": webhook_id},
@@ -7851,13 +7849,12 @@ async def test_webhook(webhook_id: str, authorization: str = Header(...)):
 async def find_lookalike_companies(company_id: str, authorization: str = Header(...)):
     """Find similar companies based on industry, tech stack, and size."""
     user_id = get_user_id(authorization)
-    try:
-        co_res = supabase.table("companies").select(
-            "id,name,website,industry,size,classification,tech_stack,headquarters"
-        ).eq("id", company_id).eq("user_id", user_id).single().execute()
-    except Exception:
+    co_res = supabase.table("companies").select(
+        "id,name,website,industry,size,classification,tech_stack,headquarters"
+    ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
+    if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
-    company = co_res.data
+    company = co_res.data[0]
     name = company.get("name", "")
     industry = company.get("industry") or ""
     size = company.get("size") or ""
@@ -7915,13 +7912,12 @@ async def find_lookalike_companies(company_id: str, authorization: str = Header(
 async def generate_linkedin_dm(company_id: str, payload: dict = {}, authorization: str = Header(...)):
     """Generate a personalised LinkedIn DM for this company using Groq."""
     user_id = get_user_id(authorization)
-    try:
-        co_res = supabase.table("companies").select(
-            "id,name,website,industry,size,description,tech_stack,revenue_estimate,recent_news,job_openings"
-        ).eq("id", company_id).eq("user_id", user_id).single().execute()
-    except Exception:
+    co_res = supabase.table("companies").select(
+        "id,name,website,industry,size,description,tech_stack,revenue_estimate,recent_news,job_openings"
+    ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
+    if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
-    company = co_res.data
+    company = co_res.data[0]
     name = company.get("name", "")
     industry = company.get("industry") or ""
     desc = company.get("description") or ""
@@ -8224,8 +8220,8 @@ async def update_feature_flag(name: str, payload: dict, authorization: str = Hea
     """Admin-only: toggle a feature flag."""
     user_id = get_user_id(authorization)
     # Verify admin role
-    profile = supabase.table("profiles").select("role").eq("id", user_id).single().execute()
-    if not profile.data or profile.data.get("role") not in ("admin", "owner"):
+    profile = _first(supabase.table("profiles").select("role").eq("id", user_id).limit(1).execute())
+    if not profile or profile.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
     enabled = payload.get("enabled")
     if enabled is None:
@@ -8245,8 +8241,8 @@ async def update_feature_flag(name: str, payload: dict, authorization: str = Hea
 async def admin_stats(authorization: str = Header(...)):
     """Platform-wide stats for the admin dashboard."""
     user_id = get_user_id(authorization)
-    profile = supabase.table("profiles").select("role").eq("id", user_id).single().execute()
-    if not profile.data or profile.data.get("role") not in ("admin", "owner"):
+    profile = _first(supabase.table("profiles").select("role").eq("id", user_id).limit(1).execute())
+    if not profile or profile.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     from datetime import datetime, timedelta
@@ -8328,10 +8324,10 @@ async def admin_stats(authorization: str = Header(...)):
 
 def _require_any_admin(user_id: str):
     """Allow admin OR owner role (no team required)."""
-    res = supabase.table("profiles").select("role,email").eq("id", user_id).single().execute()
-    if not res.data or res.data.get("role") not in ("admin", "owner"):
+    row = _first(supabase.table("profiles").select("role,email").eq("id", user_id).limit(1).execute())
+    if not row or row.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
-    return res.data
+    return row
 
 
 # ── ADMIN: ALL USERS (searchable / paginated) ─────────────────────────────────
@@ -8534,8 +8530,8 @@ async def admin_user_detail(target_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     _require_any_admin(user_id)
 
-    profile = supabase.table("profiles").select("*").eq("id", target_id).single().execute()
-    if not profile.data:
+    profile_data = _first(supabase.table("profiles").select("*").eq("id", target_id).limit(1).execute())
+    if not profile_data:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Auth info (last sign in)
@@ -8554,7 +8550,7 @@ async def admin_user_detail(target_id: str, authorization: str = Header(...)):
         return supabase.table(table).select("id", count="exact").eq("user_id", target_id).limit(1).execute().count or 0
 
     return {
-        "profile": profile.data,
+        "profile": profile_data,
         "auth": auth_info,
         "counts": {
             "companies": cnt("companies"),
@@ -9029,8 +9025,8 @@ async def warmup_cron(request: Request):
         daily_target = min(2 + day * 2, 40)
 
         # Get SMTP config for user
-        profile_res = supabase.table("profiles").select("smtp_config").eq("id", user_id).maybe_single().execute()
-        smtp = (profile_res.data or {}).get("smtp_config") or {}
+        profile_res = _first(supabase.table("profiles").select("smtp_config").eq("id", user_id).limit(1).execute()) or {}
+        smtp = profile_res.get("smtp_config") or {}
         if not smtp.get("smtp_user") or not smtp.get("smtp_pass"):
             results.append({"user_id": user_id, "skipped": "no smtp config"})
             continue
