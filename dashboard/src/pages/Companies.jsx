@@ -1325,7 +1325,7 @@ function LeadsModal({ company, onClose }) {
     async function load() {
       try {
         const res = await getCompanyLeads(company.id)
-        setLeads(res.data.leads)
+        setLeads(res.data?.leads || [])
       } catch (e) { console.error(e) }
       finally { setLoading(false) }
     }
@@ -1509,15 +1509,17 @@ export default function Companies() {
   async function fetchCompanies() {
     try {
       const res = await getCompanies()
-      const fresh = res.data.companies
-      // Apply any updates that arrived while this component was unmounted
+      const fresh = res.data?.companies || []
       const missed = drainPending()
       const merged = Object.keys(missed).length
         ? fresh.map(c => missed[c.id] ? { ...c, ...missed[c.id] } : c)
         : fresh
       setCompanies(merged)
       syncToDirectory(merged)
-    } catch (e) { console.error(e) }
+    } catch (e) {
+      console.error(e)
+      setCompanies([])
+    }
     finally { setLoading(false) }
   }
 
