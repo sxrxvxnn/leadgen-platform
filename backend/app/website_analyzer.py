@@ -84,6 +84,42 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             return None
 
         raw_html = res.text  # keep raw for regex scanning before BeautifulSoup strips JS
+        resolved_url = res.url  # canonical URL after following redirects
+
+        # ── SPA bundle scan ─────────────────────────────────────────────────
+        # React/Vue SPAs return a shell HTML with an empty <div id="root">.
+        # Social links, compliance text, and app store URLs are in JS bundles.
+        # We fetch the first main/app bundle and scan it for URLs.
+        spa_bundle_text = ""
+        _is_spa = bool(re.search(r'<div[^>]+id=["\'](?:root|app|__nuxt|__next)["\']', raw_html, re.I))
+        if _is_spa and not fast:
+            # Try __NEXT_DATA__ first (Next.js SSR embeds structured JSON)
+            _nextdata = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', raw_html, re.S)
+            if _nextdata:
+                spa_bundle_text += _nextdata.group(1)[:50_000]
+            # Find main JS bundle and fetch first 150KB
+            _bundle_m = re.search(
+                r'<script[^>]+src=["\']([^"\']*(?:main|app|index)[^"\']*\.js(?:\?[^"\']*)?)["\']',
+                raw_html, re.I
+            )
+            if _bundle_m:
+                try:
+                    from urllib.parse import urljoin as _urljoin
+                    _burl = _urljoin(resolved_url, _bundle_m.group(1))
+                    _br = requests.get(_burl, headers=headers, timeout=10, stream=True)
+                    if _br.status_code == 200:
+                        _content = b''
+                        for _chunk in _br.iter_content(chunk_size=16384):
+                            _content += _chunk
+                            if len(_content) >= 150_000:
+                                break
+                        spa_bundle_text += _content.decode('utf-8', errors='ignore')
+                except Exception:
+                    pass
+
+        # Combine raw HTML + bundle text for URL scanning
+        scan_text = raw_html + spa_bundle_text
+
         soup = BeautifulSoup(raw_html, 'html.parser')
 
         # Extract meta tags BEFORE decomposing (they're removed in the strip step)
@@ -95,12 +131,27 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
         meta_description = (meta_desc_tag.get('content', '') if meta_desc_tag else '').strip()
 
         # ── HTML-level signals ────────────────────────────────────────────────
-        # Scan RAW HTML first — many React/SPA sites have app store URLs inside
-        # JS bundles, JSON-LD structured data, or inline scripts that BeautifulSoup
-        # won't surface as anchor tags after decompose.
+        # Use scan_text (raw HTML + JS bundle) so React SPAs surface their links.
         linkedin_url_in_html = None
-        has_app_store_link  = bool(re.search(r'apps\.apple\.com|itunes\.apple\.com', raw_html, re.I))
-        has_play_store_link = bool(re.search(r'play\.google\.com/store/apps', raw_html, re.I))
+        has_app_store_link  = bool(re.search(r'apps\.apple\.com|itunes\.apple\.com', scan_text, re.I))
+        has_play_store_link = bool(re.search(r'play\.google\.com/store/apps', scan_text, re.I))
+
+        # Social profile URLs extracted from HTML + JS bundle
+        _social_pats = {
+            'twitter':   re.compile(r'https?://(?:www\.)?(?:twitter|x)\.com/([A-Za-z0-9_]{1,50})', re.I),
+            'instagram': re.compile(r'https?://(?:www\.)?instagram\.com/([A-Za-z0-9_.]{1,50})', re.I),
+            'youtube':   re.compile(r'https?://(?:www\.)?youtube\.com/(?:c/|channel/|@)?([A-Za-z0-9_\-]{2,80})', re.I),
+            'facebook':  re.compile(r'https?://(?:www\.)?facebook\.com/([A-Za-z0-9_.]{3,80})', re.I),
+            'linkedin':  re.compile(r'https?://(?:www\.)?linkedin\.com/company/([A-Za-z0-9_-]{1,80})', re.I),
+        }
+        _skip_handles = {'sharer', 'share', 'login', 'signup', 'intent', 'home', 'watch', 'results', 'search', 'in', 'out', 'tr', 'p'}
+        scraped_socials: dict = {}
+        for platform, pat in _social_pats.items():
+            for m in pat.finditer(scan_text):
+                handle = m.group(1).rstrip('/').lower()
+                if handle and handle not in _skip_handles and len(handle) > 1:
+                    scraped_socials[platform] = m.group(0).split('?')[0]
+                    break
         has_web_app_link    = False
 
         # Apple Smart App Banner meta tag — placed in <head> even by SPAs
@@ -113,15 +164,23 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
 
         try:
             from urllib.parse import urlparse as _urlparse
-            _parsed    = _urlparse(url)
-            _base_dom  = _parsed.netloc.replace('www.', '').split(':')[0]  # e.g. "way.com"
+            _resolved_parsed = _urlparse(resolved_url)
+            _base_dom = _resolved_parsed.netloc.replace('www.', '').split(':')[0]
         except Exception:
             _base_dom = ''
+
+        # Also extract LinkedIn URL from scan_text (catches SPAs)
+        if not linkedin_url_in_html:
+            _li_m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', scan_text)
+            if _li_m:
+                slug = _li_m.group(1)
+                if slug not in ('linkedin', 'company', 'showcase', 'school', ''):
+                    linkedin_url_in_html = f'https://www.linkedin.com/company/{slug}/'
 
         for a_tag in soup.find_all('a', href=True):
             href = a_tag.get('href', '') or ''
 
-            # LinkedIn company URL
+            # LinkedIn company URL (HTML anchor fallback)
             if not linkedin_url_in_html:
                 m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
                 if m:
@@ -152,7 +211,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             ):
                 has_web_app_link = True
 
-        # Re-evaluate has_mobile_app after anchor loop (anchor scan may have also found links)
+        # Re-evaluate has_mobile_app after all scans
         has_mobile_app = has_app_store_link or has_play_store_link
 
         for tag in soup(['script', 'style', 'noscript', 'svg', 'img']):
@@ -224,17 +283,27 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             has_login = has_login or len(login_buttons) > 0
 
         compliance_map = {
-            'SOC 2': ['soc 2', 'soc2', 'soc ii'],
-            'ISO 27001': ['iso 27001', 'iso27001'],
-            'GDPR': ['gdpr'],
-            'HIPAA': ['hipaa'],
-            'PCI DSS': ['pci dss', 'pci-dss'],
-            'OWASP': ['owasp'],
-            'CERT-In': ['cert-in', 'cert in'],
+            'SOC 2':    ['soc 2', 'soc2', 'soc ii', 'soc-2', 'soc type ii', 'soc type 2'],
+            'ISO 27001':['iso 27001', 'iso27001', 'iso/iec 27001'],
+            'GDPR':     ['gdpr', 'general data protection'],
+            'HIPAA':    ['hipaa'],
+            'PCI DSS':  ['pci dss', 'pci-dss', 'pci compliant'],
+            'BBB':      ['bbb accredited', 'better business bureau', 'bbb rating', 'bbb.org'],
+            'CCPA':     ['ccpa', 'california consumer privacy'],
+            'OWASP':    ['owasp'],
+            'CERT-In':  ['cert-in', 'cert in'],
         }
+        # Scan full_text + scan_text (bundle may have compliance mentions as strings)
+        compliance_scan = (full_text + ' ' + scan_text[:10_000]).lower()
+        # Also scan img alt text and badge image filenames for compliance logos
+        badge_scan = ' '.join(
+            (t.get('alt', '') + ' ' + t.get('src', ''))
+            for t in soup.find_all('img')
+        ).lower()
+        compliance_scan += ' ' + badge_scan
         found_compliance = []
         for name, keywords in compliance_map.items():
-            if any(k.lower() in full_text.lower() for k in keywords):
+            if any(k.lower() in compliance_scan for k in keywords):
                 found_compliance.append(name)
 
         # Location extraction from footer / schema / contact patterns
@@ -261,6 +330,8 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
 
         return {
             'url': url,
+            'resolved_url': resolved_url,   # canonical URL after redirect (e.g. way.com not waycom.io)
+            'resolved_domain': _base_dom,   # clean domain of resolved URL
             'header': header_text,
             'footer': footer_text,
             'nav': nav_text,
@@ -274,6 +345,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             'has_play_store_link': has_play_store_link,
             'has_web_app_link': has_web_app_link,
             'compliance_detected': found_compliance,
+            'social_profiles_detected': scraped_socials,
             'meta_description': meta_description,
             'first_para': first_para,
             'location': location,

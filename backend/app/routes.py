@@ -2590,6 +2590,37 @@ async def analyze_company_website(
         if pos and isinstance(pos, list) and not company.get("specialties"):
             update_data["specialties"] = ", ".join(str(p) for p in pos[:5] if p)
 
+        # Resolve canonical website URL — if waycom.io redirected to way.com, store way.com
+        if website_data:
+            resolved_domain = website_data.get("resolved_domain", "")
+            current_domain = ""
+            if website:
+                try:
+                    from urllib.parse import urlparse as _up
+                    current_domain = _up(website if website.startswith("http") else "https://" + website).netloc.lower().replace("www.", "")
+                except Exception:
+                    pass
+            if resolved_domain and current_domain and resolved_domain != current_domain:
+                resolved_url = website_data.get("resolved_url", "")
+                if resolved_url:
+                    from urllib.parse import urlparse as _up2
+                    _p = _up2(resolved_url)
+                    canonical = f"{_p.scheme}://{_p.netloc}"
+                    update_data["website"] = canonical
+
+            # Merge scraped social profiles into DB (only fills fields not yet set)
+            scraped_socials = website_data.get("social_profiles_detected", {})
+            if scraped_socials:
+                existing_socials = company.get("social_profiles") or {}
+                if isinstance(existing_socials, str):
+                    try:
+                        import json as _j; existing_socials = _j.loads(existing_socials)
+                    except Exception:
+                        existing_socials = {}
+                merged_socials = {**scraped_socials, **existing_socials}  # existing wins
+                if merged_socials != existing_socials:
+                    update_data["social_profiles"] = merged_socials
+
         if update_data:
             supabase.table("companies").update(update_data).eq("id", company_id).eq("user_id", user_id).execute()
 
@@ -3131,13 +3162,26 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
     classification = company.get("classification") or ""
 
     from urllib.parse import urlparse as _deup
-    domain = ""
+    # Resolve redirects (e.g. waycom.io → way.com) before running enrichment jobs
     if website:
         try:
-            _h = _deup(website).netloc.lower().replace("www.", "")
-            domain = _h
+            import requests as _rq
+            _rr = _rq.get(website, headers={"User-Agent": "Mozilla/5.0"}, timeout=8, allow_redirects=True)
+            _resolved = _rr.url
+            _resolved_domain = _deup(_resolved).netloc.lower().replace("www.", "")
+            _orig_domain = _deup(website).netloc.lower().replace("www.", "")
+            if _resolved_domain and _resolved_domain != _orig_domain:
+                # Update stored website URL to the canonical one
+                from urllib.parse import urlparse as _up3
+                _rp = _up3(_resolved)
+                _canonical = f"{_rp.scheme}://{_rp.netloc}"
+                supabase.table("companies").update({"website": _canonical}).eq("id", company_id).eq("user_id", user_id).execute()
+                website = _canonical
+            domain = _resolved_domain or _deup(website).netloc.lower().replace("www.", "")
         except Exception:
-            pass
+            domain = _deup(website).netloc.lower().replace("www.", "") if website else ""
+    else:
+        domain = ""
 
     from .company_enrichment import (
         detect_tech_stack, fetch_job_openings, detect_email_pattern,
