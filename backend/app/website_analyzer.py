@@ -8,6 +8,52 @@ from .prompt_security import (
 )
 
 
+def check_app_store_presence(company_name: str, domain: str = '') -> dict:
+    """
+    Check whether a company has a mobile app via the iTunes Search API (free, no auth).
+    Falls back to domain-keyword matching for confidence.
+    Returns {'has_ios_app': bool, 'has_android_app': bool, 'app_name': str}.
+    """
+    result = {'has_ios_app': False, 'has_android_app': False, 'app_name': ''}
+    if not company_name:
+        return result
+
+    # Strip common suffixes for cleaner search
+    search_term = re.sub(r'\s*(?:pvt\.?|ltd\.?|llc\.?|inc\.?|corp\.?|private\s+limited|limited)\s*$', '', company_name, flags=re.I).strip()
+    if not search_term:
+        return result
+
+    try:
+        res = requests.get(
+            'https://itunes.apple.com/search',
+            params={'term': search_term, 'entity': 'software', 'country': 'us', 'limit': 5},
+            timeout=6,
+        )
+        if res.status_code == 200:
+            data = res.json()
+            results = data.get('results', [])
+            domain_root = domain.replace('www.', '').split('/')[0].lower() if domain else ''
+
+            for app in results:
+                app_name   = (app.get('trackName', '') or '').lower()
+                seller     = (app.get('sellerName', '') or '').lower()
+                seller_url = (app.get('sellerUrl', '') or '').lower()
+
+                search_lower = search_term.lower()
+                # Match by: app/seller name contains company keywords, or seller URL matches domain
+                name_match   = search_lower in app_name or app_name in search_lower
+                seller_match = search_lower in seller or (domain_root and domain_root in seller_url)
+
+                if name_match or seller_match:
+                    result['has_ios_app'] = True
+                    result['app_name']    = app.get('trackName', '')
+                    break
+    except Exception:
+        pass
+
+    return result
+
+
 def fetch_website_content(url: str, fast: bool = False) -> dict:
     """Scrape and parse website content.
     fast=True: 4s timeout, only meta/footer extracted — for bulk autofill where speed matters.
@@ -36,7 +82,9 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
                 return None
         if res.status_code != 200:
             return None
-        soup = BeautifulSoup(res.text, 'html.parser')
+
+        raw_html = res.text  # keep raw for regex scanning before BeautifulSoup strips JS
+        soup = BeautifulSoup(raw_html, 'html.parser')
 
         # Extract meta tags BEFORE decomposing (they're removed in the strip step)
         meta_desc_tag = (
@@ -46,11 +94,22 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
         )
         meta_description = (meta_desc_tag.get('content', '') if meta_desc_tag else '').strip()
 
-        # ── HTML-level signals (before decompose, anchor tags survive) ────────
+        # ── HTML-level signals ────────────────────────────────────────────────
+        # Scan RAW HTML first — many React/SPA sites have app store URLs inside
+        # JS bundles, JSON-LD structured data, or inline scripts that BeautifulSoup
+        # won't surface as anchor tags after decompose.
         linkedin_url_in_html = None
-        has_app_store_link  = False
-        has_play_store_link = False
+        has_app_store_link  = bool(re.search(r'apps\.apple\.com|itunes\.apple\.com', raw_html, re.I))
+        has_play_store_link = bool(re.search(r'play\.google\.com/store/apps', raw_html, re.I))
         has_web_app_link    = False
+
+        # Apple Smart App Banner meta tag — placed in <head> even by SPAs
+        if not has_app_store_link:
+            apple_meta = soup.find('meta', attrs={'name': re.compile(r'apple-itunes-app', re.I)})
+            if apple_meta:
+                has_app_store_link = True
+
+        has_mobile_app = has_app_store_link or has_play_store_link
 
         try:
             from urllib.parse import urlparse as _urlparse
@@ -93,6 +152,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             ):
                 has_web_app_link = True
 
+        # Re-evaluate has_mobile_app after anchor loop (anchor scan may have also found links)
         has_mobile_app = has_app_store_link or has_play_store_link
 
         for tag in soup(['script', 'style', 'noscript', 'svg', 'img']):
@@ -258,14 +318,18 @@ def build_analysis_prompt(website_data: dict, company_name: str) -> str:
 
     content = build_content_block(website_data)
 
+    itunes_app   = website_data.get('_itunes_app_name', '') if website_data else ''
+    itunes_found = bool(itunes_app) or (website_data.get('has_mobile_app') and not website_data.get('has_app_store_link') and not website_data.get('has_play_store_link'))
+
     return f"""Analyze the website of company "{safe_name}".
 
-FACTS CONFIRMED BY HTML SCRAPING (treat as 100% ground truth — these are from actual HTML links, not guesses):
+FACTS CONFIRMED BY AUTOMATED DETECTION (treat as 100% ground truth):
 - Login/signup page or button found: {pre_detected_login}
 - Subscription pricing text found (/month, /year, per-seat, billed annually): {pre_detected_pricing}
-- iOS App Store link found on page: {pre_detected_appstore}
-- Google Play Store link found on page: {pre_detected_playstore}
-- Mobile app present (App Store OR Play Store): {pre_detected_mobile}
+- iOS App Store link found in HTML/JS: {pre_detected_appstore}
+- Google Play Store link found in HTML/JS: {pre_detected_playstore}
+- Mobile app confirmed via iTunes Search API: {itunes_found}{f" (app: {itunes_app})" if itunes_app else ""}
+- Mobile app present (any source): {pre_detected_mobile or itunes_found}
 - Web app link found (app.domain, /dashboard, /login, /console): {pre_detected_webapp}
 - Compliance standards found: {pre_detected_compliance}
 

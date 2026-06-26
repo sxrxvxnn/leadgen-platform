@@ -2450,7 +2450,7 @@ async def analyze_company_website(
         from .website_analyzer import (
             fetch_website_content, analyze_with_gemini, analyze_with_openai,
             analyze_with_groq, classify_with_groq, classify_company_type_rules,
-            analyze_with_openrouter,
+            analyze_with_openrouter, check_app_store_presence,
         )
 
         openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
@@ -2459,9 +2459,21 @@ async def analyze_company_website(
         openrouter_key  = payload.get("openrouter_key")  or os.getenv("OPENROUTER_API_KEY", "")
         openrouter_model = payload.get("openrouter_model") or ""
         website         = company.get("website") or payload.get("website", "")
+        company_name    = company.get("name", "")
 
         # ── Step 1: fetch website content ──────────────────────────
         website_data = fetch_website_content(website) if website else None
+
+        # ── Step 1b: iTunes Search API fallback ────────────────────
+        # Many SPAs/React sites have App Store links inside JS bundles
+        # that requests-based scraping can't see. The iTunes Search API
+        # is free, no auth, and definitively confirms a mobile app exists.
+        if website_data and not website_data.get('has_mobile_app'):
+            app_check = check_app_store_presence(company_name, website)
+            if app_check.get('has_ios_app'):
+                website_data['has_mobile_app']    = True
+                website_data['has_app_store_link'] = True
+                website_data['_itunes_app_name']   = app_check.get('app_name', '')
 
         # ── Step 2: rule-based product/service classification ──────
         rule_type, rule_confidence = classify_company_type_rules(
