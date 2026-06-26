@@ -17,6 +17,11 @@ from .security import path_rate_limit_middleware, log_api_error
 
 load_dotenv()
 
+import sentry_sdk as _sentry_sdk
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    _sentry_sdk.init(dsn=_sentry_dsn, traces_sample_rate=0.1, profiles_sample_rate=0.05)
+
 _IS_PROD = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
 
