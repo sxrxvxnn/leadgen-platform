@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { getDashboardSummary, listJobChangeAlerts, markAllAlertsSeen, dismissAlert, getHotLeads, getPublicChangelog } from '../services/api'
 import { Skeleton } from '../components/Skeleton'
 import { CountUp } from '../components/ui/CountUp'
+import OnboardingChecklist from '../components/OnboardingChecklist'
 
 const SANS    = "var(--font-sans, 'Host Grotesk', sans-serif)"
 const MONO    = "var(--font-mono, 'IBM Plex Mono', monospace)"
@@ -221,6 +222,8 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      <OnboardingChecklist data={data} loading={loading} />
 
       {/* Top stat row */}
       <div style={{ display: 'flex', gap: 12, padding: '20px 36px', borderBottom: '1px solid var(--border)' }}>

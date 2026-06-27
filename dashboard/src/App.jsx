@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BulkOpsProvider } from './context/BulkOpsContext'
 import { FeatureFlagProvider, useFeatureFlags } from './context/FeatureFlagContext'
+import { ToastProvider } from './context/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppShell from './components/AppShell'
 import { PostHogProvider } from './components/PostHogProvider'
@@ -101,6 +102,7 @@ export default function App() {
       <PostHogProvider>
       <AuthProvider>
         <FeatureFlagProvider>
+        <ToastProvider>
         <BulkOpsProvider>
           {!loaderDone && <PageLoader onDone={handleLoaderDone} />}
           <ChunkErrorBoundary>
@@ -144,6 +146,7 @@ export default function App() {
           </Suspense>
           </ChunkErrorBoundary>
         </BulkOpsProvider>
+        </ToastProvider>
         </FeatureFlagProvider>
       </AuthProvider>
       </PostHogProvider>
