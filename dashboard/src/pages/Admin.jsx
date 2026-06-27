@@ -239,19 +239,29 @@ export default function Admin() {
   }, [])
 
   // ── Effects ───────────────────────────────────────────────────────────────
-  useEffect(() => { if (isAdmin) { loadStats(); loadFlags(); loadTeam() } }, [isAdmin])
+  // Track which tabs have already fetched so we never re-fetch on revisit
+  const loadedTabs = useRef(new Set())
+
+  // Mount: only load what overview needs (1 call instead of 4)
+  useEffect(() => { if (isAdmin) loadStats() }, [isAdmin])
 
   useEffect(() => {
     if (!isAdmin) return
-    if (tab === 'overview')      loadAdoption()
+    // Static tabs: fetch once, never again unless user manually refreshes
+    const STATIC = ['growth', 'engagement', 'retention', 'changelog', 'flags', 'team', 'overview']
+    if (STATIC.includes(tab) && loadedTabs.current.has(tab)) return
+
+    if (tab === 'overview')      { loadAdoption(); loadedTabs.current.add('overview') }
     if (tab === 'users')         loadUsers(dSearch, usersRole, usersPage)
     if (tab === 'announcements') loadAnnouncements()
-    if (tab === 'changelog')     loadChangelog()
-    if (tab === 'growth')        loadGrowth()
-    if (tab === 'engagement')    loadEngagement()
-    if (tab === 'retention')     loadRetention()
+    if (tab === 'changelog')     { loadChangelog(); loadedTabs.current.add('changelog') }
+    if (tab === 'growth')        { loadGrowth(); loadedTabs.current.add('growth') }
+    if (tab === 'engagement')    { loadEngagement(); loadedTabs.current.add('engagement') }
+    if (tab === 'retention')     { loadRetention(); loadedTabs.current.add('retention') }
     if (tab === 'audit')         loadAudit(auditAction, auditPage)
-    if (tab === 'health')        loadHealth()
+    if (tab === 'flags')         { loadFlags(); loadedTabs.current.add('flags') }
+    if (tab === 'team')          { loadTeam(); loadedTabs.current.add('team') }
+    // health: manual trigger only — no auto-fetch
   }, [tab, isAdmin])
 
   useEffect(() => { if (tab === 'users') { setUsersPage(0); setSelected(new Set()); loadUsers(dSearch, usersRole, 0) } }, [dSearch, usersRole])
@@ -486,7 +496,7 @@ export default function Admin() {
 
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
           <Eyebrow>Recent signups</Eyebrow>
-          <button onClick={loadStats} style={s.ghostBtn}>↻ Refresh</button>
+          <button onClick={() => { loadedTabs.current.delete('overview'); loadStats(); loadAdoption() }} style={s.ghostBtn}>↻ Refresh</button>
         </div>
         {statsLoading ? <Skeleton rows={5} /> : recentUsers.length===0 ? <Empty text="No signups yet." /> : (
           <div style={s.list}>
@@ -709,7 +719,10 @@ export default function Admin() {
     return (
       <>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
-          <p style={s.sub}><strong style={{ color:'var(--text)' }}>{enabledCount}</strong> of {featureFlags.length} flags enabled · admins bypass all flags · propagates within 60 s</p>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <p style={s.sub}><strong style={{ color:'var(--text)' }}>{enabledCount}</strong> of {featureFlags.length} flags enabled · admins bypass all flags · propagates within 60 s</p>
+            <button onClick={() => { loadedTabs.current.delete('flags'); loadFlags() }} style={s.ghostBtn}>↻ Refresh</button>
+          </div>
           {flagMsg && <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:flagMsg.ok?'#4a7c59':'#e07070' }}>{flagMsg.ok?'✓':'✗'} {flagMsg.text}</span>}
         </div>
         {categories.map(cat => {
