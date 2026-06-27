@@ -62,7 +62,7 @@ function PageFallback() {
 function AdminRoute({ children }) {
   const { profile, profileLoading } = useAuth()
   if (profileLoading) return null
-  if (profile?.role !== 'admin') return <Navigate to="/dashboard" replace />
+  if (profile?.role !== 'admin' && profile?.role !== 'owner') return <Navigate to="/dashboard" replace />
   return children
 }
 
@@ -129,7 +129,7 @@ export default function App() {
                 <Route path="/settings"      element={<Settings />} />
                 <Route path="/notifications" element={<Notifications />} />
                 <Route path="/unsubscribes"  element={<FlaggedRoute flag="page_unsubscribes"><Unsubscribes /></FlaggedRoute>} />
-                <Route path="/admin"         element={<Admin />} />
+                <Route path="/admin"         element={<AdminRoute><Admin /></AdminRoute>} />
               </Route>
 
               <Route path="/icp" element={<Navigate to="/targeting" replace />} />
