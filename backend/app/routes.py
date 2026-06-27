@@ -8790,6 +8790,10 @@ async def admin_update_user(target_id: str, payload: dict, authorization: str = 
         updates["full_name"] = (payload["full_name"] or "").strip()
     if "suspended" in payload:
         updates["suspended"] = bool(payload["suspended"])
+    if "admin_notes" in payload:
+        updates["admin_notes"] = (payload["admin_notes"] or "").strip()
+    if "admin_label" in payload:
+        updates["admin_label"] = (payload["admin_label"] or "").strip() or None
     if not updates:
         raise HTTPException(status_code=422, detail="No fields to update")
     supabase.table("profiles").update(updates).eq("id", target_id).execute()
@@ -8810,6 +8814,7 @@ async def get_audit_logs(
     authorization: str = Header(...),
     page: int = 0,
     action: str = "",
+    target_user: str = "",
 ):
     user_id = get_user_id(authorization)
     _require_any_admin(user_id)
@@ -8819,6 +8824,8 @@ async def get_audit_logs(
     ).order("created_at", desc=True).range(page * limit, (page + 1) * limit - 1)
     if action:
         q = q.eq("action", action)
+    if target_user:
+        q = q.eq("target", target_user)
     return {"logs": q.execute().data or [], "page": page}
 
 
