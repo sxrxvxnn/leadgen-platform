@@ -53,6 +53,7 @@ export default function Admin() {
   const [featureFlags, setFeatureFlags] = useState([])
   const [flagsLoading, setFlagsLoading] = useState(true)
   const [togglingFlag, setTogglingFlag] = useState(null)
+  const [flagMsg, setFlagMsg] = useState(null)
 
   // ── Overview / Stats ───────────────────────────────────────────────────────
   const [stats, setStats] = useState(null)
@@ -249,12 +250,16 @@ export default function Admin() {
   }
 
   async function handleToggleFlag(name, current) {
-    setTogglingFlag(name)
+    setTogglingFlag(name); setFlagMsg(null)
     try {
       await updateFeatureFlag(name, !current)
       setFeatureFlags(prev => prev.map(f => f.name === name ? { ...f, enabled: !current } : f))
-    } catch {}
+      setFlagMsg({ ok: true, text: `${name} → ${!current ? 'enabled' : 'disabled'}` })
+    } catch (e) {
+      setFlagMsg({ ok: false, text: e?.response?.data?.detail || 'Failed to toggle flag' })
+    }
     setTogglingFlag(null)
+    setTimeout(() => setFlagMsg(null), 4000)
   }
 
   async function handleAnnSave(e) {
@@ -626,8 +631,11 @@ export default function Admin() {
     if (flagsLoading) return <p style={s.muted}>Loading…</p>
     if (featureFlags.length === 0) return <p style={s.muted}>No feature flags configured.</p>
     const categories = [...new Set(featureFlags.map(f => f.category))]
-    const catLabels = { enrichment: 'Enrichment', outreach: 'Outreach', ui: 'UI / Views', data: 'Data & Export' }
-    return categories.map(cat => (
+    const catLabels = { pages: 'Pages', enrichment: 'Enrichment', outreach: 'Outreach', ui: 'UI / Views', data: 'Data & Export', leads: 'Leads' }
+    return <>
+      {flagMsg && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: flagMsg.ok ? '#4a7c59' : '#e07070', marginBottom: 16 }}>{flagMsg.ok ? '✓' : '✗'} {flagMsg.text}</p>}
+      <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginBottom: 20 }}>Flags gate <strong>regular users only</strong> — admins and owners always see 100% of features. Changes propagate to users within 60 seconds.</p>
+      {categories.map(cat => (
       <div key={cat} style={{ marginBottom: 28 }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 10 }}>
           {catLabels[cat] || cat}
@@ -647,7 +655,8 @@ export default function Admin() {
           ))}
         </div>
       </div>
-    ))
+    ))}
+    </>
   }
 
   function renderTeam() {

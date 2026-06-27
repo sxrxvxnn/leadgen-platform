@@ -10,14 +10,19 @@ export function FeatureFlagProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/feature-flags')
-      .then(res => {
-        const map = {}
-        for (const f of res.data?.flags || []) map[f.name] = f.enabled
-        setFlags(map)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    function fetchFlags() {
+      api.get('/feature-flags')
+        .then(res => {
+          const map = {}
+          for (const f of res.data?.flags || []) map[f.name] = f.enabled
+          setFlags(map)
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false))
+    }
+    fetchFlags()
+    const id = setInterval(fetchFlags, 60_000)
+    return () => clearInterval(id)
   }, [])
 
   // Admins and owners always see all features — flags only gate regular users
