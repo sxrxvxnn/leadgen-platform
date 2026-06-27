@@ -1,10 +1,22 @@
-import { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 import MobileHeader from './MobileHeader'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { getActiveAnnouncements } from '../services/api'
+
+const SHORTCUTS = [
+  { keys: ['G', 'D'], label: 'Go to Dashboard',    path: '/dashboard' },
+  { keys: ['G', 'L'], label: 'Go to Leads',         path: '/leads' },
+  { keys: ['G', 'C'], label: 'Go to Companies',     path: '/companies' },
+  { keys: ['G', 'P'], label: 'Go to Prospect',      path: '/prospect' },
+  { keys: ['G', 'S'], label: 'Go to Sequences',     path: '/sequences' },
+  { keys: ['G', 'A'], label: 'Go to Analytics',     path: '/analytics' },
+  { keys: ['G', 'T'], label: 'Go to Tasks',         path: '/tasks' },
+  { keys: ['G', 'E'], label: 'Go to Settings',      path: '/settings' },
+  { keys: ['?'],      label: 'Show shortcuts',       path: null },
+]
 
 const KIND_STYLE = {
   info:    { bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.25)', color: '#60a5fa' },
@@ -15,7 +27,11 @@ const KIND_STYLE = {
 
 export default function AppShell() {
   const [banners, setBanners] = useState([])
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
+  const pendingKey = useRef(null)
+  const pendingTimer = useRef(null)
 
   useEffect(() => {
     const dismissed = JSON.parse(sessionStorage.getItem('dismissed_banners') || '[]')
@@ -26,6 +42,35 @@ export default function AppShell() {
       })
       .catch(() => {})
   }, [])
+
+  // Keyboard shortcuts — ignore when typing in inputs
+  useEffect(() => {
+    function onKey(e) {
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      const key = e.key.toUpperCase()
+
+      if (key === '?') { setShowShortcuts(s => !s); return }
+      if (e.key === 'Escape') { setShowShortcuts(false); return }
+
+      if (pendingKey.current === 'G') {
+        clearTimeout(pendingTimer.current)
+        pendingKey.current = null
+        const match = SHORTCUTS.find(s => s.keys[0] === 'G' && s.keys[1] === key && s.path)
+        if (match) { e.preventDefault(); navigate(match.path) }
+        return
+      }
+
+      if (key === 'G') {
+        pendingKey.current = 'G'
+        pendingTimer.current = setTimeout(() => { pendingKey.current = null }, 800)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('keydown', onKey); clearTimeout(pendingTimer.current) }
+  }, [navigate])
 
   function dismiss(id) {
     setBanners(b => b.filter(a => a.id !== id))
@@ -67,6 +112,60 @@ export default function AppShell() {
 
         {isMobile && <BottomNav />}
       </main>
+
+      {/* Shortcuts modal */}
+      {showShortcuts && (
+        <>
+          <div onClick={() => setShowShortcuts(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 400 }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            width: 'min(400px,92vw)', background: 'var(--bg)',
+            border: '1px solid var(--border)', borderRadius: 12,
+            zIndex: 401, overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Keyboard shortcuts</p>
+              <button onClick={() => setShowShortcuts(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 18 }}>×</button>
+            </div>
+            <div style={{ padding: '12px 0' }}>
+              {SHORTCUTS.map(s => (
+                <div key={s.keys.join('')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 20px' }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: 'var(--text-muted)' }}>{s.label}</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {s.keys.map(k => (
+                      <kbd key={k} style={{
+                        padding: '3px 8px', borderRadius: 4,
+                        background: 'var(--surface)', border: '1px solid var(--border)',
+                        fontFamily: "'IBM Plex Mono',monospace", fontSize: 10, fontWeight: 700,
+                        color: 'var(--text)',
+                      }}>{k}</kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, color: 'var(--text-muted)', margin: 0 }}>Press <kbd style={{ padding: '2px 5px', borderRadius: 3, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 9 }}>?</kbd> to toggle this panel</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Hint: press ? for shortcuts — shown once */}
+      {!isMobile && !showShortcuts && (
+        <button
+          onClick={() => setShowShortcuts(true)}
+          style={{
+            position: 'fixed', bottom: 16, right: 16, zIndex: 100,
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, fontWeight: 700,
+            color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1,
+          }}
+          title="Keyboard shortcuts (?)"
+        >?</button>
+      )}
     </div>
   )
 }
