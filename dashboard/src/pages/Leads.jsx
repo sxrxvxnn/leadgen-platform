@@ -433,7 +433,28 @@ export default function Leads() {
   const [viewMode, setViewMode] = useState('table') // 'table' | 'pipeline'
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
+  const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [exportCols, setExportCols] = useState(['name','title','company','location','email','status','connection_status','starred','icp_score','linkedin_url','phone','source'])
   const csvInputRef = useRef(null)
+
+  const ALL_EXPORT_COLS = [
+    { key:'name',              label:'Name' },
+    { key:'title',             label:'Title / Role' },
+    { key:'company',           label:'Company' },
+    { key:'location',          label:'Location' },
+    { key:'email',             label:'Email' },
+    { key:'phone',             label:'Phone' },
+    { key:'linkedin_url',      label:'LinkedIn URL' },
+    { key:'status',            label:'Status' },
+    { key:'connection_status', label:'Connection Status' },
+    { key:'icp_score',         label:'ICP Score' },
+    { key:'icp_score_reason',  label:'ICP Reason' },
+    { key:'email_status',      label:'Email Status' },
+    { key:'starred',           label:'Starred' },
+    { key:'source',            label:'Source' },
+    { key:'created_at',        label:'Added On' },
+    { key:'notes',             label:'Notes' },
+  ]
 
   useEffect(() => { fetchLeads(); fetchSegments(); fetchSequences() }, [])
 
@@ -779,12 +800,16 @@ export default function Leads() {
 
   function handleExport(leadsToExport) {
     const toExport = leadsToExport || (selected.length ? filtered.filter((l) => selected.includes(l.id)) : filtered)
-    const headers = ['Name', 'Title', 'Company', 'Location', 'Email', 'Status', 'Connection Status', 'Starred', 'Profile URL']
-    const rows = toExport.map((l) => [l.name, l.title, l.company, l.location, l.email, l.status, l.connection_status, l.starred ? 'Yes' : 'No', l.profile_url])
-    const csv = [headers, ...rows].map((r) => r.map((v) => '"' + (v || '') + '"').join(',')).join('\n')
+    const cols = ALL_EXPORT_COLS.filter(c => exportCols.includes(c.key))
+    const headers = cols.map(c => c.label)
+    const rows = toExport.map(l => cols.map(c => {
+      if (c.key === 'starred') return l.starred ? 'Yes' : 'No'
+      return l[c.key] ?? ''
+    }))
+    const csv = [headers, ...rows].map(r => r.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(',')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    a.download = 'leads.csv'
+    a.download = `leads-${new Date().toISOString().slice(0,10)}.csv`
     a.click()
   }
 
@@ -839,7 +864,38 @@ export default function Leads() {
             {importing ? 'Importing…' : 'Import CSV'}
           </button>
           <button style={s.exportBtn} onClick={handleExportCSV}>Export CSV →</button>
+          <button style={{ ...s.exportBtn, background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }} onClick={() => setShowColumnPicker(true)} title="Choose export columns">⚙ Columns</button>
         </div>
+
+        {/* Column picker modal */}
+        {showColumnPicker && (
+          <>
+            <div onClick={() => setShowColumnPicker(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 400 }} />
+            <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 'min(380px,92vw)', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 401, boxShadow: '0 20px 60px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Export columns</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setExportCols(ALL_EXPORT_COLS.map(c => c.key))} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>All</button>
+                  <button onClick={() => setExportCols([])} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>None</button>
+                </div>
+              </div>
+              <div style={{ padding: '8px 0', maxHeight: 360, overflowY: 'auto' }}>
+                {ALL_EXPORT_COLS.map(col => (
+                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={exportCols.includes(col.key)} onChange={e => setExportCols(prev => e.target.checked ? [...prev, col.key] : prev.filter(k => k !== col.key))} style={{ cursor: 'pointer', accentColor: '#E7000B' }} />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)' }}>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setShowColumnPicker(false)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '8px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
+                <button onClick={() => { handleExport(); setShowColumnPicker(false) }} disabled={!exportCols.length} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, padding: '8px 18px', background: '#E7000B', border: 'none', borderRadius: 7, color: '#fff', cursor: exportCols.length ? 'pointer' : 'default', opacity: exportCols.length ? 1 : 0.5 }}>
+                  Export {selected.length ? `${selected.length} selected` : `${filtered.length} leads`}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
         {importMsg && (
           <div style={{ padding: '8px 24px', background: importMsg.includes('failed') ? 'rgba(231,0,11,0.08)' : 'rgba(74,124,89,0.1)', borderBottom: '1px solid var(--border)' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: importMsg.includes('failed') ? '#E7000B' : '#4a7c59' }}>{importMsg}</span>

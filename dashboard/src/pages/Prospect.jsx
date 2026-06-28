@@ -84,11 +84,12 @@ function TagInput({ value, onChange, placeholder, suggestions = [], pendingRef }
 }
 
 // ── PersonRow ────────────────────────────────────────────────────────────────
-function PersonRow({ person, onAdd, addedIds, verifyingIds, liveIds, enrichedEmails, selected, onToggleSelect }) {
+function PersonRow({ person, onAdd, addedIds, dupIds, verifyingIds, liveIds, enrichedEmails, selected, onToggleSelect }) {
   const [revealing,     setRevealing]     = useState(false)
   const [revealedEmail, setRevealedEmail] = useState(null)
 
   const isAdded     = addedIds.has(person.id)
+  const isDup       = dupIds.has(person.id)
   const isVerifying = verifyingIds.has(person.id)
   const isLive      = liveIds.has(person.id)
   const isSelected  = selected.has(person.id)
@@ -127,7 +128,8 @@ function PersonRow({ person, onAdd, addedIds, verifyingIds, liveIds, enrichedEma
   let btnColor = 'var(--bg)'
   let btnBorder = 'none'
   if (isVerifying) { btnLabel = 'Live check…'; btnBg = 'var(--surface)'; btnColor = 'var(--text-muted)'; btnBorder = '1px solid var(--border)' }
-  else if (isAdded) { btnLabel = 'Added'; btnBg = 'var(--surface)'; btnColor = 'var(--text-muted)'; btnBorder = '1px solid var(--border)' }
+  else if (isDup)  { btnLabel = 'In leads'; btnBg = 'rgba(59,130,246,0.08)'; btnColor = '#60a5fa'; btnBorder = '1px solid rgba(59,130,246,0.25)' }
+  else if (isAdded) { btnLabel = 'Added ✓'; btnBg = 'rgba(5,150,105,0.08)'; btnColor = '#34d399'; btnBorder = '1px solid rgba(5,150,105,0.25)' }
 
   return (
     <div
@@ -184,9 +186,9 @@ function PersonRow({ person, onAdd, addedIds, verifyingIds, liveIds, enrichedEma
           </a>
         )}
         <button
-          onClick={() => !isAdded && !isVerifying && onAdd(person)}
-          disabled={isAdded || isVerifying}
-          style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '5px 14px', background: btnBg, color: btnColor, border: btnBorder, borderRadius: 5, cursor: (isAdded || isVerifying) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          onClick={() => !isAdded && !isVerifying && !isDup && onAdd(person)}
+          disabled={isAdded || isVerifying || isDup}
+          style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', padding: '5px 14px', background: btnBg, color: btnColor, border: btnBorder, borderRadius: 5, cursor: (isAdded || isVerifying || isDup) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
           {btnLabel}
         </button>
       </div>
@@ -215,12 +217,20 @@ export default function Prospect() {
 
   // Per-person state
   const [addedIds,      setAddedIds]      = useState(new Set())   // person.id → added
+  const [dupIds,        setDupIds]        = useState(new Set())   // person.id → already in leads
   const [verifyingIds,  setVerifyingIds]  = useState(new Set())   // person.id → live check running
   const [liveIds,       setLiveIds]       = useState(new Set())   // person.id → verified live
   const [enrichedEmails,setEnrichedEmails]= useState({})          // person.id → email from Proxycurl
   const [addedLeadIds,  setAddedLeadIds]  = useState({})          // person.id → lead uuid
 
   const [selected,     setSelected]     = useState(new Set())
+
+  // Saved searches
+  const [savedSearches,  setSavedSearches]  = useState([])
+  const [showSaved,      setShowSaved]      = useState(false)
+  const [saveName,       setSaveName]       = useState('')
+  const [showSaveInput,  setShowSaveInput]  = useState(false)
+  const [savingSearch,   setSavingSearch]   = useState(false)
 
   const [sequences,    setSequences]    = useState([])
   const [showSeqModal, setShowSeqModal] = useState(false)
@@ -229,7 +239,39 @@ export default function Prospect() {
 
   useEffect(() => {
     listSequences().then(res => setSequences(res.data.sequences || [])).catch(() => {})
+    api.get('/saved-searches').then(r => setSavedSearches(r.data?.searches || [])).catch(() => {})
   }, [])
+
+  async function handleSaveSearch() {
+    const name = saveName.trim()
+    if (!name) return
+    setSavingSearch(true)
+    try {
+      const filters = buildFilters()
+      const r = await api.post('/saved-searches', { name, filters })
+      setSavedSearches(prev => [r.data.search, ...prev])
+      setSaveName(''); setShowSaveInput(false); setShowSaved(true)
+    } catch {}
+    setSavingSearch(false)
+  }
+
+  async function handleDeleteSearch(id) {
+    try {
+      await api.delete(`/saved-searches/${id}`)
+      setSavedSearches(prev => prev.filter(s => s.id !== id))
+    } catch {}
+  }
+
+  function loadSearch(s) {
+    const f = s.filters || {}
+    setKeywords(f.keywords || '')
+    setCompanyText((f.companies || [])[0] || '')
+    setTitles(f.titles || [])
+    setLocations(f.locations || [])
+    setSizes(f.sizes || [])
+    lastFilters.current = null
+    setShowSaved(false)
+  }
 
   const lastFilters = useRef(null)
 
@@ -290,10 +332,15 @@ export default function Prospect() {
 
     try {
       const res = await api.post('/prospect/add-lead', { person: personToSave })
-      if (res.data?.lead_id) {
+      if (res.data?.added === false) {
+        // Already in leads — roll back "added" state and mark as dup
+        setAddedIds(prev => { const s = new Set(prev); s.delete(person.id); return s })
+        setDupIds(prev => new Set([...prev, person.id]))
+        if (res.data?.lead_id) setAddedLeadIds(prev => ({ ...prev, [person.id]: res.data.lead_id }))
+      } else if (res.data?.lead_id) {
         setAddedLeadIds(prev => ({ ...prev, [person.id]: res.data.lead_id }))
+        invalidateCache('/leads')
       }
-      invalidateCache('/leads')
     } catch {
       // Roll back optimistic add
       setAddedIds(prev => { const s = new Set(prev); s.delete(person.id); return s })
@@ -352,6 +399,21 @@ export default function Prospect() {
         </p>
       </div>
 
+      {/* Saved searches bar */}
+      {savedSearches.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Saved:</span>
+          {savedSearches.map(s => (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
+              <button onClick={() => loadSearch(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text)', padding: '5px 12px' }}>
+                {s.name}
+              </button>
+              <button onClick={() => handleDeleteSearch(s.id)} style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', padding: '5px 8px', lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Filter card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -395,9 +457,29 @@ export default function Prospect() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {error && <p style={{ fontFamily: MONO, fontSize: 11, color: '#E7000B', margin: 0 }}>{error}</p>}
           <div style={{ flex: 1 }} />
+          {/* Save search */}
+          {showSaveInput ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                autoFocus value={saveName} onChange={e => setSaveName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveSearch(); if (e.key === 'Escape') setShowSaveInput(false) }}
+                placeholder="Search name…"
+                style={{ ...INPUT_STYLE, width: 160, padding: '8px 12px' }} />
+              <button onClick={handleSaveSearch} disabled={savingSearch || !saveName.trim()}
+                style={{ fontFamily: MONO, fontSize: 11, fontWeight: 600, padding: '8px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', cursor: 'pointer', opacity: !saveName.trim() ? 0.5 : 1 }}>
+                {savingSearch ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setShowSaveInput(false)} style={{ fontFamily: MONO, fontSize: 11, padding: '8px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowSaveInput(true)}
+              style={{ fontFamily: MONO, fontSize: 11, padding: '8px 14px', background: 'none', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-muted)', cursor: 'pointer' }}>
+              ＋ Save search
+            </button>
+          )}
           <button onClick={() => search(1)} disabled={loading}
             style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', padding: '10px 28px', background: 'var(--text)', color: 'var(--bg)', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1 }}>
             {loading ? 'Searching…' : 'Search'}
@@ -487,6 +569,7 @@ export default function Prospect() {
               person={person}
               onAdd={handleAdd}
               addedIds={addedIds}
+              dupIds={dupIds}
               verifyingIds={verifyingIds}
               liveIds={liveIds}
               enrichedEmails={enrichedEmails}

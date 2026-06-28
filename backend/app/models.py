@@ -189,3 +189,4 @@ class CompanyUpdate(BaseModel):
     is_saas: Optional[bool] = None
     name: Optional[str] = None
     tagline: Optional[str] = None
+    watchlisted: Optional[bool] = None

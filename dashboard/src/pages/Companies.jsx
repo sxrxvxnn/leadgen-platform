@@ -353,6 +353,7 @@ function checkCompanyAccuracy(company) {
 function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy, isEnabled }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
+  const [watchlisted, setWatchlisted] = useState(company.watchlisted || false)
   const [notes, setNotes] = useState(company.notes || '')
   const [editingNotes, setEditingNotes] = useState(false)
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -419,6 +420,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   async function handleSaveNotes() {
     onUpdate(company.id, { notes })
     setEditingNotes(false)
+  }
+
+  function handleWatchlist() {
+    const next = !watchlisted
+    setWatchlisted(next)
+    onUpdate(company.id, { watchlisted: next })
   }
 
   async function handleAnalyze() {
@@ -816,6 +823,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
         {/* Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button
+            onClick={handleWatchlist}
+            title={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 4px', color: watchlisted ? '#f59e0b' : 'var(--border)', transition: 'color 0.15s' }}>
+            {watchlisted ? '★' : '☆'}
+          </button>
           <input type="checkbox" checked={selected || false} onChange={() => onToggle(company.id)}
             onClick={e => e.stopPropagation()}
             style={{ accentColor: 'var(--accent)', cursor: 'pointer', width: 14, height: 14 }} />
@@ -1464,6 +1477,7 @@ export default function Companies() {
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [watchlistOnly, setWatchlistOnly] = useState(false)
   const [followerFilter, setFollowerFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [fillFilter, setFillFilter] = useState('all')
@@ -1556,7 +1570,8 @@ export default function Companies() {
     const acc = accuracyMap[c.id]
     const isSusp = acc?.confidence === 'low' || acc?.confidence === 'medium'
     const mfill = fillFilter === 'all' || (fillFilter === 'complete' && missing === 0) || (fillFilter === 'incomplete' && missing > 0) || (fillFilter === 'suspicious' && isSusp) || (fillFilter === 'accurate' && acc?.confidence === 'high')
-    return ms && mc && ms2 && mf && mt && mfill
+    const mwatch = !watchlistOnly || c.watchlisted
+    return ms && mc && ms2 && mf && mt && mfill && mwatch
   })
 
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
@@ -1909,6 +1924,11 @@ export default function Companies() {
             <option value="all">All statuses</option>
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          <button
+            onClick={() => setWatchlistOnly(w => !w)}
+            style={{ ...s.select, background: watchlistOnly ? 'rgba(245,158,11,0.12)' : 'var(--surface)', border: `1px solid ${watchlistOnly ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`, color: watchlistOnly ? '#f59e0b' : 'var(--text-muted)', cursor: 'pointer', fontWeight: watchlistOnly ? 700 : 400 }}>
+            ★ Watchlist{watchlistOnly ? ` (${companies.filter(c => c.watchlisted).length})` : ''}
+          </button>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={s.select}>
             <option value="all">All · Product / Service</option>
             <option value="Product">Product</option>

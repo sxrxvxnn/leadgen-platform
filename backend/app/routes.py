@@ -7900,6 +7900,33 @@ async def prospect_add_lead(payload: dict, authorization: str = Header(...)):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# SAVED SEARCHES
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/saved-searches")
+async def list_saved_searches(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    res = supabase.table("saved_searches").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    return {"searches": res.data or []}
+
+@router.post("/saved-searches")
+async def create_saved_search(payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    name    = (payload.get("name") or "").strip()
+    filters = payload.get("filters") or {}
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    res = supabase.table("saved_searches").insert({"user_id": user_id, "name": name, "filters": filters}).execute()
+    return {"search": res.data[0] if res.data else {}}
+
+@router.delete("/saved-searches/{search_id}")
+async def delete_saved_search(search_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    supabase.table("saved_searches").delete().eq("id", search_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════════
 # WEBHOOKS
 # ═══════════════════════════════════════════════════════════════════
 
