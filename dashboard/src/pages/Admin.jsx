@@ -52,6 +52,15 @@ function exportCSV(rows) {
   a.click()
 }
 
+function exportAuditLogsCSV(logs) {
+  const cols = ['action','admin_email','target','created_at']
+  const lines = [cols.join(','), ...logs.map(l => cols.map(c => JSON.stringify(l[c]??'')).join(','))]
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+  a.download = `audit-log-${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Admin() {
   const { profile } = useAuth()
@@ -225,6 +234,8 @@ export default function Admin() {
     try { const p = new URLSearchParams({ page }); if (action) p.set('action', action); const r = await api.get(`/admin/audit-logs?${p}`); setAuditLogs(r.data?.logs||[]) } catch {}
     setAuditLoading(false)
   }, [])
+
+  function exportAuditCSV() { exportAuditLogsCSV(auditLogs) }
 
   const loadTeam = useCallback(async () => {
     setTeamLoading(true)
@@ -857,6 +868,7 @@ export default function Admin() {
             {AUDIT_ACTIONS.map(a=><option key={a} value={a}>{a.replace(/_/g,' ')}</option>)}
           </select>
           <button onClick={()=>{ setLiveCount(0); loadAudit(auditAction,auditPage) }} style={s.ghostBtn}>↻ Refresh{liveCount>0 && <span style={{ marginLeft:6, padding:'1px 5px', borderRadius:8, background:'#E7000B', color:'#fff', fontSize:9 }}>{liveCount} new</span>}</button>
+          <button onClick={exportAuditCSV} disabled={auditLogs.length===0} style={{ ...s.ghostBtn, opacity: auditLogs.length===0 ? 0.4 : 1 }}>↓ Export CSV</button>
           <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'#059669', marginLeft:'auto' }}>● Live</span>
         </div>
         {auditLoading ? <Skeleton rows={6} /> : auditLogs.length===0 ? <Empty text="No audit logs." /> : (

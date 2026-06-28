@@ -11,8 +11,9 @@ const SECTIONS = [
   { id: 'warmup',     num: '04', label: 'Email Warm-up' },
   { id: 'scheduler',  num: '05', label: 'Meeting Scheduler' },
   { id: 'webhooks',   num: '06', label: 'Webhooks' },
-  { id: 'privacy',    num: '07', label: 'Privacy' },
-  { id: 'terms',      num: '08', label: 'Terms' },
+  { id: 'api-keys',   num: '07', label: 'API Keys' },
+  { id: 'privacy',    num: '08', label: 'Privacy' },
+  { id: 'terms',      num: '09', label: 'Terms' },
 ]
 
 const WEBHOOK_EVENT_LABELS = {
@@ -121,6 +122,7 @@ export default function Settings() {
     warmup:     useRef(null),
     scheduler:  useRef(null),
     webhooks:   useRef(null),
+    'api-keys': useRef(null),
     privacy:    useRef(null),
     terms:      useRef(null),
   }
@@ -154,6 +156,39 @@ export default function Settings() {
   const [warmupSaved,   setWarmupSaved]   = useState(false)
   const [warmupEnabled, setWarmupEnabled] = useState(false)
   const [warmupEmails,  setWarmupEmails]  = useState('')
+
+  // API keys state
+  const [apiKeys,      setApiKeys]      = useState([])
+  const [apiKeysLoaded,setApiKeysLoaded]= useState(false)
+  const [newKeyName,   setNewKeyName]   = useState('')
+  const [creatingKey,  setCreatingKey]  = useState(false)
+  const [newKeySecret, setNewKeySecret] = useState(null) // shown once after creation
+
+  async function loadApiKeys() {
+    if (apiKeysLoaded) return
+    try { const r = await api.get('/api-keys'); setApiKeys(r.data.keys || []); setApiKeysLoaded(true) } catch {}
+  }
+
+  async function createApiKey() {
+    if (!newKeyName.trim()) return
+    setCreatingKey(true)
+    try {
+      const r = await api.post('/api-keys', { name: newKeyName.trim() })
+      setApiKeys(prev => [r.data.key, ...prev])
+      setNewKeySecret(r.data.raw_key)
+      setNewKeyName('')
+    } catch (e) {
+      alert('Failed: ' + (e?.response?.data?.detail || e.message))
+    } finally {
+      setCreatingKey(false)
+    }
+  }
+
+  async function deleteApiKey(id) {
+    if (!confirm('Revoke this API key? Any integrations using it will break.')) return
+    await api.delete(`/api-keys/${id}`)
+    setApiKeys(prev => prev.filter(k => k.id !== id))
+  }
 
   useEffect(() => {
     api.get('/webhooks').then(r => setWebhooks(r.data.webhooks || [])).catch(() => {})
@@ -739,7 +774,62 @@ export default function Settings() {
             </div>
           </section>
 
-          {/* 05 — Privacy */}
+          {/* 07 — API Keys */}
+          <section ref={sectionRefs['api-keys']} style={{ ...s.section }} onMouseEnter={loadApiKeys}>
+            <SectionHeader num="07" title="API Keys" />
+            <p style={s.sectionHint}>Create API keys to access the Sonar API from your own applications or integrations. Each key is shown only once at creation.</p>
+
+            {newKeySecret && (
+              <div style={{ marginBottom: 20, padding: '14px 16px', background: '#05966912', border: '1px solid #05966940', borderRadius: 8 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, color: '#059669', letterSpacing: '0.08em', marginBottom: 6 }}>NEW KEY — COPY NOW, IT WON'T BE SHOWN AGAIN</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', flex: 1, wordBreak: 'break-all' }}>{newKeySecret}</code>
+                  <button onClick={() => { navigator.clipboard.writeText(newKeySecret); }} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '8px 14px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', flexShrink: 0 }}>Copy</button>
+                  <button onClick={() => setNewKeySecret(null)} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '8px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <input
+                value={newKeyName}
+                onChange={e => setNewKeyName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && createApiKey()}
+                placeholder="Key name, e.g. Zapier integration"
+                style={{ ...s.input, flex: 1 }}
+              />
+              <button onClick={createApiKey} disabled={creatingKey || !newKeyName.trim()}
+                style={{ ...s.saveBtn, opacity: (!newKeyName.trim() || creatingKey) ? 0.5 : 1, cursor: (!newKeyName.trim() || creatingKey) ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {creatingKey ? 'Creating…' : '+ Create key'}
+              </button>
+            </div>
+
+            {apiKeys.length === 0 && apiKeysLoaded && (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>No API keys yet.</p>
+            )}
+            {apiKeys.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {apiKeys.map(k => (
+                  <div key={k.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{k.name}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {k.prefix}••••••••
+                        {k.last_used_at ? ` · Last used ${new Date(k.last_used_at).toLocaleDateString()}` : ' · Never used'}
+                        {' · Created '}{new Date(k.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: k.active ? '#05966918' : 'rgba(255,255,255,0.04)', color: k.active ? '#059669' : 'var(--text-muted)', border: `1px solid ${k.active ? '#05966940' : 'var(--border)'}` }}>
+                      {k.active ? 'ACTIVE' : 'REVOKED'}
+                    </span>
+                    <button onClick={() => deleteApiKey(k.id)} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '6px 12px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: '#e07070', cursor: 'pointer', flexShrink: 0 }}>Revoke</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 08 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section }}>
             <SectionHeader num="06" title="Privacy Policy" />
             <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>

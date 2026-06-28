@@ -5934,6 +5934,24 @@ async def delete_sequence(seq_id: str, authorization: str = Header(...)):
     return {"ok": True}
 
 
+@router.post("/sequences/{seq_id}/clone")
+async def clone_sequence(seq_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(seq_id)
+    orig = supabase.table("sequences").select("*").eq("id", seq_id).eq("user_id", user_id).limit(1).execute()
+    if not orig.data:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    src = orig.data[0]
+    result = supabase.table("sequences").insert({
+        "user_id": user_id,
+        "name": f"Copy of {src['name']}",
+        "description": src.get("description", ""),
+        "steps": src.get("steps", []),
+        "status": "draft",
+    }).execute()
+    return {"sequence": result.data[0] if result.data else {}}
+
+
 @router.post("/sequences/{seq_id}/enroll")
 async def enroll_leads(seq_id: str, payload: dict, authorization: str = Header(...)):
     import datetime as _dt
@@ -7924,6 +7942,68 @@ async def delete_saved_search(search_id: str, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     supabase.table("saved_searches").delete().eq("id", search_id).eq("user_id", user_id).execute()
     return {"ok": True}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# API KEYS
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/api-keys")
+async def list_api_keys(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    rows = (
+        supabase.table("api_keys")
+        .select("id,name,prefix,created_at,last_used_at,expires_at,active")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return {"keys": rows.data or []}
+
+
+@router.post("/api-keys")
+async def create_api_key(payload: dict, authorization: str = Header(...)):
+    import hashlib
+    user_id = get_user_id(authorization)
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+    raw_key = f"sk-{secrets.token_urlsafe(32)}"
+    prefix = raw_key[:12]
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    row = supabase.table("api_keys").insert({
+        "user_id": user_id,
+        "name": name,
+        "key_hash": key_hash,
+        "prefix": prefix,
+        "active": True,
+    }).execute()
+    return {"key": row.data[0] if row.data else {}, "raw_key": raw_key}
+
+
+@router.delete("/api-keys/{key_id}")
+async def delete_api_key(key_id: str, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(key_id)
+    supabase.table("api_keys").delete().eq("id", key_id).eq("user_id", user_id).execute()
+    return {"ok": True}
+
+
+@router.patch("/api-keys/{key_id}")
+async def update_api_key(key_id: str, payload: dict, authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    validate_uuid(key_id)
+    update = {k: v for k, v in payload.items() if k in ("name", "active")}
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    row = (
+        supabase.table("api_keys")
+        .update(update)
+        .eq("id", key_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {"key": row.data[0] if row.data else {}}
 
 
 # ═══════════════════════════════════════════════════════════════════

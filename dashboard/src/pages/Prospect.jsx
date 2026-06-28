@@ -274,6 +274,40 @@ export default function Prospect() {
   }
 
   const lastFilters = useRef(null)
+  const [searchHistory, setSearchHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('prospect_search_history') || '[]') } catch { return [] }
+  })
+  const [showHistory, setShowHistory] = useState(false)
+
+  function saveToHistory(filters) {
+    const label = [
+      filters.keywords,
+      ...(filters.titles || []),
+      ...(filters.companies || []),
+      ...(filters.locations || []),
+    ].filter(Boolean).join(', ')
+    if (!label) return
+    const entry = { label, filters, ts: Date.now() }
+    const next = [entry, ...searchHistory.filter(h => h.label !== label)].slice(0, 10)
+    setSearchHistory(next)
+    localStorage.setItem('prospect_search_history', JSON.stringify(next))
+  }
+
+  function loadFromHistory(entry) {
+    const f = entry.filters || {}
+    setKeywords(f.keywords || '')
+    setCompanyText((f.companies || [])[0] || '')
+    setTitles(f.titles || [])
+    setLocations(f.locations || [])
+    setSizes(f.sizes || [])
+    lastFilters.current = null
+    setShowHistory(false)
+  }
+
+  function clearHistory() {
+    setSearchHistory([])
+    localStorage.removeItem('prospect_search_history')
+  }
 
   function buildFilters() {
     const companies    = companyText.trim() ? [companyText.trim()] : []
@@ -291,7 +325,7 @@ export default function Prospect() {
     setLoading(true); setError(''); setPage(p); setSelected(new Set())
     try {
       const res = await api.post('/prospect/people-search', { ...filters, page: p })
-      if (p === 1) lastFilters.current = filters
+      if (p === 1) { lastFilters.current = filters; saveToHistory(filters) }
       setResults(res.data.people || [])
       setTotal(res.data.total || 0)
       setTotalPages(res.data.total_pages || 1)
@@ -399,20 +433,47 @@ export default function Prospect() {
         </p>
       </div>
 
-      {/* Saved searches bar */}
-      {savedSearches.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Saved:</span>
-          {savedSearches.map(s => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
-              <button onClick={() => loadSearch(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text)', padding: '5px 12px' }}>
-                {s.name}
-              </button>
-              <button onClick={() => handleDeleteSearch(s.id)} style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', padding: '5px 8px', lineHeight: 1 }}>×</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Saved searches + history bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        {savedSearches.length > 0 && (
+          <>
+            <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Saved:</span>
+            {savedSearches.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 20, overflow: 'hidden' }}>
+                <button onClick={() => loadSearch(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text)', padding: '5px 12px' }}>
+                  {s.name}
+                </button>
+                <button onClick={() => handleDeleteSearch(s.id)} style={{ background: 'none', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', fontFamily: MONO, fontSize: 11, color: 'var(--text-muted)', padding: '5px 8px', lineHeight: 1 }}>×</button>
+              </div>
+            ))}
+          </>
+        )}
+        {searchHistory.length > 0 && (
+          <div style={{ position: 'relative', marginLeft: savedSearches.length ? 8 : 0 }}>
+            <button onClick={() => setShowHistory(h => !h)}
+              style={{ fontFamily: MONO, fontSize: 10, padding: '5px 12px', background: showHistory ? 'var(--surface)' : 'none', border: '1px solid var(--border)', borderRadius: 20, color: 'var(--text-muted)', cursor: 'pointer' }}>
+              ⏱ Recent ({searchHistory.length})
+            </button>
+            {showHistory && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.3)', minWidth: 260, maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Recent searches</span>
+                  <button onClick={clearHistory} style={{ fontFamily: MONO, fontSize: 9, color: '#e07070', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear</button>
+                </div>
+                {searchHistory.map((entry, i) => (
+                  <button key={i} onClick={() => loadFromHistory(entry)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', fontFamily: MONO, fontSize: 11, color: 'var(--text)', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{entry.label}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{new Date(entry.ts).toLocaleDateString()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Filter card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, marginBottom: 24 }}>

@@ -36,7 +36,10 @@ function previewText(text) {
 }
 
 function StepCard({ step, index, onChange, onRemove }) {
-  const [previewMode, setPreviewMode] = useState(false)
+  const [previewMode, setPreviewMode]       = useState(false)
+  const [showTplPicker, setShowTplPicker]   = useState(false)
+  const [tplList, setTplList]               = useState([])
+  const [tplLoading, setTplLoading]         = useState(false)
   const abEnabled = step.subject_b !== undefined && step.subject_b !== null
 
   function toggleAB() {
@@ -45,6 +48,20 @@ function StepCard({ step, index, onChange, onRemove }) {
     } else {
       onChange({ ...step, subject_b: '', body_b: '' })
     }
+  }
+
+  async function openTplPicker() {
+    setShowTplPicker(true)
+    if (tplList.length === 0) {
+      setTplLoading(true)
+      try { const r = await api.get('/email-templates'); setTplList(r.data?.templates || []) } catch {}
+      setTplLoading(false)
+    }
+  }
+
+  function applyTemplate(tpl) {
+    onChange({ ...step, subject: tpl.subject || step.subject, body: tpl.body })
+    setShowTplPicker(false)
   }
 
   return (
@@ -68,12 +85,43 @@ function StepCard({ step, index, onChange, onRemove }) {
             </button>
           )}
           {step.type === 'email' && (
+            <button onClick={openTplPicker} style={{ padding: '5px 10px', borderRadius: 6, border: showTplPicker ? '1.5px solid #059669' : '1px solid var(--border)', background: showTplPicker ? '#05966918' : 'transparent', color: showTplPicker ? '#059669' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+              Templates
+            </button>
+          )}
+          {step.type === 'email' && (
             <button onClick={() => setPreviewMode(p => !p)} style={{ padding: '5px 10px', borderRadius: 6, border: previewMode ? '1.5px solid #5b8db8' : '1px solid var(--border)', background: previewMode ? '#5b8db818' : 'transparent', color: previewMode ? '#5b8db8' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
               {previewMode ? 'Edit' : 'Preview'}
             </button>
           )}
           <button onClick={onRemove} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Remove</button>
         </div>
+
+        {showTplPicker && step.type === 'email' && (
+          <div style={{ marginBottom: 12, background: 'var(--bg)', border: '1px solid #05966940', borderRadius: 8, padding: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Email Templates</span>
+              <button onClick={() => setShowTplPicker(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>×</button>
+            </div>
+            {tplLoading ? (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Loading…</p>
+            ) : tplList.length === 0 ? (
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>No saved templates yet. Create them in Settings → Email Templates.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                {tplList.map(tpl => (
+                  <button key={tpl.id} onClick={() => applyTemplate(tpl)}
+                    style={{ textAlign: 'left', padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', fontFamily: 'var(--font-mono)' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{tpl.name}</div>
+                    {tpl.subject && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Subject: {tpl.subject}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {step.type === 'wait' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -340,7 +388,14 @@ function EnrollmentPanel({ seq }) {
   )
 }
 
-function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
+function SequenceCard({ seq, onEdit, onDelete, onToggle, onClone }) {
+  const [cloning, setCloning] = useState(false)
+
+  async function handleClone() {
+    setCloning(true)
+    try { await onClone(seq.id) } finally { setCloning(false) }
+  }
+
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -354,6 +409,9 @@ function SequenceCard({ seq, onEdit, onDelete, onToggle }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => onToggle(seq)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>
             {seq.status === 'active' ? 'Pause' : 'Activate'}
+          </button>
+          <button onClick={handleClone} disabled={cloning} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: cloning ? 'default' : 'pointer', opacity: cloning ? 0.6 : 1 }}>
+            {cloning ? '…' : 'Clone'}
           </button>
           <button onClick={() => onEdit(seq)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Edit</button>
           <button onClick={() => onDelete(seq.id)} style={{ padding: '6px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: '#e07070', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer' }}>Delete</button>
@@ -516,6 +574,11 @@ export default function Sequences() {
   async function handleDelete(id) {
     if (!confirm('Delete this sequence?')) return
     await api.delete(`/sequences/${id}`)
+    await load()
+  }
+
+  async function handleClone(id) {
+    await api.post(`/sequences/${id}/clone`)
     await load()
   }
 
@@ -777,7 +840,7 @@ export default function Sequences() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {sequences.map(seq => (
-              <SequenceCard key={seq.id} seq={seq} onEdit={openEdit} onDelete={handleDelete} onToggle={handleToggle} />
+              <SequenceCard key={seq.id} seq={seq} onEdit={openEdit} onDelete={handleDelete} onToggle={handleToggle} onClone={handleClone} />
             ))}
           </div>
         )}
