@@ -8486,10 +8486,19 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
 
     groq_key = os.environ.get("GROQ_API_KEY", "")
 
-    # ── Step 1: Ask AI to name the top 10 true competitors ───────────────────
-    competitor_names = []
+    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts', 'mycompany', 'pulse'}
+    own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
+    own_slug = own_slug_m.group(1).lower() if own_slug_m else ""
+
+    competitors = []  # list of {name, linkedin_slug, website, snippet}
+
+    # ── Step 1: Ask Groq for competitors WITH their LinkedIn slug + website ────
+    # Groq knows well-established companies and their exact LinkedIn slugs.
+    # This eliminates the unreliable "search LinkedIn for a name" step entirely.
     if groq_key:
-        prompt = f"""You are a B2B market research expert. Identify the top 10 DIRECT competitors of the company described below.
+        prompt = f"""You are a B2B competitive intelligence expert with deep knowledge of company LinkedIn profiles.
+
+Identify the top 10 DIRECT competitors of this company:
 
 Company: {name}
 Website: {website}
@@ -8498,14 +8507,19 @@ Type: {company_type}{' · SaaS' if is_saas else ''}
 Specialties: {specialties}
 Description: {description[:400] if description else 'N/A'}
 
-Return ONLY a JSON array of competitor company names (strings), ordered from most similar to least similar.
-Focus on companies that:
-- Solve the same core problem for the same customer segment
-- Are direct product substitutes (not just same-industry)
-- Are real, established companies (not startups with no presence)
+Return ONLY a JSON array. Each item must have:
+- "name": company display name
+- "linkedin_slug": EXACT LinkedIn company slug (the part after linkedin.com/company/)
+- "website": company's main domain (e.g. "invicti.com")
+- "snippet": one sentence describing what they do and why they are a direct competitor
 
-Example format: ["CompanyA", "CompanyB", "CompanyC"]
-Return only the JSON array, no explanation."""
+Rules:
+- Only list companies that are direct product substitutes solving the SAME core problem
+- LinkedIn slugs must be real and accurate (e.g. invicti-security, acunetix, intruder-io)
+- Order from most to least similar
+- Do NOT include the source company itself
+
+Return only the JSON array, no explanation, no markdown."""
 
         try:
             res = requests.post(
@@ -8514,59 +8528,71 @@ Return only the JSON array, no explanation."""
                 json={
                     'model': 'llama-3.3-70b-versatile',
                     'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 300,
+                    'max_tokens': 800,
                     'temperature': 0.1,
                 },
-                timeout=15
+                timeout=20
             )
             raw = res.json().get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-            # Extract JSON array from response
-            arr_m = _lre.search(r'\[.*?\]', raw, _lre.DOTALL)
+            raw = _lre.sub(r'^```(?:json)?\s*', '', raw)
+            raw = _lre.sub(r'\s*```$', '', raw).strip()
+            arr_m = _lre.search(r'\[.*\]', raw, _lre.DOTALL)
             if arr_m:
-                competitor_names = _json.loads(arr_m.group(0))
+                parsed = _json.loads(arr_m.group(0))
+                for item in parsed:
+                    if isinstance(item, dict) and item.get('linkedin_slug') and item.get('name'):
+                        slug = item['linkedin_slug'].strip().lower().strip('/')
+                        # Basic sanity: slug must look like a real slug
+                        if slug and slug not in _SKIP_SLUGS and slug != own_slug and _lre.match(r'^[a-z0-9][a-z0-9_-]{1,60}$', slug):
+                            competitors.append({
+                                'name': item['name'],
+                                'linkedin_slug': slug,
+                                'website': (item.get('website') or '').strip().lower(),
+                                'snippet': (item.get('snippet') or '')[:200],
+                            })
         except Exception:
             pass
 
-    # ── Step 2: For each competitor name, resolve to a LinkedIn URL ───────────
-    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts', 'mycompany'}
-    own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
-    own_slug = own_slug_m.group(1).lower() if own_slug_m else ""
+    # ── Step 2: For slugs Groq gave us, verify via a quick web search snippet ─
+    # We trust Groq's slugs but try to get a richer description from the web.
+    results = []
     seen_slugs = {own_slug} if own_slug else set()
 
-    results = []
-
-    for cname in competitor_names[:12]:
+    for comp in competitors[:12]:
         if len(results) >= 10:
             break
-        # Search LinkedIn for this specific company name
-        q = f'site:linkedin.com/company "{cname}"'
-        for r in _lws(q, count=5):
-            href = r.get("href", "") or r.get("url", "")
-            title = (r.get("title") or "").strip()
-            snippet = (r.get("body") or r.get("description") or "").strip()
-            m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
-            if not m:
-                continue
-            slug = m.group(1).lower()
-            if slug in _SKIP_SLUGS or slug in seen_slugs:
-                continue
-            seen_slugs.add(slug)
-            li_url = f"https://www.linkedin.com/company/{slug}/"
-            # Use the AI-provided name if the title seems garbled
-            clean_title = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip()
-            display_name = clean_title if clean_title else cname
-            results.append({
-                "name": display_name,
-                "linkedin_url": li_url,
-                "domain": slug,
-                "snippet": snippet[:200],
-                "industry": industry,
-                "company_type": company_type,
-                "is_saas": is_saas,
-            })
-            break  # One match per competitor name is enough
+        slug = comp['linkedin_slug']
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
 
-    # ── Fallback: if AI gave no names, fall back to specialty-based search ────
+        li_url = f"https://www.linkedin.com/company/{slug}/"
+        snippet = comp['snippet']
+
+        # Try to enrich snippet from web if it's thin
+        if not snippet or len(snippet) < 40:
+            try:
+                q = f'"{comp["name"]}" {comp.get("website", "")} company'
+                for r in _lws(q, count=3):
+                    body = (r.get("body") or r.get("description") or "").strip()
+                    if body and len(body) > 30:
+                        snippet = body[:200]
+                        break
+            except Exception:
+                pass
+
+        results.append({
+            "name": comp['name'],
+            "linkedin_url": li_url,
+            "domain": slug,
+            "snippet": snippet,
+            "website": comp.get('website', ''),
+            "industry": industry,
+            "company_type": company_type,
+            "is_saas": is_saas,
+        })
+
+    # ── Fallback: web search by specialty if Groq gave nothing useful ─────────
     if not results:
         all_spec_terms = [s.strip().lower() for s in specialties.split(",")] if specialties else []
         _GENERIC = {'software', 'technology', 'services', 'solutions', 'consulting', 'development', 'management'}
@@ -8578,7 +8604,6 @@ Return only the JSON array, no explanation."""
             queries.append(f'site:linkedin.com/company "{spec_terms[0]}"')
         if industry:
             queries.append(f'site:linkedin.com/company "{industry}"')
-
         raw_candidates = []
         for q in queries:
             if len(raw_candidates) >= 20:
@@ -8586,7 +8611,7 @@ Return only the JSON array, no explanation."""
             for r in _lws(q, count=10):
                 href = r.get("href", "") or r.get("url", "")
                 title = (r.get("title") or "").strip()
-                snippet = (r.get("body") or r.get("description") or "").strip()
+                snippet_r = (r.get("body") or r.get("description") or "").strip()
                 m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
                 if not m:
                     continue
@@ -8594,11 +8619,11 @@ Return only the JSON array, no explanation."""
                 if slug in _SKIP_SLUGS or slug in seen_slugs:
                     continue
                 seen_slugs.add(slug)
-                combined = (title + " " + snippet).lower()
+                combined = (title + " " + snippet_r).lower()
                 score = sum(1 for t in all_spec_terms if t in combined)
                 li_url = f"https://www.linkedin.com/company/{slug}/"
                 cname2 = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip() or title[:60]
-                raw_candidates.append((score, {"name": cname2, "linkedin_url": li_url, "domain": slug, "snippet": snippet[:200], "industry": industry, "company_type": company_type, "is_saas": is_saas}))
+                raw_candidates.append((score, {"name": cname2, "linkedin_url": li_url, "domain": slug, "snippet": snippet_r[:200], "industry": industry, "company_type": company_type, "is_saas": is_saas}))
         raw_candidates.sort(key=lambda x: x[0], reverse=True)
         results = [r for _, r in raw_candidates[:10]]
 
