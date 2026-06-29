@@ -1330,14 +1330,26 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
                   const added = addedLookalikes.has(l.linkedin_url)
                   const adding = addingLookalike === l.linkedin_url
                   return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <a href={l.linkedin_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
+                          {l.company_type && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 3, color: '#6366f1', letterSpacing: '0.04em' }}>{l.company_type}</span>}
                           {l.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 3, color: '#059669', letterSpacing: '0.04em' }}>★ {l.rating} G2</span>}
-                          {l.source === 'g2' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(255,90,0,0.08)', border: '1px solid rgba(255,90,0,0.2)', borderRadius: 3, color: '#ff5a00', letterSpacing: '0.04em' }}>G2</span>}
                         </div>
-                        {l.snippet && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 3, flexWrap: 'wrap' }}>
+                          {l.employees && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                              👥 {l.employees} emp
+                            </span>
+                          )}
+                          {l.followers > 0 && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                              ◆ {l.followers >= 1000 ? `${(l.followers / 1000).toFixed(l.followers >= 10000 ? 0 : 1)}K` : l.followers} followers
+                            </span>
+                          )}
+                        </div>
+                        {l.snippet && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '3px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>}
                       </div>
                       <button
                         disabled={added || adding}

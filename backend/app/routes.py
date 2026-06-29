@@ -8559,20 +8559,26 @@ Return ONLY a JSON array of 10 items ordered by similarity. Each item:
 {{
   "name": "Company Display Name",
   "linkedin_slug": "exact-linkedin-slug",
-  "snippet": "One sentence: what they do and why they directly compete with {name}."
+  "snippet": "One sentence: what they do and why they directly compete with {name}.",
+  "employees": "51-200",
+  "followers": 15400,
+  "company_type": "Private"
 }}
 
 RULES:
 - linkedin_slug must be the REAL slug from linkedin.com/company/SLUG (e.g. "invicti-security", "acunetix", "intruder-io", "tenable")
 - Only direct product substitutes — companies solving the EXACT same problem
 - Do NOT include {name} itself
+- employees: use LinkedIn range format ("1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+")
+- followers: integer, approximate LinkedIn followers count from your training knowledge
+- company_type: one of "Public", "Private", "Nonprofit", "Government"
 - No markdown, no explanation — just the JSON array"""
 
         try:
             res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1000, "temperature": 0.05},
+                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1400, "temperature": 0.05},
                 timeout=25,
             )
             raw = res.json().get("choices",[{}])[0].get("message",{}).get("content","").strip()
@@ -8591,7 +8597,14 @@ RULES:
                     if not _lre.match(r'^[a-z0-9][a-z0-9_-]{1,60}$', li_slug): continue
                     if cname.lower() == name_lower: continue
                     seen.add(li_slug)
-                    competitor_names.append({"name": cname, "linkedin_slug": li_slug, "snippet": snippet})
+                    competitor_names.append({
+                        "name": cname,
+                        "linkedin_slug": li_slug,
+                        "snippet": snippet,
+                        "employees": (item.get("employees") or "").strip(),
+                        "followers": item.get("followers") or 0,
+                        "company_type": (item.get("company_type") or "").strip(),
+                    })
         except Exception:
             pass
 
@@ -8606,9 +8619,11 @@ RULES:
             "linkedin_url": f"https://www.linkedin.com/company/{li_slug}/",
             "domain":       li_slug,
             "snippet":      comp["snippet"],
+            "employees":    comp.get("employees") or "",
+            "followers":    comp.get("followers") or 0,
+            "company_type": comp.get("company_type") or "",
             "source":       "g2+ai",
             "industry":     industry,
-            "company_type": company_type,
             "is_saas":      is_saas,
         })
 
