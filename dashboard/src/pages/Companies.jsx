@@ -1496,6 +1496,8 @@ export default function Companies() {
   const [showSpreadsheet, setShowSpreadsheet] = useState(false)
   const [bulkEnriching, setBulkEnriching] = useState(false)
   const [bulkEnrichProgress, setBulkEnrichProgress] = useState(null)
+  const [showBulkMenu, setShowBulkMenu] = useState(false)
+  const bulkMenuRef = useRef(null)
   const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
@@ -1528,6 +1530,15 @@ export default function Companies() {
     getCompanyAlerts().then(r => setAlerts(r.data.alerts || [])).catch(() => {})
     listCompanySegments().then(r => setSegments(r.data.segments || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!showBulkMenu) return
+    function handleClickOutside(e) {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target)) setShowBulkMenu(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showBulkMenu])
 
   async function fetchCompanies() {
     try {
@@ -1672,6 +1683,16 @@ export default function Companies() {
       setBulkEnrichProgress(null)
       fetchCompanies()
     }
+  }
+
+  async function handleBulkFullEnrich(incompleteOnly = false) {
+    if (autofill.running || analyze.running || bulkEnriching) return
+    const pool = selectedIds.length ? companies.filter(c => selectedIds.includes(c.id)) : companies
+    const targetIds = incompleteOnly ? pool.filter(isIncomplete).map(c => c.id) : pool.map(c => c.id)
+    if (!targetIds.length) return
+    await runAutofill(targetIds)
+    await runAnalyze(targetIds)
+    if (isEnabled('bulk_deep_enrich')) await handleBulkDeepEnrich()
   }
 
   async function handleRefreshAlerts() {
@@ -1820,30 +1841,40 @@ export default function Companies() {
           <button onClick={() => setShowAddModal(true)} style={s.primaryBtn}>+ Add Company</button>
           {isEnabled('find_dms') && <button onClick={() => setShowDMFinder(true)} style={s.secondaryBtn}>Find DMs</button>}
           <span style={{ width: '1px', height: '18px', background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
-          {isEnabled('bulk_autofill') && <button onClick={() => handleBulkAutofill(false)} disabled={autofill.running || analyze.running}
-            style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: autofill.running || analyze.running ? 0.5 : 1 }}>
-            {autofill.running ? 'Filling…' : `↯ Fill All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-          </button>}
-          {isEnabled('bulk_autofill') && (() => {
+          {/* ── Bulk Enrich dropdown ── */}
+          {(() => {
+            const busy = autofill.running || analyze.running || bulkEnriching
             const pool = selectedIds.length ? companies.filter(c => selectedIds.includes(c.id)) : companies
             const incompleteCount = pool.filter(isIncomplete).length
-            return incompleteCount > 0 && incompleteCount < pool.length ? (
-              <button onClick={() => handleBulkAutofill(true)} disabled={autofill.running || analyze.running}
-                style={{ ...s.secondaryBtn, color: 'var(--accent)', borderColor: 'rgba(168,100,72,0.3)', opacity: autofill.running || analyze.running ? 0.5 : 1 }}>
-                {autofill.running ? 'Filling…' : `↯ Fill Incomplete (${incompleteCount})`}
-              </button>
-            ) : null
+            const suffix = selectedIds.length ? ` (${selectedIds.length})` : ''
+            const label = busy
+              ? autofill.running ? `Filling… ${autofill.msg?.match(/\d+\/\d+/)?.[0] || ''}` : analyze.running ? `Analyzing…` : bulkEnrichProgress ? `Enriching… ${bulkEnrichProgress.completed}/${bulkEnrichProgress.total}` : 'Running…'
+              : `↯ Enrich All${suffix}`
+            return (
+              <div ref={bulkMenuRef} style={{ position: 'relative' }}>
+                <button
+                  disabled={busy}
+                  onClick={() => setShowBulkMenu(v => !v)}
+                  style={{ ...s.secondaryBtn, color: busy ? 'var(--text-muted)' : 'var(--accent)', borderColor: showBulkMenu ? 'var(--accent)' : 'rgba(168,100,72,0.3)', opacity: busy ? 0.5 : 1 }}>
+                  {label} {!busy && '▾'}
+                </button>
+                {showBulkMenu && !busy && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', zIndex: 300, minWidth: 200, overflow: 'hidden' }}>
+                    <button onClick={() => { setShowBulkMenu(false); handleBulkFullEnrich(false) }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: incompleteCount > 0 && incompleteCount < pool.length ? '1px solid var(--border)' : 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)', cursor: 'pointer' }}>
+                      Enrich All{suffix}
+                    </button>
+                    {incompleteCount > 0 && incompleteCount < pool.length && (
+                      <button onClick={() => { setShowBulkMenu(false); handleBulkFullEnrich(true) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                        Enrich Incomplete ({incompleteCount})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
           })()}
-          <button onClick={handleBulkAnalyze} disabled={analyze.running || autofill.running}
-            style={{ ...s.secondaryBtn, color: '#7b6bae', borderColor: 'rgba(123,107,174,0.3)', opacity: analyze.running || autofill.running ? 0.5 : 1 }}>
-            {analyze.running ? 'Analyzing…' : `⬡ Analyze All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-          </button>
-          {isEnabled('bulk_deep_enrich') && <button onClick={handleBulkDeepEnrich} disabled={bulkEnriching}
-            style={{ ...s.secondaryBtn, color: bulkEnriching ? 'var(--text-muted)' : '#7c3aed', borderColor: bulkEnriching ? 'var(--border)' : 'rgba(124,58,237,0.3)', opacity: bulkEnriching ? 0.6 : 1 }}>
-            {bulkEnriching
-              ? bulkEnrichProgress ? `Enriching… ${bulkEnrichProgress.completed}/${bulkEnrichProgress.total}` : 'Enriching…'
-              : `✦ Deep Enrich All${selectedIds.length ? ` (${selectedIds.length})` : ''}`}
-          </button>}
           <button onClick={runAccuracyCheck} disabled={companies.length === 0}
             style={{ ...s.secondaryBtn, color: '#92400e', borderColor: 'rgba(217,119,6,0.3)', opacity: companies.length === 0 ? 0.4 : 1 }}>
             ⊘ Check Accuracy
