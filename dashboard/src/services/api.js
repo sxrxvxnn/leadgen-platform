@@ -194,7 +194,7 @@ export const fetchCompanyFunding = (id) => api.post(`/companies/${id}/fetch-fund
 export const deepEnrichCompany = (id) => api.post(`/companies/${id}/deep-enrich`)
 export const bulkDeepEnrichCompanies = (companyIds = [], onProgress) =>
   _streamingFetch('/companies/bulk-deep-enrich', { company_ids: companyIds }, onProgress)
-export const findLookalikesForCompany = (id) => api.post(`/companies/${id}/lookalike`)
+export const findLookalikesForCompany = (id, refresh = false) => api.post(`/companies/${id}/lookalike`, {}, { params: refresh ? { refresh: true } : {} })
 export const generateLinkedInDM = (id, persona = '') => api.post(`/companies/${id}/generate-dm`, { persona })
 export const getCompanyActivities = (id) => api.get(`/companies/${id}/activities`)
 export const createCompanyActivity = (id, data) => api.post(`/companies/${id}/activities`, data)

@@ -8458,15 +8458,20 @@ async def test_webhook(webhook_id: str, authorization: str = Header(...)):
 # ─── LOOKALIKE FINDER ─────────────────────────────────────────
 
 @router.post("/companies/{company_id}/lookalike")
-async def find_lookalike_companies(company_id: str, authorization: str = Header(...)):
-    """Find similar companies by industry + company_type + is_saas via LinkedIn search."""
+async def find_lookalike_companies(company_id: str, refresh: bool = False, authorization: str = Header(...)):
+    """Find similar companies via LinkedIn search. Results are cached in DB after first fetch."""
     user_id = get_user_id(authorization)
     co_res = supabase.table("companies").select(
-        "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url,specialties,description"
+        "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url,specialties,description,cached_lookalikes"
     ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
     company = co_res.data[0]
+
+    # Return cached results unless caller explicitly requests a refresh
+    if not refresh and company.get("cached_lookalikes"):
+        return {"lookalikes": company["cached_lookalikes"], "cached": True}
+
     name = company.get("name", "")
     industry = (company.get("industry") or "").strip()
     company_type = (company.get("company_type") or "").strip()
@@ -8477,77 +8482,88 @@ async def find_lookalike_companies(company_id: str, authorization: str = Header(
 
     from .company_prefill import _web_search as _lws
     import re as _lre
-    from urllib.parse import urlparse as _lup
 
     _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
     seen_slugs = set()
-    results = []
+    raw_candidates = []  # (score, result_dict)
 
-    # Extract specific specialty terms — far more targeted than generic industry names
-    spec_terms = [s.strip() for s in specialties_raw.split(",")] if specialties_raw else []
-    spec_terms = [s for s in spec_terms if len(s) > 4][:3]
+    # All specialty terms for relevance scoring
+    all_spec_terms = [s.strip().lower() for s in specialties_raw.split(",")] if specialties_raw else []
+    # Top specific terms for building queries (skip generic ones)
+    _GENERIC_SPEC = {'software', 'technology', 'services', 'solutions', 'consulting', 'development', 'management'}
+    spec_terms = [s for s in [t.strip() for t in specialties_raw.split(",")] if len(s) > 5 and s.lower() not in _GENERIC_SPEC] if specialties_raw else []
 
-    # Build queries from most specific → most general
+    # Build queries: most specific first (multi-term AND), then fallbacks
     queries = []
+    if len(spec_terms) >= 3:
+        # Most specific: 3 specialty terms together
+        queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}" "{spec_terms[2]}"')
+    if len(spec_terms) >= 2:
+        queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}"')
     if spec_terms:
-        # Most specific: search by actual specialty keywords
         queries.append(f'site:linkedin.com/company "{spec_terms[0]}"')
         if len(spec_terms) >= 2:
-            queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}"')
+            queries.append(f'site:linkedin.com/company "{spec_terms[1]}"')
 
     if classification and classification not in ("Other", "Unclassified", ""):
         queries.append(f'site:linkedin.com/company "{classification}"')
-        if company_type and company_type != "Service":
-            queries.append(f'site:linkedin.com/company "{classification}" {company_type}')
 
-    # Industry fallback — only when no better signal exists
-    if not spec_terms and (not classification or classification in ("Other", "Unclassified")):
+    # Industry fallback only when no specialty signal
+    if not spec_terms:
         if industry and company_type:
             queries.append(f'site:linkedin.com/company "{industry}" "{company_type}"')
-        if industry and hq:
-            country = hq.split(',')[-1].strip() if ',' in hq else hq
-            queries.append(f'site:linkedin.com/company "{industry}" {country}')
         elif industry:
-            queries.append(f'site:linkedin.com/company "{industry}" company profile')
+            queries.append(f'site:linkedin.com/company "{industry}"')
+
+    own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
+    own_slug = own_slug_m.group(1).lower() if own_slug_m else ""
+    name_first = name.lower().split()[0] if name.split() else ""
 
     for q in queries:
-        if len(results) >= 12:
+        if len(raw_candidates) >= 20:
             break
-        for r in _lws(q, count=8):
+        for r in _lws(q, count=10):
             href = r.get("href", "") or r.get("url", "")
             title = (r.get("title") or "").strip()
             snippet = (r.get("body") or r.get("description") or "").strip()
-            # Only LinkedIn company pages
             m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
             if not m:
                 continue
             slug = m.group(1).lower()
             if slug in _SKIP_SLUGS or slug in seen_slugs:
                 continue
-            # Skip the source company
-            own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)',
-                                     company.get("linkedin_url") or "")
-            if own_slug_m and own_slug_m.group(1).lower() == slug:
-                continue
-            if name.lower().split()[0] in slug:
+            if slug == own_slug or (name_first and name_first in slug):
                 continue
             seen_slugs.add(slug)
+
+            # Relevance score: count how many of the source company's specialties
+            # appear in the result's snippet/title
+            combined_text = (title + " " + snippet).lower()
+            score = sum(1 for term in all_spec_terms if term in combined_text)
+
             li_url = f"https://www.linkedin.com/company/{slug}/"
-            # Extract a clean company name from the title
             cname = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip() or title[:60]
-            results.append({
+            raw_candidates.append((score, {
                 "name": cname,
                 "linkedin_url": li_url,
                 "domain": slug,
-                "snippet": snippet[:160],
+                "snippet": snippet[:200],
                 "industry": industry,
                 "company_type": company_type,
                 "is_saas": is_saas,
-            })
-            if len(results) >= 12:
+            }))
+            if len(raw_candidates) >= 20:
                 break
 
-    return {"lookalikes": results[:10]}
+    # Sort by relevance score descending — most-matching companies first
+    raw_candidates.sort(key=lambda x: x[0], reverse=True)
+    results = [r for _, r in raw_candidates[:10]]
+
+    # Persist to DB so subsequent opens return the same list
+    if results:
+        supabase.table("companies").update({"cached_lookalikes": results}).eq("id", company_id).execute()
+
+    return {"lookalikes": results, "cached": False}
 
 
 # ─── LINKEDIN DM GENERATOR ────────────────────────────────────
