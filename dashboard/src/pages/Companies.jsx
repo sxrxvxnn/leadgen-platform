@@ -350,7 +350,7 @@ function checkCompanyAccuracy(company) {
   }
 }
 
-function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy, isEnabled }) {
+function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onToggle, accuracy, isEnabled, onRefresh }) {
   const [classification, setClassification] = useState(company.classification || classifyCompany(company))
   const [prospectStatus, setProspectStatus] = useState(company.prospect_status || 'To Review')
   const [watchlisted, setWatchlisted] = useState(company.watchlisted || false)
@@ -663,6 +663,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
         company_type: l.company_type || '',
       }])
       setAddedLookalikes(prev => new Set([...prev, l.linkedin_url]))
+      onRefresh?.()
     } catch { }
     finally { setAddingLookalike(null) }
   }
@@ -2148,6 +2149,7 @@ export default function Companies() {
                       onToggle={id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
                       accuracy={accuracyMap[company.id]}
                       isEnabled={isEnabled}
+                      onRefresh={fetchCompanies}
                     />
                   </div>
                 </motion.div>
