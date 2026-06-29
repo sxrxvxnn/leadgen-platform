@@ -4,8 +4,8 @@ import requests
 from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
-# Cap concurrent DDGS calls to 3 — prevents DuckDuckGo rate-limiting during bulk autofill
-_DDGS_SEM = _threading_mod.Semaphore(3)
+# Cap concurrent DDGS calls to 5 — prevents DuckDuckGo rate-limiting during bulk autofill
+_DDGS_SEM = _threading_mod.Semaphore(5)
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response, RedirectResponse
 import base64
@@ -3388,7 +3388,7 @@ async def bulk_autofill_companies(
 ):
     """Autofill data for multiple companies in parallel (20 workers)."""
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-autofill", limit=5, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-autofill", limit=30, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _threading
