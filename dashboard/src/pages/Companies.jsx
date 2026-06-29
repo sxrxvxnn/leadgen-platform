@@ -1332,7 +1332,11 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <a href={l.linkedin_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <a href={l.linkedin_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
+                          {l.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 3, color: '#059669', letterSpacing: '0.04em' }}>★ {l.rating} G2</span>}
+                          {l.source === 'g2' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(255,90,0,0.08)', border: '1px solid rgba(255,90,0,0.2)', borderRadius: 3, color: '#ff5a00', letterSpacing: '0.04em' }}>G2</span>}
+                        </div>
                         {l.snippet && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>}
                       </div>
                       <button
