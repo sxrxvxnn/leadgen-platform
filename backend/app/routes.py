@@ -8491,9 +8491,9 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
     own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
     own_slug   = own_slug_m.group(1).lower() if own_slug_m else ""
 
-    # ── Helper: Firecrawl JSON extraction ────────────────────────────────────
+    # ── Helper: Firecrawl structured extraction ──────────────────────────────
     def _fc_extract(url: str, prompt: str, schema: dict) -> dict:
-        """Scrape a URL with Firecrawl and extract structured JSON. Returns {} on failure."""
+        """Scrape + LLM-extract structured JSON via Firecrawl v1. Returns {} on failure."""
         if not fc_key:
             return {}
         try:
@@ -8502,16 +8502,17 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
                 headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
                 json={
                     "url": url,
-                    "formats": ["json"],
-                    "jsonOptions": {"prompt": prompt, "schema": schema},
+                    "formats": ["extract"],
+                    "extract": {"prompt": prompt, "schema": schema},
                     "onlyMainContent": True,
-                    "waitFor": 4000,
+                    "waitFor": 5000,
                     "proxy": "stealth",
                 },
-                timeout=40,
+                timeout=50,
             )
             if r.status_code == 200:
-                return r.json().get("json") or {}
+                data = r.json().get("data") or r.json()
+                return data.get("extract") or data.get("json") or {}
         except Exception:
             pass
         return {}
@@ -8591,6 +8592,28 @@ Rules:
 
     g2_data = _fc_extract(g2_url, g2_prompt, g2_schema)
     g2_competitors = g2_data.get("competitors") or []
+
+    # If slug guess returned nothing, search G2 for the correct product URL
+    if not g2_competitors and fc_key:
+        try:
+            search_res = requests.post(
+                "https://api.firecrawl.dev/v1/search",
+                headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
+                json={"query": f"{name} competitors alternatives site:g2.com/products", "limit": 3},
+                timeout=20,
+            )
+            if search_res.status_code == 200:
+                for hit in search_res.json().get("data", []):
+                    href = hit.get("url", "")
+                    m = _lre.search(r'g2\.com/products/([^/]+)/competitors', href)
+                    if m:
+                        g2_url_found = f"https://www.g2.com/products/{m.group(1)}/competitors/alternatives"
+                        g2_data2 = _fc_extract(g2_url_found, g2_prompt, g2_schema)
+                        g2_competitors = g2_data2.get("competitors") or []
+                        if g2_competitors:
+                            break
+        except Exception:
+            pass
 
     # ── Resolve LinkedIn slugs for the G2 competitors ────────────────────────
     if g2_competitors:
