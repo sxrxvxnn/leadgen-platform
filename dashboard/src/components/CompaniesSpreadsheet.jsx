@@ -84,7 +84,7 @@ const COLUMNS = [
   { key: '_serial',        label: '#',              width: 48,  type: 'serial' },
   { key: 'name',           label: 'Name',           width: 200, type: 'text' },
   { key: '_accuracy',      label: 'Accuracy',       width: 120, type: 'computed' },
-  { key: 'classification', label: 'Classification', width: 150, type: 'select', options: CLASSIFICATIONS },
+  { key: 'industry',        label: 'Industry',       width: 180, type: 'text' },
   { key: 'prospect_status',label: 'Status',         width: 130, type: 'select', options: PROSPECT_STATUSES },
   { key: 'website',        label: 'Website',        width: 170, type: 'url' },
   { key: 'linkedin_url',   label: 'LinkedIn URL',   width: 200, type: 'url' },
@@ -178,7 +178,7 @@ function EditableCell({ company, col, onSave, isEditing, onStartEdit, onStopEdit
     const dv = getCellValue(company, col.key)
     let color = 'var(--text-muted)'
     if (col.key === 'prospect_status') color = getProspectColor(dv)
-    if (col.key === 'classification' && dv && dv !== 'Unclassified') color = 'var(--text)'
+    if (col.key === 'industry' && dv) color = 'var(--text)'
     return <div style={{ ...cell.text, color, cursor: 'pointer' }} onClick={onStartEdit}>{dv || '—'}</div>
   }
 
@@ -319,7 +319,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   const filteredRows = local.filter(c => {
     const q = search.toLowerCase()
     const textMatch = !search.trim() || (c.name || '').toLowerCase().includes(q) ||
-                      (c.classification || '').toLowerCase().includes(q) ||
+                      (c.industry || '').toLowerCase().includes(q) ||
                       (c.headquarters || '').toLowerCase().includes(q)
     if (!textMatch) return false
     if (accuracyFilter === 'all') return true
