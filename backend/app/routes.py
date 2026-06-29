@@ -8485,213 +8485,134 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
     website     = (company.get("website") or "").strip()
 
     groq_key = os.environ.get("GROQ_API_KEY", "")
-    fc_key   = os.environ.get("FIRECRAWL_API_KEY", "")
 
-    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts', 'mycompany', 'pulse'}
+    _SKIP_SLUGS = {'linkedin','company','showcase','school','about','jobs','feed','posts','mycompany','pulse','in','www'}
     own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
     own_slug   = own_slug_m.group(1).lower() if own_slug_m else ""
+    name_lower = name.lower()
 
-    # ── Helper: Firecrawl structured extraction ──────────────────────────────
-    def _fc_extract(url: str, prompt: str, schema: dict) -> dict:
-        """Scrape + LLM-extract structured JSON via Firecrawl v1. Returns {} on failure."""
-        if not fc_key:
-            return {}
-        try:
-            r = requests.post(
-                "https://api.firecrawl.dev/v1/scrape",
-                headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
-                json={
-                    "url": url,
-                    "formats": ["extract"],
-                    "extract": {"prompt": prompt, "schema": schema},
-                    "onlyMainContent": True,
-                    "waitFor": 5000,
-                    "proxy": "stealth",
-                },
-                timeout=50,
-            )
-            if r.status_code == 200:
-                data = r.json().get("data") or r.json()
-                return data.get("extract") or data.get("json") or {}
-        except Exception:
-            pass
-        return {}
+    def _slug(n: str) -> str:
+        s = _lre.sub(r'[^a-z0-9\s-]', '', n.lower())
+        s = _lre.sub(r'\s+', '-', s.strip())
+        return _lre.sub(r'-+', '-', s).strip('-')[:60]
 
-    # ── Helper: Groq LinkedIn slugs for a list of names ──────────────────────
-    def _groq_linkedin_slugs(competitor_names: list) -> dict:
-        """Ask Groq for LinkedIn slugs for a list of company names. Returns {name: slug}."""
-        if not groq_key or not competitor_names:
-            return {}
-        names_str = ", ".join(f'"{n}"' for n in competitor_names)
-        p = f"""For each company below, return its EXACT LinkedIn company page slug (the path segment in linkedin.com/company/SLUG).
-
-Companies: {names_str}
-
-Return ONLY a JSON object mapping company name to slug.
-Example: {{"Invicti": "invicti-security", "Acunetix by Invicti": "acunetix", "Intruder": "intruder-io"}}
-
-Rules:
-- Use the real, current LinkedIn slug (check your training data carefully)
-- If unsure, derive it from the company name in lowercase-hyphenated form
-- Never use generic slugs like 'company' or 'linkedin'"""
-        try:
-            res = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": p}], "max_tokens": 400, "temperature": 0.1},
-                timeout=15,
-            )
-            raw = res.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            raw = _lre.sub(r'^```(?:json)?\s*', '', raw); raw = _lre.sub(r'\s*```$', '', raw).strip()
-            obj_m = _lre.search(r'\{.*\}', raw, _lre.DOTALL)
-            if obj_m:
-                return _json.loads(obj_m.group(0))
-        except Exception:
-            pass
-        return {}
-
-    # ── Helper: derive LinkedIn slug from company name as last resort ─────────
-    def _name_to_slug(n: str) -> str:
-        slug = _lre.sub(r'[^a-z0-9\s-]', '', n.lower())
-        slug = _lre.sub(r'\s+', '-', slug.strip())
-        slug = _lre.sub(r'-+', '-', slug).strip('-')
-        return slug[:60]
-
-    g2_competitors = []   # [{name, description, g2_slug}] from G2
-    results = []
+    competitor_names = []  # ordered list of company names from G2 / web
+    snippets = {}          # name -> description
 
     # ════════════════════════════════════════════════════════════════════════
-    # PRIMARY: G2 Alternatives page — human-verified, ranked, authoritative
+    # STEP 1 — Extract competitor names from G2 search result snippets
+    # G2's meta description says "The best X alternatives are A, B, and C."
+    # No page scraping needed — this comes straight from the search snippet.
     # ════════════════════════════════════════════════════════════════════════
-    # Derive the G2 slug from the company name (same normalisation G2 uses)
-    g2_slug_guess = _name_to_slug(name)
-    g2_url = f"https://www.g2.com/products/{g2_slug_guess}/competitors/alternatives"
-
-    g2_schema = {
-        "type": "object",
-        "properties": {
-            "competitors": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name":        {"type": "string"},
-                        "g2_slug":     {"type": "string"},
-                        "description": {"type": "string"},
-                        "rating":      {"type": "string"},
-                    }
-                }
-            }
-        }
-    }
-    g2_prompt = (
-        "Extract the list of competitor/alternative companies shown on this G2 page. "
-        "For each competitor return: name (display name), g2_slug (slug from their G2 URL "
-        "e.g. 'intruder' from g2.com/products/intruder), description or tagline, rating if visible."
-    )
-
-    g2_data = _fc_extract(g2_url, g2_prompt, g2_schema)
-    g2_competitors = g2_data.get("competitors") or []
-
-    # If slug guess returned nothing, search G2 for the correct product URL
-    if not g2_competitors and fc_key:
-        try:
-            search_res = requests.post(
-                "https://api.firecrawl.dev/v1/search",
-                headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
-                json={"query": f"{name} competitors alternatives site:g2.com/products", "limit": 3},
-                timeout=20,
-            )
-            if search_res.status_code == 200:
-                for hit in search_res.json().get("data", []):
-                    href = hit.get("url", "")
-                    m = _lre.search(r'g2\.com/products/([^/]+)/competitors', href)
-                    if m:
-                        g2_url_found = f"https://www.g2.com/products/{m.group(1)}/competitors/alternatives"
-                        g2_data2 = _fc_extract(g2_url_found, g2_prompt, g2_schema)
-                        g2_competitors = g2_data2.get("competitors") or []
-                        if g2_competitors:
-                            break
-        except Exception:
-            pass
-
-    # ── Resolve LinkedIn slugs for the G2 competitors ────────────────────────
-    if g2_competitors:
-        names = [c["name"] for c in g2_competitors if c.get("name")]
-        slug_map = _groq_linkedin_slugs(names)
-
-        seen_slugs = {own_slug} if own_slug else set()
-        for comp in g2_competitors:
-            if len(results) >= 10:
+    g2_queries = [
+        f'"{name}" alternatives site:g2.com',
+        f'"{name}" competitors site:g2.com',
+        f'{name} alternatives g2.com',
+    ]
+    raw_text_chunks = []
+    for q in g2_queries:
+        if len(raw_text_chunks) >= 3:
+            break
+        for r in _lws(q, count=5):
+            href = r.get("href","") or r.get("url","")
+            if "g2.com" not in href:
+                continue
+            body = (r.get("body") or r.get("description") or r.get("title") or "").strip()
+            if body:
+                raw_text_chunks.append(body)
+            if len(raw_text_chunks) >= 3:
                 break
-            cname = (comp.get("name") or "").strip()
-            if not cname:
-                continue
 
-            # Try Groq's slug, fall back to name-derived slug
-            li_slug = slug_map.get(cname, "").strip().lower().strip("/")
-            if not li_slug or li_slug in _SKIP_SLUGS:
-                li_slug = _name_to_slug(cname)
-            if not li_slug or li_slug in seen_slugs or li_slug == own_slug:
-                continue
-            if not _lre.match(r'^[a-z0-9][a-z0-9_-]{1,60}$', li_slug):
-                continue
-            seen_slugs.add(li_slug)
+    # Also pull from Capterra for broader coverage
+    capterra_queries = [f'"{name}" alternatives site:capterra.com', f'{name} competitors capterra']
+    for q in capterra_queries:
+        if len(raw_text_chunks) >= 5:
+            break
+        for r in _lws(q, count=3):
+            body = (r.get("body") or r.get("description") or "").strip()
+            if body and len(body) > 30:
+                raw_text_chunks.append(body)
+                break
 
-            results.append({
-                "name":         cname,
-                "linkedin_url": f"https://www.linkedin.com/company/{li_slug}/",
-                "domain":       li_slug,
-                "snippet":      (comp.get("description") or "")[:200],
-                "rating":       comp.get("rating") or "",
-                "source":       "g2",
-                "industry":     industry,
-                "company_type": company_type,
-                "is_saas":      is_saas,
-            })
+    combined_text = " | ".join(raw_text_chunks)
 
     # ════════════════════════════════════════════════════════════════════════
-    # FALLBACK: Groq-only (no G2 page found or G2 returned nothing)
+    # STEP 2 — Send everything to Groq: extract names + LinkedIn slugs in one shot
     # ════════════════════════════════════════════════════════════════════════
-    if not results and groq_key:
-        prompt_fb = f"""You are a B2B competitive intelligence expert.
+    if groq_key:
+        prompt = f"""You are a B2B competitive intelligence expert.
 
-Identify the top 10 DIRECT competitors of this company:
-Company: {name}
-Website: {website}
-Industry: {industry}
-Type: {company_type}{' · SaaS' if is_saas else ''}
-Specialties: {specialties}
-Description: {description[:400] if description else 'N/A'}
+TASK: Identify the top 10 direct competitors of "{name}" and return their LinkedIn company slugs.
 
-Return ONLY a JSON array. Each item: {{"name": "...", "linkedin_slug": "...", "website": "...", "snippet": "..."}}
-- linkedin_slug = exact slug from linkedin.com/company/SLUG
-- Only direct product substitutes, real established companies
-- Order most-to-least similar. No markdown, no explanation."""
+COMPANY CONTEXT:
+- Name: {name}
+- Website: {website}
+- Industry: {industry}
+- Type: {company_type}{' · SaaS' if is_saas else ''}
+- Specialties: {specialties}
+- Description: {description[:300] if description else 'N/A'}
+
+MARKET DATA (from G2/Capterra search results — use this to identify the right competitors):
+{combined_text[:1500] if combined_text else 'No market data available — use your training knowledge.'}
+
+Return ONLY a JSON array of 10 items ordered by similarity. Each item:
+{{
+  "name": "Company Display Name",
+  "linkedin_slug": "exact-linkedin-slug",
+  "snippet": "One sentence: what they do and why they directly compete with {name}."
+}}
+
+RULES:
+- linkedin_slug must be the REAL slug from linkedin.com/company/SLUG (e.g. "invicti-security", "acunetix", "intruder-io", "tenable")
+- Only direct product substitutes — companies solving the EXACT same problem
+- Do NOT include {name} itself
+- No markdown, no explanation — just the JSON array"""
+
         try:
             res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt_fb}], "max_tokens": 800, "temperature": 0.1},
-                timeout=20,
+                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1000, "temperature": 0.05},
+                timeout=25,
             )
-            raw = res.json().get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            raw = _lre.sub(r'^```(?:json)?\s*', '', raw); raw = _lre.sub(r'\s*```$', '', raw).strip()
+            raw = res.json().get("choices",[{}])[0].get("message",{}).get("content","").strip()
+            raw = _lre.sub(r'^```(?:json)?\s*','',raw); raw = _lre.sub(r'\s*```$','',raw).strip()
             arr_m = _lre.search(r'\[.*\]', raw, _lre.DOTALL)
             if arr_m:
-                seen_slugs2 = {own_slug} if own_slug else set()
-                for item in _json.loads(arr_m.group(0)):
-                    if len(results) >= 10: break
+                parsed = _json.loads(arr_m.group(0))
+                seen = {own_slug} if own_slug else set()
+                for item in parsed:
                     if not isinstance(item, dict): continue
+                    cname   = (item.get("name") or "").strip()
                     li_slug = (item.get("linkedin_slug") or "").strip().lower().strip("/")
-                    if not li_slug or li_slug in _SKIP_SLUGS or li_slug in seen_slugs2: continue
+                    snippet = (item.get("snippet") or "").strip()
+                    if not cname or not li_slug: continue
+                    if li_slug in _SKIP_SLUGS or li_slug in seen: continue
                     if not _lre.match(r'^[a-z0-9][a-z0-9_-]{1,60}$', li_slug): continue
-                    seen_slugs2.add(li_slug)
-                    results.append({"name": item.get("name",""), "linkedin_url": f"https://www.linkedin.com/company/{li_slug}/", "domain": li_slug, "snippet": (item.get("snippet",""))[:200], "source": "ai", "industry": industry, "company_type": company_type, "is_saas": is_saas})
+                    if cname.lower() == name_lower: continue
+                    seen.add(li_slug)
+                    competitor_names.append({"name": cname, "linkedin_slug": li_slug, "snippet": snippet})
         except Exception:
             pass
 
-    # ── Persist so next open is instant and consistent ────────────────────────
+    # ════════════════════════════════════════════════════════════════════════
+    # STEP 3 — Build final results list
+    # ════════════════════════════════════════════════════════════════════════
+    results = []
+    for comp in competitor_names[:10]:
+        li_slug = comp["linkedin_slug"]
+        results.append({
+            "name":         comp["name"],
+            "linkedin_url": f"https://www.linkedin.com/company/{li_slug}/",
+            "domain":       li_slug,
+            "snippet":      comp["snippet"],
+            "source":       "g2+ai",
+            "industry":     industry,
+            "company_type": company_type,
+            "is_saas":      is_saas,
+        })
+
+    # Persist so next open is instant
     if results:
         supabase.table("companies").update({"cached_lookalikes": results}).eq("id", company_id).execute()
 
