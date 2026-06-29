@@ -8459,7 +8459,7 @@ async def test_webhook(webhook_id: str, authorization: str = Header(...)):
 
 @router.post("/companies/{company_id}/lookalike")
 async def find_lookalike_companies(company_id: str, refresh: bool = False, authorization: str = Header(...)):
-    """Find similar companies via LinkedIn search. Results are cached in DB after first fetch."""
+    """Find true competitors using AI identification + LinkedIn resolution. Cached after first fetch."""
     user_id = get_user_id(authorization)
     co_res = supabase.table("companies").select(
         "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url,specialties,description,cached_lookalikes"
@@ -8472,57 +8472,75 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
     if not refresh and company.get("cached_lookalikes"):
         return {"lookalikes": company["cached_lookalikes"], "cached": True}
 
-    name = company.get("name", "")
-    industry = (company.get("industry") or "").strip()
-    company_type = (company.get("company_type") or "").strip()
-    is_saas = company.get("is_saas")
-    hq = (company.get("headquarters") or "").strip()
-    classification = (company.get("classification") or "").strip()
-    specialties_raw = (company.get("specialties") or "").strip()
-
-    from .company_prefill import _web_search as _lws
     import re as _lre
+    import json as _json
+    from .company_prefill import _web_search as _lws
 
-    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
-    seen_slugs = set()
-    raw_candidates = []  # (score, result_dict)
+    name        = company.get("name", "")
+    industry    = (company.get("industry") or "").strip()
+    company_type= (company.get("company_type") or "").strip()
+    is_saas     = company.get("is_saas")
+    description = (company.get("description") or "").strip()
+    specialties = (company.get("specialties") or "").strip()
+    website     = (company.get("website") or "").strip()
 
-    # All specialty terms for relevance scoring
-    all_spec_terms = [s.strip().lower() for s in specialties_raw.split(",")] if specialties_raw else []
-    # Top specific terms for building queries (skip generic ones)
-    _GENERIC_SPEC = {'software', 'technology', 'services', 'solutions', 'consulting', 'development', 'management'}
-    spec_terms = [s for s in [t.strip() for t in specialties_raw.split(",")] if len(s) > 5 and s.lower() not in _GENERIC_SPEC] if specialties_raw else []
+    groq_key = os.environ.get("GROQ_API_KEY", "")
 
-    # Build queries: most specific first (multi-term AND), then fallbacks
-    queries = []
-    if len(spec_terms) >= 3:
-        # Most specific: 3 specialty terms together
-        queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}" "{spec_terms[2]}"')
-    if len(spec_terms) >= 2:
-        queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}"')
-    if spec_terms:
-        queries.append(f'site:linkedin.com/company "{spec_terms[0]}"')
-        if len(spec_terms) >= 2:
-            queries.append(f'site:linkedin.com/company "{spec_terms[1]}"')
+    # ── Step 1: Ask AI to name the top 10 true competitors ───────────────────
+    competitor_names = []
+    if groq_key:
+        prompt = f"""You are a B2B market research expert. Identify the top 10 DIRECT competitors of the company described below.
 
-    if classification and classification not in ("Other", "Unclassified", ""):
-        queries.append(f'site:linkedin.com/company "{classification}"')
+Company: {name}
+Website: {website}
+Industry: {industry}
+Type: {company_type}{' · SaaS' if is_saas else ''}
+Specialties: {specialties}
+Description: {description[:400] if description else 'N/A'}
 
-    # Industry fallback only when no specialty signal
-    if not spec_terms:
-        if industry and company_type:
-            queries.append(f'site:linkedin.com/company "{industry}" "{company_type}"')
-        elif industry:
-            queries.append(f'site:linkedin.com/company "{industry}"')
+Return ONLY a JSON array of competitor company names (strings), ordered from most similar to least similar.
+Focus on companies that:
+- Solve the same core problem for the same customer segment
+- Are direct product substitutes (not just same-industry)
+- Are real, established companies (not startups with no presence)
 
+Example format: ["CompanyA", "CompanyB", "CompanyC"]
+Return only the JSON array, no explanation."""
+
+        try:
+            res = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                json={
+                    'model': 'llama-3.3-70b-versatile',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 300,
+                    'temperature': 0.1,
+                },
+                timeout=15
+            )
+            raw = res.json().get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            # Extract JSON array from response
+            arr_m = _lre.search(r'\[.*?\]', raw, _lre.DOTALL)
+            if arr_m:
+                competitor_names = _json.loads(arr_m.group(0))
+        except Exception:
+            pass
+
+    # ── Step 2: For each competitor name, resolve to a LinkedIn URL ───────────
+    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts', 'mycompany'}
     own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', company.get("linkedin_url") or "")
     own_slug = own_slug_m.group(1).lower() if own_slug_m else ""
-    name_first = name.lower().split()[0] if name.split() else ""
+    seen_slugs = {own_slug} if own_slug else set()
 
-    for q in queries:
-        if len(raw_candidates) >= 20:
+    results = []
+
+    for cname in competitor_names[:12]:
+        if len(results) >= 10:
             break
-        for r in _lws(q, count=10):
+        # Search LinkedIn for this specific company name
+        q = f'site:linkedin.com/company "{cname}"'
+        for r in _lws(q, count=5):
             href = r.get("href", "") or r.get("url", "")
             title = (r.get("title") or "").strip()
             snippet = (r.get("body") or r.get("description") or "").strip()
@@ -8532,34 +8550,59 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
             slug = m.group(1).lower()
             if slug in _SKIP_SLUGS or slug in seen_slugs:
                 continue
-            if slug == own_slug or (name_first and name_first in slug):
-                continue
             seen_slugs.add(slug)
-
-            # Relevance score: count how many of the source company's specialties
-            # appear in the result's snippet/title
-            combined_text = (title + " " + snippet).lower()
-            score = sum(1 for term in all_spec_terms if term in combined_text)
-
             li_url = f"https://www.linkedin.com/company/{slug}/"
-            cname = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip() or title[:60]
-            raw_candidates.append((score, {
-                "name": cname,
+            # Use the AI-provided name if the title seems garbled
+            clean_title = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip()
+            display_name = clean_title if clean_title else cname
+            results.append({
+                "name": display_name,
                 "linkedin_url": li_url,
                 "domain": slug,
                 "snippet": snippet[:200],
                 "industry": industry,
                 "company_type": company_type,
                 "is_saas": is_saas,
-            }))
+            })
+            break  # One match per competitor name is enough
+
+    # ── Fallback: if AI gave no names, fall back to specialty-based search ────
+    if not results:
+        all_spec_terms = [s.strip().lower() for s in specialties.split(",")] if specialties else []
+        _GENERIC = {'software', 'technology', 'services', 'solutions', 'consulting', 'development', 'management'}
+        spec_terms = [s.strip() for s in specialties.split(",") if len(s.strip()) > 5 and s.strip().lower() not in _GENERIC] if specialties else []
+        queries = []
+        if len(spec_terms) >= 2:
+            queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}"')
+        if spec_terms:
+            queries.append(f'site:linkedin.com/company "{spec_terms[0]}"')
+        if industry:
+            queries.append(f'site:linkedin.com/company "{industry}"')
+
+        raw_candidates = []
+        for q in queries:
             if len(raw_candidates) >= 20:
                 break
+            for r in _lws(q, count=10):
+                href = r.get("href", "") or r.get("url", "")
+                title = (r.get("title") or "").strip()
+                snippet = (r.get("body") or r.get("description") or "").strip()
+                m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+                if not m:
+                    continue
+                slug = m.group(1).lower()
+                if slug in _SKIP_SLUGS or slug in seen_slugs:
+                    continue
+                seen_slugs.add(slug)
+                combined = (title + " " + snippet).lower()
+                score = sum(1 for t in all_spec_terms if t in combined)
+                li_url = f"https://www.linkedin.com/company/{slug}/"
+                cname2 = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip() or title[:60]
+                raw_candidates.append((score, {"name": cname2, "linkedin_url": li_url, "domain": slug, "snippet": snippet[:200], "industry": industry, "company_type": company_type, "is_saas": is_saas}))
+        raw_candidates.sort(key=lambda x: x[0], reverse=True)
+        results = [r for _, r in raw_candidates[:10]]
 
-    # Sort by relevance score descending — most-matching companies first
-    raw_candidates.sort(key=lambda x: x[0], reverse=True)
-    results = [r for _, r in raw_candidates[:10]]
-
-    # Persist to DB so subsequent opens return the same list
+    # ── Persist so next open is instant and consistent ────────────────────────
     if results:
         supabase.table("companies").update({"cached_lookalikes": results}).eq("id", company_id).execute()
 

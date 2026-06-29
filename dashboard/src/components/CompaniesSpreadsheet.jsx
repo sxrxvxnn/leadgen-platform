@@ -441,7 +441,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 
             {/* Column picker */}
             <div style={{ position: 'relative' }} ref={colPickerRef}>
-              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? 'rgba(255,255,255,0.22)' : undefined, outline: showColPicker ? '2px solid rgba(255,255,255,0.3)' : 'none' }}>
+              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? '#c5000a' : undefined, outline: 'none' }}>
                 Columns ({visibleKeys.size}/{ALL_COLUMNS.length}) ▾
               </button>
               {showColPicker && (
@@ -577,8 +577,8 @@ const s = {
   unit: { fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 400, color: 'rgba(255,255,255,0.35)' },
   searchInput: { padding: '7px 12px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#ffffff', outline: 'none', width: 180 },
   btn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' },
-  toolBtn: { padding: '7px 12px', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em', color: '#ffffff', cursor: 'pointer', whiteSpace: 'nowrap' },
-  closeBtn: { padding: '7px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(255,255,255,0.55)', cursor: 'pointer' },
+  toolBtn: { padding: '7px 12px', background: 'var(--accent)', border: 'none', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' },
+  closeBtn: { padding: '7px 14px', background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: '#ffffff', cursor: 'pointer' },
   selBanner: { padding: '7px 24px', background: 'rgba(168,100,72,0.06)', borderBottom: '1px solid rgba(168,100,72,0.15)', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', color: 'var(--text)', flexShrink: 0 },
   bannerBtn: { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '11px', padding: 0, color: 'var(--accent)', textDecoration: 'underline' },
   tableWrap: { flex: 1, overflow: 'auto' },
