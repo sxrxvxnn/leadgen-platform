@@ -3498,51 +3498,52 @@ async def bulk_autofill_companies(
         return any(w in slug for w in words[:4])
 
     def _ddgs_linkedin_snippet(company_name: str, li_slug: str = "") -> dict:
-        """Pull employee count + followers from DDGS search snippets for a LinkedIn page.
+        """Pull employee count + followers from web search snippets for a LinkedIn page.
 
-        LinkedIn blocks direct scraping without login. DDGS snippets for
+        LinkedIn blocks direct scraping without login. Search snippets for
         linkedin.com/company/slug frequently contain "X followers" and "Y employees"
-        from Google/Bing knowledge panels — no login required.
+        from knowledge panels — no login required. Uses Brave Search (if key set)
+        with DDGS as fallback.
         """
+        from .company_prefill import _web_search as _ws
         result = {}
-        try:
-            from ddgs import DDGS
-            queries = []
-            if li_slug:
-                queries.append(f"site:linkedin.com/company/{li_slug}")
-            queries.append(f'"{company_name}" linkedin employees followers')
-            with DDGS() as ddgs:
-                for q in queries:
-                    try:
-                        for r in ddgs.text(q, max_results=4):
-                            body = " ".join(filter(None, [
-                                r.get("body"), r.get("title"), r.get("description"),
-                            ]))
-                            if not result.get("followers"):
-                                m = _re_mod.search(r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers', body, _re_mod.I)
-                                if m:
-                                    result["followers"] = m.group(0).strip()
-                            if not result.get("employee_count"):
-                                # Handles: "1,234 employees", "11-50 employees",
-                                # "5000 & Above employees", "501+ employees"
-                                m = _re_mod.search(
-                                    r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
-                                    r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
-                                    body, _re_mod.I,
-                                )
-                                if m:
-                                    result["employee_count"] = m.group(1).replace(",", "")
-                            if not result.get("headquarters"):
-                                # LinkedIn snippet format: "City, Country · Industry · X employees"
-                                m = _re_mod.search(r'·\s*([A-Z][^·|<]{4,50}(?:India|US|UAE|UK|Singapore|Malaysia|Canada|Australia))\s*[·|]', body)
-                                if m:
-                                    result["headquarters"] = m.group(1).strip()
-                            if result.get("followers") or result.get("employee_count"):
-                                return result
-                    except Exception:
-                        continue
-        except Exception:
-            pass
+        queries = []
+        if li_slug:
+            queries.append(f"site:linkedin.com/company/{li_slug}")
+        queries.append(f'"{company_name}" site:linkedin.com employees followers')
+        queries.append(f'"{company_name}" linkedin company employees followers')
+        for q in queries:
+            try:
+                for r in _ws(q, count=5):
+                    body = " ".join(filter(None, [
+                        r.get("body"), r.get("title"), r.get("description"),
+                    ]))
+                    if not result.get("followers"):
+                        m = _re_mod.search(
+                            r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?',
+                            body, _re_mod.I,
+                        )
+                        if m:
+                            result["followers"] = m.group(0).strip()
+                    if not result.get("employee_count"):
+                        m = _re_mod.search(
+                            r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
+                            r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
+                            body, _re_mod.I,
+                        )
+                        if m:
+                            result["employee_count"] = m.group(1).replace(",", "")
+                    if not result.get("headquarters"):
+                        m = _re_mod.search(
+                            r'[·•]\s*([A-Z][^·•|<]{4,50}(?:India|US|UAE|UK|Singapore|Malaysia|Canada|Australia))\s*[·•|]',
+                            body,
+                        )
+                        if m:
+                            result["headquarters"] = m.group(1).strip()
+                    if result.get("followers") and result.get("employee_count"):
+                        return result
+            except Exception:
+                continue
         return result
 
     def _ddgs_general_info(company_name: str, out: dict, need_desc: bool, need_hq: bool) -> None:
@@ -4026,7 +4027,7 @@ async def bulk_analyze_companies(
     from fastapi.responses import StreamingResponse
 
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-analyze", limit=5, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-analyze", limit=30, window_minutes=60)
     company_ids = payload.get("company_ids", [])
     gemini_key      = payload.get("gemini_key")      or os.getenv("GEMINI_API_KEY", "")
     openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
@@ -4097,9 +4098,37 @@ async def bulk_analyze_companies(
                 'Real Estate', 'Government', 'Non-profit', 'Other',
             }
 
+            # ── is_saas determination (mirrors single-company analyze logic) ──
+            is_saas_val = ai_result.get("is_saas")
+            if final_type == "Service":
+                is_saas_val = False
+            elif final_type in ("Product", "Hybrid"):
+                has_mobile  = bool(website_data and website_data.get("has_mobile_app"))
+                has_web_app = bool(website_data and website_data.get("has_web_app_link"))
+                has_login   = bool(website_data and website_data.get("has_login_detected"))
+                has_pricing = bool(website_data and website_data.get("has_pricing_detected"))
+                full_lower  = (website_data.get("full_text", "") if website_data else "").lower()
+                non_saas_signals = [
+                    "on-premise", "on premise", "on-prem", "installed locally",
+                    "local installation", "download and install", "downloadable software",
+                    "one-time license", "perpetual license", "desktop app",
+                ]
+                if any(s in full_lower for s in non_saas_signals):
+                    is_saas_val = False
+                elif is_saas_val is not None:
+                    pass
+                elif has_mobile or has_web_app or has_login:
+                    is_saas_val = True
+                elif has_pricing:
+                    is_saas_val = True
+                else:
+                    is_saas_val = None
+
             update_data = {}
             if final_type and not company.get("company_type"):
                 update_data["company_type"] = final_type
+            if is_saas_val is not None and company.get("is_saas") is None:
+                update_data["is_saas"] = bool(is_saas_val)
             if merged_compliance and not company.get("compliance"):
                 update_data["compliance"] = ", ".join(merged_compliance)
 
