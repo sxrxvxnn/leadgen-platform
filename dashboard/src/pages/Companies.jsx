@@ -1855,7 +1855,6 @@ export default function Companies() {
           </div>}
           <button onClick={() => setShowBulkAdd(true)} style={s.heroBtn}>Bulk Add</button>
           <button onClick={() => setShowSpreadsheet(true)} style={s.heroBtn}>Spreadsheet</button>
-          {isEnabled('csv_export') && <button onClick={exportCompaniesCSV} style={{ ...s.heroBtn, background: 'var(--text)', color: '#FFFFFF', border: 'none' }}>Export →</button>}
         </div>
       </motion.div>
 
@@ -2126,7 +2125,14 @@ export default function Companies() {
           </div>
         ) : (
           /* ── List view ── */
-          <div style={s.grid}>
+          <motion.div
+            key={safePage}
+            initial={{ opacity: 0, x: 18 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -18 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            style={s.grid}
+          >
             {paged.map((company, i) => (
               <React.Fragment key={company.id}>
                 {i > 0 && <div style={{ height: '1px', background: 'var(--border-strong)', margin: '8px 0' }} />}
@@ -2156,31 +2162,52 @@ export default function Companies() {
               </React.Fragment>
             ))}
             {/* ── Pagination controls ── */}
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0 8px', width: '100%' }}>
-                <button
-                  disabled={safePage <= 1}
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text)', cursor: safePage <= 1 ? 'default' : 'pointer', opacity: safePage <= 1 ? 0.4 : 1 }}>
-                  ← Prev
-                </button>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(p => (
-                    <button key={p} onClick={() => setPage(p)}
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: 11, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p === safePage ? 'var(--accent)' : 'transparent', border: `1px solid ${p === safePage ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 5, color: p === safePage ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: p === safePage ? 700 : 400 }}>
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text)', cursor: safePage >= totalPages ? 'default' : 'pointer', opacity: safePage >= totalPages ? 0.4 : 1 }}>
-                  Next →
-                </button>
-              </div>
-            )}
-          </div>
+            {totalPages > 1 && (() => {
+              // Build windowed page list with ellipsis
+              const WINDOW = 2
+              const pages = []
+              for (let p = 1; p <= totalPages; p++) {
+                if (p === 1 || p === totalPages || (p >= safePage - WINDOW && p <= safePage + WINDOW)) {
+                  pages.push(p)
+                } else if (pages[pages.length - 1] !== '…') {
+                  pages.push('…')
+                }
+              }
+              const btnBase = { fontFamily: 'var(--font-mono)', fontSize: 11, height: 32, minWidth: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s ease', padding: '0 10px' }
+              return (
+                <motion.div
+                  key="pagination"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '24px 0 8px', width: '100%', flexWrap: 'wrap' }}
+                >
+                  <button
+                    disabled={safePage <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    style={{ ...btnBase, background: 'transparent', color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text)', opacity: safePage <= 1 ? 0.35 : 1, cursor: safePage <= 1 ? 'default' : 'pointer' }}>
+                    ← Prev
+                  </button>
+                  {pages.map((p, i) => p === '…'
+                    ? <span key={`ellipsis-${i}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', userSelect: 'none' }}>…</span>
+                    : <button key={p} onClick={() => setPage(p)}
+                        style={{ ...btnBase, background: p === safePage ? 'var(--accent)' : 'transparent', borderColor: p === safePage ? 'var(--accent)' : 'var(--border)', color: p === safePage ? '#fff' : 'var(--text-muted)', fontWeight: p === safePage ? 700 : 400, transform: p === safePage ? 'scale(1.05)' : 'scale(1)' }}>
+                        {p}
+                      </button>
+                  )}
+                  <button
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    style={{ ...btnBase, background: 'transparent', color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text)', opacity: safePage >= totalPages ? 0.35 : 1, cursor: safePage >= totalPages ? 'default' : 'pointer' }}>
+                    Next →
+                  </button>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
+                    {safePage} / {totalPages}
+                  </span>
+                </motion.div>
+              )
+            })()}
+          </motion.div>
         )}
       </div>
 
