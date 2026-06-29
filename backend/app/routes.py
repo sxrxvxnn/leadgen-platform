@@ -3785,11 +3785,19 @@ async def bulk_autofill_companies(
                         update_data["tagline"] = li_data["tagline"]
 
                     # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
-                    if li_data.get("industry"):
+                    # Skip non-industry placeholders LinkedIn sometimes returns
+                    _BAD_INDUSTRIES = {
+                        'private company', 'privately held', 'public company',
+                        'partnership', 'sole proprietorship', 'government agency',
+                    }
+                    if li_data.get("industry") and \
+                       li_data["industry"].strip().lower() not in _BAD_INDUSTRIES:
                         update_data["industry"] = li_data["industry"]
 
                     # Industry → classification (if not already set)
-                    if li_data.get("industry") and (not company.get("classification") or company.get("classification") == "Unclassified"):
+                    if li_data.get("industry") and \
+                       li_data["industry"].strip().lower() not in _BAD_INDUSTRIES and \
+                       (not company.get("classification") or company.get("classification") == "Unclassified"):
                         _LI_CLASS_MAP = {
                             'software development': 'IT Services',
                             'information technology': 'IT Services',

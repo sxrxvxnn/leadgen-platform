@@ -881,22 +881,16 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             style={{ ...card.statusSelect, color: statusColor, borderColor: `${statusColor}40` }}>
             {PROSPECT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          {showCustomInput ? (
-            <input type="text" placeholder="Category…" autoFocus
-              style={{ ...card.select, width: 110, color: 'var(--text)', borderColor: 'var(--accent)' }}
-              onBlur={e => { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handleClassificationChange(v); setShowCustomInput(false) }
-                if (e.key === 'Escape') setShowCustomInput(false)
-              }}
-            />
-          ) : (
-            <select value={classification}
-              onChange={e => { if (e.target.value === 'Custom...') setShowCustomInput(true); else handleClassificationChange(e.target.value) }}
-              style={{ ...card.select, color: classColor, borderColor: `${classColor}40` }}>
-              {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
+          {(() => {
+            const BAD_INDUSTRIES = ['private company', 'privately held', 'public company', 'partnership', 'sole proprietorship']
+            const ind = (company.industry || '').trim()
+            const show = ind && !BAD_INDUSTRIES.includes(ind.toLowerCase())
+            return show ? (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.04em', color: classColor, border: `1px solid ${classColor}40`, borderRadius: 5, padding: '4px 10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }} title={ind}>
+                {ind}
+              </span>
+            ) : null
+          })()}
           {/* ── Actions dropdown ── */}
           <div ref={actionsMenuRef} style={{ position: 'relative' }}>
             <button
