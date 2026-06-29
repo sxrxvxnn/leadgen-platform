@@ -1335,6 +1335,11 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <a href={l.linkedin_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
                           {l.company_type && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 3, color: '#6366f1', letterSpacing: '0.04em' }}>{l.company_type}</span>}
+                          {(l.business_model || l.is_saas != null) && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 3, color: '#a16207', letterSpacing: '0.04em' }}>
+                              {[l.business_model, l.is_saas != null ? (l.is_saas ? 'SaaS' : 'Non-SaaS') : null].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
                           {l.rating && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '1px 5px', background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.2)', borderRadius: 3, color: '#059669', letterSpacing: '0.04em' }}>★ {l.rating} G2</span>}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 3, flexWrap: 'wrap' }}>
