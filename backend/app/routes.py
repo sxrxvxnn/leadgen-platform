@@ -3272,7 +3272,7 @@ async def bulk_deep_enrich_companies(
 ):
     """Run all 8 enrichment jobs for multiple companies in parallel (5 workers)."""
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-deep-enrich", limit=3, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-deep-enrich", limit=20, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _bde_threading
@@ -8396,61 +8396,76 @@ async def test_webhook(webhook_id: str, authorization: str = Header(...)):
 
 @router.post("/companies/{company_id}/lookalike")
 async def find_lookalike_companies(company_id: str, authorization: str = Header(...)):
-    """Find similar companies based on industry, tech stack, and size."""
+    """Find similar companies by industry + company_type + is_saas via LinkedIn search."""
     user_id = get_user_id(authorization)
     co_res = supabase.table("companies").select(
-        "id,name,website,industry,size,classification,tech_stack,headquarters"
+        "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url"
     ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
     company = co_res.data[0]
     name = company.get("name", "")
-    industry = company.get("industry") or ""
-    size = company.get("size") or ""
-    hq = company.get("headquarters") or ""
-    tech_stack = company.get("tech_stack") or []
-    classification = company.get("classification") or ""
+    industry = (company.get("industry") or "").strip()
+    company_type = (company.get("company_type") or "").strip()
+    is_saas = company.get("is_saas")
+    hq = (company.get("headquarters") or "").strip()
 
-    # Build search queries
+    from .company_prefill import _web_search as _lws
+    import re as _lre
+    from urllib.parse import urlparse as _lup
+
+    _SKIP_SLUGS = {'linkedin', 'company', 'showcase', 'school', 'about', 'jobs', 'feed', 'posts'}
+    seen_slugs = set()
+    results = []
+
+    # Build targeted queries for LinkedIn company pages with matching profile
     queries = []
     if industry:
-        queries.append(f'companies similar to "{name}" {industry} B2B software')
-    if tech_stack and isinstance(tech_stack, list) and len(tech_stack) > 0:
-        top_tech = ", ".join(tech_stack[:3])
-        queries.append(f'B2B companies using {top_tech} {industry}')
-    queries.append(f'alternatives to "{name}" competitors {industry}')
+        queries.append(f'site:linkedin.com/company "{industry}"')
+    if industry and company_type:
+        queries.append(f'site:linkedin.com/company "{industry}" "{company_type}"')
+    if industry and hq:
+        country = hq.split(',')[-1].strip() if ',' in hq else hq
+        queries.append(f'site:linkedin.com/company "{industry}" {country}')
+    if industry:
+        queries.append(f'linkedin.com/company "{industry}" company profile')
 
-    results = []
-    seen_domains = set()
-    try:
-        from ddgs import DDGS
-        import re as _lre
-        with DDGS() as d:
-            for q in queries:
-                if len(results) >= 12:
-                    break
-                for r in d.text(q, max_results=6):
-                    href = r.get("href") or ""
-                    title = (r.get("title") or "").strip()
-                    snippet = (r.get("body") or r.get("snippet") or "").strip()
-                    if not href or not title:
-                        continue
-                    # Skip the company itself and junk
-                    if name.lower() in href.lower():
-                        continue
-                    if any(s in href for s in ["linkedin.com", "twitter.com", "facebook.com", "reddit.com", "wikipedia.org", "youtube.com"]):
-                        continue
-                    try:
-                        from urllib.parse import urlparse as _lup
-                        dom = _lup(href).netloc.replace("www.", "").lower()
-                    except Exception:
-                        dom = href
-                    if not dom or dom in seen_domains:
-                        continue
-                    seen_domains.add(dom)
-                    results.append({"name": title[:80], "url": href, "domain": dom, "snippet": snippet[:150]})
-    except Exception:
-        pass
+    for q in queries:
+        if len(results) >= 12:
+            break
+        for r in _lws(q, count=8):
+            href = r.get("href", "") or r.get("url", "")
+            title = (r.get("title") or "").strip()
+            snippet = (r.get("body") or r.get("description") or "").strip()
+            # Only LinkedIn company pages
+            m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', href)
+            if not m:
+                continue
+            slug = m.group(1).lower()
+            if slug in _SKIP_SLUGS or slug in seen_slugs:
+                continue
+            # Skip the source company
+            own_slug_m = _lre.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)',
+                                     company.get("linkedin_url") or "")
+            if own_slug_m and own_slug_m.group(1).lower() == slug:
+                continue
+            if name.lower().split()[0] in slug:
+                continue
+            seen_slugs.add(slug)
+            li_url = f"https://www.linkedin.com/company/{slug}/"
+            # Extract a clean company name from the title
+            cname = _lre.sub(r'\s*[\|·\-–]\s*LinkedIn.*$', '', title).strip() or title[:60]
+            results.append({
+                "name": cname,
+                "linkedin_url": li_url,
+                "domain": slug,
+                "snippet": snippet[:160],
+                "industry": industry,
+                "company_type": company_type,
+                "is_saas": is_saas,
+            })
+            if len(results) >= 12:
+                break
 
     return {"lookalikes": results[:10]}
 
