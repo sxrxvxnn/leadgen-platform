@@ -390,6 +390,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
        company.recent_news?.length || company.revenue_estimate || company.social_profiles ||
        company.traffic_estimate || company.review_presence)
   )
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const actionsMenuRef = useRef(null)
 
   useEffect(() => {
     getCompanySignals(company.id).then(r => {
@@ -406,6 +408,17 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!showActionsMenu) return
+    function handleClickOutside(e) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+        setShowActionsMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showActionsMenu])
 
   async function handleClassificationChange(val) {
     setClassification(val)
@@ -878,44 +891,71 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
               {CLASSIFICATIONS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          <button
-            style={{ ...card.actionBtn, color: (fillingLI || analyzing) ? 'var(--text-muted)' : 'var(--accent)', borderColor: (fillingLI || analyzing) ? 'var(--border)' : 'rgba(168,100,72,0.3)', opacity: (fillingLI || analyzing) ? 0.5 : 1 }}
-            onClick={handleFillAndAnalyze}
-            disabled={fillingLI || analyzing}
-            title="Fill from LinkedIn, then analyze website">
-            {fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : 'Fill + Analyze'}
-          </button>
-          <button
-            style={{ ...card.actionBtn, color: pipelining ? 'var(--text-muted)' : '#5b8db8', borderColor: pipelining ? 'var(--border)' : 'rgba(91,141,184,0.35)', opacity: pipelining ? 0.6 : 1 }}
-            onClick={handleEnrichPipeline} disabled={pipelining} title="Website analysis + compliance + maps enrich">
-            {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enrich'}
-          </button>
-          {isEnabled('deep_enrich') && <button
-            style={{ ...card.actionBtn, color: deepEnriching ? 'var(--text-muted)' : '#7c3aed', borderColor: deepEnriching ? 'var(--border)' : 'rgba(124,58,237,0.35)', opacity: deepEnriching ? 0.6 : 1 }}
-            onClick={handleDeepEnrich} disabled={deepEnriching} title="Tech stack, jobs, news, revenue, social, traffic, reviews">
-            {deepEnriching ? 'Enriching…' : enrichResult?.ok ? `✓ ${enrichResult.count} fields` : 'Deep Enrich'}
-          </button>}
-          {isEnabled('linkedin_dm') && <button style={{ ...card.actionBtn, color: showDM ? '#0369a1' : 'var(--text-muted)', borderColor: showDM ? 'rgba(3,105,161,0.3)' : 'var(--border)' }}
-            onClick={handleGenerateDM} title="Generate LinkedIn DM">
-            {generatingDM ? 'Writing…' : 'DM'}
-          </button>}
-          {isEnabled('activity_timeline') && <button style={{ ...card.actionBtn, color: showActivity ? 'var(--text)' : 'var(--text-muted)' }}
-            onClick={handleLoadActivities} title="Activity log">
-            Activity
-          </button>}
-          {isEnabled('lookalike_finder') && <button style={{ ...card.actionBtn, color: showLookalikes ? '#059669' : 'var(--text-muted)', borderColor: showLookalikes ? 'rgba(5,150,105,0.3)' : 'var(--border)' }}
-            onClick={handleLoadLookalikes} title="Find similar companies">
-            Similar
-          </button>}
-          <button
-            style={{ ...card.actionBtn, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', borderColor: cachedSignals?.length ? 'rgba(168,100,72,0.3)' : 'var(--border)' }}
-            onClick={() => setShowSignals(v => !v)}>
-            {cachedSignals?.length ? `${cachedSignals.length} Signals` : 'Signals'}
-          </button>
-          <button style={{ ...card.actionBtn, color: (showNotes || notes) ? 'var(--text)' : 'var(--text-muted)' }}
-            onClick={() => { setShowNotes(v => !v); if (!showNotes) setEditingNotes(false) }}>
-            Notes
-          </button>
+          {/* ── Actions dropdown ── */}
+          <div ref={actionsMenuRef} style={{ position: 'relative' }}>
+            <button
+              style={{ ...card.actionBtn, color: 'var(--text)', borderColor: showActionsMenu ? 'var(--accent)' : 'var(--border)', background: showActionsMenu ? 'rgba(168,100,72,0.08)' : 'transparent' }}
+              onClick={() => setShowActionsMenu(v => !v)}>
+              {(fillingLI || analyzing || pipelining || deepEnriching) ? (
+                fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enriching…'
+              ) : 'Actions ▾'}
+            </button>
+            {showActionsMenu && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', zIndex: 200, minWidth: 180, overflow: 'hidden' }}>
+                <button
+                  disabled={fillingLI || analyzing}
+                  onClick={() => { setShowActionsMenu(false); handleFillAndAnalyze() }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: (fillingLI || analyzing) ? 'var(--text-muted)' : 'var(--accent)', cursor: (fillingLI || analyzing) ? 'default' : 'pointer', opacity: (fillingLI || analyzing) ? 0.5 : 1 }}>
+                  {fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : 'Fill + Analyze'}
+                </button>
+                <button
+                  disabled={pipelining}
+                  onClick={() => { setShowActionsMenu(false); handleEnrichPipeline() }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: pipelining ? 'var(--text-muted)' : '#5b8db8', cursor: pipelining ? 'default' : 'pointer', opacity: pipelining ? 0.6 : 1 }}>
+                  {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enrich'}
+                </button>
+                {isEnabled('deep_enrich') && (
+                  <button
+                    disabled={deepEnriching}
+                    onClick={() => { setShowActionsMenu(false); handleDeepEnrich() }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: deepEnriching ? 'var(--text-muted)' : '#7c3aed', cursor: deepEnriching ? 'default' : 'pointer', opacity: deepEnriching ? 0.6 : 1 }}>
+                    {deepEnriching ? 'Enriching…' : enrichResult?.ok ? `✓ ${enrichResult.count} fields` : 'Deep Enrich'}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowActionsMenu(false); setShowSignals(v => !v) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', cursor: 'pointer' }}>
+                  {cachedSignals?.length ? `${cachedSignals.length} Signals` : 'Signals'}
+                </button>
+                <button
+                  onClick={() => { setShowActionsMenu(false); setShowNotes(v => !v); if (!showNotes) setEditingNotes(false) }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: isEnabled('linkedin_dm') || isEnabled('activity_timeline') || isEnabled('lookalike_finder') ? '1px solid var(--border)' : 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: (showNotes || notes) ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                  Notes
+                </button>
+                {isEnabled('linkedin_dm') && (
+                  <button
+                    onClick={() => { setShowActionsMenu(false); handleGenerateDM() }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: isEnabled('activity_timeline') || isEnabled('lookalike_finder') ? '1px solid var(--border)' : 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: showDM ? '#0369a1' : 'var(--text-muted)', cursor: 'pointer' }}>
+                    {generatingDM ? 'Writing DM…' : 'LinkedIn DM'}
+                  </button>
+                )}
+                {isEnabled('activity_timeline') && (
+                  <button
+                    onClick={() => { setShowActionsMenu(false); handleLoadActivities() }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: isEnabled('lookalike_finder') ? '1px solid var(--border)' : 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: showActivity ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer' }}>
+                    Activity Log
+                  </button>
+                )}
+                {isEnabled('lookalike_finder') && (
+                  <button
+                    onClick={() => { setShowActionsMenu(false); handleLoadLookalikes() }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', fontFamily: 'var(--font-mono)', fontSize: 11, color: showLookalikes ? '#059669' : 'var(--text-muted)', cursor: 'pointer' }}>
+                    Find Similar
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>Leads →</button>
           <button style={card.editCardBtn} onClick={openEdit} title="Edit">✎</button>
           <button style={card.deleteBtn} onClick={() => onDelete(company.id)} title="Remove">✕</button>
@@ -1467,6 +1507,8 @@ export default function Companies() {
   const [bulkEnriching, setBulkEnriching] = useState(false)
   const [bulkEnrichProgress, setBulkEnrichProgress] = useState(null)
   const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
   const [alerts, setAlerts] = useState([])
   const [showAlerts, setShowAlerts] = useState(false)
   const [refreshingAlerts, setRefreshingAlerts] = useState(false)
@@ -1549,6 +1591,12 @@ export default function Companies() {
     const mwatch = !watchlistOnly || c.watchlisted
     return ms && mc && ms2 && mf && mt && mfill && mwatch
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  useEffect(() => { setPage(1) }, [search, classFilter, statusFilter, followerFilter, typeFilter, fillFilter, watchlistOnly])
 
   const prospectCount = companies.filter(c => c.prospect_status === 'Prospect').length
   const notFitCount = companies.filter(c => c.prospect_status === 'Not a Fit').length
@@ -2034,7 +2082,7 @@ export default function Companies() {
         ) : (
           /* ── List view ── */
           <div style={s.grid}>
-            {filtered.map((company, i) => (
+            {paged.map((company, i) => (
               <React.Fragment key={company.id}>
                 {i > 0 && <div style={{ height: '1px', background: 'var(--border-strong)', margin: '8px 0' }} />}
                 <motion.div
@@ -2044,7 +2092,7 @@ export default function Companies() {
                   style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', width: '100%' }}
                 >
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '28px', fontWeight: '700', color: 'var(--border-strong)', lineHeight: 1, paddingTop: '22px', minWidth: '36px', textAlign: 'right', letterSpacing: '-0.03em', userSelect: 'none' }}>
-                    {i + 1}
+                    {(safePage - 1) * PAGE_SIZE + i + 1}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <CompanyCard
@@ -2061,6 +2109,31 @@ export default function Companies() {
                 </motion.div>
               </React.Fragment>
             ))}
+            {/* ── Pagination controls ── */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0 8px', width: '100%' }}>
+                <button
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text)', cursor: safePage <= 1 ? 'default' : 'pointer', opacity: safePage <= 1 ? 0.4 : 1 }}>
+                  ← Prev
+                </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(p => (
+                    <button key={p} onClick={() => setPage(p)}
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: 11, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: p === safePage ? 'var(--accent)' : 'transparent', border: `1px solid ${p === safePage ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 5, color: p === safePage ? '#fff' : 'var(--text-muted)', cursor: 'pointer', fontWeight: p === safePage ? 700 : 400 }}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, padding: '6px 14px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 5, color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text)', cursor: safePage >= totalPages ? 'default' : 'pointer', opacity: safePage >= totalPages ? 0.4 : 1 }}>
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
