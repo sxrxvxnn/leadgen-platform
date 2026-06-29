@@ -745,13 +745,39 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     </div>
   ) : null
 
-  // Strip LinkedIn date-prefixed posts ("Oct 7, 2025 · …") and truncate to one sentence
+  // One-liner summary: tagline → structured sentence → description fallback
   const cleanTagline = (() => {
-    const raw = company.tagline || company.description || ''
-    if (!raw) return null
-    const stripped = raw.replace(/^[A-Z][a-z]{2,8}\s+\d{1,2},\s+\d{4}\s*[·•·]\s*/i, '').trim()
-    const sentence = stripped.split(/(?<=[.!?])\s+/)[0] || stripped
-    return sentence.length > 4 ? (sentence.length > 110 ? sentence.substring(0, 108) + '…' : sentence) : null
+    // 1. Use tagline if it's a real sentence (not a LinkedIn post date)
+    const tl = (company.tagline || '')
+      .replace(/^[A-Z][a-z]{2,8}\s+\d{1,2},\s+\d{4}\s*[·•·]\s*/i, '').trim()
+    if (tl && tl.length >= 12 && tl.length <= 140) return tl
+
+    // 2. Build a structured sentence from available fields
+    const name     = company.name || ''
+    const industry = (company.industry || '').trim()
+    const isSaas   = company.is_saas
+    const ctRaw    = (company.company_type || '').split('·')[0].trim().toLowerCase()
+    const rawSpecs = typeof company.specialties === 'string' ? company.specialties : ''
+    const specs    = rawSpecs.split(',').map(s => s.trim()).filter(Boolean).slice(0, 3)
+
+    if (name && (industry || specs.length)) {
+      let s = name + ' is'
+      if (isSaas === true)        s += ' a SaaS'
+      else if (ctRaw)             s += ` a ${ctRaw}`
+      else                        s += ' a'
+      s += industry ? ` ${industry.toLowerCase()} company` : ' company'
+      if (specs.length === 1)     s += ` focused on ${specs[0]}`
+      else if (specs.length === 2) s += ` specializing in ${specs[0]} and ${specs[1]}`
+      else if (specs.length >= 3) s += ` specializing in ${specs[0]}, ${specs[1]}, and ${specs[2]}`
+      return s + '.'
+    }
+
+    // 3. Fall back: first sentence of description
+    const desc = (company.description || '')
+      .replace(/^[A-Z][a-z]{2,8}\s+\d{1,2},\s+\d{4}\s*[·•·]\s*/i, '').trim()
+    if (!desc) return null
+    const sentence = desc.split(/(?<=[.!?])\s+/)[0] || desc
+    return sentence.length > 4 ? (sentence.length > 120 ? sentence.substring(0, 118) + '…' : sentence) : null
   })()
 
   // Format employee count: "1547 employees" → "1,547" / "1001-5000" → "1,001–5,000"
@@ -795,7 +821,7 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             {enrichedAgo && <span style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.01em' }}>· {enrichedAgo}</span>}
           </div>
           {cleanTagline && (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 0', lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '5px 0 0', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
               {cleanTagline}
             </p>
           )}
