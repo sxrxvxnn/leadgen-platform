@@ -181,6 +181,7 @@ export const createCompany = (data) => { invalidateCache('/companies'); return a
 export const updateCompany = (id, data) => { invalidateCache('/companies'); return api.patch(`/companies/${id}`, data) }
 export const deleteCompany = (id) => { invalidateCache('/companies'); return api.delete(`/companies/${id}`) }
 export const bulkDeleteCompanies = (ids) => { invalidateCache('/companies'); return api.delete('/companies', { data: { ids } }) }
+export const bulkCreateCompanies = (companies) => { invalidateCache('/companies'); return api.post('/companies/bulk', { companies }) }
 export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyze-website`, payload)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId) =>
@@ -213,7 +214,6 @@ export const prefillCompany = (name, websiteUrl) =>
   })
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
-export const bulkCreateCompanies = (companies) => api.post('/companies/bulk', { companies })
 export const getTechnoparkDirectory = (params = {}) => api.get('/companies/technopark-directory', { params })
 export const mapsDiscover = (payload) => api.post('/companies/maps-discover', payload)
 export const bulkMapsEnrich = (companyIds = [], onProgress) =>

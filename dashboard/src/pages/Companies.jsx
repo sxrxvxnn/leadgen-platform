@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment, bulkCreateCompanies } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment, bulkCreateCompanies, invalidateCache } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { useFeatureFlags } from '../context/FeatureFlagContext'
@@ -1566,6 +1566,7 @@ export default function Companies() {
 
   async function fetchCompanies() {
     try {
+      invalidateCache('/companies')
       const res = await getCompanies()
       const fresh = res.data?.companies || []
       const missed = drainPending()
