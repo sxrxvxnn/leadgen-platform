@@ -3255,11 +3255,12 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
         _web_search as _de_ws,
     )
     li_url_de = company.get("linkedin_url") or ""
-    _de_needs_followers = not company.get("followers") and not results.get("followers")
-    _de_needs_size      = not company.get("size")      and not results.get("size")
-    _de_needs_hq        = not company.get("headquarters") and not results.get("headquarters")
-    _de_needs_desc      = not company.get("description")  and not results.get("description")
-    _de_needs_spec      = not company.get("specialties")  and not results.get("specialties")
+    # Always refresh followers (live count); keep existing size (LinkedIn only returns coarse ranges)
+    _de_needs_followers = not results.get("followers")
+    _de_needs_size      = not company.get("size") and not results.get("size")
+    _de_needs_hq        = not results.get("headquarters")
+    _de_needs_desc      = not results.get("description")
+    _de_needs_spec      = not results.get("specialties")
 
     if li_url_de and any([_de_needs_followers, _de_needs_size, _de_needs_hq, _de_needs_desc, _de_needs_spec]):
         try:
@@ -3661,17 +3662,16 @@ async def bulk_autofill_companies(
         if ws_url and not ws_url.startswith("http"):
             ws_url = "https://" + ws_url
 
-        needs_desc      = not company.get("description")
-        needs_hq        = not company.get("headquarters")
-        needs_type      = not company.get("company_type")
+        # Always refresh live/analysis data; skip structural fields set by user.
+        # size (employee range) is stable and LinkedIn only returns coarse ranges —
+        # keep the existing value to avoid overwriting with a less accurate category.
+        needs_desc      = True
+        needs_hq        = True
+        needs_type      = True
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
-        needs_followers = not company.get("followers")
-        # A correct LinkedIn company profile always lists the real website — if it
-        # disagrees with our stored website, that's a strong sign of a wrong match.
-        # Captured once per company (stored as "" if LinkedIn lists none) so this
-        # doesn't force a re-scrape on every future run.
+        needs_followers = True
         needs_li_verify = bool(company.get("linkedin_url")) and company.get("linkedin_website") is None
 
         if not any([needs_desc, needs_hq, needs_type, needs_site,
@@ -3830,23 +3830,23 @@ async def bulk_autofill_companies(
                     if li_data.get("description") and needs_desc and not update_data.get("description"):
                         update_data["description"] = li_data["description"]
 
-                    # Phone from LinkedIn About (only if not already set from Maps)
-                    if li_data.get("phone") and not company.get("phone") and not update_data.get("phone"):
+                    # Phone — don't overwrite (could have been manually verified)
+                    if li_data.get("phone") and not update_data.get("phone") and not company.get("phone"):
                         update_data["phone"] = li_data["phone"]
 
-                    # Founded year
+                    # Founded year — stable once known, don't overwrite
                     if li_data.get("founded") and not company.get("founded"):
                         update_data["founded"] = li_data["founded"]
 
-                    # Specialties
-                    if li_data.get("specialties") and not company.get("specialties"):
+                    # Specialties — always refresh from LinkedIn (authoritative source)
+                    if li_data.get("specialties"):
                         update_data["specialties"] = li_data["specialties"]
 
-                    # Tagline (company slogan from LinkedIn og:description)
-                    if li_data.get("tagline") and not company.get("tagline"):
+                    # Tagline — always refresh
+                    if li_data.get("tagline"):
                         update_data["tagline"] = li_data["tagline"]
 
-                    # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
+                    # Industry — always overwrite (LinkedIn is authoritative)
                     # Skip non-industry placeholders LinkedIn sometimes returns
                     _BAD_INDUSTRIES = {
                         'private company', 'privately held', 'public company',
@@ -4196,11 +4196,11 @@ async def bulk_analyze_companies(
                     is_saas_val = True
 
             update_data = {}
-            if final_type and not company.get("company_type"):
+            if final_type:
                 update_data["company_type"] = final_type
-            if is_saas_val is not None and company.get("is_saas") is None:
+            if is_saas_val is not None:
                 update_data["is_saas"] = bool(is_saas_val)
-            if merged_compliance and not company.get("compliance"):
+            if merged_compliance:
                 update_data["compliance"] = ", ".join(merged_compliance)
 
             ws_description = (
@@ -4209,7 +4209,7 @@ async def bulk_analyze_companies(
                 or website_data.get("first_para")
                 or (website_data.get("hero", "")[:300].strip() or None)
             )
-            if ws_description and not company.get("description"):
+            if ws_description:
                 update_data["description"] = ws_description
 
             ws_location = website_data.get("location")
