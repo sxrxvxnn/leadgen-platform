@@ -36,18 +36,25 @@ export function BulkOpsProvider({ children }) {
 
   async function runAutofill(companyIds) {
     if (autofill.running) return
-    setAutofill({ running: true, msg: `Starting autofill for ${companyIds.length} companies…`, filledCount: 0, total: companyIds.length })
+    const CHUNK = 40
+    const total = companyIds.length
+    setAutofill({ running: true, msg: `Starting autofill for ${total} companies…`, filledCount: 0, total })
     let filled = 0
+    let globalCompleted = 0
     try {
-      await bulkAutofillCompanies(companyIds, (completed, total, result) => {
-        setAutofill(p => ({ ...p, msg: `Filling… ${completed ?? '?'}/${total ?? p.total}`, total: total ?? p.total }))
-        if (result?.success && result.update && Object.keys(result.update).length) {
-          filled++
-          setAutofill(p => ({ ...p, filledCount: filled }))
-          dispatch(result)
-        }
-      })
-      setAutofill({ running: false, msg: `Done — ${filled} of ${companyIds.length} companies updated`, filledCount: filled, total: companyIds.length })
+      for (let i = 0; i < companyIds.length; i += CHUNK) {
+        const chunk = companyIds.slice(i, i + CHUNK)
+        await bulkAutofillCompanies(chunk, (_, __, result) => {
+          globalCompleted++
+          setAutofill(p => ({ ...p, msg: `Filling… ${globalCompleted}/${total}` }))
+          if (result?.success && result.update && Object.keys(result.update).length) {
+            filled++
+            setAutofill(p => ({ ...p, filledCount: filled }))
+            dispatch(result)
+          }
+        })
+      }
+      setAutofill({ running: false, msg: `Done — ${filled} of ${total} companies updated`, filledCount: filled, total })
     } catch (e) {
       setAutofill({ running: false, msg: 'Autofill failed — ' + e.message, filledCount: 0, total: 0 })
     } finally {
@@ -57,18 +64,25 @@ export function BulkOpsProvider({ children }) {
 
   async function runAnalyze(companyIds) {
     if (analyze.running) return
-    setAnalyze({ running: true, msg: `Analyzing ${companyIds.length} companies…`, filledCount: 0, total: companyIds.length })
+    const CHUNK = 40
+    const total = companyIds.length
+    setAnalyze({ running: true, msg: `Analyzing ${total} companies…`, filledCount: 0, total })
     let filled = 0
+    let globalCompleted = 0
     try {
-      await bulkAnalyzeCompanies(companyIds, (completed, total, result) => {
-        setAnalyze(p => ({ ...p, msg: `Analyzing… ${completed ?? '?'}/${total ?? p.total}`, total: total ?? p.total }))
-        if (result?.success && result.update && Object.keys(result.update).length) {
-          filled++
-          setAnalyze(p => ({ ...p, filledCount: filled }))
-          dispatch(result)
-        }
-      })
-      setAnalyze({ running: false, msg: `Done — ${filled} of ${companyIds.length} analyzed`, filledCount: filled, total: companyIds.length })
+      for (let i = 0; i < companyIds.length; i += CHUNK) {
+        const chunk = companyIds.slice(i, i + CHUNK)
+        await bulkAnalyzeCompanies(chunk, (_, __, result) => {
+          globalCompleted++
+          setAnalyze(p => ({ ...p, msg: `Analyzing… ${globalCompleted}/${total}` }))
+          if (result?.success && result.update && Object.keys(result.update).length) {
+            filled++
+            setAnalyze(p => ({ ...p, filledCount: filled }))
+            dispatch(result)
+          }
+        })
+      }
+      setAnalyze({ running: false, msg: `Done — ${filled} of ${total} analyzed`, filledCount: filled, total })
     } catch (e) {
       setAnalyze({ running: false, msg: 'Analyze failed — ' + e.message, filledCount: 0, total: 0 })
     } finally {
@@ -78,18 +92,25 @@ export function BulkOpsProvider({ children }) {
 
   async function runMapsEnrich(companyIds) {
     if (maps.running) return
-    setMaps({ running: true, msg: `Enriching ${companyIds.length} companies from Maps…`, filledCount: 0, total: companyIds.length })
+    const CHUNK = 40
+    const total = companyIds.length
+    setMaps({ running: true, msg: `Enriching ${total} companies from Maps…`, filledCount: 0, total })
     let filled = 0
+    let globalCompleted = 0
     try {
-      await bulkMapsEnrich(companyIds, (completed, total, result) => {
-        setMaps(p => ({ ...p, msg: `Maps enriching… ${completed ?? '?'}/${total ?? p.total}`, total: total ?? p.total }))
-        if (result?.success && result.update && Object.keys(result.update).length) {
-          filled++
-          setMaps(p => ({ ...p, filledCount: filled }))
-          dispatch(result)
-        }
-      })
-      setMaps({ running: false, msg: `Done — ${filled} of ${companyIds.length} enriched from Maps`, filledCount: filled, total: companyIds.length })
+      for (let i = 0; i < companyIds.length; i += CHUNK) {
+        const chunk = companyIds.slice(i, i + CHUNK)
+        await bulkMapsEnrich(chunk, (_, __, result) => {
+          globalCompleted++
+          setMaps(p => ({ ...p, msg: `Maps enriching… ${globalCompleted}/${total}` }))
+          if (result?.success && result.update && Object.keys(result.update).length) {
+            filled++
+            setMaps(p => ({ ...p, filledCount: filled }))
+            dispatch(result)
+          }
+        })
+      }
+      setMaps({ running: false, msg: `Done — ${filled} of ${total} enriched from Maps`, filledCount: filled, total })
     } catch (e) {
       setMaps({ running: false, msg: 'Maps enrich failed — ' + (e.message || 'unknown error'), filledCount: 0, total: 0 })
     } finally {
