@@ -1039,132 +1039,120 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
 
     </div>
 
-    {/* ── Deep Enrich sub-cards ── */}
-    {showEnrichCards && (
-      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    {/* ── Deep Enrich sub-cards — gated by feature flag ── */}
+    {showEnrichCards && isEnabled('company_enrich_cards') && (
+      <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gridAutoFlow: 'dense', gap: 8 }}>
 
-        {/* Row 1: Tech Stack + Email Pattern */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-
-          {/* Tech Stack */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #7c3aed', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Tech Stack</span>
-            </div>
-            {company.tech_stack?.length
-              ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {(Array.isArray(company.tech_stack) ? company.tech_stack : []).slice(0, 12).map(t => (
-                    <span key={t} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 7px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 4, color: '#7c3aed', letterSpacing: '0.02em' }}>{t}</span>
-                  ))}
-                  {company.tech_stack.length > 12 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{company.tech_stack.length - 12} more</span>}
-                </div>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
-            }
+        {/* Tech Stack */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #7c3aed', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Tech Stack</span>
           </div>
-
-          {/* Email Pattern */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #b45309', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                <polyline points="22,6 12,13 2,6"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Email Pattern</span>
-            </div>
-            {company.email_pattern
-              ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: '#b45309', margin: 0, letterSpacing: '-0.02em' }}>{company.email_pattern}@{domain || '…'}</p>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
-            }
-          </div>
+          {company.tech_stack?.length
+            ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {(Array.isArray(company.tech_stack) ? company.tech_stack : []).slice(0, 12).map(t => (
+                  <span key={t} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 7px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.2)', borderRadius: 4, color: '#7c3aed', letterSpacing: '0.02em' }}>{t}</span>
+                ))}
+                {company.tech_stack.length > 12 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{company.tech_stack.length - 12} more</span>}
+              </div>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
+          }
         </div>
 
-        {/* Row 2: Revenue Estimate + Traffic */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-
-          {/* Revenue Estimate */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #059669', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Revenue Estimate</span>
-            </div>
-            {company.revenue_estimate
-              ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: '#059669', margin: 0, letterSpacing: '-0.02em' }}>{company.revenue_estimate}</p>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
-            }
+        {/* Email Pattern */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #b45309', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Email Pattern</span>
           </div>
-
-          {/* Traffic Estimate */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0284c7', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Web Traffic</span>
-            </div>
-            {company.traffic_estimate
-              ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: '#0284c7', margin: 0, letterSpacing: '-0.02em' }}>{company.traffic_estimate}</p>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
-            }
-          </div>
+          {company.email_pattern
+            ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: '#b45309', margin: 0, letterSpacing: '-0.02em' }}>{company.email_pattern}@{domain || '…'}</p>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to detect.</p>
+          }
         </div>
 
-        {/* Row 3: Social Profiles + Review Presence */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-
-          {/* Social Profiles */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #db2777', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#db2777" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Social Profiles</span>
-            </div>
-            {company.social_profiles && Object.keys(company.social_profiles).length
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {Object.entries(company.social_profiles).map(([platform, url]) => (
-                    <a key={platform} href={url} target="_blank" rel="noreferrer"
-                      style={{ fontSize: 12, color: '#db2777', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ textTransform: 'capitalize', minWidth: 68 }}>{platform}</span>
-                      <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↗</span>
-                    </a>
-                  ))}
-                </div>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
-            }
+        {/* Revenue Estimate */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #059669', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Revenue Estimate</span>
           </div>
-
-          {/* Review Presence */}
-          <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #d97706', borderRadius: 8, padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Reviews</span>
-            </div>
-            {company.review_presence && Object.keys(company.review_presence).length
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {Object.entries(company.review_presence).map(([platform, data]) => (
-                    <a key={platform} href={data.url} target="_blank" rel="noreferrer"
-                      style={{ fontSize: 12, color: '#d97706', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ textTransform: 'capitalize', minWidth: 72 }}>{platform}</span>
-                      {data.rating && <span style={{ color: 'var(--text)', fontWeight: 700 }}>★ {data.rating}</span>}
-                      {data.reviews && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({data.reviews} reviews)</span>}
-                    </a>
-                  ))}
-                </div>
-              : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
-            }
-          </div>
+          {company.revenue_estimate
+            ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: '#059669', margin: 0, letterSpacing: '-0.02em' }}>{company.revenue_estimate}</p>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
+          }
         </div>
 
-        {/* Row 4: Job Openings (full width) */}
-        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0369a1', borderRadius: 8, padding: '14px 18px' }}>
+        {/* Web Traffic */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0284c7', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Web Traffic</span>
+          </div>
+          {company.traffic_estimate
+            ? <p style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: '#0284c7', margin: 0, letterSpacing: '-0.02em' }}>{company.traffic_estimate}</p>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to estimate.</p>
+          }
+        </div>
+
+        {/* Social Profiles */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #db2777', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#db2777" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Social Profiles</span>
+          </div>
+          {company.social_profiles && Object.keys(company.social_profiles).length
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {Object.entries(company.social_profiles).map(([platform, url]) => (
+                  <a key={platform} href={url} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 12, color: '#db2777', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ textTransform: 'capitalize', minWidth: 68 }}>{platform}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>↗</span>
+                  </a>
+                ))}
+              </div>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
+          }
+        </div>
+
+        {/* Reviews */}
+        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #d97706', borderRadius: 8, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Reviews</span>
+          </div>
+          {company.review_presence && Object.keys(company.review_presence).length
+            ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {Object.entries(company.review_presence).map(([platform, data]) => (
+                  <a key={platform} href={data.url} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 12, color: '#d97706', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ textTransform: 'capitalize', minWidth: 72 }}>{platform}</span>
+                    {data.rating && <span style={{ color: 'var(--text)', fontWeight: 700 }}>★ {data.rating}</span>}
+                    {data.reviews && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({data.reviews} reviews)</span>}
+                  </a>
+                ))}
+              </div>
+            : <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>Run Deep Enrich to find.</p>
+          }
+        </div>
+
+        {/* Open Roles — full width */}
+        <div style={{ gridColumn: '1 / -1', background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #0369a1', borderRadius: 8, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
@@ -1188,8 +1176,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           }
         </div>
 
-        {/* Row 5: Recent News (full width) */}
-        <div style={{ background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #6d28d9', borderRadius: 8, padding: '14px 18px' }}>
+        {/* Recent News — full width */}
+        <div style={{ gridColumn: '1 / -1', background: 'var(--bg)', border: '1px solid rgba(196,193,189,0.55)', borderLeft: '4px solid #6d28d9', borderRadius: 8, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6d28d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/>
