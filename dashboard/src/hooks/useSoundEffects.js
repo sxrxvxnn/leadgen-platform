@@ -7,19 +7,24 @@ import { useEffect, useRef } from 'react'
 const SKIP_KEYS = new Set(['Meta', 'Control', 'Alt', 'Shift', 'Tab', 'CapsLock', 'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'])
 
 // Elements whose clicks should play the click sound
+const CLICKABLE_TAGS = new Set(['button', 'a', 'select', 'label', 'summary'])
+const CLICKABLE_ROLES = new Set(['button', 'tab', 'menuitem', 'option', 'checkbox', 'radio', 'switch', 'link'])
+
 function isClickable(el) {
   if (!el) return false
   const tag = el.tagName?.toLowerCase()
-  if (tag === 'button' || tag === 'a' || tag === 'select' || tag === 'label') return true
+  if (CLICKABLE_TAGS.has(tag)) return true
   const role = el.getAttribute?.('role')
-  if (role === 'button' || role === 'tab' || role === 'menuitem' || role === 'option') return true
-  if (el.onclick || el.getAttribute?.('data-clickable')) return true
-  // Walk up a couple levels for nested icon/text inside buttons
+  if (role && CLICKABLE_ROLES.has(role)) return true
+  if (el.getAttribute?.('type') === 'checkbox' || el.getAttribute?.('type') === 'radio') return true
+  // cursor: pointer is a reliable signal for React-handled click targets
+  if (el.style?.cursor === 'pointer') return true
+  try { if (window.getComputedStyle(el).cursor === 'pointer') return true } catch {}
   return false
 }
 
 function findClickableAncestor(el, depth = 0) {
-  if (!el || depth > 4) return null
+  if (!el || depth > 6 || el === document.body) return null
   if (isClickable(el)) return el
   return findClickableAncestor(el.parentElement, depth + 1)
 }
@@ -59,25 +64,39 @@ function playKeyClick(ctx, vol = 0.35) {
   } catch {}
 }
 
-// ── UI button click (low thud) ───────────────────────────────────────────────
-function playClickThud(ctx, vol = 0.25) {
+// ── UI button click (punchy tap) ─────────────────────────────────────────────
+function playClickThud(ctx, vol = 0.55) {
   if (!ctx) return
   try {
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
     const now = ctx.currentTime
 
-    osc.frequency.setValueAtTime(160, now)
-    osc.frequency.exponentialRampToValueAtTime(60, now + 0.04)
+    // Layer 1: sharp initial transient (noise burst)
+    const bufLen = ctx.sampleRate * 0.012
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1)
+    const noiseSrc = ctx.createBufferSource()
+    noiseSrc.buffer = buf
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.setValueAtTime(vol * 0.6, now)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.015)
+    noiseSrc.connect(noiseGain)
+    noiseGain.connect(ctx.destination)
+    noiseSrc.start(now)
+    noiseSrc.stop(now + 0.016)
+
+    // Layer 2: pitched body (sine sweep for the "thunk" feel)
+    const osc = ctx.createOscillator()
+    const oscGain = ctx.createGain()
     osc.type = 'sine'
-
-    gain.gain.setValueAtTime(vol, now)
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06)
-
-    osc.connect(gain)
-    gain.connect(ctx.destination)
+    osc.frequency.setValueAtTime(220, now)
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.05)
+    oscGain.gain.setValueAtTime(vol, now)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+    osc.connect(oscGain)
+    oscGain.connect(ctx.destination)
     osc.start(now)
-    osc.stop(now + 0.07)
+    osc.stop(now + 0.09)
   } catch {}
 }
 
