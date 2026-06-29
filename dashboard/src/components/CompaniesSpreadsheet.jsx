@@ -441,7 +441,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 
             {/* Column picker */}
             <div style={{ position: 'relative' }} ref={colPickerRef}>
-              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? 'rgba(253,253,253,0.16)' : undefined }}>
+              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? 'rgba(255,255,255,0.22)' : undefined, outline: showColPicker ? '2px solid rgba(255,255,255,0.3)' : 'none' }}>
                 Columns ({visibleKeys.size}/{ALL_COLUMNS.length}) ▾
               </button>
               {showColPicker && (
@@ -571,14 +571,14 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 const s = {
   overlay: { position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 900, display: 'flex', flexDirection: 'column' },
   container: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
-  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(253,253,253,0.08)', background: 'var(--text)', flexShrink: 0, gap: 10, flexWrap: 'wrap' },
-  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(253,253,253,0.35)', marginBottom: 4, textTransform: 'uppercase' },
-  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 400, color: 'rgba(253,253,253,0.95)', letterSpacing: '-0.04em', lineHeight: 1 },
-  unit: { fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 400, color: 'rgba(253,253,253,0.35)' },
-  searchInput: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(253,253,253,0.85)', outline: 'none', width: 180 },
+  toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: '#0f0f0f', flexShrink: 0, gap: 10, flexWrap: 'wrap' },
+  eyebrow: { fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: 600, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.35)', marginBottom: 4, textTransform: 'uppercase' },
+  title: { fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 400, color: '#ffffff', letterSpacing: '-0.04em', lineHeight: 1 },
+  unit: { fontFamily: 'var(--font-display)', fontSize: '14px', fontWeight: 400, color: 'rgba(255,255,255,0.35)' },
+  searchInput: { padding: '7px 12px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#ffffff', outline: 'none', width: 180 },
   btn: { padding: '7px 14px', background: 'var(--accent)', border: 'none', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em', color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' },
-  toolBtn: { padding: '7px 12px', background: 'rgba(253,253,253,0.07)', border: '1px solid rgba(253,253,253,0.12)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em', color: 'rgba(253,253,253,0.7)', cursor: 'pointer', whiteSpace: 'nowrap' },
-  closeBtn: { padding: '7px 14px', background: 'transparent', border: '1px solid rgba(253,253,253,0.15)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(253,253,253,0.45)', cursor: 'pointer' },
+  toolBtn: { padding: '7px 12px', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em', color: '#ffffff', cursor: 'pointer', whiteSpace: 'nowrap' },
+  closeBtn: { padding: '7px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 7, fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'rgba(255,255,255,0.55)', cursor: 'pointer' },
   selBanner: { padding: '7px 24px', background: 'rgba(168,100,72,0.06)', borderBottom: '1px solid rgba(168,100,72,0.15)', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', color: 'var(--text)', flexShrink: 0 },
   bannerBtn: { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '11px', padding: 0, color: 'var(--accent)', textDecoration: 'underline' },
   tableWrap: { flex: 1, overflow: 'auto' },

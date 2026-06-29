@@ -641,12 +641,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     }
   }
 
-  async function handleLoadLookalikes() {
+  async function handleLoadLookalikes(forceRefresh = false) {
     setShowLookalikes(true)
-    if (lookalikes !== null) return
+    if (lookalikes !== null && !forceRefresh) return
     setLoadingLookalikes(true)
     try {
-      const res = await findLookalikesForCompany(company.id)
+      const res = await findLookalikesForCompany(company.id, forceRefresh)
       setLookalikes(res.data.lookalikes || [])
     } catch { setLookalikes([]) }
     finally { setLoadingLookalikes(false) }
@@ -1311,9 +1311,16 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Similar companies to {company.name}</span>
           <button onClick={() => setShowLookalikes(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>✕</button>
         </div>
-        {company.industry && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: '0 0 10px', letterSpacing: '0.04em' }}>
-          {company.industry}{company.company_type ? ` · ${company.company_type}` : ''}{company.is_saas != null ? ` · ${company.is_saas ? 'SaaS' : 'Non-SaaS'}` : ''}
-        </p>}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          {company.industry && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: 0, letterSpacing: '0.04em' }}>
+            {company.industry}{company.company_type ? ` · ${company.company_type}` : ''}{company.is_saas != null ? ` · ${company.is_saas ? 'SaaS' : 'Non-SaaS'}` : ''}
+          </p>}
+          {lookalikes !== null && !loadingLookalikes && (
+            <button onClick={() => handleLoadLookalikes(true)} style={{ fontFamily: 'var(--font-mono)', fontSize: 9, padding: '3px 8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-muted)', cursor: 'pointer', letterSpacing: '0.04em' }}>
+              ↻ Refresh
+            </button>
+          )}
+        </div>
         {loadingLookalikes
           ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Searching LinkedIn for similar companies…</p>
           : !lookalikes?.length
