@@ -8562,7 +8562,9 @@ Return ONLY a JSON array of 10 items ordered by similarity. Each item:
   "snippet": "One sentence: what they do and why they directly compete with {name}.",
   "employees": "51-200",
   "followers": 15400,
-  "company_type": "Private"
+  "company_type": "Private",
+  "business_model": "Product",
+  "is_saas": true
 }}
 
 RULES:
@@ -8572,6 +8574,8 @@ RULES:
 - employees: use LinkedIn range format ("1-10", "11-50", "51-200", "201-500", "501-1000", "1001-5000", "5001-10000", "10001+")
 - followers: integer, approximate LinkedIn followers count from your training knowledge
 - company_type: one of "Public", "Private", "Nonprofit", "Government"
+- business_model: "Product" if they sell software/hardware, "Service" if they primarily sell consulting/services
+- is_saas: true if cloud-based subscription software, false otherwise
 - No markdown, no explanation — just the JSON array"""
 
         try:
@@ -8604,6 +8608,8 @@ RULES:
                         "employees": (item.get("employees") or "").strip(),
                         "followers": item.get("followers") or 0,
                         "company_type": (item.get("company_type") or "").strip(),
+                        "business_model": (item.get("business_model") or "").strip(),
+                        "is_saas": item.get("is_saas"),
                     })
         except Exception:
             pass
@@ -8619,10 +8625,12 @@ RULES:
             "linkedin_url": f"https://www.linkedin.com/company/{li_slug}/",
             "domain":       li_slug,
             "snippet":      comp["snippet"],
-            "employees":    comp.get("employees") or "",
-            "followers":    comp.get("followers") or 0,
-            "company_type": comp.get("company_type") or "",
-            "source":       "g2+ai",
+            "employees":      comp.get("employees") or "",
+            "followers":      comp.get("followers") or 0,
+            "company_type":   comp.get("company_type") or "",
+            "business_model": comp.get("business_model") or "",
+            "is_saas":        comp.get("is_saas"),
+            "source":         "g2+ai",
             "industry":     industry,
             "is_saas":      is_saas,
         })
