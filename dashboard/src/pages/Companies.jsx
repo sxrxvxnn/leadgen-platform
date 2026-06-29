@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment, bulkCreateCompanies } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { useFeatureFlags } from '../context/FeatureFlagContext'
@@ -378,6 +378,8 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
   const [showLookalikes, setShowLookalikes] = useState(false)
   const [lookalikes, setLookalikes] = useState(null)
   const [loadingLookalikes, setLoadingLookalikes] = useState(false)
+  const [addingLookalike, setAddingLookalike] = useState(null)
+  const [addedLookalikes, setAddedLookalikes] = useState(new Set())
   const [showActivity, setShowActivity] = useState(false)
   const [activities, setActivities] = useState(null)
   const [activityNote, setActivityNote] = useState('')
@@ -648,6 +650,21 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
       setLookalikes(res.data.lookalikes || [])
     } catch { setLookalikes([]) }
     finally { setLoadingLookalikes(false) }
+  }
+
+  async function handleAddLookalike(l) {
+    if (addingLookalike === l.linkedin_url || addedLookalikes.has(l.linkedin_url)) return
+    setAddingLookalike(l.linkedin_url)
+    try {
+      await bulkCreateCompanies([{
+        name: l.name,
+        linkedin_url: l.linkedin_url,
+        industry: l.industry || '',
+        company_type: l.company_type || '',
+      }])
+      setAddedLookalikes(prev => new Set([...prev, l.linkedin_url]))
+    } catch { }
+    finally { setAddingLookalike(null) }
   }
 
   async function handleLoadActivities() {
@@ -1289,24 +1306,36 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     {/* ── Lookalike companies ── */}
     {showLookalikes && (
       <div style={{ background: 'var(--bg)', border: '1px solid rgba(5,150,105,0.25)', borderLeft: '4px solid #059669', borderRadius: 8, padding: '14px 18px', marginTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Similar companies to {company.name}</span>
           <button onClick={() => setShowLookalikes(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}>✕</button>
         </div>
+        {company.industry && <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', margin: '0 0 10px', letterSpacing: '0.04em' }}>
+          {company.industry}{company.company_type ? ` · ${company.company_type}` : ''}{company.is_saas != null ? ` · ${company.is_saas ? 'SaaS' : 'Non-SaaS'}` : ''}
+        </p>}
         {loadingLookalikes
-          ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Searching…</p>
+          ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Searching LinkedIn for similar companies…</p>
           : !lookalikes?.length
-            ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No lookalikes found.</p>
-            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {lookalikes.map((l, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <a href={l.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>
+            ? <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No similar companies found.</p>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {lookalikes.map((l, i) => {
+                  const added = addedLookalikes.has(l.linkedin_url)
+                  const adding = addingLookalike === l.linkedin_url
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <a href={l.linkedin_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#059669', textDecoration: 'none' }}>{l.name}</a>
+                        {l.snippet && <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', lineHeight: 1.4 }}>{l.snippet}</p>}
+                      </div>
+                      <button
+                        disabled={added || adding}
+                        onClick={() => handleAddLookalike(l)}
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 10px', background: added ? 'rgba(5,150,105,0.1)' : 'transparent', border: `1px solid ${added ? '#059669' : 'var(--border)'}`, borderRadius: 5, color: added ? '#059669' : 'var(--text-muted)', cursor: added ? 'default' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {adding ? 'Adding…' : added ? '✓ Added' : '+ Add'}
+                      </button>
                     </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{l.domain}</span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
         }
       </div>
