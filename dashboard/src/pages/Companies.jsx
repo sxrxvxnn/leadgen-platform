@@ -619,6 +619,12 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
     }
   }
 
+  async function handleFullEnrich() {
+    await handleFillAndAnalyze()
+    await handleEnrichPipeline()
+    if (isEnabled('deep_enrich')) await handleDeepEnrich()
+  }
+
   async function handleGenerateDM() {
     setGeneratingDM(true)
     setShowDM(true)
@@ -896,32 +902,16 @@ function CompanyCard({ company, onUpdate, onDelete, onViewLeads, selected, onTog
             <button
               style={{ ...card.actionBtn, color: 'var(--text)', borderColor: showActionsMenu ? 'var(--accent)' : 'var(--border)', background: showActionsMenu ? 'rgba(168,100,72,0.08)' : 'transparent' }}
               onClick={() => setShowActionsMenu(v => !v)}>
-              {(fillingLI || analyzing || pipelining || deepEnriching) ? (
-                fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enriching…'
-              ) : 'Actions ▾'}
+              {(fillingLI || analyzing || pipelining || deepEnriching) ? 'Running…' : 'Actions ▾'}
             </button>
             {showActionsMenu && (
               <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', zIndex: 200, minWidth: 180, overflow: 'hidden' }}>
                 <button
-                  disabled={fillingLI || analyzing}
-                  onClick={() => { setShowActionsMenu(false); handleFillAndAnalyze() }}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: (fillingLI || analyzing) ? 'var(--text-muted)' : 'var(--accent)', cursor: (fillingLI || analyzing) ? 'default' : 'pointer', opacity: (fillingLI || analyzing) ? 0.5 : 1 }}>
-                  {fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : 'Fill + Analyze'}
+                  disabled={fillingLI || analyzing || pipelining || deepEnriching}
+                  onClick={() => { setShowActionsMenu(false); handleFullEnrich() }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: (fillingLI || analyzing || pipelining || deepEnriching) ? 'var(--text-muted)' : 'var(--accent)', cursor: (fillingLI || analyzing || pipelining || deepEnriching) ? 'default' : 'pointer', opacity: (fillingLI || analyzing || pipelining || deepEnriching) ? 0.5 : 1 }}>
+                  {fillingLI ? 'Filling…' : analyzing ? 'Analyzing…' : pipelining ? `Enriching ${pipelineSteps.filter(s => s.status === 'done').length}/3…` : deepEnriching ? 'Deep Enriching…' : enrichResult?.ok ? `✓ ${enrichResult.count} fields` : 'Enrich'}
                 </button>
-                <button
-                  disabled={pipelining}
-                  onClick={() => { setShowActionsMenu(false); handleEnrichPipeline() }}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: pipelining ? 'var(--text-muted)' : '#5b8db8', cursor: pipelining ? 'default' : 'pointer', opacity: pipelining ? 0.6 : 1 }}>
-                  {pipelining ? `${pipelineSteps.filter(s => s.status === 'done').length}/3…` : 'Enrich'}
-                </button>
-                {isEnabled('deep_enrich') && (
-                  <button
-                    disabled={deepEnriching}
-                    onClick={() => { setShowActionsMenu(false); handleDeepEnrich() }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: deepEnriching ? 'var(--text-muted)' : '#7c3aed', cursor: deepEnriching ? 'default' : 'pointer', opacity: deepEnriching ? 0.6 : 1 }}>
-                    {deepEnriching ? 'Enriching…' : enrichResult?.ok ? `✓ ${enrichResult.count} fields` : 'Deep Enrich'}
-                  </button>
-                )}
                 <button
                   onClick={() => { setShowActionsMenu(false); setShowSignals(v => !v) }}
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '9px 14px', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11, color: (cachedSignals?.length || showSignals) ? '#a86448' : 'var(--text-muted)', cursor: 'pointer' }}>
