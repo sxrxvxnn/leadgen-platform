@@ -5,6 +5,7 @@ import BottomNav from './BottomNav'
 import MobileHeader from './MobileHeader'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { getActiveAnnouncements } from '../services/api'
+import { useSoundEffects } from '../hooks/useSoundEffects'
 
 const SHORTCUTS = [
   { keys: ['G', 'D'], label: 'Go to Dashboard',    path: '/dashboard' },
@@ -32,6 +33,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const pendingKey = useRef(null)
   const pendingTimer = useRef(null)
+  useSoundEffects({ enabled: true })
 
   useEffect(() => {
     const dismissed = JSON.parse(sessionStorage.getItem('dismissed_banners') || '[]')
