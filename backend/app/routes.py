@@ -3167,10 +3167,11 @@ async def fetch_company_funding(company_id: str, authorization: str = Header(...
 @router.post("/companies/{company_id}/deep-enrich")
 async def deep_enrich_company(company_id: str, authorization: str = Header(...)):
     """Run all 8 enrichment jobs for a company: tech stack, jobs, email pattern,
-    news, revenue estimate, social profiles, traffic estimate, review presence."""
+    news, revenue estimate, social profiles, traffic estimate, review presence.
+    Also backfills any missing LinkedIn basics (followers, size, HQ, description, specialties)."""
     user_id = get_user_id(authorization)
     co_res = supabase.table("companies").select(
-        "id,name,website,size,classification,industry,linkedin_url"
+        "id,name,website,size,classification,industry,linkedin_url,followers,headquarters,description,specialties"
     ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -3245,6 +3246,70 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
                 errors[key] = err
             elif val is not None and val != "" and val != [] and val != {}:
                 results[key] = val
+
+    # ── Backfill missing LinkedIn basics (followers, size, HQ, description, specialties) ──
+    # Autofill may have been blocked by LinkedIn on first pass — deep-enrich is the safety net.
+    import re as _de_re
+    from .company_prefill import (
+        scrape_linkedin_data as _de_scrape_li,
+        _web_search as _de_ws,
+    )
+    li_url_de = company.get("linkedin_url") or ""
+    _de_needs_followers = not company.get("followers") and not results.get("followers")
+    _de_needs_size      = not company.get("size")      and not results.get("size")
+    _de_needs_hq        = not company.get("headquarters") and not results.get("headquarters")
+    _de_needs_desc      = not company.get("description")  and not results.get("description")
+    _de_needs_spec      = not company.get("specialties")  and not results.get("specialties")
+
+    if li_url_de and any([_de_needs_followers, _de_needs_size, _de_needs_hq, _de_needs_desc, _de_needs_spec]):
+        try:
+            _de_li = _de_scrape_li(li_url_de, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
+            if _de_li.get("followers") and _de_needs_followers:
+                results["followers"] = _de_li["followers"]
+                _de_needs_followers = False
+            if _de_li.get("employee_count") and _de_needs_size:
+                results["size"] = str(_de_li["employee_count"])
+                _de_needs_size = False
+            if _de_li.get("location") and _de_needs_hq:
+                results["headquarters"] = _de_li["location"]
+            if _de_li.get("description") and _de_needs_desc:
+                results["description"] = _de_li["description"]
+            if _de_li.get("specialties") and _de_needs_spec:
+                results["specialties"] = _de_li["specialties"]
+        except Exception:
+            pass
+
+    # DDGS fallback for followers/size — search engine snippets often have these
+    if _de_needs_followers or _de_needs_size:
+        try:
+            _de_slug_m = _de_re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url_de) if li_url_de else None
+            _de_slug = _de_slug_m.group(1) if _de_slug_m else ""
+            _de_queries = []
+            if _de_slug:
+                _de_queries.append(f"site:linkedin.com/company/{_de_slug}")
+            _de_queries += [
+                f'"{name}" site:linkedin.com employees followers',
+                f'"{name}" linkedin company employees followers',
+            ]
+            for _dq in _de_queries:
+                for _dr in _de_ws(_dq, count=5):
+                    _db = " ".join(filter(None, [_dr.get("body"), _dr.get("title"), _dr.get("description")]))
+                    if _de_needs_followers and not results.get("followers"):
+                        _fm = _de_re.search(r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?', _db, _de_re.I)
+                        if _fm:
+                            results["followers"] = _fm.group(1).strip()
+                            _de_needs_followers = False
+                    if _de_needs_size and not results.get("size"):
+                        _em = _de_re.search(r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)\s*employees?', _db, _de_re.I)
+                        if _em:
+                            results["size"] = _em.group(1).replace(",", "")
+                            _de_needs_size = False
+                    if not _de_needs_followers and not _de_needs_size:
+                        break
+                if not _de_needs_followers and not _de_needs_size:
+                    break
+        except Exception:
+            pass
 
     # Persist all collected results + timestamp
     if results:
@@ -3521,7 +3586,7 @@ async def bulk_autofill_companies(
                             body, _re_mod.I,
                         )
                         if m:
-                            result["followers"] = m.group(0).strip()
+                            result["followers"] = m.group(1).strip()  # number only, not "X followers"
                     if not result.get("employee_count"):
                         m = _re_mod.search(
                             r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
