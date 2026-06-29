@@ -2099,15 +2099,14 @@ async def check_compliance(
             prompt = f"""Company: {company_name}
 Industry: {industry or "Unknown"}
 Description: {description or "None"}
-Compliance already detected from their website: {compliance_found}
+Compliance certifications detected from their website: {compliance_found}
 
-Based ONLY on what's likely for this specific company given their industry and description, what compliance standards might they have?
-DO NOT make up standards. Only include ones that are highly likely given the industry.
+Does this company have a security team based on their description?
 
 Reply with ONLY valid JSON:
 {{"additional_compliance": [], "has_security_team": "Yes" or "No" or "Unknown", "confidence": "High" or "Medium" or "Low", "notes": "one sentence"}}
 
-IMPORTANT: Return empty additional_compliance array if not sure. Do not guess."""
+IMPORTANT: Return additional_compliance as empty array []. Only use website-detected compliance above. Do not guess or infer certifications from industry."""
 
             try:
                 content = ""
@@ -2580,15 +2579,13 @@ async def analyze_company_website(
                 # AI already gave an answer — trust it (AI saw the content)
                 pass
             elif has_mobile or has_web_app or has_login:
-                # Web/mobile delivery is confirmed → default to SaaS
-                # (SaaS companies routinely hide pricing or use App Store billing)
                 is_saas_val = True
             elif has_pricing:
-                # Subscription pricing text without login/app — unusual but SaaS
                 is_saas_val = True
             else:
-                # Product but no delivery mechanism detected — stay None (unknown)
-                is_saas_val = None
+                # Product company with no contradicting signals → default SaaS
+                # (the vast majority of product-classified tech companies are SaaS)
+                is_saas_val = True
 
         result["is_saas"] = is_saas_val
 
@@ -4130,7 +4127,8 @@ async def bulk_analyze_companies(
                 elif has_pricing:
                     is_saas_val = True
                 else:
-                    is_saas_val = None
+                    # Product company with no contradicting signals → default SaaS
+                    is_saas_val = True
 
             update_data = {}
             if final_type and not company.get("company_type"):
@@ -8399,7 +8397,7 @@ async def find_lookalike_companies(company_id: str, authorization: str = Header(
     """Find similar companies by industry + company_type + is_saas via LinkedIn search."""
     user_id = get_user_id(authorization)
     co_res = supabase.table("companies").select(
-        "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url"
+        "id,name,website,industry,size,company_type,is_saas,classification,headquarters,linkedin_url,specialties,description"
     ).eq("id", company_id).eq("user_id", user_id).limit(1).execute()
     if not co_res.data:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -8409,6 +8407,8 @@ async def find_lookalike_companies(company_id: str, authorization: str = Header(
     company_type = (company.get("company_type") or "").strip()
     is_saas = company.get("is_saas")
     hq = (company.get("headquarters") or "").strip()
+    classification = (company.get("classification") or "").strip()
+    specialties_raw = (company.get("specialties") or "").strip()
 
     from .company_prefill import _web_search as _lws
     import re as _lre
@@ -8418,17 +8418,32 @@ async def find_lookalike_companies(company_id: str, authorization: str = Header(
     seen_slugs = set()
     results = []
 
-    # Build targeted queries for LinkedIn company pages with matching profile
+    # Extract specific specialty terms — far more targeted than generic industry names
+    spec_terms = [s.strip() for s in specialties_raw.split(",")] if specialties_raw else []
+    spec_terms = [s for s in spec_terms if len(s) > 4][:3]
+
+    # Build queries from most specific → most general
     queries = []
-    if industry:
-        queries.append(f'site:linkedin.com/company "{industry}"')
-    if industry and company_type:
-        queries.append(f'site:linkedin.com/company "{industry}" "{company_type}"')
-    if industry and hq:
-        country = hq.split(',')[-1].strip() if ',' in hq else hq
-        queries.append(f'site:linkedin.com/company "{industry}" {country}')
-    if industry:
-        queries.append(f'linkedin.com/company "{industry}" company profile')
+    if spec_terms:
+        # Most specific: search by actual specialty keywords
+        queries.append(f'site:linkedin.com/company "{spec_terms[0]}"')
+        if len(spec_terms) >= 2:
+            queries.append(f'site:linkedin.com/company "{spec_terms[0]}" "{spec_terms[1]}"')
+
+    if classification and classification not in ("Other", "Unclassified", ""):
+        queries.append(f'site:linkedin.com/company "{classification}"')
+        if company_type and company_type != "Service":
+            queries.append(f'site:linkedin.com/company "{classification}" {company_type}')
+
+    # Industry fallback — only when no better signal exists
+    if not spec_terms and (not classification or classification in ("Other", "Unclassified")):
+        if industry and company_type:
+            queries.append(f'site:linkedin.com/company "{industry}" "{company_type}"')
+        if industry and hq:
+            country = hq.split(',')[-1].strip() if ',' in hq else hq
+            queries.append(f'site:linkedin.com/company "{industry}" {country}')
+        elif industry:
+            queries.append(f'site:linkedin.com/company "{industry}" company profile')
 
     for q in queries:
         if len(results) >= 12:

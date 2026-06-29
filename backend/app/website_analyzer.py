@@ -286,29 +286,29 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             )
             has_login = has_login or len(login_buttons) > 0
 
+        # Only real compliance certifications — not frameworks or methodologies
         compliance_map = {
             'SOC 2':    ['soc 2', 'soc2', 'soc ii', 'soc-2', 'soc type ii', 'soc type 2'],
             'ISO 27001':['iso 27001', 'iso27001', 'iso/iec 27001'],
-            'GDPR':     ['gdpr', 'general data protection'],
-            'HIPAA':    ['hipaa'],
-            'PCI DSS':  ['pci dss', 'pci-dss', 'pci compliant'],
-            'BBB':      ['bbb accredited', 'better business bureau', 'bbb rating', 'bbb.org'],
-            'CCPA':     ['ccpa', 'california consumer privacy'],
-            'OWASP':    ['owasp'],
-            'CERT-In':  ['cert-in', 'cert in'],
+            'GDPR':     ['gdpr compliant', 'gdpr certified', 'general data protection regulation compliant'],
+            'HIPAA':    ['hipaa compliant', 'hipaa certified', 'hipaa-compliant'],
+            'PCI DSS':  ['pci dss', 'pci-dss', 'pci compliant', 'pci certified'],
+            'CCPA':     ['ccpa compliant', 'ccpa certified', 'california consumer privacy'],
+            'CERT-In':  ['cert-in certified', 'cert-in empanelled', 'cert in empanelled'],
+            'ISO 9001': ['iso 9001'],
+            'CSA STAR': ['csa star', 'cloud security alliance'],
         }
-        # Scan full_text + scan_text (bundle may have compliance mentions as strings)
-        compliance_scan = (full_text + ' ' + scan_text[:10_000]).lower()
-        # Also scan img alt text and badge image filenames for compliance logos
+        # Scan badge images first (most reliable — actual certification logos)
         badge_scan = ' '.join(
             (t.get('alt', '') + ' ' + t.get('src', ''))
             for t in soup.find_all('img')
         ).lower()
-        compliance_scan += ' ' + badge_scan
+        # Also scan full page text for explicit certification claims
+        compliance_scan = badge_scan + ' ' + (full_text + ' ' + scan_text[:10_000]).lower()
         found_compliance = []
-        for name, keywords in compliance_map.items():
+        for cert_name, keywords in compliance_map.items():
             if any(k.lower() in compliance_scan for k in keywords):
-                found_compliance.append(name)
+                found_compliance.append(cert_name)
 
         # Location extraction from footer / schema / contact patterns
         location = None
@@ -453,7 +453,7 @@ classification:
 products_or_services:
 - List the ACTUAL named products or specific services the company offers (e.g. "Vulnerability scanner", "Staff augmentation", "HRMS platform", "Mobile app development").
 - Do NOT list generic buzzwords like "Digital transformation", "Innovation", "Solutions". Be specific.
-- Always include all pre-detected compliance in compliance array
+- compliance: ONLY include certifications explicitly confirmed from the website content above. Do NOT guess or infer from industry. If not found in website content, return [].
 - If login pre-detected as true AND pricing pre-detected as true → Product or Hybrid (strong signal)
 - If login pre-detected as true BUT pricing pre-detected as false → could be a client portal for a Service company — look for service keywords before defaulting to Product"""
 
@@ -470,9 +470,13 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
     """Override AI result with hard ground-truth facts from HTML scraping."""
     if website_data.get('has_login_detected'):
         result['has_login'] = True
-    if website_data.get('compliance_detected'):
-        existing = result.get('compliance', [])
-        result['compliance'] = list(set(website_data['compliance_detected'] + existing))
+    # Compliance: only use what was actually detected on the website, ignore AI guesses
+    # AI tends to hallucinate compliance certs it "expects" a company to have
+    detected = website_data.get('compliance_detected', [])
+    if detected:
+        result['compliance'] = detected
+    else:
+        result['compliance'] = []
 
     # Mobile app detected → must be Product or Hybrid, never pure Service
     if website_data.get('has_mobile_app'):
