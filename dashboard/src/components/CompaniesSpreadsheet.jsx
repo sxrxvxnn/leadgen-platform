@@ -441,7 +441,7 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
 
             {/* Column picker */}
             <div style={{ position: 'relative' }} ref={colPickerRef}>
-              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? '#c5000a' : undefined, outline: 'none' }}>
+              <button onClick={() => setShowColPicker(v => !v)} style={{ ...s.toolBtn, background: showColPicker ? '#c5000a' : 'var(--accent)', outline: 'none' }}>
                 Columns ({visibleKeys.size}/{ALL_COLUMNS.length}) ▾
               </button>
               {showColPicker && (
