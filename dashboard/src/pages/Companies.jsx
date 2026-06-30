@@ -1686,30 +1686,18 @@ export default function Companies() {
   const notFitCount = companies.filter(c => c.prospect_status === 'Not a Fit').length
   const needsDataCount = companies.filter(c => getMissingFields(c).length > 0).length
 
-  function exportCompaniesCSV() {
+  async function exportCompaniesCSV() {
+    const ExcelJS = (await import('exceljs')).default
+
     const scalar = (v) => {
       if (v === null || v === undefined) return ''
       if (typeof v === 'object') {
-        // Arrays: join with semicolons. Objects: serialize key=value pairs
         if (Array.isArray(v)) return v.map(item => typeof item === 'object' ? (item.title || item.url || JSON.stringify(item)) : item).join('; ')
         return Object.entries(v).map(([k, val]) => `${k}: ${typeof val === 'object' ? JSON.stringify(val) : val}`).join('; ')
       }
       return v.toString()
     }
-    const escape = (v) => { const s = scalar(v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
 
-    const cols = [
-      'name','classification','prospect_status','website','linkedin_url','headquarters','size',
-      'followers','revenue','compliance','company_type','industry','description','notes',
-      'email_pattern','revenue_estimate','traffic_estimate',
-      'tech_stack','job_openings','recent_news','social_profiles','review_presence','enriched_at'
-    ]
-    const headers = [
-      'Name','Classification','Status','Website','LinkedIn URL','HQ','Employees',
-      'Followers','Revenue/Funding','Compliance','Type','Industry','Description','Notes',
-      'Email Pattern','Revenue Estimate','Traffic',
-      'Tech Stack','Open Roles','Recent News','Social Profiles','Reviews','Enriched At'
-    ]
     // Sort: pipeline stage → classification tier → followers desc → name asc
     const STATUS_RANK = { qualified: 0, contacted: 1, new: 2 }
     const CLASS_RANK  = { Target: 0, Potential: 1, Monitor: 2 }
@@ -1723,12 +1711,159 @@ export default function Companies() {
       return (a.name || '').localeCompare(b.name || '')
     })
 
-    const rows = sorted.map(c => cols.map(k => escape(c[k])).join(','))
-    const csv = [headers.join(','), ...rows].join('\n')
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a'); link.href = url; link.download = `companies-${new Date().toISOString().split('T')[0]}.csv`
-    link.click(); URL.revokeObjectURL(url)
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'Sonar'
+    wb.created = new Date()
+
+    // ── Sheet 1: Companies ──────────────────────────────────────────
+    const ws = wb.addWorksheet('Companies', {
+      views: [{ state: 'frozen', ySplit: 1, xSplit: 1 }],
+      properties: { defaultRowHeight: 16 },
+    })
+
+    const COLS = [
+      { header: 'Name',             key: 'name',             width: 32 },
+      { header: 'Classification',   key: 'classification',   width: 16 },
+      { header: 'Status',           key: 'prospect_status',  width: 14 },
+      { header: 'Industry',         key: 'industry',         width: 22 },
+      { header: 'Type',             key: 'company_type',     width: 14 },
+      { header: 'HQ',               key: 'headquarters',     width: 22 },
+      { header: 'Employees',        key: 'size',             width: 12 },
+      { header: 'Followers',        key: 'followers',        width: 12 },
+      { header: 'Website',          key: 'website',          width: 30 },
+      { header: 'LinkedIn URL',     key: 'linkedin_url',     width: 30 },
+      { header: 'Compliance',       key: 'compliance',       width: 14 },
+      { header: 'Revenue/Funding',  key: 'revenue',          width: 16 },
+      { header: 'Revenue Estimate', key: 'revenue_estimate', width: 18 },
+      { header: 'Traffic',          key: 'traffic_estimate', width: 12 },
+      { header: 'Email Pattern',    key: 'email_pattern',    width: 18 },
+      { header: 'Tech Stack',       key: 'tech_stack',       width: 30 },
+      { header: 'Description',      key: 'description',      width: 50 },
+      { header: 'Notes',            key: 'notes',            width: 30 },
+      { header: 'Open Roles',       key: 'job_openings',     width: 30 },
+      { header: 'Enriched At',      key: 'enriched_at',      width: 18 },
+    ]
+    ws.columns = COLS
+
+    // Header row styling
+    const RED = 'FFE7000B', WHITE = 'FFFFFFFF', DARK_RED = 'FF9D0010'
+    const hdr = ws.getRow(1)
+    hdr.height = 24
+    hdr.eachCell(cell => {
+      cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: RED } }
+      cell.font   = { bold: true, color: { argb: WHITE }, size: 11, name: 'Calibri' }
+      cell.border = { bottom: { style: 'medium', color: { argb: DARK_RED } } }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false }
+    })
+
+    // Classification colour map
+    const CLASS_FILL = {
+      Target:    { argb: 'FFFDE8E8' },
+      Potential: { argb: 'FFFFF3CD' },
+      Monitor:   { argb: 'FFE8F5E9' },
+    }
+    const CLASS_FONT = {
+      Target:    { argb: 'FF9D0010' },
+      Potential: { argb: 'FF92400E' },
+      Monitor:   { argb: 'FF166534' },
+    }
+
+    const STRIPE = 'FFF5F5F5'
+    sorted.forEach((c, i) => {
+      const vals = COLS.map(col => scalar(c[col.key]))
+      const row = ws.addRow(vals)
+      row.height = 15
+
+      const stripe = i % 2 === 1
+      row.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        cell.alignment = { vertical: 'middle', wrapText: false }
+        cell.font      = { size: 10, name: 'Calibri' }
+        if (stripe) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STRIPE } }
+      })
+
+      // Colour the Classification cell
+      const cls = c.classification
+      if (CLASS_FILL[cls]) {
+        const classCell = row.getCell(2)
+        classCell.fill = { type: 'pattern', pattern: 'solid', fgColor: CLASS_FILL[cls] }
+        classCell.font = { size: 10, name: 'Calibri', bold: true, color: CLASS_FONT[cls] }
+        classCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      }
+
+      // Website / LinkedIn as hyperlinks
+      const webCell = row.getCell(9)
+      if (c.website) { webCell.value = { text: c.website, hyperlink: c.website }; webCell.font = { size: 10, color: { argb: 'FF0563C1' }, underline: true } }
+      const liCell = row.getCell(10)
+      if (c.linkedin_url) { liCell.value = { text: 'LinkedIn', hyperlink: c.linkedin_url }; liCell.font = { size: 10, color: { argb: 'FF0563C1' }, underline: true } }
+    })
+
+    // Auto-filter and border
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLS.length } }
+
+    // ── Sheet 2: Summary ─────────────────────────────────────────────
+    const ss = wb.addWorksheet('Summary', { properties: { defaultRowHeight: 16 } })
+    ss.columns = [{ width: 26 }, { width: 16 }, { width: 16 }]
+
+    const addSummaryHeader = (label) => {
+      const r = ss.addRow([label])
+      r.height = 20
+      const cell = r.getCell(1)
+      cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: RED } }
+      cell.font  = { bold: true, color: { argb: WHITE }, size: 11 }
+      cell.alignment = { vertical: 'middle' }
+      ss.mergeCells(`A${r.number}:B${r.number}`)
+    }
+    const addSummaryRow = (label, value, stripe) => {
+      const r = ss.addRow([label, value])
+      if (stripe) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STRIPE } } })
+      r.getCell(1).font = { size: 10 }
+      r.getCell(2).font = { size: 10, bold: true }
+      r.getCell(2).alignment = { horizontal: 'right' }
+    }
+
+    const total = sorted.length
+    const enriched = sorted.filter(c => c.enriched_at).length
+    const withEmail = sorted.filter(c => c.email_pattern).length
+
+    addSummaryHeader('📊  Pipeline Overview')
+    addSummaryRow('Total companies', total, false)
+    addSummaryRow('Enriched', enriched, true)
+    addSummaryRow('With email pattern', withEmail, false)
+    addSummaryRow('Exported on', new Date().toLocaleDateString(), true)
+    ss.addRow([])
+
+    addSummaryHeader('Classification Breakdown')
+    const classCounts = {}
+    sorted.forEach(c => { const k = c.classification || '(none)'; classCounts[k] = (classCounts[k] || 0) + 1 })
+    Object.entries(classCounts).sort((a,b) => b[1]-a[1]).forEach(([k,v], i) => addSummaryRow(k, v, i%2===1))
+    ss.addRow([])
+
+    addSummaryHeader('Top Industries')
+    const indCounts = {}
+    sorted.forEach(c => { const k = c.industry || '(unknown)'; indCounts[k] = (indCounts[k] || 0) + 1 })
+    Object.entries(indCounts).sort((a,b) => b[1]-a[1]).slice(0,10).forEach(([k,v], i) => addSummaryRow(k, v, i%2===1))
+    ss.addRow([])
+
+    addSummaryHeader('Status Breakdown')
+    const statusCounts = {}
+    sorted.forEach(c => { const k = c.prospect_status || '(none)'; statusCounts[k] = (statusCounts[k] || 0) + 1 })
+    Object.entries(statusCounts).sort((a,b) => b[1]-a[1]).forEach(([k,v], i) => addSummaryRow(k, v, i%2===1))
+    ss.addRow([])
+
+    addSummaryHeader('Top HQ Locations')
+    const hqCounts = {}
+    sorted.forEach(c => { const k = (c.headquarters || '').split(',').pop().trim() || '(unknown)'; hqCounts[k] = (hqCounts[k] || 0) + 1 })
+    Object.entries(hqCounts).sort((a,b) => b[1]-a[1]).slice(0,10).forEach(([k,v], i) => addSummaryRow(k, v, i%2===1))
+
+    // Download
+    const buf  = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url  = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href  = url
+    link.download = `sonar-companies-${new Date().toISOString().split('T')[0]}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   function isIncomplete(c) {
