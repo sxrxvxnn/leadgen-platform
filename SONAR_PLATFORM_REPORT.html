@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sonar — Complete Platform Reference</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink: #0f0f0f; --ink-2: #3a3a3a; --ink-3: #6b7280;
+      --rule: #e5e7eb; --accent: #c5000a; --accent-light: #fff0f0;
+      --green: #059669; --green-light: #ecfdf5;
+      --blue: #2563eb; --blue-light: #eff6ff;
+      --purple: #7c3aed; --purple-light: #f5f3ff;
+      --amber: #d97706; --amber-light: #fffbeb;
+    }
+    body { font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.7; color: var(--ink); background: #fff; }
+    .cover {
+      height: 100vh; min-height: 640px; display: flex; flex-direction: column; justify-content: center;
+      padding: 72px 80px; background: var(--ink); color: #fff; page-break-after: always;
+      position: relative; overflow: hidden;
+    }
+    .cover::before { content:''; position:absolute; top:-120px; right:-120px; width:500px; height:500px; border-radius:50%; background:radial-gradient(circle,rgba(197,0,10,.3) 0%,transparent 70%); }
+    .cover-label { font-size:11px; font-weight:600; letter-spacing:.12em; color:var(--accent); text-transform:uppercase; margin-bottom:24px; }
+    .cover h1 { font-size:52px; font-weight:800; line-height:1.1; margin-bottom:12px; letter-spacing:-.03em; }
+    .cover h1 span { color:var(--accent); }
+    .cover-sub { font-size:18px; font-weight:300; color:rgba(255,255,255,.6); margin-bottom:48px; }
+    .cover-meta { display:flex; gap:40px; border-top:1px solid rgba(255,255,255,.1); padding-top:32px; }
+    .cover-meta-item label { display:block; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.4); margin-bottom:4px; }
+    .cover-meta-item span { font-size:14px; font-weight:500; color:rgba(255,255,255,.9); }
+    .page { max-width:860px; margin:0 auto; padding:64px 80px; }
+    .section-label { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+    h2 { font-size:26px; font-weight:800; letter-spacing:-.02em; color:var(--ink); margin-bottom:6px; }
+    h3 { font-size:15px; font-weight:700; color:var(--ink); margin:28px 0 10px; }
+    h4 { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-2); margin:20px 0 8px; }
+    .section-divider { border:none; border-top:2px solid var(--rule); margin:48px 0; }
+    p { margin-bottom:12px; color:var(--ink-2); }
+    p:last-child { margin-bottom:0; }
+    .lead { font-size:15px; font-weight:400; line-height:1.8; color:var(--ink-2); margin-bottom:32px; padding-bottom:24px; border-bottom:1px solid var(--rule); }
+    .callout { border-radius:8px; padding:16px 20px; margin:20px 0; border-left:3px solid; }
+    .callout.red    { background:var(--accent-light); border-color:var(--accent); }
+    .callout.green  { background:var(--green-light);  border-color:var(--green); }
+    .callout.blue   { background:var(--blue-light);   border-color:var(--blue); }
+    .callout.purple { background:var(--purple-light); border-color:var(--purple); }
+    .callout.amber  { background:var(--amber-light);  border-color:var(--amber); }
+    .callout strong { display:block; margin-bottom:4px; font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+    .callout.red    strong { color:var(--accent); }
+    .callout.green  strong { color:var(--green); }
+    .callout.blue   strong { color:var(--blue); }
+    .callout.purple strong { color:var(--purple); }
+    .callout.amber  strong { color:var(--amber); }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin:24px 0; }
+    .stat { background:#f9fafb; border:1px solid var(--rule); border-radius:8px; padding:16px; text-align:center; }
+    .stat-num { font-size:28px; font-weight:800; color:var(--accent); letter-spacing:-.03em; display:block; }
+    .stat-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); margin-top:4px; }
+    table { width:100%; border-collapse:collapse; margin:16px 0; font-size:12px; }
+    thead th { background:var(--ink); color:#fff; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:10px 14px; text-align:left; }
+    tbody tr:nth-child(even) { background:#f9fafb; }
+    tbody tr:hover { background:#f3f4f6; }
+    tbody td { padding:9px 14px; color:var(--ink-2); border-bottom:1px solid var(--rule); vertical-align:top; }
+    tbody td:first-child { font-weight:500; color:var(--ink); }
+    code { font-family:'JetBrains Mono',monospace; font-size:11px; background:#f3f4f6; border:1px solid var(--rule); border-radius:4px; padding:1px 6px; color:var(--accent); }
+    pre { font-family:'JetBrains Mono',monospace; font-size:11px; background:#1a1a1a; color:#e5e7eb; border-radius:8px; padding:20px 24px; overflow-x:auto; line-height:1.6; margin:16px 0; }
+    pre .kw { color:#f472b6; } pre .str { color:#86efac; } pre .cmt { color:#6b7280; } pre .num-lit { color:#fb923c; }
+    .flow { display:flex; align-items:flex-start; gap:0; margin:24px 0; overflow-x:auto; }
+    .flow-step { flex:1; min-width:120px; position:relative; }
+    .flow-step:not(:last-child)::after { content:'→'; position:absolute; right:-14px; top:20px; font-size:18px; color:var(--ink-3); z-index:1; }
+    .flow-box { background:#f9fafb; border:1px solid var(--rule); border-radius:8px; padding:12px 14px; margin-right:28px; text-align:center; }
+    .flow-box .icon { font-size:20px; margin-bottom:6px; display:block; }
+    .flow-box .title { font-size:11px; font-weight:700; color:var(--ink); display:block; }
+    .flow-box .sub { font-size:10px; color:var(--ink-3); margin-top:2px; display:block; }
+    .flow-step.accent .flow-box { background:var(--accent-light); border-color:rgba(197,0,10,.2); }
+    .flow-step.green .flow-box  { background:var(--green-light); border-color:rgba(5,150,105,.2); }
+    .flow-step.blue .flow-box   { background:var(--blue-light); border-color:rgba(37,99,235,.2); }
+    .flow-step.purple .flow-box { background:var(--purple-light); border-color:rgba(124,58,237,.2); }
+    .tags { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+    .tag { font-size:10px; font-weight:600; letter-spacing:.05em; padding:3px 10px; border-radius:100px; border:1px solid; }
+    .tag.red   { background:var(--accent-light); border-color:rgba(197,0,10,.25);  color:var(--accent); }
+    .tag.green { background:var(--green-light);  border-color:rgba(5,150,105,.25); color:var(--green); }
+    .tag.blue  { background:var(--blue-light);   border-color:rgba(37,99,235,.25); color:var(--blue); }
+    .tag.gray  { background:#f3f4f6; border-color:var(--rule); color:var(--ink-2); }
+    .route-group { margin-bottom:24px; }
+    .route-group-header { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#fff; background:var(--ink-2); padding:7px 14px; border-radius:6px 6px 0 0; }
+    .route-row { display:flex; align-items:flex-start; gap:12px; padding:8px 14px; border:1px solid var(--rule); border-top:none; font-size:11px; }
+    .route-row:last-child { border-radius:0 0 6px 6px; }
+    .route-row:nth-child(even) { background:#f9fafb; }
+    .method { font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; padding:2px 7px; border-radius:4px; min-width:44px; text-align:center; flex-shrink:0; margin-top:1px; }
+    .method.GET    { background:var(--green-light);  color:var(--green); }
+    .method.POST   { background:var(--blue-light);   color:var(--blue); }
+    .method.PATCH  { background:var(--amber-light);  color:var(--amber); }
+    .method.DELETE { background:var(--accent-light); color:var(--accent); }
+    .route-path { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink); flex:1; }
+    .route-desc { color:var(--ink-3); flex:1.5; }
+    .arch-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:20px 0; }
+    .arch-card { border:1px solid var(--rule); border-radius:8px; padding:18px; }
+    .arch-card h4 { margin-top:0; }
+    .arch-card ul { list-style:none; padding:0; }
+    .arch-card li { font-size:12px; color:var(--ink-2); padding:3px 0; border-bottom:1px solid var(--rule); }
+    .arch-card li:last-child { border-bottom:none; }
+    .arch-card li::before { content:'·  '; color:var(--accent); font-weight:700; }
+    .toc { margin:32px 0; }
+    .toc-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px dashed var(--rule); font-size:13px; }
+    .toc-item .num { color:var(--accent); font-weight:700; margin-right:10px; font-variant-numeric:tabular-nums; }
+    .toc-item .title { color:var(--ink); font-weight:500; }
+    .toc-item .pg { color:var(--ink-3); font-size:11px; }
+    @media print { .cover { height:100vh; } .page-break { page-break-before:always; } body { font-size:12px; } }
+    @page { margin:0; }
+    /* ══ CODE REFERENCE STYLES ══ */
+    .badge-team { font-size:11px; font-weight:700; padding:5px 14px; border-radius:100px; letter-spacing:.05em; display:inline-block; }
+    .badge-team.soc { background:rgba(220,38,38,.15); border:1px solid rgba(220,38,38,.4); color:#fca5a5; }
+    .badge-team.ai  { background:rgba(124,58,237,.15); border:1px solid rgba(124,58,237,.4); color:#c4b5fd; }
+    .badge-team.eng { background:rgba(37,99,235,.15);  border:1px solid rgba(37,99,235,.4);  color:#93c5fd; }
+    .audience { display:inline-flex; gap:8px; margin-bottom:32px; }
+    .for-whom { display:flex; gap:6px; margin-bottom:10px; }
+    .for-tag { font-size:9px; font-weight:700; padding:2px 8px; border-radius:100px; letter-spacing:.06em; text-transform:uppercase; }
+    .for-tag.soc { background:rgba(220,38,38,.1); border:1px solid rgba(220,38,38,.3); color:#dc2626; }
+    .for-tag.ai  { background:rgba(124,58,237,.1); border:1px solid rgba(124,58,237,.3); color:#7c3aed; }
+    .for-tag.all { background:#f3f4f6; border:1px solid #e5e7eb; color:#6b7280; }
+    .section-label.soc    { color:#dc2626; }
+    .section-label.ai     { color:#7c3aed; }
+    .section-label.infra  { color:#2563eb; }
+    .section-label.shared { color:#059669; }
+    .code-section { margin:20px 0; border-radius:10px; overflow:hidden; border:1px solid #2a2a2e; }
+    .code-header  { background:#18181b; padding:10px 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #2a2a2e; }
+    .code-file    { font-family:'JetBrains Mono',monospace; font-size:11px; color:#a1a1aa; }
+    .code-lang    { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:4px; }
+    .code-lang.python { background:rgba(59,130,246,.2); color:#93c5fd; }
+    .code-lang.js     { background:rgba(234,179,8,.2);  color:#fde68a; }
+    pre.code { background:#09090b; color:#e4e4e7; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.65; padding:20px 24px; overflow-x:auto; margin:0; }
+    pre.code .kw  { color:#c084fc; }
+    pre.code .fn  { color:#67e8f9; }
+    pre.code .str { color:#86efac; }
+    pre.code .num { color:#fb923c; }
+    pre.code .cmt { color:#52525b; font-style:italic; }
+    pre.code .cls { color:#fde68a; }
+    pre.code .op  { color:#f472b6; }
+    pre.code .var { color:#e4e4e7; }
+    pre.code .prop{ color:#a5f3fc; }
+    .explain { border-left:3px solid; border-radius:0 8px 8px 0; padding:14px 18px; margin:0; font-size:12px; line-height:1.7; }
+    .explain.soc    { border-color:#dc2626; background:#fef2f2; }
+    .explain.ai     { border-color:#7c3aed; background:#f5f3ff; }
+    .explain.infra  { border-color:#2563eb; background:#eff6ff; }
+    .explain.shared { border-color:#059669; background:#ecfdf5; }
+    .explain.amber  { border-color:#d97706; background:#fffbeb; }
+    .explain strong { display:block; margin-bottom:4px; font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; }
+    .explain.soc    strong { color:#dc2626; }
+    .explain.ai     strong { color:#7c3aed; }
+    .explain.infra  strong { color:#2563eb; }
+    .explain.shared strong { color:#059669; }
+    .explain.amber  strong { color:#d97706; }
+    .explain ul { list-style:none; padding:0; margin-top:6px; }
+    .explain li { padding:2px 0; color:#3a3a3a; }
+    .explain li::before { content:'→  '; opacity:.6; font-weight:700; }
+    .toc-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed #e5e7eb; font-size:12px; }
+    .toc-row .num-letter { color:#c5000a; font-weight:700; margin-right:10px; min-width:24px; display:inline-block; }
+    .chapter-divider { background:#09090b; color:#fff; padding:56px 80px; }
+    .chapter-divider-label { font-size:10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#a78bfa; margin-bottom:16px; }
+    .chapter-divider h2 { font-size:36px; font-weight:800; color:#fff; letter-spacing:-.02em; margin-bottom:8px; }
+    .chapter-divider p { font-size:13px; color:rgba(255,255,255,.5); margin:0; }
+    .chapter-divider .ch-badges { display:flex; gap:8px; margin-top:20px; }
+    .doc-footer { margin-top:48px; padding:24px; background:#09090b; border-radius:8px; text-align:center; }
+    .doc-footer p { font-size:11px; color:rgba(255,255,255,.3); margin:0; }
+    hr { border:none; border-top:2px solid var(--rule); margin:48px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ════ COVER ════ -->
+<div class="cover">
+  <div class="cover-label">Complete Technical Reference · Confidential</div>
+  <h1><span>Sonar</span><br>Lead Intelligence<br>Platform</h1>
+  <div class="cover-sub">Architecture · Workflow · Stack · Routing · Security Code · AI Pipelines</div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><label>Version</label><span>1.5.0</span></div>
+    <div class="cover-meta-item"><label>Author</label><span>Shravan Omanakuttan</span></div>
+    <div class="cover-meta-item"><label>Audience</label><span>SOC · AI · Engineering</span></div>
+    <div class="cover-meta-item"><label>Classification</label><span>Internal</span></div>
+  </div>
+</div>
+
+<!-- ════ PART 1: PLATFORM REPORT ════ -->
+<div class="page">
+  <div class="section-label">Contents · Part 1</div>
+  <h2>Table of Contents</h2>
+  <div class="toc">
+    <div class="toc-item"><span><span class="num">01</span><span class="title">Platform Overview</span></span></div>
+    <div class="toc-item"><span><span class="num">02</span><span class="title">Technology Stack</span></span></div>
+    <div class="toc-item"><span><span class="num">03</span><span class="title">System Architecture</span></span></div>
+    <div class="toc-item"><span><span class="num">04</span><span class="title">Core Workflow</span></span></div>
+    <div class="toc-item"><span><span class="num">05</span><span class="title">Frontend — Pages &amp; Routing</span></span></div>
+    <div class="toc-item"><span><span class="num">06</span><span class="title">Backend API — Route Reference</span></span></div>
+    <div class="toc-item"><span><span class="num">07</span><span class="title">Database Schema</span></span></div>
+    <div class="toc-item"><span><span class="num">08</span><span class="title">Chrome Extension</span></span></div>
+    <div class="toc-item"><span><span class="num">09</span><span class="title">AI &amp; Enrichment Pipeline</span></span></div>
+    <div class="toc-item"><span><span class="num">10</span><span class="title">Security &amp; Compliance</span></span></div>
+    <div class="toc-item"><span><span class="num">11</span><span class="title">Deployment &amp; CI/CD</span></span></div>
+    <div class="toc-item"><span><span class="num">12</span><span class="title">External APIs &amp; Integrations</span></span></div>
+  </div>
+
+  <div class="section-label" style="margin-top:24px;">Contents · Part 2 — Code Reference</div>
+  <div class="toc">
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">A</span><span class="title">Authentication &amp; JWT Validation</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">B</span><span class="title">Rate Limiting — Global + Per-Path</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">C</span><span class="title">SSRF Protection</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">D</span><span class="title">Security Audit Logging</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">E</span><span class="title">Input Validation — Pydantic Models</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">F</span><span class="title">HTTP Security Headers</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">G</span><span class="title">Tenant Isolation — Row-Level Auth</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">H</span><span class="title">Cron Job Authentication</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#7c3aed;">I</span><span class="title">Universal LLM Dispatcher (_call_ai)</span></span><span style="font-size:9px;color:#7c3aed;font-weight:700;background:#f5f3ff;padding:1px 7px;border-radius:4px;">AI</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#7c3aed;">J</span><span class="title">Similar Companies — Web Search + Groq</span></span><span style="font-size:9px;color:#7c3aed;font-weight:700;background:#f5f3ff;padding:1px 7px;border-radius:4px;">AI</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#7c3aed;">K</span><span class="title">ICP Lead Scoring — LLM with Rubric</span></span><span style="font-size:9px;color:#7c3aed;font-weight:700;background:#f5f3ff;padding:1px 7px;border-radius:4px;">AI</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#7c3aed;">L</span><span class="title">PDL People Search — SQL Mode</span></span><span style="font-size:9px;color:#7c3aed;font-weight:700;background:#f5f3ff;padding:1px 7px;border-radius:4px;">AI</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#7c3aed;">M</span><span class="title">Company Prefill — Multi-Fallback Enrichment</span></span><span style="font-size:9px;color:#7c3aed;font-weight:700;background:#f5f3ff;padding:1px 7px;border-radius:4px;">AI</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#dc2626;">N</span><span class="title">Email Open &amp; Click Tracking</span></span><span style="font-size:9px;color:#dc2626;font-weight:700;background:#fef2f2;padding:1px 7px;border-radius:4px;">SOC</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#2563eb;">O</span><span class="title">Frontend API Client — Auth + TTL Cache</span></span><span style="font-size:9px;color:#2563eb;font-weight:700;background:#eff6ff;padding:1px 7px;border-radius:4px;">ENG</span></div>
+    <div class="toc-item"><span><span class="num" style="color:#2563eb;">P</span><span class="title">Sound Effects Hook — Web Audio API</span></span><span style="font-size:9px;color:#2563eb;font-weight:700;background:#eff6ff;padding:1px 7px;border-radius:4px;">ENG</span></div>
+  </div>
+
+  <hr class="section-divider">
+
+<!-- ═══ 01 OVERVIEW -->
+  <div class="section-label">Section 01</div>
+  <h2>Platform Overview</h2>
+  <p class="lead">
+    Sonar is a full-stack B2B lead intelligence platform that helps go-to-market teams discover, enrich, and engage
+    high-fit prospects. It combines a LinkedIn data extraction browser extension, an AI-powered enrichment backend,
+    an Excel-grade spreadsheet UI, and automated outreach sequences into a single unified product.
+  </p>
+
+  <div class="stats">
+    <div class="stat"><span class="stat-num">219</span><div class="stat-label">API Endpoints</div></div>
+    <div class="stat"><span class="stat-num">9,986</span><div class="stat-label">Backend LOC</div></div>
+    <div class="stat"><span class="stat-num">78</span><div class="stat-label">React Components</div></div>
+    <div class="stat"><span class="stat-num">16</span><div class="stat-label">App Pages</div></div>
+  </div>
+
+  <h3>What it does</h3>
+  <p>Users install the Sonar Chrome Extension and browse LinkedIn. The extension captures company and contact profiles
+  in one click, syncing them to the Sonar dashboard. The backend enriches each record automatically — pulling
+  funding rounds, tech stack, emails, and social signals — and scores leads against the user's ICP (Ideal Customer Profile).
+  AI models generate personalised LinkedIn DMs and email sequences. A feature-flagged admin panel lets the team manage users,
+  feature access, and announcements.</p>
+
+  <div class="callout green">
+    <strong>Core Value Proposition</strong>
+    Find the right companies, enrich them in seconds, reach out with personalised messages — all without leaving the platform.
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 02 STACK -->
+  <div class="section-label">Section 02</div>
+  <h2>Technology Stack</h2>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <h4>Frontend</h4>
+      <ul>
+        <li>React 19 (JSX, functional components, hooks)</li>
+        <li>React Router DOM v7 — client-side SPA routing</li>
+        <li>Framer Motion (animation)</li>
+        <li>Vite 6 — dev server + production bundler</li>
+        <li>Axios — HTTP client with TTL cache layer</li>
+        <li>Supabase JS SDK — auth session management</li>
+        <li>PostHog — product analytics / event tracking</li>
+        <li>Inline styles + CSS variables (no Tailwind, no CSS modules)</li>
+        <li>Web Audio API — keyboard &amp; click sound effects</li>
+        <li>TanStack Table — spreadsheet data grid</li>
+        <li>Leaflet / react-globe.gl — geo visualisations</li>
+        <li>Cobe — WebGL globe on landing page</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>Backend</h4>
+      <ul>
+        <li>Python 3.14</li>
+        <li>FastAPI — async REST API framework</li>
+        <li>Pydantic v2 — request/response validation</li>
+        <li>SlowAPI — token-bucket rate limiting</li>
+        <li>Supabase (PostgreSQL) — primary database</li>
+        <li>Requests — outbound HTTP to external APIs</li>
+        <li>BeautifulSoup4 — HTML scraping</li>
+        <li>Sentry SDK — error monitoring</li>
+        <li>python-dotenv — env var management</li>
+        <li>Groq SDK — LLM completions</li>
+        <li>DDGS (DuckDuckGo) — fallback web search</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>Chrome Extension</h4>
+      <ul>
+        <li>Manifest v3 (MV3)</li>
+        <li>Vanilla JS (no framework)</li>
+        <li>Content scripts: LinkedIn profile + search pages</li>
+        <li>Content scripts: Gmail thread overlay</li>
+        <li>Background service worker</li>
+        <li>Popup UI (popup.html / popup.js)</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>Infrastructure</h4>
+      <ul>
+        <li>Vercel (Fluid Compute) — frontend + backend hosting</li>
+        <li>Supabase — managed PostgreSQL + auth + realtime</li>
+        <li>Vercel Cron — scheduled background jobs</li>
+        <li>GitHub — version control (main branch)</li>
+        <li>Husky + lint-staged — pre-commit hooks</li>
+        <li>Prettier — code formatting</li>
+        <li>ESLint — static analysis</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Languages used</h3>
+  <div class="tags">
+    <span class="tag blue">Python 3.14</span>
+    <span class="tag blue">JavaScript (ESM)</span>
+    <span class="tag blue">JSX</span>
+    <span class="tag gray">HTML5</span>
+    <span class="tag gray">CSS3 / CSS Variables</span>
+    <span class="tag gray">SQL (PostgreSQL)</span>
+    <span class="tag gray">JSON (config / schemas)</span>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 03 ARCHITECTURE -->
+  <div class="section-label">Section 03</div>
+  <h2>System Architecture</h2>
+
+  <div class="flow">
+    <div class="flow-step blue">
+      <div class="flow-box">
+        <span class="icon">🌐</span>
+        <span class="title">Browser Extension</span>
+        <span class="sub">LinkedIn + Gmail</span>
+      </div>
+    </div>
+    <div class="flow-step accent">
+      <div class="flow-box">
+        <span class="icon">⚡</span>
+        <span class="title">FastAPI Backend</span>
+        <span class="sub">219 endpoints · Python</span>
+      </div>
+    </div>
+    <div class="flow-step green">
+      <div class="flow-box">
+        <span class="icon">🗄️</span>
+        <span class="title">Supabase DB</span>
+        <span class="sub">PostgreSQL + Auth</span>
+      </div>
+    </div>
+    <div class="flow-step purple">
+      <div class="flow-box">
+        <span class="icon">🤖</span>
+        <span class="title">AI Pipeline</span>
+        <span class="sub">Groq / Gemini / GPT</span>
+      </div>
+    </div>
+    <div class="flow-step blue">
+      <div class="flow-box">
+        <span class="icon">📊</span>
+        <span class="title">React Dashboard</span>
+        <span class="sub">SPA · Vite</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>Data flow</h3>
+  <p>
+    <strong>1. Capture:</strong> The Chrome Extension injects a content script into LinkedIn profile, company, and search pages.
+    When the user clicks "Save to Sonar", the extension POSTs raw LinkedIn data directly to the backend API at
+    <code>leadgenengineplatform-api.vercel.app</code>, authenticated with the user's JWT from Supabase.
+  </p>
+  <p>
+    <strong>2. Store:</strong> The backend validates and stores the lead or company record in Supabase (PostgreSQL).
+    Each record is tenant-scoped by <code>user_id</code>, ensuring complete data isolation between users.
+  </p>
+  <p>
+    <strong>3. Enrich:</strong> On-demand or via cron, the enrichment pipeline fills in missing data:
+    employee count via PDL, emails via Hunter/proprietary scraper, tech stack via website analysis,
+    funding via web scraping, and social signals via GitHub/HackerNews scrapers.
+  </p>
+  <p>
+    <strong>4. Score &amp; Surface:</strong> The React dashboard fetches enriched data, scores leads against
+    the user's ICP, and renders them in a spreadsheet view, kanban pipeline, or card layout with filters, sort, and export.
+  </p>
+  <p>
+    <strong>5. Engage:</strong> Users compose personalised LinkedIn DMs and email sequences powered by LLMs.
+    Email opens/clicks are tracked via pixel and redirect links. Sequences with warm-up scheduling are managed server-side.
+  </p>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 04 WORKFLOW -->
+  <div class="section-label">Section 04</div>
+  <h2>Core Workflow</h2>
+
+  <h3>Lead capture flow</h3>
+  <table>
+    <thead><tr><th>Step</th><th>Actor</th><th>Action</th><th>Tech</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>User</td><td>Visits LinkedIn profile or company page</td><td>Chrome Extension (MV3)</td></tr>
+      <tr><td>2</td><td>Extension</td><td>Injects content.js, scrapes DOM for name, title, company, location, profile URL</td><td>Vanilla JS content script</td></tr>
+      <tr><td>3</td><td>Extension</td><td>User clicks "Save to Sonar" in popup or inline button</td><td>popup.js / background.js</td></tr>
+      <tr><td>4</td><td>Backend</td><td>POST /api/leads — validates, deduplicates by profile URL, stores</td><td>FastAPI + Supabase</td></tr>
+      <tr><td>5</td><td>Backend</td><td>Background enrichment triggered (email, score, signals)</td><td>Python enrichment pipeline</td></tr>
+      <tr><td>6</td><td>Dashboard</td><td>Lead appears in real-time (TTL cache invalidated on save)</td><td>React + Axios cache</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Company enrichment flow</h3>
+  <table>
+    <thead><tr><th>Step</th><th>Source</th><th>Data Fetched</th></tr></thead>
+    <tbody>
+      <tr><td>1. Company prefill</td><td>LinkedIn + Web search</td><td>Name, website, description, HQ, industry, size, followers, founded year</td></tr>
+      <tr><td>2. Website analysis</td><td>Direct crawl of company website</td><td>Tech stack, pricing model, SaaS/Non-SaaS classification</td></tr>
+      <tr><td>3. People data</td><td>PDL (SQL mode) / ProxyCurl</td><td>Employee count, LinkedIn metrics, company type</td></tr>
+      <tr><td>4. Email discovery</td><td>Hunter.io / proprietary scraper</td><td>Domain email pattern, verified email addresses</td></tr>
+      <tr><td>5. Funding</td><td>Brave web search + scraping</td><td>Funding stage, amount, investors, last round date</td></tr>
+      <tr><td>6. Signals</td><td>GitHub + HackerNews APIs</td><td>Open-source repos, HN mentions, hiring signals, tech indicators</td></tr>
+      <tr><td>7. Similar companies</td><td>G2/Capterra search + Groq LLM</td><td>Top 10 competitors with LinkedIn slugs, employees, SaaS flag</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Prospect search flow (PDL)</h3>
+  <p>The Prospect page lets users search 700M+ professional profiles via People Data Labs.
+  The backend converts UI filters (title, company size, location, seniority) into PDL SQL queries,
+  paginates with <code>scroll_token</code>, and merges results with any locally-saved contacts
+  from the proprietary <code>sonar_contacts</code> table (enriched via cron).</p>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 05 FRONTEND ROUTING -->
+  <div class="section-label">Section 05</div>
+  <h2>Frontend — Pages &amp; Routing</h2>
+
+  <p>The frontend is a React SPA using <strong>React Router DOM v7</strong> with client-side routing. All routes under
+  <code>/dashboard</code>, <code>/leads</code>, <code>/companies</code>, etc. are protected by an
+  <code>AuthLayout</code> component that checks Supabase session state. Feature access is gated by
+  <code>FeatureFlagContext</code> — a <code>FlaggedRoute</code> wrapper reads flags from the backend
+  and redirects unauthorised users to <code>/dashboard</code>.</p>
+
+  <table>
+    <thead><tr><th>Route</th><th>Page</th><th>Access</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>/</code></td><td>Landing</td><td>Public</td><td>Marketing landing page with globe, pricing, features</td></tr>
+      <tr><td><code>/login</code></td><td>Login</td><td>Public</td><td>Email + password auth via Supabase</td></tr>
+      <tr><td><code>/signup</code></td><td>Signup</td><td>Public</td><td>New user registration + profile creation</td></tr>
+      <tr><td><code>/onboarding</code></td><td>Onboarding</td><td>Auth</td><td>Multi-step ICP/persona setup wizard</td></tr>
+      <tr><td><code>/dashboard</code></td><td>Dashboard</td><td>Auth</td><td>Overview: lead stats, recent activity, alerts</td></tr>
+      <tr><td><code>/leads</code></td><td>Leads</td><td>Auth + Flag</td><td>Lead list: spreadsheet + kanban + filters</td></tr>
+      <tr><td><code>/companies</code></td><td>Companies</td><td>Auth + Flag</td><td>Company CRM: cards, spreadsheet, enrichment panel</td></tr>
+      <tr><td><code>/directory</code></td><td>CompanyDirectory</td><td>Auth + Flag</td><td>Technopark company directory with search</td></tr>
+      <tr><td><code>/prospect</code></td><td>Prospect</td><td>Auth + Flag</td><td>PDL people search: 700M+ profiles</td></tr>
+      <tr><td><code>/email-finder</code></td><td>EmailFinder</td><td>Auth + Flag</td><td>Find &amp; verify email addresses by name+domain</td></tr>
+      <tr><td><code>/sequences</code></td><td>Sequences</td><td>Auth + Flag</td><td>Email outreach sequences with warm-up scheduling</td></tr>
+      <tr><td><code>/tasks</code></td><td>Tasks</td><td>Auth + Flag</td><td>CRM-style task manager tied to leads</td></tr>
+      <tr><td><code>/analytics</code></td><td>Analytics</td><td>Auth + Flag</td><td>Funnel metrics, email open rates, pipeline stats</td></tr>
+      <tr><td><code>/targeting</code></td><td>Targeting</td><td>Auth + Flag</td><td>ICP &amp; Persona builder (replaces /icp + /persona)</td></tr>
+      <tr><td><code>/settings</code></td><td>Settings</td><td>Auth</td><td>API keys, email config, notification prefs</td></tr>
+      <tr><td><code>/notifications</code></td><td>Notifications</td><td>Auth</td><td>System notifications and alerts feed</td></tr>
+      <tr><td><code>/admin</code></td><td>Admin</td><td>Admin only</td><td>User management, feature flags, announcements, audit logs</td></tr>
+      <tr><td><code>/database</code></td><td>Database</td><td>Admin only</td><td>Internal contact database browser + scraper</td></tr>
+      <tr><td><code>/book/:slug</code></td><td>BookingPage</td><td>Public</td><td>Public booking page per user</td></tr>
+      <tr><td><code>/auth/callback</code></td><td>AuthCallback</td><td>Public</td><td>OAuth callback handler (Google, etc.)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Auth guard layers</h3>
+  <div class="callout blue">
+    <strong>Three-tier access control</strong>
+    <strong>Public</strong> → no session required. &nbsp;|&nbsp;
+    <strong>Auth</strong> → Supabase JWT must be valid (ProtectedRoute). &nbsp;|&nbsp;
+    <strong>Flagged</strong> → feature flag must be enabled for that user (FlaggedRoute). &nbsp;|&nbsp;
+    <strong>Admin</strong> → user must have <code>is_admin = true</code> in their profile (AdminRoute).
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 06 API ROUTES -->
+  <div class="section-label">Section 06</div>
+  <h2>Backend API — Route Reference</h2>
+  <p>All routes are prefixed with <code>/api</code>. Authentication is via <code>Authorization: Bearer &lt;jwt&gt;</code> header (Supabase JWT). Total: <strong>219 endpoints</strong> across 9,986 lines of Python.</p>
+
+  <div class="route-group">
+    <div class="route-group-header">Auth</div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/signup</span><span class="route-desc">Register user + create profile, validate email &amp; password strength</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/login</span><span class="route-desc">Email + password login, returns Supabase JWT</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/refresh</span><span class="route-desc">Refresh JWT using refresh token</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/forgot-password</span><span class="route-desc">Send password reset email via Supabase</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/reset-password</span><span class="route-desc">Confirm new password with reset token</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/auth/ensure-profile</span><span class="route-desc">Upsert profile row on first OAuth login</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Leads</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/leads</span><span class="route-desc">List leads with filters (status, search, starred, ICP score)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads</span><span class="route-desc">Create lead (from extension or manual)</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/leads/{id}</span><span class="route-desc">Update lead fields (status, notes, email, etc.)</span></div>
+    <div class="route-row"><span class="method DELETE">DELETE</span><span class="route-path">/leads/{id}</span><span class="route-desc">Delete single lead</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/bulk-delete</span><span class="route-desc">Delete multiple leads by ID array</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/{id}/enrich</span><span class="route-desc">Enrich a single lead (email, score, about)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/bulk-enrich</span><span class="route-desc">Batch enrich up to 50 leads</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/bulk-score</span><span class="route-desc">Score leads against ICP in batch</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/leads/hot</span><span class="route-desc">Fetch leads with recent signal activity</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/{id}/track-email</span><span class="route-desc">Register tracking pixel + click links for email</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/track/open/{tracking_id}</span><span class="route-desc">1×1 px tracker — records email open event</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/track/click/{tracking_id}</span><span class="route-desc">Redirect + record link click event</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Companies</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/companies</span><span class="route-desc">List companies with search, filter, pagination</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies</span><span class="route-desc">Create company record</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/companies/{id}</span><span class="route-desc">Update company fields</span></div>
+    <div class="route-row"><span class="method DELETE">DELETE</span><span class="route-path">/companies/{id}</span><span class="route-desc">Delete company + cascading records</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/prefill</span><span class="route-desc">Auto-fill company data from LinkedIn URL or name (web search + scraping)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/bulk</span><span class="route-desc">Bulk create up to 100 companies</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/{id}/lookalike</span><span class="route-desc">Find similar companies via G2 search + Groq LLM</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/{id}/generate-dm</span><span class="route-desc">Generate personalised LinkedIn DM using LLM</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/companies/{id}/signals</span><span class="route-desc">Get company buying signals (GitHub, HN, jobs)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/{id}/check-compliance</span><span class="route-desc">AI-powered GDPR/compliance check on company</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/find-duplicates</span><span class="route-desc">Detect duplicate company records by name/domain</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/{id}/merge/{other}</span><span class="route-desc">Merge two company records, keeping best field values</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/companies/technopark-directory</span><span class="route-desc">Serve Technopark company directory (proprietary cache)</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/company-suggest</span><span class="route-desc">Typeahead autocomplete for company name search</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Prospect Search (PDL)</div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/companies/people-search</span><span class="route-desc">PDL SQL people search with filters + scroll_token pagination</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/database/stats</span><span class="route-desc">Sonar contacts DB stats (proprietary enriched contacts)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/database/search</span><span class="route-desc">Search proprietary sonar_contacts table</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">ICP / Personas / Targeting</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/icp</span><span class="route-desc">List user's ICP profiles</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/icp</span><span class="route-desc">Create ICP profile (title keywords, industries, seniority, size)</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/icp/{id}</span><span class="route-desc">Update ICP profile</span></div>
+    <div class="route-row"><span class="method DELETE">DELETE</span><span class="route-path">/icp/{id}</span><span class="route-desc">Delete ICP profile</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/personas</span><span class="route-desc">List buyer personas</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/personas</span><span class="route-desc">Create buyer persona</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Sequences &amp; Outreach</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/email-templates</span><span class="route-desc">List email templates for current user</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/email-templates</span><span class="route-desc">Create email template</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/profile/warmup-config</span><span class="route-desc">Get email warm-up schedule configuration</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/profile/warmup-config</span><span class="route-desc">Update warm-up schedule</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/sequences/warmup-cron</span><span class="route-desc">Cron-triggered warm-up email dispatch</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Signals &amp; Tasks</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/leads/{id}/signals</span><span class="route-desc">Get buying signals for a lead</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/companies/{id}/signals</span><span class="route-desc">Get buying signals for a company</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/tasks</span><span class="route-desc">List all CRM tasks for the user</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/leads/{id}/tasks</span><span class="route-desc">Create task linked to a lead</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/tasks/{id}</span><span class="route-desc">Mark task complete / update</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Cron Jobs</div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/cron/scrape-github</span><span class="route-desc">Scrape GitHub for company tech signals (daily)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/cron/scrape-hn</span><span class="route-desc">Scrape HackerNews for company mentions (daily)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/cron/enrich-contacts</span><span class="route-desc">Batch enrich sonar_contacts from PDL (daily)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/cron/refresh-contacts</span><span class="route-desc">Refresh stale contact data (daily)</span></div>
+  </div>
+
+  <div class="route-group">
+    <div class="route-group-header">Admin</div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/stats</span><span class="route-desc">Platform-wide stats (users, leads, companies, enrichment counts)</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/all-users</span><span class="route-desc">List all users with their plan and usage</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/admin/users/{id}</span><span class="route-desc">Update user plan, feature flags, admin status</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/audit-logs</span><span class="route-desc">View all API audit log entries</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/growth</span><span class="route-desc">Signup growth chart data</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/engagement</span><span class="route-desc">DAU/WAU/MAU engagement metrics</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/feature-flags</span><span class="route-desc">Get feature flag state for current user</span></div>
+    <div class="route-row"><span class="method PATCH">PATCH</span><span class="route-path">/feature-flags/{name}</span><span class="route-desc">Toggle feature flag for current user (admin override)</span></div>
+    <div class="route-row"><span class="method POST">POST</span><span class="route-path">/admin/email-blast</span><span class="route-desc">Send platform-wide email to all users (via Resend)</span></div>
+    <div class="route-row"><span class="method GET">GET</span><span class="route-path">/admin/changelog</span><span class="route-desc">List product changelog entries</span></div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 07 DATABASE -->
+  <div class="section-label">Section 07</div>
+  <h2>Database Schema</h2>
+  <p>Supabase (PostgreSQL) is the primary data store. Row-level security (RLS) enforces tenant isolation — every table has a <code>user_id</code> foreign key matching the authenticated user's Supabase UID.</p>
+
+  <table>
+    <thead><tr><th>Table</th><th>Key Columns</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>profiles</code></td><td>id, email, full_name, is_admin, plan, feature_flags JSONB</td><td>User accounts, plan tier, feature access</td></tr>
+      <tr><td><code>leads</code></td><td>id, user_id, name, title, company, email, status, profile_url, icp_score, starred, enriched_at</td><td>Individual contact records</td></tr>
+      <tr><td><code>companies</code></td><td>id, user_id, name, website, linkedin_url, industry, size, description, cached_lookalikes JSONB, funding JSONB, tech_stack JSONB</td><td>B2B account records</td></tr>
+      <tr><td><code>icp_profiles</code></td><td>id, user_id, title_keywords, industries, seniority_levels, company_sizes, score_weights JSONB</td><td>Ideal Customer Profile definitions</td></tr>
+      <tr><td><code>personas</code></td><td>id, user_id, name, role, pain_points, motivations</td><td>Buyer persona templates</td></tr>
+      <tr><td><code>email_templates</code></td><td>id, user_id, name, subject, body, created_at</td><td>Reusable email templates</td></tr>
+      <tr><td><code>lead_signals</code></td><td>id, lead_id, type, content, source, detected_at</td><td>Buying signals: job changes, posts, mentions</td></tr>
+      <tr><td><code>company_signals</code></td><td>id, company_id, type, content, source, detected_at</td><td>Company signals: funding, GitHub activity, HN</td></tr>
+      <tr><td><code>tasks</code></td><td>id, user_id, lead_id, title, due_date, completed, priority</td><td>CRM task management</td></tr>
+      <tr><td><code>email_tracking</code></td><td>id, lead_id, tracking_id, opened_at, clicks</td><td>Email open / click tracking</td></tr>
+      <tr><td><code>company_activities</code></td><td>id, company_id, user_id, type, notes, created_at</td><td>Activity log for company CRM</td></tr>
+      <tr><td><code>company_segments</code></td><td>id, user_id, name, filter_criteria JSONB</td><td>Saved smart segments for company list</td></tr>
+      <tr><td><code>sonar_contacts</code></td><td>id, name, title, company, email, linkedin_url, enriched_at</td><td>Proprietary enriched contact database (admin)</td></tr>
+      <tr><td><code>webhooks</code></td><td>id, user_id, url, events, secret, active</td><td>Outbound webhook subscriptions</td></tr>
+      <tr><td><code>notifications</code></td><td>id, user_id, type, content, seen, created_at</td><td>In-app notification feed</td></tr>
+      <tr><td><code>audit_logs</code></td><td>id, user_id, action, resource, metadata JSONB, created_at</td><td>Security audit trail (admin-readable)</td></tr>
+      <tr><td><code>announcements</code></td><td>id, title, body, active, created_at</td><td>Platform-wide announcements shown in dashboard</td></tr>
+      <tr><td><code>changelog_entries</code></td><td>id, version, title, body, created_at</td><td>Public product changelog</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 08 EXTENSION -->
+  <div class="section-label">Section 08</div>
+  <h2>Chrome Extension</h2>
+
+  <div class="callout blue">
+    <strong>Extension: Sonar v1.5.0 — Manifest v3</strong>
+    Available for internal install (unpacked). Permissions: activeTab, storage, scripting, tabs, identity.
+    Host permissions: linkedin.com, mail.google.com, leadgenengineplatform-api.vercel.app
+  </div>
+
+  <table>
+    <thead><tr><th>File</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>manifest.json</code></td><td>MV3 manifest — declares permissions, content scripts, background worker, popup</td></tr>
+      <tr><td><code>content.js</code></td><td>Injected into LinkedIn profile / company / search / sales pages. Scrapes DOM and adds "Save to Sonar" button</td></tr>
+      <tr><td><code>gmail-content.js</code></td><td>Injected into Gmail — shows Sonar lead data inline in email threads (open rate, last activity, ICP score)</td></tr>
+      <tr><td><code>background.js</code></td><td>Service worker — handles API calls to backend, auth token refresh, tab messaging</td></tr>
+      <tr><td><code>popup.html/js</code></td><td>Toolbar popup — shows recent leads, quick search, login status, one-click save</td></tr>
+      <tr><td><code>config.js</code></td><td>Shared constants: API base URL, timeout values</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 09 AI PIPELINE -->
+  <div class="section-label">Section 09</div>
+  <h2>AI &amp; Enrichment Pipeline</h2>
+
+  <table>
+    <thead><tr><th>Feature</th><th>Model / Service</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>Company prefill</td><td>Groq llama-3.1-8b-instant</td><td>Extract structured company data from web search snippets</td></tr>
+      <tr><td>ICP lead scoring</td><td>Groq llama-3.3-70b-versatile</td><td>Score lead 0–100 against ICP criteria; explain top match factors</td></tr>
+      <tr><td>LinkedIn DM generation</td><td>Groq llama-3.3-70b-versatile</td><td>Write personalised cold outreach DMs from company context</td></tr>
+      <tr><td>Similar companies</td><td>Groq llama-3.3-70b-versatile + Brave Search</td><td>Identify top 10 competitors from G2/Capterra snippets; return LinkedIn slugs, employees, SaaS flag</td></tr>
+      <tr><td>Email sequence drafting</td><td>Groq llama-3.3-70b-versatile</td><td>Multi-step email sequence personalised to lead + ICP</td></tr>
+      <tr><td>Compliance check</td><td>Gemini 2.0 Flash (via OpenRouter)</td><td>Assess GDPR / data privacy compliance risk for a company</td></tr>
+      <tr><td>Website tech stack</td><td>Rule-based HTML scraper (website_analyzer.py)</td><td>Detect frameworks, analytics tools, CMS, e-commerce platform from HTML/JS</td></tr>
+      <tr><td>Email finder</td><td>Hunter.io + proprietary scraper</td><td>Discover and verify professional email addresses</td></tr>
+      <tr><td>Prospect enrichment</td><td>PDL (People Data Labs) SQL API</td><td>Search 700M+ people by title/company/location; enrich with phone, social URLs</td></tr>
+      <tr><td>Company enrichment</td><td>ProxyCurl</td><td>LinkedIn company profile data (employee count, followers, type)</td></tr>
+      <tr><td>Funding data</td><td>Brave Search + web scraping</td><td>Find Crunchbase / TechCrunch mentions to extract funding rounds</td></tr>
+      <tr><td>GitHub signals</td><td>GitHub REST API (github_scraper.py)</td><td>Detect open-source activity, stars, hiring signals</td></tr>
+      <tr><td>HackerNews signals</td><td>HN Algolia API (hn_scraper.py)</td><td>Find company mentions in HN threads, job posts, Ask HN</td></tr>
+      <tr><td>Web search</td><td>Brave Search API (primary) / DDGS (fallback)</td><td>All search-backed enrichment pipelines; Brave is preferred</td></tr>
+    </tbody>
+  </table>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 10 SECURITY -->
+  <div class="section-label">Section 10</div>
+  <h2>Security &amp; Compliance</h2>
+
+  <div class="arch-grid">
+    <div class="arch-card">
+      <h4>Authentication</h4>
+      <ul>
+        <li>Supabase JWT — RS256 signed, verified server-side</li>
+        <li>Password policy: 8+ chars, upper, lower, digit</li>
+        <li>Password reset via email OTP (Supabase)</li>
+        <li>OAuth callback via onAuthStateChange (no manual code exchange)</li>
+        <li>Profile auto-created on first OAuth login</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>API Security</h4>
+      <ul>
+        <li>SlowAPI rate limiting (token bucket per user/IP)</li>
+        <li>Path-based sliding-window limiter (custom middleware)</li>
+        <li>Request body size limit: 2 MB max</li>
+        <li>CORS: explicit allowlist of origins</li>
+        <li>Docs (Swagger/ReDoc) disabled in production</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>HTTP Security Headers</h4>
+      <ul>
+        <li>X-Content-Type-Options: nosniff</li>
+        <li>X-Frame-Options: DENY</li>
+        <li>Content-Security-Policy: default-src 'none'</li>
+        <li>Strict-Transport-Security (prod only, 2yr preload)</li>
+        <li>Referrer-Policy: strict-origin-when-cross-origin</li>
+        <li>Permissions-Policy: no camera/mic/geo/payment</li>
+      </ul>
+    </div>
+    <div class="arch-card">
+      <h4>Data Isolation</h4>
+      <ul>
+        <li>Row-level security (RLS) in Supabase</li>
+        <li>Every table user_id-scoped</li>
+        <li>Admin routes check is_admin flag in profile</li>
+        <li>Audit log: all sensitive actions recorded</li>
+        <li>Sentry: error monitoring with PII scrubbing</li>
+        <li>PostHog: product analytics (no PII in events)</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 11 DEPLOYMENT -->
+  <div class="section-label">Section 11</div>
+  <h2>Deployment &amp; CI/CD</h2>
+
+  <table>
+    <thead><tr><th>Component</th><th>Host</th><th>URL</th><th>Deploy command</th></tr></thead>
+    <tbody>
+      <tr><td>React Dashboard</td><td>Vercel (Fluid Compute)</td><td>sonar-xxx.vercel.app</td><td><code>vercel --prod</code> from repo root with dashboard project ID</td></tr>
+      <tr><td>FastAPI Backend</td><td>Vercel (Fluid Compute)</td><td>leadgenengineplatform-api.vercel.app</td><td><code>vercel --prod</code> from repo root with backend project ID</td></tr>
+      <tr><td>Admin Panel</td><td>Vercel</td><td>admin-xxx.vercel.app</td><td>Separate Vite build</td></tr>
+      <tr><td>Database</td><td>Supabase</td><td>*.supabase.co</td><td>Managed — schema via Supabase MCP</td></tr>
+      <tr><td>Cron jobs</td><td>Vercel Cron</td><td>—</td><td>vercel.json cron config, daily schedule</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout amber">
+    <strong>Deployment Note</strong>
+    Both frontend and backend are deployed from the <strong>monorepo root</strong> (<code>/leadgen-platform</code>)
+    with explicit <code>VERCEL_PROJECT_ID</code> and <code>VERCEL_ORG_ID</code> overrides to target the correct
+    Vercel project. The backend uses Vercel's Python ASGI runtime via <code>api/index.py</code>.
+  </div>
+
+  <h3>Pre-commit hooks (Husky)</h3>
+  <p>Husky runs Prettier formatting check on all staged <code>.js</code>, <code>.jsx</code>, and <code>.css</code>
+  files before every commit via lint-staged. Commits are rejected if formatting is not clean.</p>
+
+  <hr class="section-divider">
+
+  <!-- ═══ 12 INTEGRATIONS -->
+  <div class="section-label">Section 12</div>
+  <h2>External APIs &amp; Integrations</h2>
+
+  <table>
+    <thead><tr><th>Service</th><th>Purpose</th><th>Used in</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Supabase</strong></td><td>PostgreSQL database, auth, row-level security</td><td>All backend routes, frontend auth</td></tr>
+      <tr><td><strong>Groq</strong></td><td>LLM inference — llama-3.1-8b &amp; llama-3.3-70b</td><td>Scoring, DMs, similar companies, email gen, slug resolution</td></tr>
+      <tr><td><strong>People Data Labs (PDL)</strong></td><td>700M+ person + company search (SQL mode)</td><td>Prospect page, contact enrichment cron</td></tr>
+      <tr><td><strong>Brave Search API</strong></td><td>Web search for enrichment (2K free/month)</td><td>Company prefill, funding, signals, similar companies</td></tr>
+      <tr><td><strong>Hunter.io</strong></td><td>Email finder + domain email pattern detection</td><td>Lead enrichment, email finder page</td></tr>
+      <tr><td><strong>ProxyCurl</strong></td><td>LinkedIn company/person data via API</td><td>Company enrichment, lead deep-enrich</td></tr>
+      <tr><td><strong>Apollo.io</strong></td><td>Contact data fallback</td><td>Lead enrichment pipeline</td></tr>
+      <tr><td><strong>Firecrawl</strong></td><td>Web scraping and structured extraction</td><td>Company prefill, website analysis</td></tr>
+      <tr><td><strong>Google Gemini 2.0 Flash</strong></td><td>LLM for compliance checks (via OpenRouter)</td><td>Check compliance route</td></tr>
+      <tr><td><strong>OpenAI GPT</strong></td><td>Fallback LLM for complex generation tasks</td><td>Email sequences, analysis</td></tr>
+      <tr><td><strong>Resend</strong></td><td>Transactional email sending</td><td>Email blast, sequence dispatch</td></tr>
+      <tr><td><strong>GitHub API</strong></td><td>Repository signals (stars, commits, topics)</td><td>Cron: scrape-github, company signals</td></tr>
+      <tr><td><strong>HackerNews Algolia</strong></td><td>HN post/job mention search</td><td>Cron: scrape-hn, company signals</td></tr>
+      <tr><td><strong>Google Maps API</strong></td><td>HQ location geocoding</td><td>Company enrichment, map view</td></tr>
+      <tr><td><strong>Sentry</strong></td><td>Backend error monitoring</td><td>main.py — always-on</td></tr>
+      <tr><td><strong>PostHog</strong></td><td>Product analytics (events, sessions, funnels)</td><td>Frontend + backend event tracking</td></tr>
+      <tr><td><strong>Discord Webhooks</strong></td><td>Internal engineering/product/design alerts</td><td>Admin events, error notifications</td></tr>
+      <tr><td><strong>DuckDuckGo Search (DDGS)</strong></td><td>Fallback web search when Brave key unavailable</td><td>company_prefill.py</td></tr>
+    </tbody>
+  </table>
+</div>
+  <div class="doc-footer"><p>Sonar Platform Technical Reference · Confidential · © Shravan Omanakuttan</p></div>
+</div>
+
+<div class="chapter-divider">
+  <div class="chapter-divider-label">Part 2 · Code Reference</div>
+  <h2>Security, AI &amp; Frontend<br>Annotated Code Walkthrough</h2>
+  <p>Annotated code sections covering security controls, AI inference pipelines,<br>enrichment logic, and frontend architecture.</p>
+  <div class="ch-badges">
+    <span class="badge-team soc">SOC Team</span>
+    <span class="badge-team ai">AI Team</span>
+    <span class="badge-team eng">Engineering</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- TOC -->
+  <div class="section-label shared">Contents</div>
+  <h2>Index of Code Sections</h2>
+  <div style="margin-top:20px;">
+    <div class="toc-row"><span><span class="num-letter">A</span>Authentication &amp; JWT Validation</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">B</span>Rate Limiting — Global + Per-Path</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">C</span>SSRF Protection</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">D</span>Security Audit Logging</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">E</span>Input Validation — Pydantic Models</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">F</span>HTTP Security Headers</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">G</span>Tenant Isolation — Row-Level Auth</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">H</span>Cron Job Authentication</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">I</span>Universal LLM Dispatcher (_call_ai)</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">J</span>Similar Companies — Web Search + Groq</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">K</span>ICP Lead Scoring — LLM with Rubric</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">L</span>PDL People Search — SQL Mode</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">M</span>Company Prefill — Multi-Fallback Enrichment</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">N</span>Email Open + Click Tracking</span><span class="for-tag soc">SOC</span></div>
+    <div class="toc-row"><span><span class="num-letter">O</span>Frontend API Client — Auth + TTL Cache</span><span class="for-tag ai">AI</span></div>
+    <div class="toc-row"><span><span class="num-letter">P</span>Sound Effects Hook (Web Audio API)</span><span class="for-tag ai">AI</span></div>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION A — AUTH
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section A · Security</div>
+  <h2>Authentication &amp; JWT Validation</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span><span class="for-tag all">Engineering</span></div>
+  <p>Every protected API route begins by calling <code>get_user_id(authorization)</code>. This extracts the Bearer token from the HTTP header, verifies it against Supabase Auth (RS256), and returns the user's UUID. Any invalid or expired token raises HTTP 401 immediately — no logic runs before this check.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · lines 203–214</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">def</span> <span class="fn">get_user_id</span>(authorization: <span class="cls">str</span>) <span class="op">-></span> <span class="cls">str</span>:
+    <span class="kw">try</span>:
+        token = authorization.<span class="fn">replace</span>(<span class="str">"Bearer "</span>, <span class="str">""</span>).<span class="fn">strip</span>()
+        <span class="kw">if not</span> token:
+            <span class="kw">raise</span> <span class="cls">ValueError</span>(<span class="str">"Missing token"</span>)
+        user = supabase_auth.auth.<span class="fn">get_user</span>(token)
+        <span class="kw">return</span> user.user.id        <span class="cmt"># Supabase verifies RS256 signature here</span>
+    <span class="kw">except</span> <span class="cls">Exception</span>:
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(status_code=<span class="num">401</span>, detail=<span class="str">"Invalid or expired token"</span>)</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — what to know</strong>
+    <ul>
+      <li>Token verification is delegated to Supabase Auth — the backend never decodes JWT manually, so there is no risk of algorithm-confusion attacks (e.g. RS256 → HS256 downgrade)</li>
+      <li>A single point of entry: every protected route uses this same helper — no routes bypass it</li>
+      <li>On failure the error message is generic ("Invalid or expired token") — no leakage of internal state</li>
+      <li>Login endpoint is rate-limited to 5 req/min per IP to prevent brute-force credential attacks</li>
+    </ul>
+  </div>
+
+  <h3>Login — email verification + anti-enumeration</h3>
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · login route</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">@router.post</span>(<span class="str">"/auth/login"</span>)
+<span class="kw">@limiter.limit</span>(<span class="str">"5/minute"</span>)                   <span class="cmt"># brute-force guard</span>
+<span class="kw">async def</span> <span class="fn">login</span>(request: <span class="cls">Request</span>, user: <span class="cls">UserLogin</span>):
+    <span class="kw">try</span>:
+        response = supabase_auth.auth.<span class="fn">sign_in_with_password</span>({...})
+    <span class="kw">except</span> <span class="cls">Exception</span>:
+        <span class="fn">log_auth_failure</span>(email=user.email, ip=<span class="fn">_ip</span>(request), reason=<span class="str">"invalid_credentials"</span>)
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(status_code=<span class="num">401</span>, detail=<span class="str">"Invalid email or password"</span>)
+
+    <span class="cmt"># Block unverified emails from accessing the platform</span>
+    <span class="kw">if not</span> response.user.email_confirmed_at:
+        <span class="fn">log_auth_failure</span>(..., reason=<span class="str">"email_not_verified"</span>)
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(status_code=<span class="num">403</span>, detail=<span class="str">"Email not verified..."</span>)
+
+    <span class="fn">log_auth_success</span>(user_id=response.user.id, ip=<span class="fn">_ip</span>(request))
+    <span class="kw">return</span> {<span class="str">"access_token"</span>: ..., <span class="str">"refresh_token"</span>: ...}</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — key controls</strong>
+    <ul>
+      <li>Rate limit: 5 attempts/minute per IP — excessive failures trigger <code>log_auth_failure</code> events visible in logs</li>
+      <li>Email enumeration prevention: both "wrong password" and "email not found" return the same 401 with identical message</li>
+      <li>Unverified email addresses receive HTTP 403 — they cannot receive a token even if the password is correct</li>
+      <li>All login events (success and failure) are emitted as structured JSON log events for SIEM ingestion</li>
+    </ul>
+  </div>
+
+  <div class="callout red">
+    <strong>Signup — anti-enumeration</strong>
+    The signup endpoint always returns: <em>"If this email is not already registered, you will receive a confirmation link shortly."</em>
+    — regardless of whether the email already exists. This prevents attackers from enumerating registered accounts.
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION B — RATE LIMITING
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section B · Security</div>
+  <h2>Rate Limiting — Global + Per-Path</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+  <p>Two independent rate-limiting layers protect the API. <strong>SlowAPI</strong> handles per-route decorators. A custom <strong>sliding-window middleware</strong> enforces per-IP limits by path category — with tighter limits on expensive AI and paid-API endpoints.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/security.py · path rate limit config</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># Most-specific match wins — checked in order</span>
+<span class="var">_PATH_LIMITS</span>: <span class="cls">list</span>[<span class="cls">tuple</span>[<span class="cls">str</span>, <span class="cls">int</span>]] = [
+    <span class="cmt"># Bulk AI calls — tightest limit (expensive + slow)</span>
+    (<span class="str">"/bulk-autofill"</span>,    <span class="num">4</span>),    <span class="cmt"># 4 req/60s per IP</span>
+    (<span class="str">"/bulk-analyze"</span>,     <span class="num">4</span>),
+    (<span class="str">"/bulk-maps-enrich"</span>, <span class="num">4</span>),
+    <span class="cmt"># Single AI calls</span>
+    (<span class="str">"/analyze-website"</span>,  <span class="num">10</span>),
+    (<span class="str">"/check-compliance"</span>, <span class="num">10</span>),
+    (<span class="str">"/autofill-linkedin"</span>,<span class="num">10</span>),
+    (<span class="str">"/autofill"</span>,          <span class="num">20</span>),
+    <span class="cmt"># Paid enrichment APIs</span>
+    (<span class="str">"/maps-discover"</span>,    <span class="num">15</span>),
+    (<span class="str">"/people-search"</span>,    <span class="num">20</span>),
+    (<span class="str">"/enrich"</span>,           <span class="num">40</span>),
+    <span class="cmt"># Global fallback</span>
+    (<span class="str">""</span>,                  <span class="num">200</span>),   <span class="cmt"># 200 req/60s per IP</span>
+]</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — design rationale</strong>
+    <ul>
+      <li>Bulk AI endpoints are limited to 4/min — prevents a single compromised account from triggering $100s of Groq or Firecrawl charges</li>
+      <li>Paid enrichment endpoints (PDL people-search, ProxyCurl) are capped at 15–20/min — protects credit budgets from abuse</li>
+      <li>The sliding window is in-process (per Vercel function instance); for strict multi-instance enforcement, Redis-backed SlowAPI should be used at scale</li>
+      <li>Rate limit hits emit <code>security.rate_limit</code> log events with IP and path — filterable in any log aggregator</li>
+    </ul>
+  </div>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/security.py · sliding-window middleware</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">async def</span> <span class="fn">path_rate_limit_middleware</span>(request: <span class="cls">Request</span>, call_next):
+    path = request.url.path
+    <span class="kw">if</span> path <span class="kw">in</span> <span class="var">_SKIP_PATHS</span>:               <span class="cmt"># /health, /docs, etc. — bypass</span>
+        <span class="kw">return await</span> <span class="fn">call_next</span>(request)
+
+    ip  = request.client.host <span class="kw">or</span> <span class="str">"0.0.0.0"</span>
+    lim = <span class="fn">_path_limit</span>(path)
+    key = <span class="fn">f"</span><span class="str">{lim}:{ip}</span><span class="fn">"</span>
+    now = time.<span class="fn">monotonic</span>()
+
+    bucket = <span class="var">_buckets</span>[key]
+    <span class="cmt"># Evict timestamps older than the 60s window</span>
+    <span class="kw">while</span> bucket <span class="kw">and</span> now - bucket[<span class="num">0</span>] > <span class="var">_WINDOW_SECS</span>:
+        bucket.<span class="fn">popleft</span>()
+
+    <span class="kw">if</span> <span class="fn">len</span>(bucket) >= lim:
+        <span class="fn">log_rate_limit_hit</span>(ip=ip, path=path, limit=lim)
+        <span class="kw">return</span> <span class="cls">JSONResponse</span>(status_code=<span class="num">429</span>, content={<span class="str">"detail"</span>: <span class="str">"Too many requests"</span>})
+
+    bucket.<span class="fn">append</span>(now)
+    <span class="kw">return await</span> <span class="fn">call_next</span>(request)</pre>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION C — SSRF
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section C · Security</div>
+  <h2>SSRF Protection</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+  <p>When the backend fetches user-supplied URLs (website analysis, company prefill), it first validates them through <code>validate_external_url()</code> — a full SSRF guard that blocks private IP ranges, loopback, link-local, cloud metadata endpoints, and DNS rebinding attacks.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/security.py · SSRF guard</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># All private / reserved IP ranges are blocked</span>
+<span class="var">_PRIVATE_NETS</span> = [
+    <span class="fn">ip_network</span>(<span class="str">"10.0.0.0/8"</span>),
+    <span class="fn">ip_network</span>(<span class="str">"172.16.0.0/12"</span>),
+    <span class="fn">ip_network</span>(<span class="str">"192.168.0.0/16"</span>),
+    <span class="fn">ip_network</span>(<span class="str">"127.0.0.0/8"</span>),
+    <span class="fn">ip_network</span>(<span class="str">"169.254.0.0/16"</span>),   <span class="cmt"># AWS/Azure/DO metadata (169.254.169.254)</span>
+    <span class="fn">ip_network</span>(<span class="str">"100.64.0.0/10"</span>),    <span class="cmt"># Carrier-grade NAT</span>
+]
+
+<span class="var">_BLOCKED_HOSTS</span> = <span class="fn">frozenset</span>({
+    <span class="str">"localhost"</span>, <span class="str">"127.0.0.1"</span>, <span class="str">"::1"</span>,
+    <span class="str">"169.254.169.254"</span>,              <span class="cmt"># AWS/Azure/DO metadata</span>
+    <span class="str">"metadata.google.internal"</span>,     <span class="cmt"># GCP metadata</span>
+    <span class="str">"100.100.100.200"</span>,              <span class="cmt"># Alibaba Cloud metadata</span>
+})
+
+<span class="kw">def</span> <span class="fn">validate_external_url</span>(url: <span class="cls">str</span>, field: <span class="cls">str</span> = <span class="str">"url"</span>) <span class="op">-></span> <span class="cls">str</span>:
+    parsed = <span class="fn">_urlparse</span>(url)
+    <span class="kw">if</span> parsed.scheme <span class="kw">not in</span> (<span class="str">"http"</span>, <span class="str">"https"</span>):
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(<span class="num">422</span>, <span class="str">"only http/https URLs are permitted"</span>)
+
+    hostname = (parsed.hostname <span class="kw">or</span> <span class="str">""</span>).<span class="fn">lower</span>()
+    <span class="kw">if</span> hostname <span class="kw">in</span> <span class="var">_BLOCKED_HOSTS</span>:
+        <span class="fn">log_suspicious</span>(<span class="str">"ssrf_blocked_host"</span>, ...)
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(<span class="num">403</span>, ...)
+
+    <span class="cmt"># DNS resolution check — catches DNS rebinding attacks</span>
+    addrs = socket.<span class="fn">getaddrinfo</span>(hostname, <span class="kw">None</span>, ...)
+    <span class="kw">for</span> _, _, _, _, sockaddr <span class="kw">in</span> addrs:
+        <span class="kw">if not</span> <span class="fn">_ip_is_safe</span>(sockaddr[<span class="num">0</span>]):
+            <span class="fn">log_suspicious</span>(<span class="str">"ssrf_blocked_resolved_ip"</span>, ...)
+            <span class="kw">raise</span> <span class="cls">HTTPException</span>(<span class="num">403</span>, ...)</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — threat model covered</strong>
+    <ul>
+      <li>Direct IP attacks: private/loopback IPs in the URL are rejected before any network call</li>
+      <li>DNS rebinding: all resolved IPs for the hostname are checked, not just the literal hostname — prevents attackers registering a public domain that resolves to 169.254.169.254</li>
+      <li>Cloud metadata exfil: all major cloud metadata endpoints (AWS, GCP, Azure, Alibaba) are explicitly blocked by hostname</li>
+      <li>Protocol restriction: only http/https allowed — blocks file://, ftp://, gopher:// vectors</li>
+      <li>All SSRF attempts emit <code>security.suspicious</code> log events with the target URL for forensics</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION D — AUDIT LOGGING
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section D · Security</div>
+  <h2>Structured Security Audit Logging</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+  <p>All security-relevant events are emitted as structured JSON to stdout via a dedicated <code>leadgen.security</code> logger. These are ingested by Vercel's log drain or any external SIEM (Datadog, Splunk, etc.).</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/security.py · audit log helpers</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">def</span> <span class="fn">_emit</span>(event: <span class="cls">str</span>, <span class="op">**</span>kw) <span class="op">-></span> <span class="cls">None</span>:
+    <span class="var">_log</span>.<span class="fn">info</span>(json.<span class="fn">dumps</span>({<span class="str">"ts"</span>: <span class="fn">round</span>(time.<span class="fn">time</span>(), <span class="num">3</span>), <span class="str">"event"</span>: event, <span class="op">**</span>kw}))
+
+<span class="fn">log_auth_success</span>  → <span class="str">"auth.login.success"</span>   {user_id, ip, method}
+<span class="fn">log_auth_failure</span>  → <span class="str">"auth.login.failure"</span>   {email, ip, reason}
+<span class="fn">log_signup</span>        → <span class="str">"auth.signup"</span>          {user_id, ip}
+<span class="fn">log_bulk_op</span>       → <span class="str">"api.bulk_op"</span>          {user_id, operation, count, ip}
+<span class="fn">log_suspicious</span>    → <span class="str">"security.suspicious"</span>  {reason, ip, path, user_id}  <span class="cmt"># WARNING level</span>
+<span class="fn">log_rate_limit_hit</span>→ <span class="str">"security.rate_limit"</span> {ip, path, limit}
+<span class="fn">log_api_error</span>     → <span class="str">"api.error"</span>           {path, status, ip, user_id, detail}
+
+<span class="cmt"># Example emitted JSON:</span>
+<span class="cmt"># {"ts":1751234567.123,"event":"auth.login.failure","email":"x@y.com","ip":"1.2.3.4","reason":"invalid_credentials"}</span></pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — SIEM integration</strong>
+    <ul>
+      <li>All events are machine-parseable JSON with a Unix timestamp (<code>ts</code>) and a dotted event name</li>
+      <li><code>security.suspicious</code> is logged at WARNING level — easy to alert on in any log aggregator</li>
+      <li>Filter on <code>event:"auth.login.failure"</code> with count &gt; 5 from same IP within 60s to detect credential stuffing</li>
+      <li>Filter on <code>event:"security.suspicious" reason:"ssrf_*"</code> to detect SSRF probing</li>
+      <li>Admin-level actions are also recorded in the <code>audit_logs</code> Supabase table for durable storage</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION E — INPUT VALIDATION
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section E · Security</div>
+  <h2>Input Validation — Pydantic Models</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span><span class="for-tag all">Engineering</span></div>
+  <p>All API request bodies are validated by Pydantic v2 models before any business logic runs. Email format, password strength, and field lengths are enforced at the model level — invalid requests are rejected with HTTP 422 before touching the database.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/models.py · UserSignup</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">class</span> <span class="cls">UserSignup</span>(<span class="cls">BaseModel</span>):
+    email:     <span class="cls">str</span>
+    password:  <span class="cls">str</span>
+    full_name: <span class="cls">Optional</span>[<span class="cls">str</span>] = <span class="kw">None</span>
+
+    <span class="kw">@field_validator</span>(<span class="str">'email'</span>)
+    <span class="kw">def</span> <span class="fn">normalise_email</span>(cls, v):
+        v = v.<span class="fn">strip</span>().<span class="fn">lower</span>()
+        <span class="kw">if not</span> re.<span class="fn">match</span>(<span class="str">r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'</span>, v):
+            <span class="kw">raise</span> <span class="cls">ValueError</span>(<span class="str">'Invalid email address'</span>)
+        <span class="kw">return</span> v
+
+    <span class="kw">@field_validator</span>(<span class="str">'password'</span>)
+    <span class="kw">def</span> <span class="fn">validate_password</span>(cls, v):
+        errors = []
+        <span class="kw">if</span> <span class="fn">len</span>(v) < <span class="num">8</span>:        errors.<span class="fn">append</span>(<span class="str">'at least 8 characters'</span>)
+        <span class="kw">if not</span> re.<span class="fn">search</span>(<span class="str">r'[A-Z]'</span>, v): errors.<span class="fn">append</span>(<span class="str">'one uppercase letter'</span>)
+        <span class="kw">if not</span> re.<span class="fn">search</span>(<span class="str">r'[a-z]'</span>, v): errors.<span class="fn">append</span>(<span class="str">'one lowercase letter'</span>)
+        <span class="kw">if not</span> re.<span class="fn">search</span>(<span class="str">r'[0-9]'</span>, v): errors.<span class="fn">append</span>(<span class="str">'one digit'</span>)
+        <span class="kw">if</span> errors:
+            <span class="kw">raise</span> <span class="cls">ValueError</span>(<span class="str">'Password must contain '</span> + <span class="str">', '</span>.<span class="fn">join</span>(errors))
+        <span class="kw">return</span> v</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — validation controls</strong>
+    <ul>
+      <li>Email is normalised to lowercase and RFC-validated by regex before reaching any database layer</li>
+      <li>Password requires minimum complexity: 8+ chars, upper, lower, digit — weak passwords are rejected at signup</li>
+      <li>All UUID path parameters are validated with <code>validate_uuid()</code> before any Supabase query — prevents path traversal via malformed IDs</li>
+      <li>Text fields are capped via <code>sanitize_text(value, max_len=500)</code> — prevents oversized payloads from reaching the DB</li>
+      <li>Request body is capped at 2MB by a FastAPI middleware (HTTP 413 on overflow)</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION F — SECURITY HEADERS
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section F · Security</div>
+  <h2>HTTP Security Headers</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/main.py · security headers middleware</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">@app.middleware</span>(<span class="str">"http"</span>)
+<span class="kw">async def</span> <span class="fn">add_security_headers</span>(request, call_next):
+    response = <span class="kw">await</span> <span class="fn">call_next</span>(request)
+    response.headers[<span class="str">"X-Content-Type-Options"</span>]   = <span class="str">"nosniff"</span>
+    response.headers[<span class="str">"X-Frame-Options"</span>]          = <span class="str">"DENY"</span>
+    response.headers[<span class="str">"X-XSS-Protection"</span>]         = <span class="str">"0"</span>  <span class="cmt"># deprecated; CSP is the control</span>
+    response.headers[<span class="str">"Referrer-Policy"</span>]           = <span class="str">"strict-origin-when-cross-origin"</span>
+    response.headers[<span class="str">"Permissions-Policy"</span>]        = <span class="str">"camera=(), microphone=(), geolocation=(), payment=()"</span>
+    response.headers[<span class="str">"Cross-Origin-Opener-Policy"</span>] = <span class="str">"same-origin"</span>
+    response.headers[<span class="str">"Content-Security-Policy"</span>]   = (
+        <span class="str">"default-src 'none'; frame-ancestors 'none'; form-action 'none';"</span>
+    )
+    <span class="kw">if</span> <span class="var">_IS_PROD</span>:
+        response.headers[<span class="str">"Strict-Transport-Security"</span>] = <span class="str">"max-age=63072000; includeSubDomains; preload"</span>
+    <span class="kw">return</span> response</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — header breakdown</strong>
+    <ul>
+      <li><code>X-Frame-Options: DENY</code> — prevents the API from being embedded in iframes (clickjacking)</li>
+      <li><code>CSP: default-src 'none'</code> — maximally restrictive; the API returns JSON, not HTML, so no resources need loading</li>
+      <li><code>HSTS: max-age=63072000</code> (2 years) with preload — forces HTTPS-only in production, prevents SSL stripping</li>
+      <li><code>Permissions-Policy</code> — explicitly denies camera, mic, geolocation, payments — prevents accidental capability grant</li>
+      <li><code>Cross-Origin-Opener-Policy: same-origin</code> — isolates browsing context, prevents Spectre-class cross-origin data leaks</li>
+      <li>Swagger UI (<code>/docs</code>) is disabled in production — no API surface exposure to unauthenticated clients</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION G — TENANT ISOLATION
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section G · Security</div>
+  <h2>Tenant Isolation — Row-Level Auth</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+  <p>Every Supabase query is scoped with <code>.eq("user_id", user_id)</code>. This means even if an attacker bypasses JWT validation (unlikely — it's handled by Supabase), all queries return empty for any other tenant. Data isolation is enforced at the query layer, not just the application layer.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · tenant-scoped queries (pattern used throughout)</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># Every data access follows this pattern:</span>
+user_id = <span class="fn">get_user_id</span>(authorization)   <span class="cmt"># 1. Verify JWT → get UUID</span>
+
+<span class="cmt"># 2. Always scope to this user's data</span>
+leads = supabase.table(<span class="str">"leads"</span>)\
+    .<span class="fn">select</span>(<span class="str">"*"</span>)\
+    .<span class="fn">eq</span>(<span class="str">"user_id"</span>, user_id)\   <span class="cmt"># ← tenant filter, always present</span>
+    .<span class="fn">execute</span>()
+
+<span class="cmt"># Update: user_id filter prevents cross-user writes</span>
+supabase.table(<span class="str">"leads"</span>)\
+    .<span class="fn">update</span>({<span class="str">"status"</span>: <span class="str">"contacted"</span>})\
+    .<span class="fn">eq</span>(<span class="str">"id"</span>, lead_id)\
+    .<span class="fn">eq</span>(<span class="str">"user_id"</span>, user_id)\   <span class="cmt"># ← prevents horizontal privilege escalation</span>
+    .<span class="fn">execute</span>()
+
+<span class="cmt"># Supabase RLS (Row Level Security) provides a second enforcement layer in the DB</span></pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — defence in depth</strong>
+    <ul>
+      <li>Application layer: every query includes <code>.eq("user_id", user_id)</code> — no query can return another user's data</li>
+      <li>Database layer: Supabase Row-Level Security policies enforce the same constraint at the PostgreSQL level</li>
+      <li>Two independent enforcement layers — neither alone is a single point of failure</li>
+      <li>UUID format is validated before reaching the query — no SQL injection via path parameters</li>
+      <li>Admin routes additionally verify <code>is_admin = true</code> in the profile table before granting elevated access</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION H — CRON AUTH
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section H · Security</div>
+  <h2>Cron Job Authentication</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span></div>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/security.py · verify_cron_auth</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">def</span> <span class="fn">verify_cron_auth</span>(request: <span class="cls">Request</span>) <span class="op">-></span> <span class="cls">None</span>:
+    <span class="str">"""Verify the request originates from Vercel's cron runner.
+    Set CRON_SECRET in Vercel env; Vercel passes it as Authorization: Bearer."""</span>
+    secret = os.<span class="fn">getenv</span>(<span class="str">"CRON_SECRET"</span>)
+    <span class="kw">if not</span> secret:
+        <span class="kw">return</span>   <span class="cmt"># Dev mode — skip enforcement</span>
+    auth = request.headers.<span class="fn">get</span>(<span class="str">"authorization"</span>, <span class="str">""</span>)
+    <span class="kw">if</span> auth != <span class="fn">f"Bearer {secret}"</span>:
+        <span class="fn">log_suspicious</span>(
+            <span class="str">"unauthorized_cron_trigger"</span>,
+            ip=request.client.host,
+            path=<span class="fn">str</span>(request.url.path),
+        )
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(status_code=<span class="num">401</span>, detail=<span class="str">"Cron authentication required"</span>)
+
+<span class="cmt"># Usage in every cron endpoint:</span>
+<span class="kw">@router.post</span>(<span class="str">"/cron/scrape-github"</span>)
+<span class="kw">async def</span> <span class="fn">cron_scrape_github</span>(request: <span class="cls">Request</span>):
+    <span class="fn">verify_cron_auth</span>(request)   <span class="cmt"># ← first line, always</span>
+    ...</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — threat model</strong>
+    <ul>
+      <li>Cron endpoints trigger expensive operations (PDL enrichment, GitHub scraping) — they must not be publicly triggerable</li>
+      <li>Vercel injects <code>CRON_SECRET</code> automatically from env into each cron invocation as Bearer token</li>
+      <li>Unauthorized attempts log <code>security.suspicious</code> with <code>reason:"unauthorized_cron_trigger"</code></li>
+      <li>In development (<code>CRON_SECRET</code> not set), auth is skipped — this is intentional for local testing only</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION I — _call_ai
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section I · AI Pipeline</div>
+  <h2>Universal LLM Dispatcher — _call_ai()</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span><span class="for-tag all">Engineering</span></div>
+  <p>All LLM inference in the platform is routed through a single <code>_call_ai()</code> function. It tries <strong>Groq → Gemini</strong> in order, emits a <code>$ai_generation</code> PostHog event with token counts and latency for every call, and raises HTTP 503 if no AI key is available.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · _call_ai() · lines 4789–4850</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">def</span> <span class="fn">_call_ai</span>(prompt: <span class="cls">str</span>, max_tokens: <span class="cls">int</span> = <span class="num">300</span>,
+              user_id: <span class="cls">str</span> = <span class="kw">None</span>, feature: <span class="cls">str</span> = <span class="kw">None</span>) <span class="op">-></span> <span class="cls">str</span>:
+    <span class="str">"""Groq → Gemini in order. Emits $ai_generation to PostHog per call."""</span>
+    groq_key   = os.<span class="fn">getenv</span>(<span class="str">"GROQ_API_KEY"</span>, <span class="str">""</span>)
+    gemini_key = os.<span class="fn">getenv</span>(<span class="str">"GEMINI_API_KEY"</span>, <span class="str">""</span>)
+    content  = <span class="str">""</span>
+    trace_id = <span class="fn">str</span>(uuid.<span class="fn">uuid4</span>())      <span class="cmt"># unique ID to correlate logs with PostHog</span>
+
+    <span class="kw">if</span> groq_key:
+        t0 = time.<span class="fn">monotonic</span>()
+        r = requests.<span class="fn">post</span>(
+            <span class="str">"https://api.groq.com/openai/v1/chat/completions"</span>,
+            headers={<span class="str">"Authorization"</span>: <span class="fn">f"Bearer {groq_key}"</span>},
+            json={<span class="str">"model"</span>: <span class="str">"llama-3.3-70b-versatile"</span>,
+                  <span class="str">"messages"</span>: [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: prompt}],
+                  <span class="str">"max_tokens"</span>: max_tokens, <span class="str">"temperature"</span>: <span class="num">0.2</span>},
+            timeout=<span class="num">20</span>,
+        )
+        <span class="kw">if</span> <span class="str">"choices"</span> <span class="kw">in</span> r.<span class="fn">json</span>():
+            content = r.<span class="fn">json</span>()[<span class="str">"choices"</span>][<span class="num">0</span>][<span class="str">"message"</span>][<span class="str">"content"</span>].<span class="fn">strip</span>()
+            posthog.<span class="fn">capture</span>(user_id, <span class="str">"$ai_generation"</span>, {
+                <span class="str">"$ai_provider"</span>:      <span class="str">"groq"</span>,
+                <span class="str">"$ai_model"</span>:         <span class="str">"llama-3.3-70b-versatile"</span>,
+                <span class="str">"$ai_input_tokens"</span>:  usage.<span class="fn">get</span>(<span class="str">"prompt_tokens"</span>),
+                <span class="str">"$ai_output_tokens"</span>: usage.<span class="fn">get</span>(<span class="str">"completion_tokens"</span>),
+                <span class="str">"$ai_latency"</span>:       <span class="fn">round</span>(time.<span class="fn">monotonic</span>() - t0, <span class="num">3</span>),
+                <span class="str">"$ai_trace_id"</span>:      trace_id,
+                <span class="str">"feature"</span>:           feature,   <span class="cmt"># e.g. "bulk_icp_score", "dm-generate"</span>
+            })
+
+    <span class="kw">if not</span> content <span class="kw">and</span> gemini_key:
+        <span class="cmt"># Gemini fallback — same pattern, different API shape</span>
+        r = requests.<span class="fn">post</span>(
+            <span class="fn">f"https://generativelanguage.googleapis.com/.../gemini-2.0-flash:generateContent?key={gemini_key}"</span>,
+            json={<span class="str">"contents"</span>: [{<span class="str">"parts"</span>: [{<span class="str">"text"</span>: prompt}]}]}, timeout=<span class="num">20</span>)
+        <span class="cmt"># Parses candidates[0].content.parts[0].text ...</span>
+
+    <span class="kw">if not</span> content:
+        <span class="kw">raise</span> <span class="cls">HTTPException</span>(<span class="num">503</span>, <span class="str">"No AI key configured."</span>)
+    <span class="kw">return</span> content</pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — design notes</strong>
+    <ul>
+      <li>Single function = single place to add new providers (e.g. Anthropic, Mistral) — just add another fallback block</li>
+      <li>PostHog <code>$ai_generation</code> event captures input tokens, output tokens, latency, and a <code>trace_id</code> — allows per-feature cost analysis in the PostHog AI analytics dashboard</li>
+      <li><code>feature</code> parameter identifies the calling context (e.g. <code>"bulk_icp_score"</code>, <code>"dm-generate"</code>) — use this to compare cost/latency per feature</li>
+      <li>Temperature is fixed at <code>0.2</code> for most calls — low enough for deterministic JSON output, high enough for natural prose in DMs</li>
+      <li>Groq is always tried first — it's free and faster (~200ms vs ~800ms for Gemini)</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION J — SIMILAR COMPANIES
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section J · AI Pipeline</div>
+  <h2>Similar Companies — Web Search + Groq</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span></div>
+  <p>The lookalike endpoint uses a two-step pipeline: first pull real competitor names from G2/Capterra search result snippets using web search, then feed those snippets alongside the company's profile to Groq in a single call that returns names, LinkedIn slugs, employees, followers, and SaaS classification.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · /companies/{id}/lookalike — Step 1</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># STEP 1 — Extract competitor names from G2/Capterra search snippets</span>
+<span class="cmt"># G2's meta description contains: "The best X alternatives are A, B, and C."</span>
+<span class="cmt"># We harvest this from search result snippets — no page scraping needed.</span>
+
+g2_queries = [
+    <span class="fn">f'"{name}" alternatives site:g2.com'</span>,
+    <span class="fn">f'"{name}" competitors site:g2.com'</span>,
+    <span class="fn">f'{name} alternatives g2.com'</span>,
+]
+raw_text_chunks = []
+<span class="kw">for</span> q <span class="kw">in</span> g2_queries:
+    <span class="kw">for</span> r <span class="kw">in</span> <span class="fn">_lws</span>(q, count=<span class="num">5</span>):        <span class="cmt"># _lws = Brave Search → DDGS fallback</span>
+        href = r.<span class="fn">get</span>(<span class="str">"href"</span>, <span class="str">""</span>)
+        <span class="kw">if</span> <span class="str">"g2.com"</span> <span class="kw">not in</span> href: <span class="kw">continue</span>
+        body = (r.<span class="fn">get</span>(<span class="str">"body"</span>) <span class="kw">or</span> r.<span class="fn">get</span>(<span class="str">"description"</span>) <span class="kw">or</span> <span class="str">""</span>).<span class="fn">strip</span>()
+        <span class="kw">if</span> body: raw_text_chunks.<span class="fn">append</span>(body)
+
+<span class="cmt"># Also query Capterra for broader coverage</span>
+<span class="kw">for</span> q <span class="kw">in</span> [<span class="fn">f'"{name}" alternatives site:capterra.com'</span>]:
+    <span class="kw">for</span> r <span class="kw">in</span> <span class="fn">_lws</span>(q, count=<span class="num">3</span>):
+        body = (r.<span class="fn">get</span>(<span class="str">"body"</span>) <span class="kw">or</span> <span class="str">""</span>).<span class="fn">strip</span>()
+        <span class="kw">if</span> body: raw_text_chunks.<span class="fn">append</span>(body); <span class="kw">break</span>
+
+combined_text = <span class="str">" | "</span>.<span class="fn">join</span>(raw_text_chunks)</pre>
+  </div>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · /companies/{id}/lookalike — Step 2 (Groq prompt)</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># STEP 2 — Single Groq call: market context + company profile → structured JSON</span>
+prompt = <span class="fn">f"""You are a B2B competitive intelligence expert.
+
+TASK: Identify the top 10 direct competitors of "{name}"
+
+COMPANY CONTEXT:
+- Industry: {industry} | Type: {company_type} | SaaS: {is_saas}
+- Description: {description[:300]}
+
+MARKET DATA (from G2/Capterra — use to identify the RIGHT competitors):
+{combined_text[:1500]}
+
+Return ONLY a JSON array. Each item:
+{{
+  "name":           "Company Display Name",
+  "linkedin_slug":  "exact-linkedin-slug",
+  "snippet":        "One sentence competitive context.",
+  "employees":      "51-200",
+  "followers":      15400,
+  "company_type":   "Private",
+  "business_model": "Product",
+  "is_saas":        true
+}}"""</span>
+
+<span class="cmt"># Call Groq with temperature=0.05 for deterministic results</span>
+res = requests.<span class="fn">post</span>(<span class="str">"https://api.groq.com/openai/v1/chat/completions"</span>,
+    json={<span class="str">"model"</span>: <span class="str">"llama-3.3-70b-versatile"</span>, <span class="str">"temperature"</span>: <span class="num">0.05</span>,
+          <span class="str">"max_tokens"</span>: <span class="num">1400</span>, <span class="str">"messages"</span>: [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: prompt}]})
+
+<span class="cmt"># Validate slugs before returning</span>
+<span class="kw">if</span> <span class="kw">not</span> re.<span class="fn">match</span>(<span class="str">r'^[a-z0-9][a-z0-9_-]{1,60}$'</span>, li_slug): <span class="kw">continue</span>
+<span class="kw">if</span> li_slug <span class="kw">in</span> _SKIP_SLUGS <span class="kw">or</span> li_slug <span class="kw">in</span> seen: <span class="kw">continue</span>
+
+<span class="cmt"># Cache result in DB so subsequent opens are instant</span>
+supabase.table(<span class="str">"companies"</span>).<span class="fn">update</span>({<span class="str">"cached_lookalikes"</span>: results}).<span class="fn">eq</span>(<span class="str">"id"</span>, company_id).<span class="fn">execute</span>()</pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — pipeline design</strong>
+    <ul>
+      <li>The key insight: G2 search result <em>snippets</em> already contain "The best X alternatives are A, B, C" — no page scraping needed, just read the meta description from search results</li>
+      <li>Groq gets both the raw market data AND the company profile in one prompt — it can cross-reference to filter irrelevant results</li>
+      <li><code>temperature: 0.05</code> is near-zero for this call — competitor names must be deterministic, not creative</li>
+      <li>LinkedIn slugs are regex-validated after Groq returns them — invalid slugs (<code>linkedin</code>, <code>company</code>, etc.) are discarded</li>
+      <li>Results are cached in <code>cached_lookalikes JSONB</code> — next open returns instantly; a ↻ Refresh button forces re-fetch</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION K — ICP SCORING
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section K · AI Pipeline</div>
+  <h2>ICP Lead Scoring — LLM with Scoring Rubric</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span></div>
+  <p>Each lead is scored 0–100 against the user's ICP profiles using a structured rubric injected into the prompt. The model returns a JSON object with a numeric score and a one-sentence reason. The rubric is explicit so the model doesn't guess at what "good" means.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · bulk-score prompt (condensed)</span><span class="code-lang python">Python</span></div>
+    <pre class="code">prompt = <span class="fn">f"""You are an expert B2B sales qualification analyst.
+
+ICP CRITERIA:
+{icp_text}             <span class="cmt"># user's defined ICP profiles from DB</span>
+
+LEAD PROFILE:
+- Name: {lead['name']} | Title: {lead['title']}
+- Company: {lead['company']} | Location: {lead['location']}
+- About: {lead.get('about','')[:300]}
+
+SCORING RUBRIC:
+- 85–100: Exceptional — title, company, signals all align; likely has budget and pain
+- 65–84:  Strong — most criteria match; worth immediate outreach
+- 45–64:  Moderate — partial match; worth nurturing
+- 20–44:  Weak — few criteria match; low priority
+-  0–19:  Poor — disqualified by role, industry, or company stage
+
+Penalise heavily for: wrong industry, too junior, company too large/small.
+Reward for: exact title match, growth-stage company, pain signals.
+
+Reply ONLY with valid JSON (no markdown):
+{{"score": <integer 0-100>, "reason": "<one concise sentence>"}}"""</span>
+
+raw = <span class="fn">_call_ai</span>(prompt, max_tokens=<span class="num">120</span>, user_id=user_id, feature=<span class="str">"bulk_icp_score"</span>)
+
+<span class="cmt"># Parse and clamp to 0–100</span>
+score = <span class="fn">max</span>(<span class="num">0</span>, <span class="fn">min</span>(<span class="num">100</span>, <span class="fn">int</span>(parsed.<span class="fn">get</span>(<span class="str">"score"</span>, <span class="num">0</span>))))
+supabase.table(<span class="str">"leads"</span>).<span class="fn">update</span>({<span class="str">"icp_score"</span>: score, <span class="str">"icp_score_reason"</span>: reason})
+    .<span class="fn">eq</span>(<span class="str">"id"</span>, lead[<span class="str">"id"</span>]).<span class="fn">eq</span>(<span class="str">"user_id"</span>, user_id).<span class="fn">execute</span>()</pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — prompt engineering notes</strong>
+    <ul>
+      <li>The rubric is explicit score ranges with named criteria — this prevents the model from hallucinating its own scoring scale</li>
+      <li><code>max_tokens: 120</code> is intentionally tight — the model only needs to return a JSON object with two keys, not an essay</li>
+      <li>Score is clamped to 0–100 in Python after parsing — model output is never trusted directly as a database value</li>
+      <li>The <code>icp_text</code> variable injects the user's live ICP definitions from the DB — scoring is personalised per user, not global</li>
+      <li>Batch size is capped at 50 leads per call — prevents timeout and controls cost per request</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION L — PDL SEARCH
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section L · Data Pipeline</div>
+  <h2>PDL People Search — SQL Mode</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span><span class="for-tag all">Engineering</span></div>
+  <p>The Prospect page queries People Data Labs via their SQL API. Filters are converted to parameterised SQL clauses, results are paginated using <code>scroll_token</code> (avoids duplicate billing), and a proprietary <code>sonar_contacts</code> table is searched first to serve results without hitting PDL.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · PDL SQL query builder</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">def</span> <span class="fn">_build_pdl_sql</span>(payload: <span class="cls">dict</span>) <span class="op">-></span> <span class="cls">str</span>:
+    titles    = payload.<span class="fn">get</span>(<span class="str">"titles"</span>) <span class="kw">or</span> []
+    companies = payload.<span class="fn">get</span>(<span class="str">"companies"</span>) <span class="kw">or</span> []
+    locations = payload.<span class="fn">get</span>(<span class="str">"locations"</span>) <span class="kw">or</span> []
+    sizes     = payload.<span class="fn">get</span>(<span class="str">"sizes"</span>) <span class="kw">or</span> []
+
+    clauses = []
+    <span class="kw">if</span> titles:
+        title_or = <span class="str">" OR "</span>.<span class="fn">join</span>(<span class="fn">f"job_title LIKE '%{esc(t)}%'"</span> <span class="kw">for</span> t <span class="kw">in</span> titles)
+        clauses.<span class="fn">append</span>(<span class="fn">f"({title_or})"</span>)
+    <span class="kw">if</span> companies:
+        co_or = <span class="str">" OR "</span>.<span class="fn">join</span>(<span class="fn">f"job_company_name LIKE '%{esc(c)}%'"</span> <span class="kw">for</span> c <span class="kw">in</span> companies)
+        clauses.<span class="fn">append</span>(<span class="fn">f"({co_or})"</span>)
+    <span class="kw">if</span> sizes:
+        size_or = <span class="str">" OR "</span>.<span class="fn">join</span>(<span class="fn">f"job_company_size = '{esc(s)}'"</span> <span class="kw">for</span> s <span class="kw">in</span> sizes)
+        clauses.<span class="fn">append</span>(<span class="fn">f"({size_or})"</span>)
+
+    <span class="kw">return</span> <span class="str">"SELECT * FROM person WHERE "</span> + (<span class="str">" AND "</span>.<span class="fn">join</span>(clauses) <span class="kw">if</span> clauses <span class="kw">else</span> <span class="str">"1=1"</span>)
+
+<span class="cmt"># scroll_token enables stateful pagination — page N token fetches page N+1</span>
+<span class="cmt"># This avoids duplicate match charges (each scroll re-uses the same search session)</span>
+body = {<span class="str">"sql"</span>: sql, <span class="str">"size"</span>: per_page, <span class="str">"dataset"</span>: <span class="str">"resume"</span>}
+<span class="kw">if</span> scroll_token:
+    body[<span class="str">"scroll_token"</span>] = scroll_token
+
+r = requests.<span class="fn">post</span>(<span class="fn">f"{_PDL_BASE}/person/search"</span>,
+    headers={<span class="str">"X-Api-Key"</span>: <span class="var">_PDL_KEY</span>}, json=body, timeout=<span class="num">30</span>)</pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — PDL integration notes</strong>
+    <ul>
+      <li>SQL mode (not DSL mode) — PDL's SQL API is more expressive and doesn't have the <code>minimum_should_match</code> limitations that caused earlier failures</li>
+      <li><code>scroll_token</code> is cached by query hash — re-using the token for page 2 doesn't re-bill the page 1 results</li>
+      <li>The proprietary <code>sonar_contacts</code> table is searched first — if results exist there, PDL is not called at all (zero cost)</li>
+      <li><code>esc()</code> escapes single quotes in filter values to prevent SQL injection in the PDL query string</li>
+      <li>Cache TTL is 1 hour — the same search terms within an hour return instantly without hitting PDL's API</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION M — COMPANY PREFILL
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section M · Enrichment Pipeline</div>
+  <h2>Company Prefill — Multi-Fallback Enrichment</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span></div>
+  <p>When a user types a company name and clicks "Prefill", the backend runs a waterfall of 4 strategies to find the LinkedIn URL, then validates the result by cross-checking the scraped LinkedIn website against the original website domain.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · /companies/prefill — LinkedIn URL discovery waterfall</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="cmt"># Fallback 1: Extract LinkedIn URL from company homepage HTML</span>
+html = requests.<span class="fn">get</span>(website_url, ...).<span class="fn">text</span>
+linkedin_url = <span class="fn">extract_linkedin_url_from_html</span>(html)
+
+<span class="cmt"># Fallback 2: Web search — "site:linkedin.com/company waycom.com"</span>
+<span class="kw">if not</span> linkedin_url:
+    linkedin_url = <span class="fn">search_linkedin_url_by_domain</span>(website_url)
+
+<span class="cmt"># Fallback 3: Scrape homepage for any /company/ href</span>
+<span class="kw">if not</span> linkedin_url:
+    html = <span class="fn">_fetch</span>(<span class="fn">f"https://{domain}"</span>)
+    li_match = re.<span class="fn">search</span>(<span class="str">r'linkedin\.com/company/([a-zA-Z0-9_-]+)'</span>, html)
+    <span class="kw">if</span> li_match: linkedin_url = <span class="fn">f"https://www.linkedin.com/company/{li_match.group(1)}/"</span>
+
+<span class="cmt"># Fallback 4: Guess slug from domain base (e.g. sequantix.com → /company/sequantix)</span>
+<span class="kw">if not</span> linkedin_url:
+    slug = domain.<span class="fn">split</span>(<span class="str">"."</span>)[<span class="num">0</span>]
+    guessed = <span class="fn">f"https://www.linkedin.com/company/{slug}/"</span>
+    probe = requests.<span class="fn">get</span>(guessed, timeout=<span class="num">8</span>, allow_redirects=<span class="cls">True</span>)
+    <span class="kw">if</span> probe.status_code == <span class="num">200</span> <span class="kw">and</span> <span class="str">"linkedin.com/company/"</span> <span class="kw">in</span> probe.url:
+        linkedin_url = probe.url
+
+<span class="cmt"># Domain cross-check: if LinkedIn website ≠ original website → discard</span>
+<span class="kw">if</span> <span class="fn">_root_domain</span>(website_url) != <span class="fn">_root_domain</span>(linkedin_data.<span class="fn">get</span>(<span class="str">"website"</span>)):
+    linkedin_url = <span class="cls">None</span>   <span class="cmt"># wrong company — don't pollute the record</span></pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — why this waterfall</strong>
+    <ul>
+      <li>Strategy 1 (HTML extraction) works for ~60% of companies that link their LinkedIn from their homepage footer</li>
+      <li>Strategy 2 (domain web search) is more precise than slug guessing — it finds pages that actually mention the domain</li>
+      <li>Strategy 3 (scrape) catches companies where the LinkedIn link is in the nav or scripts rather than HTML text</li>
+      <li>Strategy 4 (slug guess) is a last resort — many company slugs do match their domain (e.g. sequantix.com → /company/sequantix)</li>
+      <li>Domain cross-check is critical — without it, a slug guess could match the wrong company with the same name in a different country</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION N — EMAIL TRACKING
+  ═══════════════════════════════════════════ -->
+  <div class="section-label soc">Section N · SOC + Product</div>
+  <h2>Email Open &amp; Click Tracking</h2>
+  <div class="for-whom"><span class="for-tag soc">SOC</span><span class="for-tag all">Engineering</span></div>
+  <p>Email opens are tracked via a 1×1 transparent GIF pixel. Clicks are tracked via a redirect endpoint. Both update the lead's <code>engagement_score</code> in real-time — first open adds +3 points, first click adds +5.</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">backend/app/routes.py · /track/open/{tracking_id} — pixel tracker</span><span class="code-lang python">Python</span></div>
+    <pre class="code"><span class="kw">@router.get</span>(<span class="str">"/track/open/{tracking_id}"</span>)   <span class="cmt"># Public — no auth</span>
+<span class="kw">async def</span> <span class="fn">track_open</span>(tracking_id: <span class="cls">str</span>):
+    row = <span class="fn">_first</span>(supabase.table(<span class="str">"email_tracking"</span>)
+        .<span class="fn">select</span>(<span class="str">"open_count,first_opened_at,lead_id"</span>)
+        .<span class="fn">eq</span>(<span class="str">"tracking_id"</span>, tracking_id).<span class="fn">limit</span>(<span class="num">1</span>).<span class="fn">execute</span>())
+    <span class="kw">if</span> row:
+        prev_opens = row.<span class="fn">get</span>(<span class="str">"open_count"</span>) <span class="kw">or</span> <span class="num">0</span>
+        supabase.table(<span class="str">"email_tracking"</span>).<span class="fn">update</span>({
+            <span class="str">"open_count"</span>: prev_opens + <span class="num">1</span>,
+            <span class="str">"last_opened_at"</span>: now
+        }).<span class="fn">eq</span>(<span class="str">"tracking_id"</span>, tracking_id).<span class="fn">execute</span>()
+
+        <span class="cmt"># Boost engagement score only on FIRST open (+3 for intent signal)</span>
+        <span class="kw">if</span> prev_opens == <span class="num">0</span> <span class="kw">and</span> row.<span class="fn">get</span>(<span class="str">"lead_id"</span>):
+            cur_score = (cur <span class="kw">or</span> {}).<span class="fn">get</span>(<span class="str">"engagement_score"</span>) <span class="kw">or</span> <span class="num">0</span>
+            supabase.table(<span class="str">"leads"</span>).<span class="fn">update</span>({
+                <span class="str">"engagement_score"</span>: <span class="fn">min</span>(<span class="num">100</span>, cur_score + <span class="num">3</span>)
+            }).<span class="fn">eq</span>(<span class="str">"id"</span>, row[<span class="str">"lead_id"</span>]).<span class="fn">execute</span>()
+
+    <span class="cmt"># Always return the 1×1 GIF — even on error or unknown tracking_id</span>
+    <span class="kw">return</span> <span class="cls">Response</span>(content=<span class="var">_GIF_1x1</span>, media_type=<span class="str">"image/gif"</span>, headers={
+        <span class="str">"Cache-Control"</span>: <span class="str">"no-store, no-cache, must-revalidate"</span>,
+    })
+
+<span class="cmt"># Click tracker — records redirect + updates click_count + lead engagement_score</span>
+<span class="kw">@router.get</span>(<span class="str">"/track/click/{tracking_id}"</span>)
+<span class="kw">async def</span> <span class="fn">track_click</span>(tracking_id: <span class="cls">str</span>, url: <span class="cls">str</span>):
+    <span class="cmt"># ... update click_count, add +5 engagement on first click ...</span>
+    <span class="kw">return</span> <span class="cls">RedirectResponse</span>(url=url, status_code=<span class="num">302</span>)</pre>
+  </div>
+  <div class="explain soc">
+    <strong>SOC — privacy &amp; security considerations</strong>
+    <ul>
+      <li>Tracking endpoints are public (no auth) — they must be by design so email clients can load the pixel without auth tokens</li>
+      <li>The GIF is always returned regardless of whether the <code>tracking_id</code> exists — error handling never reveals valid vs. invalid IDs</li>
+      <li><code>Cache-Control: no-store</code> prevents email clients from caching the pixel (which would cause false "open" counts)</li>
+      <li>Click redirects expose the destination URL in the query string — sensitive URLs should not be tracked this way</li>
+      <li>Engagement score is capped at 100 and only incremented on the first open/click — prevents score inflation from multiple opens</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION O — FRONTEND API CLIENT
+  ═══════════════════════════════════════════ -->
+  <div class="section-label infra">Section O · Frontend</div>
+  <h2>Frontend API Client — Auth + TTL Cache</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span><span class="for-tag all">Engineering</span></div>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">dashboard/src/services/api.js · TTL cache + auto-refresh interceptor</span><span class="code-lang js">JavaScript</span></div>
+    <pre class="code"><span class="cmt">// ── TTL Cache — 30 second window prevents duplicate GET requests ──</span>
+<span class="kw">const</span> <span class="var">_cache</span> = <span class="kw">new</span> <span class="cls">Map</span>()
+<span class="kw">const</span> <span class="var">CACHE_TTL</span> = <span class="num">30_000</span>   <span class="cmt">// 30 seconds</span>
+
+<span class="kw">function</span> <span class="fn">_cacheGet</span>(key) {
+  <span class="kw">const</span> entry = <span class="var">_cache</span>.<span class="fn">get</span>(key)
+  <span class="kw">if</span> (!entry) <span class="kw">return</span> <span class="kw">null</span>
+  <span class="kw">if</span> (<span class="cls">Date</span>.<span class="fn">now</span>() - entry.ts > <span class="var">CACHE_TTL</span>) { <span class="var">_cache</span>.<span class="fn">delete</span>(key); <span class="kw">return</span> <span class="kw">null</span> }
+  <span class="kw">return</span> entry.data
+}
+<span class="kw">export function</span> <span class="fn">invalidateCache</span>(...keys) {
+  <span class="kw">if</span> (keys.length === <span class="num">0</span>) { <span class="var">_cache</span>.<span class="fn">clear</span>(); <span class="kw">return</span> }
+  <span class="kw">for</span> (<span class="kw">const</span> k <span class="kw">of</span> keys) <span class="var">_cache</span>.<span class="fn">delete</span>(k)    <span class="cmt">// targeted invalidation after mutations</span>
+}
+
+<span class="cmt">// ── Auto JWT refresh — handles 401 responses without log-out ──</span>
+<span class="kw">let</span> <span class="var">_refreshPromise</span> = <span class="kw">null</span>   <span class="cmt">// lock prevents concurrent refresh calls</span>
+
+api.interceptors.response.<span class="fn">use</span>(
+  (response) <span class="op">=></span> response,
+  <span class="kw">async</span> (error) <span class="op">=></span> {
+    <span class="kw">const</span> original = error.config
+    <span class="kw">if</span> (error.response?.status === <span class="num">401</span> <span class="op">&&</span> !original._retried) {
+      original._retried = <span class="kw">true</span>
+      <span class="kw">if</span> (!<span class="var">_refreshPromise</span>) {
+        <span class="cmt">// All concurrent 401s share ONE refresh call — prevents token refresh race</span>
+        <span class="var">_refreshPromise</span> = api.<span class="fn">post</span>(<span class="str">'/auth/refresh'</span>, { refresh_token: refreshToken })
+          .<span class="fn">finally</span>(() <span class="op">=></span> { <span class="var">_refreshPromise</span> = <span class="kw">null</span> })
+      }
+      <span class="kw">const</span> res = <span class="kw">await</span> <span class="var">_refreshPromise</span>
+      localStorage.<span class="fn">setItem</span>(<span class="str">'token'</span>, res.data.access_token)
+      original.headers.Authorization = <span class="fn">`Bearer ${res.data.access_token}`</span>
+      <span class="kw">return</span> api(original)   <span class="cmt">// retry original request with new token</span>
+    }
+  }
+)</pre>
+  </div>
+  <div class="explain infra">
+    <strong>Engineering — key design decisions</strong>
+    <ul>
+      <li>TTL cache: all GET requests are cached for 30 seconds — navigating between Companies and back doesn't re-fetch from the API</li>
+      <li><code>invalidateCache('/companies')</code> is called explicitly after create/delete/bulk operations — ensures the UI shows fresh data immediately after mutations</li>
+      <li>Refresh promise lock: if 5 simultaneous requests all 401, they all await the same single refresh call — prevents 5 parallel token refresh requests which would cause a race condition</li>
+      <li>The retry path sets <code>_retried = true</code> — prevents infinite refresh loops if the refresh token itself is expired</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════════════════════════════
+       SECTION P — SOUND EFFECTS
+  ═══════════════════════════════════════════ -->
+  <div class="section-label ai">Section P · Frontend UX</div>
+  <h2>Sound Effects Hook — Web Audio API</h2>
+  <div class="for-whom"><span class="for-tag ai">AI Team</span></div>
+  <p>Keyboard typing sounds and button click sounds are synthesised in real-time using the browser's Web Audio API — no audio files downloaded. The hook detects typable elements for keyboard sounds, and any element with <code>cursor: pointer</code> for click sounds (catches React event handlers that aren't on native <code>&lt;button&gt;</code> elements).</p>
+
+  <div class="code-section">
+    <div class="code-header"><span class="code-file">dashboard/src/hooks/useSoundEffects.js · mechanical key click</span><span class="code-lang js">JavaScript</span></div>
+    <pre class="code"><span class="kw">function</span> <span class="fn">playKeyClick</span>(ctx, vol = <span class="num">0.35</span>) {
+  <span class="kw">const</span> bufLen = ctx.sampleRate * <span class="num">0.025</span>   <span class="cmt">// 25ms of white noise</span>
+  <span class="kw">const</span> buf  = ctx.<span class="fn">createBuffer</span>(<span class="num">1</span>, bufLen, ctx.sampleRate)
+  <span class="kw">const</span> data = buf.<span class="fn">getChannelData</span>(<span class="num">0</span>)
+  <span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i < bufLen; i++) data[i] = (Math.<span class="fn">random</span>() * <span class="num">2</span> - <span class="num">1</span>)
+
+  <span class="kw">const</span> bp = ctx.<span class="fn">createBiquadFilter</span>()
+  bp.type = <span class="str">'bandpass'</span>
+  bp.frequency.value = <span class="num">2800</span> + Math.<span class="fn">random</span>() * <span class="num">600</span>  <span class="cmt">// 2.8–3.4kHz — "click" character</span>
+  bp.Q.value = <span class="num">1.4</span>
+
+  <span class="kw">const</span> gain = ctx.<span class="fn">createGain</span>()
+  gain.gain.<span class="fn">setValueAtTime</span>(vol, ctx.currentTime)
+  gain.gain.<span class="fn">exponentialRampToValueAtTime</span>(<span class="num">0.001</span>, ctx.currentTime + <span class="num">0.028</span>)
+
+  src.<span class="fn">connect</span>(bp) <span class="op">→</span> bp.<span class="fn">connect</span>(gain) <span class="op">→</span> gain.<span class="fn">connect</span>(ctx.destination)
+}
+
+<span class="cmt">// Clickable detection — catches React-handled divs, not just buttons</span>
+<span class="kw">function</span> <span class="fn">isClickable</span>(el) {
+  <span class="kw">if</span> (<span class="cls">CLICKABLE_TAGS</span>.<span class="fn">has</span>(el.tagName?.toLowerCase())) <span class="kw">return true</span>
+  <span class="kw">if</span> (window.<span class="fn">getComputedStyle</span>(el).cursor === <span class="str">'pointer'</span>) <span class="kw">return true</span>
+  <span class="kw">return false</span>
+}</pre>
+  </div>
+  <div class="explain ai">
+    <strong>AI Team — Web Audio implementation</strong>
+    <ul>
+      <li>White noise burst + bandpass filter at 2.8–3.4kHz mimics the frequency signature of a mechanical keyswitch — frequencies below 1kHz (thud) and above 4kHz (hiss) are cut</li>
+      <li>Frequency is randomised ±300Hz per keypress — prevents the "canned sound" effect of identical repeating sounds</li>
+      <li>Exponential gain ramp to 0.001 (not 0) — browsers disallow ramp-to-zero; 0.001 is below the threshold of human hearing</li>
+      <li><code>AudioContext</code> is lazily created on first user gesture — browsers block audio until a user interaction has occurred</li>
+      <li>Click detection via <code>getComputedStyle(el).cursor === 'pointer'</code> catches React onClick handlers on divs and spans that aren't native <code>&lt;button&gt;</code> elements</li>
+    </ul>
+  </div>
+
+  <div style="margin-top:52px; padding:24px; background:#09090b; border-radius:8px; text-align:center;">
+    <p style="font-size:11px; color:rgba(255,255,255,0.3); margin:0;">
+      Sonar Code Reference · SOC &amp; AI Teams · Confidential · © Shravan Omanakuttan
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

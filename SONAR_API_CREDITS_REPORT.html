@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sonar — API Usage by Feature</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --ink: #0f0f0f; --ink-2: #3a3a3a; --ink-3: #6b7280;
+      --rule: #e5e7eb;
+      --accent: #c5000a; --accent-light: #fff0f0;
+      --green: #059669; --green-light: #ecfdf5;
+      --blue: #2563eb; --blue-light: #eff6ff;
+      --purple: #7c3aed; --purple-light: #f5f3ff;
+      --amber: #d97706; --amber-light: #fffbeb;
+    }
+    body { font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.7; color: var(--ink); background: #fff; }
+
+    .cover {
+      height: 100vh; min-height: 580px; display: flex; flex-direction: column;
+      justify-content: center; padding: 72px 80px;
+      background: #09090b; color: #fff;
+      position: relative; overflow: hidden;
+    }
+    .cover::before { content:''; position:absolute; top:-80px; right:-80px; width:420px; height:420px; border-radius:50%; background:radial-gradient(circle,rgba(5,150,105,.25) 0%,transparent 70%); }
+    .cover-label { font-size:11px; font-weight:700; letter-spacing:.14em; color:#6ee7b7; text-transform:uppercase; margin-bottom:24px; }
+    .cover h1 { font-size:48px; font-weight:800; line-height:1.1; letter-spacing:-.03em; margin-bottom:12px; }
+    .cover h1 span { color:#6ee7b7; }
+    .cover-sub { font-size:16px; font-weight:300; color:rgba(255,255,255,.5); margin-bottom:48px; line-height:1.7; }
+    .cover-meta { display:flex; gap:40px; border-top:1px solid rgba(255,255,255,.1); padding-top:32px; }
+    .cover-meta-item label { display:block; font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.35); margin-bottom:4px; }
+    .cover-meta-item span { font-size:13px; font-weight:500; color:rgba(255,255,255,.85); }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 64px 80px; }
+    h2 { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 6px; }
+    h3 { font-size: 14px; font-weight: 700; margin: 0 0 4px; }
+    p { margin-bottom: 12px; color: var(--ink-2); }
+    hr { border: none; border-top: 2px solid var(--rule); margin: 40px 0; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #f3f4f6; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; color: var(--accent); }
+
+    /* FEATURE BLOCK */
+    .feature-block { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; margin-bottom: 28px; }
+    .feature-header { padding: 18px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--rule); }
+    .feature-header.companies { background: var(--blue-light); }
+    .feature-header.discovery { background: var(--purple-light); }
+    .feature-header.leads     { background: var(--green-light); }
+    .feature-icon { font-size: 22px; }
+    .feature-title { font-size: 16px; font-weight: 800; }
+    .feature-header.companies .feature-title { color: var(--blue); }
+    .feature-header.discovery .feature-title { color: var(--purple); }
+    .feature-header.leads     .feature-title { color: var(--green); }
+    .feature-desc { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+
+    /* COLUMN HEADER */
+    .col-header {
+      display: grid; grid-template-columns: 160px 1fr 150px 100px;
+      gap: 12px; padding: 8px 24px;
+      background: #18181b;
+      font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af;
+    }
+    .col-header span:last-child { text-align: right; }
+
+    /* API ROW */
+    .api-row {
+      display: grid; grid-template-columns: 160px 1fr 150px 100px;
+      gap: 12px; padding: 13px 24px; border-bottom: 1px solid var(--rule);
+      align-items: start; font-size: 12px;
+    }
+    .api-row:last-child { border-bottom: none; }
+    .api-row:nth-child(even) { background: #fafafa; }
+    .api-name { font-weight: 700; color: var(--ink); line-height: 1.4; }
+    .api-name small { display: block; font-size: 10px; font-weight: 500; color: var(--ink-3); margin-top: 2px; }
+    .api-what { color: var(--ink-2); line-height: 1.55; }
+    .api-limit { color: var(--ink-3); font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.6; }
+    .api-cost { font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; line-height: 1.5; }
+    .api-cost.free  { color: var(--green); }
+    .api-cost.paid  { color: var(--accent); }
+    .api-cost.usage { color: var(--amber); }
+    .api-cost small { display: block; font-size: 9px; font-weight: 400; color: var(--ink-3); font-family: 'Inter', sans-serif; }
+
+    /* TOTALS */
+    .totals-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 24px 0; }
+    .total-card { border-radius: 10px; padding: 20px; border: 1px solid var(--rule); }
+    .total-card.companies { border-top: 3px solid var(--blue); }
+    .total-card.discovery { border-top: 3px solid var(--purple); }
+    .total-card.leads     { border-top: 3px solid var(--green); }
+    .total-card-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+    .total-card-amount { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+    .total-card.companies .total-card-amount { color: var(--blue); }
+    .total-card.discovery .total-card-amount { color: var(--purple); }
+    .total-card.leads     .total-card-amount { color: var(--green); }
+    .total-card-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; line-height: 1.5; }
+
+    /* CALLOUT */
+    .callout { border-radius:8px; padding:16px 20px; margin:20px 0; border-left:3px solid; }
+    .callout.green { background:var(--green-light); border-color:var(--green); }
+    .callout.amber { background:var(--amber-light); border-color:var(--amber); }
+    .callout.blue  { background:var(--blue-light);  border-color:var(--blue); }
+    .callout strong { display:block; margin-bottom:4px; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .callout.green strong { color:var(--green); }
+    .callout.amber strong { color:var(--amber); }
+    .callout.blue  strong { color:var(--blue); }
+
+    /* INFRA TABLE */
+    .infra-block { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; margin-bottom: 28px; }
+
+    @media print { .cover { height:100vh; } }
+    @page { margin: 0; }
+  </style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-label">API Usage · Active Features</div>
+  <h1><span>Sonar</span><br>API Usage<br>by Feature</h1>
+  <div class="cover-sub">
+    Credit and token usage for the three actively used features:<br>
+    Companies · Discovery · Leads
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><label>Active Features</label><span>Companies · Discovery · Leads</span></div>
+    <div class="cover-meta-item"><label>Classification</label><span>Internal</span></div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- ══════════════════ COMPANIES ══════════════════ -->
+  <div class="feature-block">
+    <div class="feature-header companies">
+      <div class="feature-icon">🏢</div>
+      <div>
+        <h3 class="feature-title">Companies</h3>
+        <div class="feature-desc">Prefill · Website analysis · Similar companies (G2/Capterra) · Funding · GitHub/HN signals · DM generation · ProxyCurl enrichment</div>
+      </div>
+    </div>
+    <div class="col-header">
+      <span>API / Service</span><span>What it does in Companies</span><span>Pricing / Free tier</span><span>Cost per use</span>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Brave Search<small>Primary web search</small></div>
+      <div class="api-what">
+        Company prefill — searches for the company's LinkedIn URL by domain (<code>site:linkedin.com/company domain.com</code>).
+        Funding data — searches Crunchbase/TechCrunch for funding rounds.
+        Similar companies — queries <code>site:g2.com</code> and <code>site:capterra.com</code> to pull competitor names from search snippets.
+        G2 and Capterra are accessed through these Brave queries — no separate G2 API key needed.
+      </div>
+      <div class="api-limit">2,000 queries/month free.<br>~3–6 queries per company prefill.<br>~6 queries per similar companies fetch.</div>
+      <div class="api-cost free">$0.00<small>Within 2K free/mo</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Firecrawl<small>Web scraping</small></div>
+      <div class="api-what">
+        Website analysis — scrapes the company's homepage to extract tech stack (detects frameworks, analytics tools, CMS from HTML/JS).
+        Company prefill fallback — if Brave Search can't find the LinkedIn URL, Firecrawl scrapes the company homepage directly to look for a LinkedIn link in the HTML.
+        Called from <code>enrichment.py</code> and <code>company_prefill.py</code>.
+      </div>
+      <div class="api-limit">500 scrapes/month free.<br>$16/month Hobby: 3,000 scrapes.<br>~1–2 scrapes per company.</div>
+      <div class="api-cost usage">500 free<small>then $16/mo</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Groq LLM<small>llama-3.3-70b</small></div>
+      <div class="api-what">
+        Similar companies — single Groq call processes G2/Capterra search snippets and returns 10 competitors with LinkedIn slugs, employee ranges, SaaS classification, and followers count.
+        DM generation — writes a personalised LinkedIn cold outreach message using company context (industry, description, signals).
+        Company name extraction — uses llama-3.1-8b-instant for fast lightweight tasks like slug resolution.
+      </div>
+      <div class="api-limit">14,400 TPM free · 1K req/day.<br>~1,200 tokens per lookalike.<br>~800 tokens per DM.</div>
+      <div class="api-cost free">$0.00<small>Within free tier</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">ProxyCurl<small>LinkedIn data API</small></div>
+      <div class="api-what">
+        Company enrichment — fetches the company's LinkedIn profile data: employee headcount, follower count, company type (Public/Private/NGO), specialties, and HQ address. Called when user clicks "Enrich" on a company that has a LinkedIn URL.
+      </div>
+      <div class="api-limit">$0.01 per company lookup.<br>No free tier for company API.<br>~1 call per manual enrichment.</div>
+      <div class="api-cost paid">$0.01<small>per enrichment</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Google Maps<small>Places API</small></div>
+      <div class="api-what">
+        HQ geocoding — when a company's headquarters address is stored, Google Maps Places API converts it to latitude/longitude coordinates for the map view in the company panel. Called once per company, result cached in DB.
+      </div>
+      <div class="api-limit">$200 free credit/month.<br>$0.017 per geocode beyond credit.<br>~1 call per company (cached).</div>
+      <div class="api-cost free">$0.00<small>Within $200 credit</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">GitHub REST API<small>Daily cron · 02:00</small></div>
+      <div class="api-what">
+        Signals cron — daily at 02:00, fetches repos, star count, topics, recent commits, and language breakdown for each saved company's GitHub org. Results shown in the Company signals panel with timestamps.
+      </div>
+      <div class="api-limit">5,000 calls/hr (authenticated).<br>~2–5 calls per company per day.<br>Always free with auth token.</div>
+      <div class="api-cost free">$0.00<small>Always free</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">HackerNews Algolia<small>Weekly cron · Mon 03:00</small></div>
+      <div class="api-what">
+        Signals cron — weekly, searches HN for company name mentions, job posts ("Who is hiring?" threads), and Show HN entries. Results shown in the signals panel alongside GitHub signals.
+      </div>
+      <div class="api-limit">Unlimited. Public API.<br>No authentication required.</div>
+      <div class="api-cost free">$0.00<small>Always free</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">DuckDuckGo DDGS<small>Search fallback</small></div>
+      <div class="api-what">
+        Automatic fallback to DDGS when Brave Search is rate-limited or the API key is unavailable. Same queries, same pipelines — no configuration needed. Used in company prefill and the enrich-contacts cron.
+      </div>
+      <div class="api-limit">Unlimited. No key required.<br>Normal usage: ~0 calls<br>(Brave handles it).</div>
+      <div class="api-cost free">$0.00<small>Fallback only</small></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ DISCOVERY ══════════════════ -->
+  <div class="feature-block">
+    <div class="feature-header discovery">
+      <div class="feature-icon">🔍</div>
+      <div>
+        <h3 class="feature-title">Discovery</h3>
+        <div class="feature-desc">PDL Prospect Search · 700M+ people · SQL filters by title, company, location, size · scroll_token pagination</div>
+      </div>
+    </div>
+    <div class="col-header">
+      <span>API / Service</span><span>What it does in Discovery</span><span>Pricing / Free tier</span><span>Cost per use</span>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">People Data Labs (PDL)<small>Prospect search</small></div>
+      <div class="api-what">
+        Powers the entire Prospect page. User sets filters — job title keywords, company size, location, seniority — and the backend converts them into a PDL SQL query. Returns matching profiles with name, title, company, location, email (where available), LinkedIn URL, and work history.
+        Scroll token pagination means page 2, 3, etc. do not re-bill the page 1 matches.
+        The proprietary <code>sonar_contacts</code> table (built by the daily enrich cron) is always searched first — profiles found there are returned for free.
+      </div>
+      <div class="api-limit">$0.05–$0.10 per matched profile.<br>No free tier for person search.<br>Cached contacts served free.<br>Scroll token avoids re-billing.</div>
+      <div class="api-cost paid">$0.05–$0.10<small>per new match</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Sonar Contacts DB<small>Internal cache</small></div>
+      <div class="api-what">
+        Proprietary contact table (<code>sonar_contacts</code>) built by the daily <code>enrich-contacts</code> cron using Brave Search + Groq. Checked before every PDL query — profiles found here are served instantly at zero cost. Reduces PDL spend as the table grows.
+      </div>
+      <div class="api-limit">Free. Internal Supabase table.<br>Grows daily via cron.</div>
+      <div class="api-cost free">$0.00<small>Internal DB</small></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ LEADS ══════════════════ -->
+  <div class="feature-block">
+    <div class="feature-header leads">
+      <div class="feature-icon">👤</div>
+      <div>
+        <h3 class="feature-title">Leads</h3>
+        <div class="feature-desc">LinkedIn capture via extension · Email finding (Hunter → Apollo waterfall) · ICP scoring · DM generation · Engagement tracking</div>
+      </div>
+    </div>
+    <div class="col-header">
+      <span>API / Service</span><span>What it does in Leads</span><span>Pricing / Free tier</span><span>Cost per use</span>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Groq LLM<small>llama-3.3-70b</small></div>
+      <div class="api-what">
+        ICP scoring — given a lead's name, title, company, and about text alongside the user's ICP criteria, Groq returns a score 0–100 and a one-sentence reason using a structured rubric. Bulk scoring processes up to 50 leads per call.
+        DM generation — writes a personalised LinkedIn cold outreach message tailored to the lead's role and company context.
+      </div>
+      <div class="api-limit">14,400 TPM free · 1K req/day.<br>~120 tokens per ICP score.<br>~800 tokens per DM.</div>
+      <div class="api-cost free">$0.00<small>Within free tier</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Hunter.io<small>Email finder — primary</small></div>
+      <div class="api-what">
+        Email finding — given a lead's first name, last name, and company domain, Hunter returns the most likely verified email address and the domain's email pattern (e.g. <code>first.last@company.com</code>). Used on the Email Finder page and when enriching a lead record. First in the waterfall — tried before Apollo.
+      </div>
+      <div class="api-limit">25 searches/month free.<br>Starter: $49/month · 500 searches.<br>Growth: $99/month · 2,500 searches.</div>
+      <div class="api-cost usage">25 free/mo<small>then $49/mo</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Apollo.io<small>Email finder — fallback</small></div>
+      <div class="api-what">
+        Email finding fallback — automatically tried when Hunter.io returns no result for a lead. Apollo has a broader database of direct-dial numbers and emails, especially for US companies. Part of the waterfall: Hunter → Apollo → pattern-based guess.
+      </div>
+      <div class="api-limit">50 email exports/month free.<br>Basic: $49/month · 1,200 exports.<br>Tried only when Hunter fails.</div>
+      <div class="api-cost usage">50 free/mo<small>then $49/mo</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">ProxyCurl<small>LinkedIn person data</small></div>
+      <div class="api-what">
+        Deep lead enrichment — fetches the lead's full LinkedIn profile: current and past work history, education, skills, connections count, and profile photo URL. Called when user clicks "Deep Enrich" on a lead. More comprehensive than what the extension captures from the DOM.
+      </div>
+      <div class="api-limit">$0.01 per person lookup.<br>No free tier for person API.</div>
+      <div class="api-cost paid">$0.01<small>per deep enrich</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Chrome Extension<small>LinkedIn DOM scraper</small></div>
+      <div class="api-what">
+        Captures lead data from LinkedIn profile pages — name, headline, current title, company, location, and profile URL — by reading the page DOM. User clicks "Save to Sonar" in the popup or inline button. No external API call — runs entirely in the browser.
+      </div>
+      <div class="api-limit">Free. MV3 content script.<br>No external calls.</div>
+      <div class="api-cost free">$0.00<small>Browser only</small></div>
+    </div>
+
+    <div class="api-row">
+      <div class="api-name">Email Tracking Pixel<small>Open + click tracking</small></div>
+      <div class="api-what">
+        Self-hosted tracking — the backend serves a 1×1 GIF pixel embedded in sent emails. When a recipient opens the email, the pixel loads and the backend records the open event, incrementing the lead's <code>engagement_score</code> by +3 on first open and +5 on first link click. No external API.
+      </div>
+      <div class="api-limit">Free. Self-hosted endpoint.<br><code>/track/open/{id}</code> and <code>/track/click/{id}</code>.</div>
+      <div class="api-cost free">$0.00<small>Self-hosted</small></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ INFRASTRUCTURE ══════════════════ -->
+  <p style="font-size:10px;color:var(--ink-3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;">Infrastructure — shared across all features</p>
+  <div class="infra-block">
+    <div class="col-header"><span>Service</span><span>Role</span><span>Free tier</span><span>Cost</span></div>
+    <div class="api-row">
+      <div class="api-name">Supabase<small>Database + Auth</small></div>
+      <div class="api-what">Primary database for all leads, companies, contacts, signals, sequences, and audit logs. Supabase Auth issues and verifies all JWTs. Row-level security enforces per-user data isolation at the database layer.</div>
+      <div class="api-limit">500MB DB free.<br>Currently &lt;50MB used.</div>
+      <div class="api-cost free">$0.00</div>
+    </div>
+    <div class="api-row">
+      <div class="api-name">Vercel<small>Hosting + Cron</small></div>
+      <div class="api-what">Hosts the FastAPI backend (Python 3.14, ASGI) and React dashboard (Vite SPA) via Fluid Compute. Dispatches all cron jobs on schedule. 300s max function execution per request.</div>
+      <div class="api-limit">Hobby plan free.<br>100GB bandwidth/month.</div>
+      <div class="api-cost free">$0.00</div>
+    </div>
+    <div class="api-row">
+      <div class="api-name">PostHog<small>Product analytics</small></div>
+      <div class="api-what">Tracks every user action (page views, button clicks, feature usage) and every AI inference call (<code>$ai_generation</code> event with token counts and latency per Groq/Gemini call). Used for cost analysis, funnel analysis, and feature adoption.</div>
+      <div class="api-limit">1M events/month free.</div>
+      <div class="api-cost free">$0.00</div>
+    </div>
+    <div class="api-row">
+      <div class="api-name">Sentry<small>Error monitoring</small></div>
+      <div class="api-what">Backend error monitoring — captures all unhandled exceptions in FastAPI with stack traces, request context, and user ID. Always on (traces_sample_rate = 0.1, profiles_sample_rate = 0.05).</div>
+      <div class="api-limit">5K errors/month free.</div>
+      <div class="api-cost free">$0.00</div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ══════════════════ COST SUMMARY ══════════════════ -->
+  <p style="font-size:10px;color:var(--ink-3);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;">Cost Summary by Feature</p>
+  <div class="totals-grid">
+    <div class="total-card companies">
+      <div class="total-card-label">Companies</div>
+      <div class="total-card-amount">~$0.01</div>
+      <div class="total-card-note">Per company enriched via ProxyCurl. Brave Search, Groq, GitHub, HN, Firecrawl (first 500) and Google Maps all free. ProxyCurl $0.01 per manual enrichment.</div>
+    </div>
+    <div class="total-card discovery">
+      <div class="total-card-label">Discovery (PDL)</div>
+      <div class="total-card-amount">$0.05–$0.10</div>
+      <div class="total-card-note">Per new PDL matched profile. Profiles cached in sonar_contacts are returned free. Scroll pagination avoids re-billing on next pages.</div>
+    </div>
+    <div class="total-card leads">
+      <div class="total-card-label">Leads</div>
+      <div class="total-card-amount">~$0.01</div>
+      <div class="total-card-note">Per lead enriched via ProxyCurl deep enrich. ICP scoring and DMs are free (Groq). Hunter.io / Apollo have 25–50 free email finds before paid tiers.</div>
+    </div>
+  </div>
+
+  <div class="callout green">
+    <strong>What costs nothing at all</strong>
+    Groq LLM (all AI features), GitHub signals (daily cron), HackerNews signals (weekly cron), Chrome Extension capture, email open/click tracking, Google Maps geocoding, DuckDuckGo fallback, PostHog analytics, Sentry monitoring, Supabase DB, and Vercel hosting — all $0.00 within current usage.
+  </div>
+
+  <div class="callout amber">
+    <strong>What costs per use</strong>
+    ProxyCurl ($0.01 per company or person enriched) and PDL ($0.05–$0.10 per new prospect match) are the only per-call costs. Firecrawl is free for the first 500 scrapes/month. Hunter.io and Apollo.io are free for the first 25–50 email finds per month before hitting paid tiers.
+  </div>
+
+  <div style="margin-top:48px; padding:24px; background:#09090b; border-radius:8px; text-align:center;">
+    <p style="font-size:11px; color:rgba(255,255,255,.3); margin:0;">
+      Sonar API Usage Report · Companies · Discovery · Leads · Confidential · © Shravan Omanakuttan
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
