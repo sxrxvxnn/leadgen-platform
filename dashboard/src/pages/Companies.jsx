@@ -1710,7 +1710,20 @@ export default function Companies() {
       'Email Pattern','Revenue Estimate','Traffic',
       'Tech Stack','Open Roles','Recent News','Social Profiles','Reviews','Enriched At'
     ]
-    const rows = companies.map(c => cols.map(k => escape(c[k])).join(','))
+    // Sort: pipeline stage → classification tier → followers desc → name asc
+    const STATUS_RANK = { qualified: 0, contacted: 1, new: 2 }
+    const CLASS_RANK  = { Target: 0, Potential: 1, Monitor: 2 }
+    const sorted = [...companies].sort((a, b) => {
+      const sr = (STATUS_RANK[a.prospect_status] ?? 9) - (STATUS_RANK[b.prospect_status] ?? 9)
+      if (sr !== 0) return sr
+      const cr = (CLASS_RANK[a.classification] ?? 9) - (CLASS_RANK[b.classification] ?? 9)
+      if (cr !== 0) return cr
+      const fb = (Number(b.followers) || 0) - (Number(a.followers) || 0)
+      if (fb !== 0) return fb
+      return (a.name || '').localeCompare(b.name || '')
+    })
+
+    const rows = sorted.map(c => cols.map(k => escape(c[k])).join(','))
     const csv = [headers.join(','), ...rows].join('\n')
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
