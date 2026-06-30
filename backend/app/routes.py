@@ -1376,65 +1376,147 @@ async def detect_company_signals(
 
     supabase.table("company_signals").delete().eq("company_id", company_id).eq("user_id", user_id).execute()
 
+    import json as _json, re as _re
+
+    website  = co.get("website", "") or ""
+    industry = co.get("industry", "") or ""
+    linkedin = co.get("linkedin_url", "") or ""
+
+    # ── 1. Web search: 8 targeted queries across hiring / funding / news / product ──
     raw_results = []
     try:
-        from .company_prefill import _web_search
         queries = [
-            f'"{name}" hiring security OR CISO OR compliance',
-            f'"{name}" funding OR investment OR "Series A" OR "Series B"',
-            f'"{name}" data breach OR regulatory OR GDPR OR ISO27001',
+            f'"{name}" hiring site:linkedin.com/jobs',
+            f'"{name}" "we are hiring" OR "join our team" OR "open roles"',
+            f'"{name}" funding OR "Series A" OR "Series B" OR "raised" site:techcrunch.com OR site:venturebeat.com',
+            f'"{name}" funding OR investment site:crunchbase.com',
+            f'"{name}" partnership OR acquisition OR acquired OR merger',
+            f'"{name}" "product launch" OR "new feature" OR "announcing"',
+            f'"{name}" expansion OR "new market" OR "international"',
+            f'"{name}" leadership OR "new CEO" OR "new CTO" OR "appointed" OR "joins as"',
         ]
         for q in queries:
-            for r in _web_search(q, count=4):
-                raw_results.append({
-                    "title": r.get("title", ""),
-                    "body": r.get("body", ""),
-                    "url": r.get("href", ""),
-                })
+            hits = _lws(q, count=4)
+            for r in hits:
+                url  = r.get("href") or r.get("url") or ""
+                body = (r.get("body") or r.get("description") or "").strip()
+                title = (r.get("title") or "").strip()
+                if body and len(body) > 20:
+                    raw_results.append({"title": title, "body": body, "url": url})
+            if len(raw_results) >= 30:
+                break
     except Exception:
         pass
 
-    search_ctx = ""
-    for r in raw_results[:10]:
-        search_ctx += f"- {r['title']}: {r['body'][:180]}\n"
+    # ── 2. GitHub: look up the company's org directly for repo/activity signals ──
+    github_ctx = ""
+    try:
+        _gh_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITHUB_COLLAB_TOKEN", "")
+        _gh_headers = {"Accept": "application/vnd.github.v3+json"}
+        if _gh_token:
+            _gh_headers["Authorization"] = f"token {_gh_token}"
 
-    prompt = f"""You are a senior B2B sales intelligence analyst at Sonar. Your job is to identify specific, credible buying signals that indicate a company may be ready to purchase a B2B lead intelligence and outbound automation tool.
+        # Derive org slug from LinkedIn URL or website
+        _org_slug = ""
+        if linkedin:
+            _m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin)
+            if _m:
+                _org_slug = _m.group(1).replace("-", "")
+        if not _org_slug and website:
+            _org_slug = _re.sub(r'^https?://(www\.)?', '', website).split('/')[0].split('.')[0]
+
+        if _org_slug:
+            # Search GitHub for the org's repos
+            _gh_res = requests.get(
+                "https://api.github.com/search/repositories",
+                params={"q": f"org:{_org_slug}", "sort": "updated", "per_page": 5},
+                headers=_gh_headers, timeout=8,
+            )
+            if _gh_res.status_code == 200:
+                _repos = _gh_res.json().get("items", [])
+                if _repos:
+                    _total_stars = sum(r.get("stargazers_count", 0) for r in _repos)
+                    _recent = _repos[0]
+                    github_ctx = (
+                        f"GitHub org '{_org_slug}': {len(_repos)} repos found. "
+                        f"Most recently updated: '{_recent.get('name')}' "
+                        f"({_recent.get('stargazers_count',0)} stars, "
+                        f"last pushed {(_recent.get('pushed_at','') or '')[:10]}). "
+                        f"Total stars across top repos: {_total_stars}."
+                    )
+    except Exception:
+        pass
+
+    # ── 3. HackerNews Algolia: search for company mentions in stories ──
+    hn_ctx = ""
+    try:
+        _hn_res = requests.get(
+            "https://hn.algolia.com/api/v1/search",
+            params={"query": name, "tags": "story", "hitsPerPage": 5},
+            timeout=8,
+        )
+        if _hn_res.status_code == 200:
+            _hn_hits = _hn_res.json().get("hits", [])
+            if _hn_hits:
+                _hn_lines = []
+                for h in _hn_hits[:3]:
+                    t = (h.get("title") or "").strip()
+                    pts = h.get("points", 0)
+                    url = f"https://news.ycombinator.com/item?id={h.get('objectID','')}"
+                    if t:
+                        _hn_lines.append(f"- [{pts} pts] {t} ({url})")
+                hn_ctx = "HackerNews mentions:\n" + "\n".join(_hn_lines)
+    except Exception:
+        pass
+
+    # ── Build context string ──
+    search_ctx = ""
+    for r in raw_results[:20]:
+        search_ctx += f"[{r['url']}] {r['title']}: {r['body'][:200]}\n"
+
+    extra_ctx = "\n".join(filter(None, [github_ctx, hn_ctx]))
+
+    full_ctx = "\n".join(filter(None, [search_ctx, extra_ctx]))
+
+    prompt = f"""You are a senior B2B sales intelligence analyst. Identify real, evidence-backed buying signals for "{name}".
 
 COMPANY PROFILE:
-Name: {name}
-Industry: {co.get('industry') or 'Unknown'}
-Size: {co.get('size') or 'Unknown'}
-Description: {(co.get('description') or '')[:300]}
+- Name: {name}
+- Industry: {industry or 'Unknown'}
+- Size: {co.get('size') or 'Unknown'}
+- Description: {(co.get('description') or '')[:300]}
 
-{"RECENT INTELLIGENCE:\n" + search_ctx if search_ctx else "Note: No recent search data — infer signals from industry norms, company size, and description."}
+EVIDENCE (web search + GitHub + HackerNews):
+{full_ctx[:3000] if full_ctx else "NO DATA FOUND"}
 
-SIGNAL TYPES TO LOOK FOR:
-- hiring: Sales, marketing, SDR, or RevOps job openings indicate active growth
-- funding: Recent funding rounds = new budget to spend
-- compliance: SOC2, ISO, GDPR work signals security tool purchases
-- growth: Expansion into new markets, product launches, partnerships
-- news: Leadership changes, acquisitions, or press coverage showing momentum
+SIGNAL TYPES:
+- hiring: Sales/SDR/RevOps/marketing job openings = active growth, new headcount budget
+- funding: Recent funding round = new spend budget approved
+- growth: Product launch, new market, partnership, acquisition = scaling activity
+- news: Press coverage, leadership change, public milestone = company momentum
+- github: Recent open-source activity, repo stars, active engineering = tech investment signal
 
-RULES:
-- Each signal must be specific to THIS company, not generic industry advice
-- relevance_score: 85-100 = strong signal, 60-84 = moderate, 40-59 = weak
-- title: punchy, under 70 chars, state the signal clearly
-- description: 1-2 sentences explaining WHY this is a buying signal for a lead intelligence tool
-- Return exactly 3-5 signals, ordered by relevance_score descending
+STRICT RULES:
+- ONLY include signals that have direct evidence in the search results above
+- If NO evidence exists for a signal type, do NOT invent one — omit it entirely
+- source_url must be a real URL from the evidence above, not empty
+- title: under 65 chars, state the actual signal (e.g. "Hiring 3 SDRs on LinkedIn")
+- description: 1-2 sentences — state the specific evidence and why it signals buying intent
+- relevance_score: 85-100 = strong (direct evidence), 60-84 = moderate, 40-59 = weak
+- Return 3-5 signals if evidence supports them, fewer if not — never fabricate
 
-Return ONLY a valid JSON array (no markdown, no explanation):
+Return ONLY a valid JSON array:
 [
   {{
     "signal_type": "hiring",
-    "title": "<signal title under 70 chars>",
-    "description": "<1-2 sentences on why this matters>",
+    "title": "<specific signal title>",
+    "description": "<what the evidence shows and why it matters>",
     "relevance_score": <integer 40-100>,
-    "source_url": ""
+    "source_url": "<real URL from evidence above>"
   }}
 ]"""
 
-    import json as _json, re as _re
-    raw = _call_ai(prompt, max_tokens=900, user_id=user_id, feature="company_signals")
+    raw = _call_ai(prompt, max_tokens=1100, user_id=user_id, feature="company_signals")
     signals = []
     try:
         m = _re.search(r'\[.*?\]', raw, _re.DOTALL)
@@ -1444,18 +1526,18 @@ Return ONLY a valid JSON array (no markdown, no explanation):
         pass
 
     to_insert = []
-    valid_types = {"hiring", "funding", "compliance", "news", "growth"}
+    valid_types = {"hiring", "funding", "compliance", "news", "growth", "github"}
     for s in signals[:6]:
         stype = s.get("signal_type", "news")
         if stype not in valid_types:
             stype = "news"
         to_insert.append({
-            "user_id": user_id,
-            "company_id": company_id,
-            "signal_type": stype,
-            "title": str(s.get("title", ""))[:200],
-            "description": str(s.get("description", ""))[:500],
-            "source_url": str(s.get("source_url", ""))[:500],
+            "user_id":        user_id,
+            "company_id":     company_id,
+            "signal_type":    stype,
+            "title":          str(s.get("title", ""))[:200],
+            "description":    str(s.get("description", ""))[:500],
+            "source_url":     str(s.get("source_url", ""))[:500],
             "relevance_score": min(100, max(0, int(s.get("relevance_score", 50)))),
         })
 
