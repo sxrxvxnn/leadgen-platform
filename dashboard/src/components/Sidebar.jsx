@@ -120,6 +120,18 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState('')
   const [unreadNotifs, setUnreadNotifs] = useState(0)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile) setMobileOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   useEffect(() => {
     function update() {
@@ -157,18 +169,51 @@ export default function Sidebar() {
     : (user?.email?.[0] || '?').toUpperCase()
 
   return (
+    <>
+    {/* Mobile hamburger button */}
+    {isMobile && (
+      <button
+        onClick={() => setMobileOpen(v => !v)}
+        style={{
+          position: 'fixed', top: 12, left: 12, zIndex: 200,
+          width: 36, height: 36, borderRadius: 6,
+          background: 'var(--bg)', border: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: 'var(--text)',
+        }}
+        aria-label="Toggle menu"
+      >
+        {mobileOpen ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M3 12h18M3 6h18M3 18h18" />
+          </svg>
+        )}
+      </button>
+    )}
+    {/* Overlay backdrop */}
+    {isMobile && mobileOpen && (
+      <div onClick={() => setMobileOpen(false)} style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99,
+      }} />
+    )}
     <aside style={{
       width: 220,
       flexShrink: 0,
       height: '100vh',
-      position: 'sticky',
+      position: isMobile ? 'fixed' : 'sticky',
       top: 0,
+      left: isMobile ? (mobileOpen ? 0 : -220) : 0,
       background: 'var(--bg)',
       borderRight: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
       overflowY: 'auto',
-      zIndex: 50,
+      zIndex: 100,
+      transition: isMobile ? 'left 0.22s ease' : 'none',
     }}>
 
       {/* Logo */}
@@ -247,5 +292,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

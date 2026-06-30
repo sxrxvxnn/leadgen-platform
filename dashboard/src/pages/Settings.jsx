@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { motion } from 'motion/react'
-import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, checkDomainHealth, getWarmupConfig, saveWarmupConfig } from '../services/api'
+import { getSmtpConfig, saveSmtpConfig, deleteSmtpConfig, getCalConfig, saveCalConfig, checkDomainHealth, getWarmupConfig, saveWarmupConfig, getWorkerHealth, getCronStatus } from '../services/api'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
@@ -11,9 +11,10 @@ const SECTIONS = [
   { id: 'warmup',     num: '04', label: 'Email Warm-up' },
   { id: 'scheduler',  num: '05', label: 'Meeting Scheduler' },
   { id: 'webhooks',   num: '06', label: 'Webhooks' },
-  { id: 'api-keys',   num: '07', label: 'API Keys' },
-  { id: 'privacy',    num: '08', label: 'Privacy' },
-  { id: 'terms',      num: '09', label: 'Terms' },
+  { id: 'api-keys',      num: '07', label: 'API Keys' },
+  { id: 'system-health', num: '08', label: 'System Health' },
+  { id: 'privacy',       num: '09', label: 'Privacy' },
+  { id: 'terms',         num: '10', label: 'Terms' },
 ]
 
 const WEBHOOK_EVENT_LABELS = {
@@ -116,16 +117,26 @@ export default function Settings() {
   }
 
   const sectionRefs = {
-    profile:    useRef(null),
-    email:      useRef(null),
-    automation: useRef(null),
-    warmup:     useRef(null),
-    scheduler:  useRef(null),
-    webhooks:   useRef(null),
-    'api-keys': useRef(null),
-    privacy:    useRef(null),
-    terms:      useRef(null),
+    profile:         useRef(null),
+    email:           useRef(null),
+    automation:      useRef(null),
+    warmup:          useRef(null),
+    scheduler:       useRef(null),
+    webhooks:        useRef(null),
+    'api-keys':      useRef(null),
+    'system-health': useRef(null),
+    privacy:         useRef(null),
+    terms:           useRef(null),
   }
+
+  // System health state
+  const [workerHealth, setWorkerHealth] = useState(null)
+  const [cronRows,     setCronRows]     = useState([])
+
+  useEffect(() => {
+    getWorkerHealth().then(r => setWorkerHealth(r.data)).catch(() => {})
+    getCronStatus().then(r => setCronRows(r.data || [])).catch(() => {})
+  }, [])
 
   // Meeting scheduler state
   const [calLink,    setCalLink]    = useState('')
@@ -829,7 +840,72 @@ export default function Settings() {
             )}
           </section>
 
-          {/* 08 — Privacy */}
+          {/* 08 — System Health */}
+          <section ref={sectionRefs['system-health']} style={{ ...s.section }}>
+            <SectionHeader num="08" title="System Health" />
+            <p style={s.sectionHint}>Live status of the background worker and scheduled cron jobs.</p>
+
+            {/* Worker health */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                background: workerHealth?.status === 'healthy' ? '#22c55e'
+                  : workerHealth?.status === 'stale' ? '#f59e0b'
+                  : workerHealth ? '#ef4444' : 'var(--border)',
+              }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                {!workerHealth && 'Loading worker status…'}
+                {workerHealth?.status === 'healthy' && `Worker healthy — last seen ${Math.round(workerHealth.age_seconds)}s ago · watching ${workerHealth.queues_watched ?? '?'} queues`}
+                {workerHealth?.status === 'stale'   && `Worker stale — last seen ${Math.round(workerHealth.age_seconds)}s ago`}
+                {workerHealth?.status === 'down'    && 'Worker down — no heartbeat received'}
+              </span>
+              <button onClick={() => getWorkerHealth().then(r => setWorkerHealth(r.data)).catch(() => {})}
+                style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, padding: '4px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                Refresh
+              </button>
+            </div>
+
+            {/* Cron jobs table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    {['Job', 'Last Run', 'Status', 'Duration', 'Error'].map(h => (
+                      <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 400, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: 10 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronRows.length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: '14px 10px', color: 'var(--text-muted)', textAlign: 'center' }}>No cron data yet — jobs log on first run.</td></tr>
+                  )}
+                  {cronRows.map(row => (
+                    <tr key={row.cron_name} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px 10px', color: 'var(--text)' }}>{row.cron_name.replace(/_/g, ' ')}</td>
+                      <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>
+                        {row.last_run_at ? new Date(row.last_run_at).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{
+                          padding: '2px 7px', borderRadius: 4, fontSize: 10,
+                          background: row.status === 'ok' ? 'rgba(34,197,94,0.1)' : row.status === 'error' ? 'rgba(239,68,68,0.1)' : 'var(--surface)',
+                          color: row.status === 'ok' ? '#22c55e' : row.status === 'error' ? '#ef4444' : 'var(--text-muted)',
+                        }}>{row.status || '—'}</span>
+                      </td>
+                      <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>
+                        {row.duration_ms != null ? `${row.duration_ms}ms` : '—'}
+                      </td>
+                      <td style={{ padding: '8px 10px', color: '#ef4444', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {row.error || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* 09 — Privacy */}
           <section ref={sectionRefs.privacy} style={{ ...s.section }}>
             <SectionHeader num="06" title="Privacy Policy" />
             <p style={s.sectionHint}>How Sonar collects, uses, and protects your data. Effective June 16, 2026.</p>
