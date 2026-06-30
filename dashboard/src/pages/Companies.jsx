@@ -3479,227 +3479,232 @@ export default function Companies() {
   const needsDataCount = companies.filter((c) => getMissingFields(c).length > 0).length
 
   function exportCompaniesCSV() {
-    import('xlsx-js-style').then((mod) => {
-      const XLSX = mod.default || mod
+    import('xlsx-js-style')
+      .then((mod) => {
+        const XLSX = mod.default || mod
 
-      const scalar = (v) => {
-        if (v === null || v === undefined) return ''
-        if (typeof v === 'object') {
-          if (Array.isArray(v))
-            return v
-              .map((item) =>
-                typeof item === 'object' ? item.title || item.url || JSON.stringify(item) : item
-              )
+        const scalar = (v) => {
+          if (v === null || v === undefined) return ''
+          if (typeof v === 'object') {
+            if (Array.isArray(v))
+              return v
+                .map((item) =>
+                  typeof item === 'object' ? item.title || item.url || JSON.stringify(item) : item
+                )
+                .join('; ')
+            return Object.entries(v)
+              .map(([k, val]) => `${k}: ${typeof val === 'object' ? JSON.stringify(val) : val}`)
               .join('; ')
-          return Object.entries(v)
-            .map(([k, val]) => `${k}: ${typeof val === 'object' ? JSON.stringify(val) : val}`)
-            .join('; ')
+          }
+          return String(v)
         }
-        return String(v)
-      }
 
-      // ── Sort ──────────────────────────────────────────────────────
-      const STATUS_RANK = { qualified: 0, contacted: 1, new: 2 }
-      const CLASS_RANK = { Target: 0, Potential: 1, Monitor: 2 }
-      const sorted = [...companies].sort((a, b) => {
-        const sr = (STATUS_RANK[a.prospect_status] ?? 9) - (STATUS_RANK[b.prospect_status] ?? 9)
-        if (sr !== 0) return sr
-        const cr = (CLASS_RANK[a.classification] ?? 9) - (CLASS_RANK[b.classification] ?? 9)
-        if (cr !== 0) return cr
-        const fb = (Number(b.followers) || 0) - (Number(a.followers) || 0)
-        if (fb !== 0) return fb
-        return (a.name || '').localeCompare(b.name || '')
-      })
+        // ── Sort ──────────────────────────────────────────────────────
+        const STATUS_RANK = { qualified: 0, contacted: 1, new: 2 }
+        const CLASS_RANK = { Target: 0, Potential: 1, Monitor: 2 }
+        const sorted = [...companies].sort((a, b) => {
+          const sr = (STATUS_RANK[a.prospect_status] ?? 9) - (STATUS_RANK[b.prospect_status] ?? 9)
+          if (sr !== 0) return sr
+          const cr = (CLASS_RANK[a.classification] ?? 9) - (CLASS_RANK[b.classification] ?? 9)
+          if (cr !== 0) return cr
+          const fb = (Number(b.followers) || 0) - (Number(a.followers) || 0)
+          if (fb !== 0) return fb
+          return (a.name || '').localeCompare(b.name || '')
+        })
 
-      // ── Column definitions ────────────────────────────────────────
-      const COLS = [
-        { label: 'Name', key: 'name', w: 32 },
-        { label: 'Classification', key: 'classification', w: 16 },
-        { label: 'Status', key: 'prospect_status', w: 14 },
-        { label: 'Industry', key: 'industry', w: 22 },
-        { label: 'Type', key: 'company_type', w: 14 },
-        { label: 'HQ', key: 'headquarters', w: 24 },
-        { label: 'Employees', key: 'size', w: 12 },
-        { label: 'Followers', key: 'followers', w: 12 },
-        { label: 'Website', key: 'website', w: 34 },
-        { label: 'LinkedIn URL', key: 'linkedin_url', w: 34 },
-        { label: 'Compliance', key: 'compliance', w: 14 },
-        { label: 'Revenue/Funding', key: 'revenue', w: 18 },
-        { label: 'Email Pattern', key: 'email_pattern', w: 18 },
-        { label: 'Tech Stack', key: 'tech_stack', w: 32 },
-        { label: 'Description', key: 'description', w: 52 },
-        { label: 'Notes', key: 'notes', w: 30 },
-        { label: 'Enriched At', key: 'enriched_at', w: 18 },
-      ]
+        // ── Column definitions ────────────────────────────────────────
+        const COLS = [
+          { label: 'Name', key: 'name', w: 32 },
+          { label: 'Classification', key: 'classification', w: 16 },
+          { label: 'Status', key: 'prospect_status', w: 14 },
+          { label: 'Industry', key: 'industry', w: 22 },
+          { label: 'Type', key: 'company_type', w: 14 },
+          { label: 'HQ', key: 'headquarters', w: 24 },
+          { label: 'Employees', key: 'size', w: 12 },
+          { label: 'Followers', key: 'followers', w: 12 },
+          { label: 'Website', key: 'website', w: 34 },
+          { label: 'LinkedIn URL', key: 'linkedin_url', w: 34 },
+          { label: 'Compliance', key: 'compliance', w: 14 },
+          { label: 'Revenue/Funding', key: 'revenue', w: 18 },
+          { label: 'Email Pattern', key: 'email_pattern', w: 18 },
+          { label: 'Tech Stack', key: 'tech_stack', w: 32 },
+          { label: 'Description', key: 'description', w: 52 },
+          { label: 'Notes', key: 'notes', w: 30 },
+          { label: 'Enriched At', key: 'enriched_at', w: 18 },
+        ]
 
-      // ── Style helpers ─────────────────────────────────────────────
-      const HDR_S = {
-        fill: { fgColor: { rgb: 'E7000B' }, patternType: 'solid' },
-        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
-        alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
-        border: {
-          bottom: { style: 'medium', color: { rgb: '9D0010' } },
-          right: { style: 'thin', color: { rgb: 'CC0000' } },
-        },
-      }
-      const DATA_S = (stripe) => ({
-        fill: stripe
-          ? { fgColor: { rgb: 'F5F5F5' }, patternType: 'solid' }
-          : { fgColor: { rgb: 'FFFFFF' }, patternType: 'solid' },
-        font: { sz: 10, name: 'Calibri' },
-        alignment: { vertical: 'center', wrapText: false },
-        border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
-      })
-      const CLASS_S = {
-        Target: {
-          fill: { fgColor: { rgb: 'FDE8E8' }, patternType: 'solid' },
-          font: { bold: true, color: { rgb: '9D0010' }, sz: 10, name: 'Calibri' },
-          alignment: { horizontal: 'center', vertical: 'center' },
+        // ── Style helpers ─────────────────────────────────────────────
+        const HDR_S = {
+          fill: { fgColor: { rgb: 'E7000B' }, patternType: 'solid' },
+          font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11, name: 'Calibri' },
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: false },
+          border: {
+            bottom: { style: 'medium', color: { rgb: '9D0010' } },
+            right: { style: 'thin', color: { rgb: 'CC0000' } },
+          },
+        }
+        const DATA_S = (stripe) => ({
+          fill: stripe
+            ? { fgColor: { rgb: 'F5F5F5' }, patternType: 'solid' }
+            : { fgColor: { rgb: 'FFFFFF' }, patternType: 'solid' },
+          font: { sz: 10, name: 'Calibri' },
+          alignment: { vertical: 'center', wrapText: false },
           border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
-        },
-        Potential: {
-          fill: { fgColor: { rgb: 'FFF3CD' }, patternType: 'solid' },
-          font: { bold: true, color: { rgb: '92400E' }, sz: 10, name: 'Calibri' },
-          alignment: { horizontal: 'center', vertical: 'center' },
-          border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
-        },
-        Monitor: {
-          fill: { fgColor: { rgb: 'E8F5E9' }, patternType: 'solid' },
-          font: { bold: true, color: { rgb: '166534' }, sz: 10, name: 'Calibri' },
-          alignment: { horizontal: 'center', vertical: 'center' },
-          border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
-        },
-      }
+        })
+        const CLASS_S = {
+          Target: {
+            fill: { fgColor: { rgb: 'FDE8E8' }, patternType: 'solid' },
+            font: { bold: true, color: { rgb: '9D0010' }, sz: 10, name: 'Calibri' },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
+          },
+          Potential: {
+            fill: { fgColor: { rgb: 'FFF3CD' }, patternType: 'solid' },
+            font: { bold: true, color: { rgb: '92400E' }, sz: 10, name: 'Calibri' },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
+          },
+          Monitor: {
+            fill: { fgColor: { rgb: 'E8F5E9' }, patternType: 'solid' },
+            font: { bold: true, color: { rgb: '166534' }, sz: 10, name: 'Calibri' },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            border: { bottom: { style: 'thin', color: { rgb: 'E0E0E0' } } },
+          },
+        }
 
-      // ── Build Companies sheet ─────────────────────────────────────
-      const ws1Data = [COLS.map((c) => c.label)]
-      sorted.forEach((c) => ws1Data.push(COLS.map((col) => scalar(c[col.key]))))
+        // ── Build Companies sheet ─────────────────────────────────────
+        const ws1Data = [COLS.map((c) => c.label)]
+        sorted.forEach((c) => ws1Data.push(COLS.map((col) => scalar(c[col.key]))))
 
-      const ws1 = XLSX.utils.aoa_to_sheet(ws1Data)
-      ws1['!cols'] = COLS.map((c) => ({ wch: c.w }))
-      ws1['!rows'] = [{ hpt: 22 }, ...sorted.map(() => ({ hpt: 15 }))]
-      ws1['!freeze'] = { xSplit: 1, ySplit: 1 }
-      ws1['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(COLS.length - 1)}1` }
+        const ws1 = XLSX.utils.aoa_to_sheet(ws1Data)
+        ws1['!cols'] = COLS.map((c) => ({ wch: c.w }))
+        ws1['!rows'] = [{ hpt: 22 }, ...sorted.map(() => ({ hpt: 15 }))]
+        ws1['!freeze'] = { xSplit: 1, ySplit: 1 }
+        ws1['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(COLS.length - 1)}1` }
 
-      // Apply header styles
-      COLS.forEach((_, ci) => {
-        const addr = XLSX.utils.encode_cell({ r: 0, c: ci })
-        if (ws1[addr]) ws1[addr].s = HDR_S
-      })
+        // Apply header styles
+        COLS.forEach((_, ci) => {
+          const addr = XLSX.utils.encode_cell({ r: 0, c: ci })
+          if (ws1[addr]) ws1[addr].s = HDR_S
+        })
 
-      // Apply data row styles
-      sorted.forEach((company, ri) => {
-        const stripe = ri % 2 === 1
-        COLS.forEach((col, ci) => {
-          const addr = XLSX.utils.encode_cell({ r: ri + 1, c: ci })
-          if (!ws1[addr]) ws1[addr] = { t: 's', v: '' }
-          if (ci === 1 && CLASS_S[company.classification]) {
-            ws1[addr].s = CLASS_S[company.classification]
-          } else {
-            ws1[addr].s = DATA_S(stripe)
+        // Apply data row styles
+        sorted.forEach((company, ri) => {
+          const stripe = ri % 2 === 1
+          COLS.forEach((col, ci) => {
+            const addr = XLSX.utils.encode_cell({ r: ri + 1, c: ci })
+            if (!ws1[addr]) ws1[addr] = { t: 's', v: '' }
+            if (ci === 1 && CLASS_S[company.classification]) {
+              ws1[addr].s = CLASS_S[company.classification]
+            } else {
+              ws1[addr].s = DATA_S(stripe)
+            }
+          })
+        })
+
+        // ── Build Summary sheet ───────────────────────────────────────
+        const total = sorted.length
+        const enriched = sorted.filter((c) => c.enriched_at).length
+        const withEmail = sorted.filter((c) => c.email_pattern).length
+
+        const count = (arr, key, fallback = '(none)') => {
+          const m = {}
+          arr.forEach((c) => {
+            const k = c[key] || fallback
+            m[k] = (m[k] || 0) + 1
+          })
+          return Object.entries(m).sort((a, b) => b[1] - a[1])
+        }
+
+        const SHDR = {
+          fill: { fgColor: { rgb: 'E7000B' }, patternType: 'solid' },
+          font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+          alignment: { vertical: 'center' },
+        }
+        const SR = (stripe) => ({
+          fill: { fgColor: { rgb: stripe ? 'F5F5F5' : 'FFFFFF' }, patternType: 'solid' },
+          font: { sz: 10 },
+          alignment: { vertical: 'center' },
+        })
+        const SRB = (stripe) => ({
+          ...SR(stripe),
+          font: { sz: 10, bold: true },
+          alignment: { horizontal: 'right', vertical: 'center' },
+        })
+
+        const ss2Rows = []
+        const ss2Styles = []
+        const addSH = (label) => {
+          ss2Rows.push([label, ''])
+          ss2Styles.push(['hdr', ''])
+        }
+        const addSR = (label, val, stripe) => {
+          ss2Rows.push([label, val])
+          ss2Styles.push([stripe ? 'stripe' : 'plain', stripe ? 'stripe' : 'plain'])
+        }
+        const addBlank = () => {
+          ss2Rows.push(['', ''])
+          ss2Styles.push(['', ''])
+        }
+
+        addSH('Pipeline Overview')
+        addSR('Total companies', total, false)
+        addSR('Enriched', enriched, true)
+        addSR('With email pattern', withEmail, false)
+        addSR('Exported on', new Date().toLocaleDateString(), true)
+        addBlank()
+        addSH('Classification Breakdown')
+        count(sorted, 'classification').forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
+        addBlank()
+        addSH('Top Industries')
+        count(sorted, 'industry', '(unknown)')
+          .slice(0, 10)
+          .forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
+        addBlank()
+        addSH('Pipeline Status')
+        count(sorted, 'prospect_status').forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
+        addBlank()
+        addSH('Top Locations')
+        const hqMap = {}
+        sorted.forEach((c) => {
+          const k = (c.headquarters || '').split(',').pop().trim() || '(unknown)'
+          hqMap[k] = (hqMap[k] || 0) + 1
+        })
+        Object.entries(hqMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
+
+        const ws2 = XLSX.utils.aoa_to_sheet(ss2Rows)
+        ws2['!cols'] = [{ wch: 28 }, { wch: 14 }]
+        ss2Rows.forEach((_, ri) => {
+          const [ls, vs] = ss2Styles[ri]
+          const a1 = XLSX.utils.encode_cell({ r: ri, c: 0 })
+          const a2 = XLSX.utils.encode_cell({ r: ri, c: 1 })
+          if (!ws2[a1]) ws2[a1] = { t: 's', v: '' }
+          if (!ws2[a2]) ws2[a2] = { t: 's', v: '' }
+          if (ls === 'hdr') {
+            ws2[a1].s = SHDR
+            ws2[a2].s = SHDR
+          } else if (ls === 'stripe') {
+            ws2[a1].s = SR(true)
+            ws2[a2].s = SRB(true)
+          } else if (ls === 'plain') {
+            ws2[a1].s = SR(false)
+            ws2[a2].s = SRB(false)
           }
         })
+
+        // ── Write workbook ────────────────────────────────────────────
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws1, 'Companies')
+        XLSX.utils.book_append_sheet(wb, ws2, 'Summary')
+        XLSX.writeFile(wb, `sonar-companies-${new Date().toISOString().split('T')[0]}.xlsx`)
       })
-
-      // ── Build Summary sheet ───────────────────────────────────────
-      const total = sorted.length
-      const enriched = sorted.filter((c) => c.enriched_at).length
-      const withEmail = sorted.filter((c) => c.email_pattern).length
-
-      const count = (arr, key, fallback = '(none)') => {
-        const m = {}
-        arr.forEach((c) => {
-          const k = c[key] || fallback
-          m[k] = (m[k] || 0) + 1
-        })
-        return Object.entries(m).sort((a, b) => b[1] - a[1])
-      }
-
-      const SHDR = {
-        fill: { fgColor: { rgb: 'E7000B' }, patternType: 'solid' },
-        font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-        alignment: { vertical: 'center' },
-      }
-      const SR = (stripe) => ({
-        fill: { fgColor: { rgb: stripe ? 'F5F5F5' : 'FFFFFF' }, patternType: 'solid' },
-        font: { sz: 10 },
-        alignment: { vertical: 'center' },
+      .catch((err) => {
+        console.error('Excel export failed:', err)
+        alert('Export failed: ' + (err?.message || err))
       })
-      const SRB = (stripe) => ({
-        ...SR(stripe),
-        font: { sz: 10, bold: true },
-        alignment: { horizontal: 'right', vertical: 'center' },
-      })
-
-      const ss2Rows = []
-      const ss2Styles = []
-      const addSH = (label) => {
-        ss2Rows.push([label, ''])
-        ss2Styles.push(['hdr', ''])
-      }
-      const addSR = (label, val, stripe) => {
-        ss2Rows.push([label, val])
-        ss2Styles.push([stripe ? 'stripe' : 'plain', stripe ? 'stripe' : 'plain'])
-      }
-      const addBlank = () => {
-        ss2Rows.push(['', ''])
-        ss2Styles.push(['', ''])
-      }
-
-      addSH('Pipeline Overview')
-      addSR('Total companies', total, false)
-      addSR('Enriched', enriched, true)
-      addSR('With email pattern', withEmail, false)
-      addSR('Exported on', new Date().toLocaleDateString(), true)
-      addBlank()
-      addSH('Classification Breakdown')
-      count(sorted, 'classification').forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
-      addBlank()
-      addSH('Top Industries')
-      count(sorted, 'industry', '(unknown)')
-        .slice(0, 10)
-        .forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
-      addBlank()
-      addSH('Pipeline Status')
-      count(sorted, 'prospect_status').forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
-      addBlank()
-      addSH('Top Locations')
-      const hqMap = {}
-      sorted.forEach((c) => {
-        const k = (c.headquarters || '').split(',').pop().trim() || '(unknown)'
-        hqMap[k] = (hqMap[k] || 0) + 1
-      })
-      Object.entries(hqMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .forEach(([k, v], i) => addSR(k, v, i % 2 === 1))
-
-      const ws2 = XLSX.utils.aoa_to_sheet(ss2Rows)
-      ws2['!cols'] = [{ wch: 28 }, { wch: 14 }]
-      ss2Rows.forEach((_, ri) => {
-        const [ls, vs] = ss2Styles[ri]
-        const a1 = XLSX.utils.encode_cell({ r: ri, c: 0 })
-        const a2 = XLSX.utils.encode_cell({ r: ri, c: 1 })
-        if (!ws2[a1]) ws2[a1] = { t: 's', v: '' }
-        if (!ws2[a2]) ws2[a2] = { t: 's', v: '' }
-        if (ls === 'hdr') {
-          ws2[a1].s = SHDR
-          ws2[a2].s = SHDR
-        } else if (ls === 'stripe') {
-          ws2[a1].s = SR(true)
-          ws2[a2].s = SRB(true)
-        } else if (ls === 'plain') {
-          ws2[a1].s = SR(false)
-          ws2[a2].s = SRB(false)
-        }
-      })
-
-      // ── Write workbook ────────────────────────────────────────────
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws1, 'Companies')
-      XLSX.utils.book_append_sheet(wb, ws2, 'Summary')
-      XLSX.writeFile(wb, `sonar-companies-${new Date().toISOString().split('T')[0]}.xlsx`)
-    })
   }
 
   function isIncomplete(c) {
@@ -4291,7 +4296,7 @@ export default function Companies() {
               opacity: companies.length === 0 ? 0.4 : 1,
             }}
           >
-            ↓ Export CSV
+            ↓ Export Excel
           </button>
           <label
             style={{
