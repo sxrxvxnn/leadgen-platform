@@ -8523,12 +8523,29 @@ async def find_lookalike_companies(company_id: str, refresh: bool = False, autho
             if len(raw_text_chunks) >= 3:
                 break
 
-    # Also pull from Capterra for broader coverage
+    # Capterra for broader coverage
     capterra_queries = [f'"{name}" alternatives site:capterra.com', f'{name} competitors capterra']
     for q in capterra_queries:
         if len(raw_text_chunks) >= 5:
             break
         for r in _lws(q, count=3):
+            body = (r.get("body") or r.get("description") or "").strip()
+            if body and len(body) > 30:
+                raw_text_chunks.append(body)
+                break
+
+    # Crunchbase for verified competitor names (meta descriptions name direct rivals)
+    crunchbase_queries = [
+        f'"{name}" competitors site:crunchbase.com',
+        f'{name} similar companies site:crunchbase.com',
+    ]
+    for q in crunchbase_queries:
+        if len(raw_text_chunks) >= 7:
+            break
+        for r in _lws(q, count=3):
+            href = r.get("href", "") or r.get("url", "")
+            if "crunchbase.com" not in href:
+                continue
             body = (r.get("body") or r.get("description") or "").strip()
             if body and len(body) > 30:
                 raw_text_chunks.append(body)
@@ -8552,8 +8569,8 @@ COMPANY CONTEXT:
 - Specialties: {specialties}
 - Description: {description[:300] if description else 'N/A'}
 
-MARKET DATA (from G2/Capterra search results — use this to identify the right competitors):
-{combined_text[:1500] if combined_text else 'No market data available — use your training knowledge.'}
+MARKET DATA (from G2/Capterra/Crunchbase search results — use this to identify the right competitors):
+{combined_text[:2500] if combined_text else 'No market data available — use your training knowledge.'}
 
 Return ONLY a JSON array of 10 items ordered by similarity. Each item:
 {{
