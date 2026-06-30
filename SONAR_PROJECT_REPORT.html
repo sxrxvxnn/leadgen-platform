@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sonar — Final Project Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #161616;
+    --border: #1e1e1e;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --text: #e8e8e8;
+    --muted: #666;
+    --muted2: #888;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+    --pink: #ec4899;
+    --cyan: #06b6d4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ═══════════════════════════════ COVER ═══════════════════════════════ */
+  .cover {
+    min-height: 100vh;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 80px 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(99,102,241,0.22) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 50% at 10% 90%, rgba(168,85,247,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 90% 80%, rgba(6,182,212,0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .cover-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 20px;
+    padding: 6px 20px;
+    margin-bottom: 40px;
+    position: relative;
+  }
+
+  .cover h1 {
+    font-size: clamp(48px, 8vw, 96px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.0;
+    color: #fff;
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .cover h1 .accent { color: var(--accent2); }
+
+  .cover-title2 {
+    font-size: clamp(20px, 3vw, 32px);
+    font-weight: 300;
+    color: #555;
+    letter-spacing: -0.01em;
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+    margin-bottom: 64px;
+  }
+
+  .cover-meta-item {
+    text-align: center;
+  }
+
+  .cover-meta-item .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    display: block;
+  }
+
+  .cover-meta-item .lbl {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+
+  .cover-divider {
+    width: 1px;
+    height: 40px;
+    background: var(--border);
+    align-self: center;
+  }
+
+  /* ═══════════════════════════════ LAYOUT ═══════════════════════════════ */
+  .content {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 80px 40px 120px;
+  }
+
+  /* ═══════════════════════════════ CHAPTER BREAK ═══════════════════════ */
+  .chapter {
+    margin: 80px 0 48px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  .chapter-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+
+  .chapter h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  /* ═══════════════════════════════ PROSE ═══════════════════════════════ */
+  .prose {
+    font-size: 15px;
+    color: #bbb;
+    line-height: 1.75;
+    max-width: 720px;
+    margin-bottom: 32px;
+  }
+
+  .prose strong { color: #e8e8e8; font-weight: 600; }
+
+  /* ═══════════════════════════════ CARDS ═══════════════════════════════ */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .card-body {
+    font-size: 13px;
+    color: #999;
+    line-height: 1.65;
+  }
+
+  /* ═══════════════════════════════ GRID ═══════════════════════════════ */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  /* ═══════════════════════════════ STAT CARD ═══════════════════════════ */
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    text-align: center;
+  }
+
+  .stat-card .big {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-card .sm {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+  }
+
+  /* ═══════════════════════════════ DIAGRAM ═══════════════════════════════ */
+  .diagram {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    margin: 32px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .diagram-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  /* Flow diagram nodes */
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: wrap;
+    row-gap: 20px;
+  }
+
+  .flow-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    text-align: center;
+    min-width: 120px;
+  }
+
+  .flow-node .n-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e8e8e8;
+  }
+
+  .flow-node .n-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .flow-node.accent { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.08); }
+  .flow-node.green  { border-color: rgba(34,197,94,0.4);  background: rgba(34,197,94,0.07); }
+  .flow-node.amber  { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.07); }
+  .flow-node.blue   { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.07); }
+  .flow-node.purple { border-color: rgba(168,85,247,0.4); background: rgba(168,85,247,0.07); }
+  .flow-node.pink   { border-color: rgba(236,72,153,0.4); background: rgba(236,72,153,0.07); }
+  .flow-node.cyan   { border-color: rgba(6,182,212,0.4);  background: rgba(6,182,212,0.07); }
+
+  .flow-arrow {
+    color: var(--muted);
+    font-size: 18px;
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+
+  /* Stack layout */
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stack-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .stack-item {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #ccc;
+  }
+
+  .stack-item .s-layer {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .stack-item .s-name { font-weight: 600; color: #e8e8e8; font-size: 13px; }
+  .stack-item .s-detail { color: var(--muted2); font-size: 11px; margin-top: 2px; }
+
+  /* Arch diagram — column layout */
+  .arch {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .arch-col-title {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .arch-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #ccc;
+    font-weight: 500;
+  }
+
+  .arch-box .ab-sub { font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 400; }
+
+  /* ═══════════════════════════════ TIMELINE ═══════════════════════════════ */
+  .timeline { position: relative; padding-left: 28px; }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .tl-item {
+    position: relative;
+    margin-bottom: 32px;
+  }
+
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .tl-phase {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .tl-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+
+  .tl-body {
+    font-size: 13px;
+    color: #888;
+    line-height: 1.65;
+  }
+
+  /* ═══════════════════════════════ TABLE ═══════════════════════════════ */
+  .table-wrap {
+    overflow-x: auto;
+    margin-bottom: 32px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    background: var(--surface2);
+    color: var(--muted2);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #ccc;
+    vertical-align: top;
+  }
+
+  td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent2);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  /* ═══════════════════════════════ FEATURE GRID ═══════════════════════ */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+  }
+
+  .feature-card .fc-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .feature-card .fc-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+
+  .feature-card .fc-body {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.6;
+  }
+
+  /* ═══════════════════════════════ PILL TAGS ═══════════════════════════ */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.25);
+    color: var(--accent2);
+  }
+
+  .tag.green  { background: rgba(34,197,94,0.08);  border-color: rgba(34,197,94,0.25);  color: var(--green); }
+  .tag.amber  { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25); color: var(--amber); }
+  .tag.red    { background: rgba(239,68,68,0.08);  border-color: rgba(239,68,68,0.25);  color: var(--red); }
+  .tag.purple { background: rgba(168,85,247,0.08); border-color: rgba(168,85,247,0.25); color: var(--purple); }
+  .tag.blue   { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25); color: var(--blue); }
+  .tag.cyan   { background: rgba(6,182,212,0.08);  border-color: rgba(6,182,212,0.25);  color: var(--cyan); }
+
+  /* ═══════════════════════════════ SECTION LABEL ═══════════════════════ */
+  .s-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* ═══════════════════════════════ CODE BLOCK ═══════════════════════════ */
+  .code-block {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #aaa;
+    line-height: 1.7;
+    margin-bottom: 24px;
+    overflow-x: auto;
+  }
+
+  .code-block .kw  { color: var(--accent2); }
+  .code-block .str { color: var(--green); }
+  .code-block .cmt { color: var(--muted); }
+  .code-block .fn  { color: var(--amber); }
+  .code-block .num { color: var(--pink); }
+
+  /* ═══════════════════════════════ FOOTER ═══════════════════════════════ */
+  .footer {
+    text-align: center;
+    padding: 48px 40px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.06em;
+  }
+
+  /* ═══════════════════════════════ RESPONSIVE ═══════════════════════════ */
+  @media (max-width: 720px) {
+    .content { padding: 48px 20px 80px; }
+    .grid-2, .grid-3, .grid-4, .feature-grid { grid-template-columns: 1fr; }
+    .arch { grid-template-columns: 1fr; }
+    .flow { flex-direction: column; align-items: center; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ COVER ═══════════════════════════════ -->
+<div class="cover">
+  <div class="cover-eyebrow">Final Project Report</div>
+  <h1><span class="accent">Sonar</span></h1>
+  <p class="cover-title2">AI-Powered B2B Lead Intelligence Platform</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="val">3</span>
+      <div class="lbl">Core Features</div>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="val">219</span>
+      <div class="lbl">API Endpoints</div>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="val">10,085</span>
+      <div class="lbl">Lines of Backend</div>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="val">27</span>
+      <div class="lbl">Frontend Pages</div>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta-item">
+      <span class="val">12+</span>
+      <div class="lbl">Integrated APIs</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ CONTENT ═══════════════════════════════ -->
+<div class="content">
+
+  <!-- ── CHAPTER 1: ORIGIN ── -->
+  <div class="chapter" id="origin">
+    <span class="chapter-num">01</span>
+    <h2>Origin &amp; Problem Statement</h2>
+  </div>
+
+  <p class="prose">
+    Sonar was built to solve a problem every early-stage B2B founder faces: <strong>finding the right companies and people to reach out to is painfully manual</strong>. Existing tools like Apollo, ZoomInfo, and Hunter are either too expensive, too generic, or require hours of manual list-building and copy-pasting before a single email can go out.
+  </p>
+
+  <p class="prose">
+    The project started as a simple lead scraper — a script that pulled developer profiles from GitHub and HackerNews hiring threads. Over time it evolved into a full intelligence platform with three distinct features, each solving a different part of the outreach problem:
+  </p>
+
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">Problem 1 — Finding Companies</div>
+      <div class="card-body">No easy way to discover, enrich, and monitor target companies without paying $500+/mo for enterprise tools.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Problem 2 — Finding People</div>
+      <div class="card-body">Even after finding a company, identifying the right decision-makers and getting verified contact details requires multiple tools.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Problem 3 — Reaching Out</div>
+      <div class="card-body">Generic outreach has &lt;1% reply rates. Personalised messages require hours of research per lead.</div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 2: EVOLUTION TIMELINE ── -->
+  <div class="chapter" id="evolution">
+    <span class="chapter-num">02</span>
+    <h2>How It Evolved</h2>
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-phase">Phase 1 — Foundation</div>
+      <div class="tl-title">GitHub + HN Scraper → Contacts Database</div>
+      <div class="tl-body">The first version was two Python scripts: one that crawled GitHub user profiles by searching for developers with certain follower counts and tech stacks, and one that parsed monthly "Ask HN: Who is hiring?" threads. Both dumped data into a Supabase <code>sonar_contacts</code> table. No UI existed yet.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 2 — API Layer</div>
+      <div class="tl-title">FastAPI Backend + Supabase Auth</div>
+      <div class="tl-body">The scrapers were wrapped into a FastAPI application with user authentication via Supabase Auth. Basic CRUD endpoints were built for leads and companies. Row Level Security enforced per-user data isolation from day one — every table is <code>user_id</code>-scoped.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 3 — React Dashboard</div>
+      <div class="tl-title">Companies, Leads, Prospect Pages</div>
+      <div class="tl-body">A React 19 single-page app was built in JSX (no TypeScript). Three core pages emerged: Companies (target account tracking), Leads (contact management), and Prospect (AI-powered discovery via PDL). Inline styles were used throughout — no Tailwind — for fine-grained control.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 4 — AI Enrichment</div>
+      <div class="tl-title">Groq LLM + Multi-Source Intelligence</div>
+      <div class="tl-body">Groq (llama-3.3-70b-versatile) was integrated as the primary LLM. Company auto-fill started pulling data from LinkedIn scraping. Similar-companies discovery was built using G2, Capterra, and Crunchbase search snippets fed to a single Groq call. ICP scoring was added to rank prospects automatically.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 5 — Buying Signals</div>
+      <div class="tl-title">Real-Evidence Signal Detection</div>
+      <div class="tl-body">The buying signals system was built and then completely overhauled: 8 targeted web searches (hiring, funding, partnerships, product launches, leadership changes) + GitHub org API + HN Algolia search → evidence-only Groq prompt. Signals only appear if there is a real source URL to back them up.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 6 — Email Sequences + Tracking</div>
+      <div class="tl-title">Automated Outreach with Full Observability</div>
+      <div class="tl-body">Multi-step email sequences with per-lead enrolment, warmup scheduling, reply detection, and self-hosted tracking pixels. A 1×1 pixel endpoint records every open; a redirect endpoint records clicks. All stored in Supabase <code>email_events</code>.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 7 — Security Hardening</div>
+      <div class="tl-title">SSRF Protection, Prompt Security, Audit Logging</div>
+      <div class="tl-body">A full security layer was added: SSRF blocking for all user-supplied URLs, prompt injection detection for LLM calls that process scraped web content, UUID validation, structured JSON audit logs for every auth event, and per-path rate limiting.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-phase">Phase 8 — Current</div>
+      <div class="tl-title">Production on Vercel Fluid Compute</div>
+      <div class="tl-body">Both frontend (Sonar dashboard) and backend (FastAPI ASGI) run on Vercel Fluid Compute. Seven cron jobs run daily/weekly for data collection, sequence processing, and contact enrichment. PostHog tracks product usage and Sentry captures runtime errors.</div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 3: ARCHITECTURE ── -->
+  <div class="chapter" id="architecture">
+    <span class="chapter-num">03</span>
+    <h2>System Architecture</h2>
+  </div>
+
+  <p class="prose">The platform is split into three layers: a React SPA served from Vercel's CDN, a FastAPI backend running on Vercel Fluid Compute (serverless Python), and a Supabase PostgreSQL database with Row Level Security. All communication between layers uses HTTPS with JWT authentication.</p>
+
+  <!-- High-level arch diagram -->
+  <div class="diagram">
+    <div class="diagram-title">High-Level Architecture</div>
+    <div class="arch">
+      <div>
+        <div class="arch-col-title">Client</div>
+        <div class="arch-box">React 19 SPA<div class="ab-sub">JSX · Vite · Inline styles</div></div>
+        <div class="arch-box">Chrome Extension<div class="ab-sub">LinkedIn data capture</div></div>
+      </div>
+      <div>
+        <div class="arch-col-title">Backend (Vercel)</div>
+        <div class="arch-box">FastAPI ASGI<div class="ab-sub">Python 3.14 · 219 endpoints</div></div>
+        <div class="arch-box">Vercel Cron<div class="ab-sub">7 scheduled jobs</div></div>
+        <div class="arch-box">Background Worker<div class="ab-sub">AWS SQS · ThreadPoolExecutor</div></div>
+      </div>
+      <div>
+        <div class="arch-col-title">Data & Services</div>
+        <div class="arch-box">Supabase PostgreSQL<div class="ab-sub">RLS · Auth · Realtime</div></div>
+        <div class="arch-box">Groq LLM<div class="ab-sub">llama-3.3-70b · llama-3.1-8b</div></div>
+        <div class="arch-box">Brave Search / DDGS<div class="ab-sub">Web intelligence</div></div>
+        <div class="arch-box">PDL · Hunter · Apollo<div class="ab-sub">People data</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request flow diagram -->
+  <div class="diagram">
+    <div class="diagram-title">Request Flow — User Action to Database</div>
+    <div class="flow">
+      <div class="flow-node accent"><div class="n-label">Browser</div><div class="n-sub">React SPA</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node blue"><div class="n-label">Vercel CDN</div><div class="n-sub">Edge cache</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple"><div class="n-label">FastAPI</div><div class="n-sub">routes.py</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node amber"><div class="n-label">Security</div><div class="n-sub">JWT · SSRF · Rate limit</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green"><div class="n-label">Supabase</div><div class="n-sub">PostgreSQL + RLS</div></div>
+    </div>
+  </div>
+
+  <!-- AI pipeline diagram -->
+  <div class="diagram">
+    <div class="diagram-title">AI Enrichment Pipeline</div>
+    <div class="flow">
+      <div class="flow-node accent"><div class="n-label">User Request</div><div class="n-sub">company / lead</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node cyan"><div class="n-label">Web Search</div><div class="n-sub">Brave / DDGS</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node pink"><div class="n-label">Prompt Security</div><div class="n-sub">Sanitize + validate</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple"><div class="n-label">Groq LLM</div><div class="n-sub">llama-3.3-70b</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node amber"><div class="n-label">Gemini Fallback</div><div class="n-sub">2.0 Flash</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green"><div class="n-label">Supabase</div><div class="n-sub">Store result</div></div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 4: TECH STACK ── -->
+  <div class="chapter" id="stack">
+    <span class="chapter-num">04</span>
+    <h2>Technology Stack</h2>
+  </div>
+
+  <div class="diagram" style="padding: 32px;">
+    <div class="diagram-title">Full Stack</div>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(99,102,241,0.3);">
+          <div class="s-layer">Frontend</div>
+          <div class="s-name">React 19</div>
+          <div class="s-detail">JSX · Vite · React Router v6 · Inline styles · CSS variables</div>
+        </div>
+        <div class="stack-item" style="border-color:rgba(99,102,241,0.3);">
+          <div class="s-layer">Frontend Build</div>
+          <div class="s-name">Vite 6</div>
+          <div class="s-detail">pnpm · Manual code-split chunks · SWC transforms</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(59,130,246,0.3);">
+          <div class="s-layer">Backend Framework</div>
+          <div class="s-name">FastAPI 0.135</div>
+          <div class="s-detail">Python 3.14 · Pydantic v2 · ASGI · SlowAPI rate limiting</div>
+        </div>
+        <div class="stack-item" style="border-color:rgba(59,130,246,0.3);">
+          <div class="s-layer">Backend Runtime</div>
+          <div class="s-name">Vercel Fluid Compute</div>
+          <div class="s-detail">Serverless Python · 300s max duration · iad1 region</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(34,197,94,0.3);">
+          <div class="s-layer">Database</div>
+          <div class="s-name">Supabase PostgreSQL</div>
+          <div class="s-detail">Row Level Security · Auth (JWT) · Realtime · Service role + Anon key split</div>
+        </div>
+        <div class="stack-item" style="border-color:rgba(34,197,94,0.3);">
+          <div class="s-layer">AI / LLM</div>
+          <div class="s-name">Groq + Gemini</div>
+          <div class="s-detail">llama-3.3-70b-versatile (primary) · llama-3.1-8b-instant (fast) · Gemini 2.0 Flash (fallback)</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(245,158,11,0.3);">
+          <div class="s-layer">Observability</div>
+          <div class="s-name">PostHog + Sentry</div>
+          <div class="s-detail">OTLP log shipping · Product analytics · Runtime error tracking · LLM token tracking</div>
+        </div>
+        <div class="stack-item" style="border-color:rgba(245,158,11,0.3);">
+          <div class="s-layer">Background Jobs</div>
+          <div class="s-name">AWS SQS + Worker</div>
+          <div class="s-detail">4 queues · ThreadPoolExecutor · 300s visibility timeout · Vercel Cron (7 schedules)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 5: FEATURES ── -->
+  <div class="chapter" id="features">
+    <span class="chapter-num">05</span>
+    <h2>Core Features</h2>
+  </div>
+
+  <p class="prose">Three active product features, each with its own data pipeline and UI.</p>
+
+  <!-- Companies feature -->
+  <div class="s-label">Feature 1 — Companies</div>
+  <p class="prose">Target account intelligence. Users add companies and get automatic enrichment: tech stack detection, similar companies from G2/Capterra/Crunchbase, buying signals from 8 web searches + GitHub + HN, HQ geocoding on a globe, and AI-generated outreach messages.</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Companies Enrichment Flow</div>
+    <div class="flow">
+      <div class="flow-node accent"><div class="n-label">Add Company</div><div class="n-sub">name input</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node cyan"><div class="n-label">LinkedIn Scrape</div><div class="n-sub">company_prefill.py</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node blue"><div class="n-label">Website Analysis</div><div class="n-sub">tech stack + description</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple"><div class="n-label">Similar Companies</div><div class="n-sub">G2 + Capterra + Crunchbase → Groq</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node pink"><div class="n-label">Buying Signals</div><div class="n-sub">8 searches + GitHub + HN → Groq</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green"><div class="n-label">Saved</div><div class="n-sub">Supabase</div></div>
+    </div>
+  </div>
+
+  <!-- Discovery feature -->
+  <div class="s-label">Feature 2 — Discovery (Prospects)</div>
+  <p class="prose">AI-powered people search via People Data Labs. Users set filters (title, industry, location, company size) and Sonar runs a SQL-mode PDL query with <code>scroll_token</code> pagination. Matching prospects are ICP-scored by Groq and cached in Supabase so subsequent loads are instant.</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Prospect Discovery Flow</div>
+    <div class="flow">
+      <div class="flow-node accent"><div class="n-label">Search Filters</div><div class="n-sub">title · industry · location</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node blue"><div class="n-label">PDL SQL Query</div><div class="n-sub">scroll_token pagination</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple"><div class="n-label">ICP Scoring</div><div class="n-sub">Groq llama-3.3-70b</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node amber"><div class="n-label">Email Enrichment</div><div class="n-sub">Hunter → Apollo fallback</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green"><div class="n-label">Leads Table</div><div class="n-sub">Supabase cache</div></div>
+    </div>
+  </div>
+
+  <!-- Leads feature -->
+  <div class="s-label">Feature 3 — Leads</div>
+  <p class="prose">Contact management and outreach. Leads can be enriched with verified emails (Hunter → Apollo → ProxyCurl pipeline), scored by ICP fit, enrolled in multi-step email sequences, and tracked with self-hosted open/click pixels.</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Lead Enrichment &amp; Outreach Flow</div>
+    <div class="flow">
+      <div class="flow-node accent"><div class="n-label">Lead Added</div><div class="n-sub">manual or import</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node cyan"><div class="n-label">Email Enrichment</div><div class="n-sub">Hunter → Apollo → ProxyCurl</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node blue"><div class="n-label">Email Verify</div><div class="n-sub">MX + SMTP check</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node purple"><div class="n-label">ICP Score</div><div class="n-sub">Groq 0–100</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node pink"><div class="n-label">Sequence Enrol</div><div class="n-sub">multi-step email</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node green"><div class="n-label">Track</div><div class="n-sub">open pixel · click redirect</div></div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 6: DATABASE SCHEMA ── -->
+  <div class="chapter" id="database">
+    <span class="chapter-num">06</span>
+    <h2>Database Schema</h2>
+  </div>
+
+  <p class="prose">Every table is scoped by <code>user_id</code> with Supabase RLS policies. The backend uses the service-role key (bypasses RLS) while the frontend anon key respects the policies. All <code>id</code> fields are UUIDs validated by <code>security.py</code> before use.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Purpose</th>
+          <th>Key Columns</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>companies</td>
+          <td>Target accounts tracked by the user</td>
+          <td>name, website, linkedin_url, industry, size, hq, tech_stack[], similar_companies JSONB, cached_lookalikes JSONB, lat/lng</td>
+        </tr>
+        <tr>
+          <td>company_signals</td>
+          <td>Buying signals for a company</td>
+          <td>company_id, signal_type (hiring/funding/github/news/growth), summary, source_url, detected_at</td>
+        </tr>
+        <tr>
+          <td>leads</td>
+          <td>Individual contacts (decision-makers)</td>
+          <td>name, title, company, email, phone, linkedin_url, icp_score, email_verified, status, notes</td>
+        </tr>
+        <tr>
+          <td>sonar_contacts</td>
+          <td>Internal contacts DB from GitHub/HN scrapers</td>
+          <td>name, email, company, title, location, source (github/hn), scraped_at, enriched</td>
+        </tr>
+        <tr>
+          <td>sequences</td>
+          <td>Email outreach sequences</td>
+          <td>name, subject_prefix, steps JSONB[], status, warmup_enabled</td>
+        </tr>
+        <tr>
+          <td>sequence_enrollments</td>
+          <td>Per-lead sequence state</td>
+          <td>lead_id, sequence_id, current_step, next_send_at, status (active/paused/completed/bounced)</td>
+        </tr>
+        <tr>
+          <td>email_events</td>
+          <td>Open/click tracking events</td>
+          <td>lead_id, sequence_id, event_type (open/click), timestamp, ip, user_agent</td>
+        </tr>
+        <tr>
+          <td>jobs</td>
+          <td>Background bulk job status</td>
+          <td>id, type, user_id, status, progress, total, created_at</td>
+        </tr>
+        <tr>
+          <td>email_patterns</td>
+          <td>Cached email format per company domain</td>
+          <td>domain, pattern (first.last / first / flast), confidence, updated_at</td>
+        </tr>
+        <tr>
+          <td>dm_drafts</td>
+          <td>AI-generated outreach messages</td>
+          <td>lead_id, company_id, message, tone, generated_at</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── CHAPTER 7: API SURFACE ── -->
+  <div class="chapter" id="api">
+    <span class="chapter-num">07</span>
+    <h2>API Surface</h2>
+  </div>
+
+  <div class="grid-4">
+    <div class="stat-card">
+      <div class="big">219</div>
+      <div class="sm">Total Endpoints</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">7</div>
+      <div class="sm">Cron Jobs</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">300s</div>
+      <div class="sm">Max Duration</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">2</div>
+      <div class="sm">Auth Clients</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Group</th>
+          <th>Endpoints</th>
+          <th>Key Capabilities</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>/auth/*</td>
+          <td>Signup, login, logout, password reset, token refresh, Google OAuth</td>
+          <td>Supabase Auth (JWT) · audit logs · anon-key client</td>
+        </tr>
+        <tr>
+          <td>/api/companies/*</td>
+          <td>CRUD, prefill, enrich, similar, signals, geocode, DM generate, bulk ops</td>
+          <td>LinkedIn scraping · G2/Capterra/Crunchbase · Groq · Google Maps</td>
+        </tr>
+        <tr>
+          <td>/api/leads/*</td>
+          <td>CRUD, enrich, ICP score, DM generate, bulk enrichment</td>
+          <td>Hunter → Apollo → ProxyCurl · email verification · Groq scoring</td>
+        </tr>
+        <tr>
+          <td>/api/prospects/*</td>
+          <td>Search, paginate, save to leads</td>
+          <td>PDL SQL mode · scroll_token · Sonar contacts cache</td>
+        </tr>
+        <tr>
+          <td>/api/sequences/*</td>
+          <td>CRUD, enrol lead, send, check replies, warmup</td>
+          <td>Email scheduling · reply detection · unsubscribe</td>
+        </tr>
+        <tr>
+          <td>/api/track/*</td>
+          <td>Open pixel, click redirect</td>
+          <td>Self-hosted tracking · email_events table</td>
+        </tr>
+        <tr>
+          <td>/api/cron/*</td>
+          <td>scrape-github, scrape-hn, enrich-contacts, refresh-contacts</td>
+          <td>CRON_SECRET auth · daily/weekly schedules</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── CHAPTER 8: EXTERNAL INTEGRATIONS ── -->
+  <div class="chapter" id="integrations">
+    <span class="chapter-num">08</span>
+    <h2>External Integrations</h2>
+  </div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(99,102,241,0.15);">🤖</div>
+      <div class="fc-title">Groq — Primary LLM</div>
+      <div class="fc-body">llama-3.3-70b-versatile for all reasoning tasks (similar companies, buying signals, ICP scoring, DM generation). llama-3.1-8b-instant for fast classification. Fallback to Gemini 2.0 Flash when Groq is unavailable. All calls tracked in PostHog.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(245,158,11,0.12);">🔍</div>
+      <div class="fc-title">Brave Search — Web Intelligence</div>
+      <div class="fc-body">2,000 free queries/month. Used for buying signals (8 searches per company), similar companies from G2/Capterra/Crunchbase, LinkedIn URL discovery, and website finding. DuckDuckGo DDGS is the fallback when Brave credits are exhausted.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(34,197,94,0.12);">👤</div>
+      <div class="fc-title">PDL (People Data Labs)</div>
+      <div class="fc-body">SQL-mode prospect search. $0.05–0.10/new match. Scroll-token pagination for large result sets. Powers the Discovery/Prospects feature — the only paid-per-result API in the platform.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(6,182,212,0.12);">📧</div>
+      <div class="fc-title">Hunter.io + Apollo.io</div>
+      <div class="fc-body">Email finding pipeline. Hunter first (25 free/month, $49/mo upgrade). Apollo fallback (50 free/month). Both also used for email pattern detection — once a domain's format is known, emails are generated for free without hitting the API again.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(168,85,247,0.12);">🏢</div>
+      <div class="fc-title">ProxyCurl</div>
+      <div class="fc-body">Deep LinkedIn enrichment at $0.01/call. Used when a lead has a known LinkedIn URL. Returns work email, phone, full profile, current company, and job history. Not hit until cheaper methods are exhausted.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(59,130,246,0.12);">🗺️</div>
+      <div class="fc-title">Google Maps + GitHub + HN Algolia</div>
+      <div class="fc-body">Google Maps geocodes company HQ addresses for the globe view ($0 within $200 monthly credit). GitHub REST API finds company repos and recent activity (free). HN Algolia searches for company mentions in Hacker News stories (free).</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(236,72,153,0.12);">🕷️</div>
+      <div class="fc-title">Firecrawl</div>
+      <div class="fc-body">Website scraping for company auto-fill when direct HTTP scraping fails. Used selectively — most website content is fetched directly via <code>requests</code> + BeautifulSoup to preserve Firecrawl credits for hard-to-scrape sites.</div>
+    </div>
+    <div class="feature-card">
+      <div class="fc-icon" style="background:rgba(34,197,94,0.12);">📊</div>
+      <div class="fc-title">PostHog + Sentry</div>
+      <div class="fc-body">PostHog tracks product events (features used, LLM token consumption) via OTLP log shipping from the backend. Sentry captures runtime exceptions with 10% trace sampling and 5% profiling.</div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 9: SECURITY ── -->
+  <div class="chapter" id="security">
+    <span class="chapter-num">09</span>
+    <h2>Security Model</h2>
+  </div>
+
+  <p class="prose">Security is enforced at multiple layers — network, application, AI, and database — rather than relying on any single control.</p>
+
+  <div class="diagram">
+    <div class="diagram-title">Security Layers</div>
+    <div class="stack">
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(239,68,68,0.3);">
+          <div class="s-layer">Layer 1 — Network</div>
+          <div class="s-name">Rate Limiting + SSRF Blocking</div>
+          <div class="s-detail">SlowAPI per-IP limits + custom path limits for auth/enrich endpoints. All user-supplied URLs checked against private IP ranges before HTTP requests are made.</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(245,158,11,0.3);">
+          <div class="s-layer">Layer 2 — Application</div>
+          <div class="s-name">JWT Auth + UUID Validation + Input Sanitisation</div>
+          <div class="s-detail">Every protected endpoint validates the Supabase JWT. All row IDs are regex-validated as canonical UUIDs. Pydantic models enforce types and constraints at the API boundary.</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(168,85,247,0.3);">
+          <div class="s-layer">Layer 3 — AI Safety</div>
+          <div class="s-name">Prompt Injection Detection + Output Validation</div>
+          <div class="s-detail">All scraped web content is sanitised through prompt_security.py before entering an LLM prompt. Unicode homoglyphs are normalised. AI output is validated against an allowed-keys schema.</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(34,197,94,0.3);">
+          <div class="s-layer">Layer 4 — Database</div>
+          <div class="s-name">Row Level Security (RLS)</div>
+          <div class="s-detail">Supabase RLS policies enforce that every SELECT/INSERT/UPDATE/DELETE is scoped to the authenticated user's user_id. The backend uses the service-role key which bypasses RLS — but that key never leaves the server.</div>
+        </div>
+      </div>
+      <div class="stack-row">
+        <div class="stack-item" style="border-color:rgba(59,130,246,0.3);">
+          <div class="s-layer">Layer 5 — Audit</div>
+          <div class="s-name">Structured JSON Audit Logs</div>
+          <div class="s-detail">Every auth event (login success/failure, signup, password reset) and bulk operation emits a structured JSON log line with timestamp, user_id, IP, and event type. Shipped to PostHog via OTLP.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 10: CRON JOBS ── -->
+  <div class="chapter" id="cron">
+    <span class="chapter-num">10</span>
+    <h2>Automated Jobs (Cron)</h2>
+  </div>
+
+  <p class="prose">Seven scheduled jobs run automatically via Vercel Cron. All are authenticated with a shared <code>CRON_SECRET</code> header so they cannot be triggered externally.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Schedule</th><th>Endpoint</th><th>What It Does</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Daily 08:00 UTC</td><td>/api/sequences/warmup-cron</td><td>Gradually increases email sending volume to warm up the sending domain and avoid spam filters.</td></tr>
+        <tr><td>Daily 09:00 UTC</td><td>/api/sequences/process-cron</td><td>Sends all queued sequence emails for the day based on each enrolment's <code>next_send_at</code>.</td></tr>
+        <tr><td>Daily 10:00 UTC</td><td>/api/sequences/check-replies</td><td>Checks for email replies and marks enrolments as replied/paused to stop the sequence automatically.</td></tr>
+        <tr><td>Daily 02:00 UTC</td><td>/api/cron/scrape-github</td><td>Rotates through 14 GitHub search queries to add new developer profiles to <code>sonar_contacts</code>.</td></tr>
+        <tr><td>Daily 04:00 UTC</td><td>/api/cron/enrich-contacts</td><td>Enriches newly scraped contacts with email/phone data using the Hunter → Apollo pipeline.</td></tr>
+        <tr><td>Weekly Mon 03:00</td><td>/api/cron/scrape-hn</td><td>Scrapes the latest "Ask HN: Who is hiring?" thread and extracts company and contact data.</td></tr>
+        <tr><td>Weekly Sun 05:00</td><td>/api/cron/refresh-contacts</td><td>Refreshes stale contact records that haven't been updated in 30+ days.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── CHAPTER 11: FRONTEND ── -->
+  <div class="chapter" id="frontend">
+    <span class="chapter-num">11</span>
+    <h2>Frontend — Pages &amp; Components</h2>
+  </div>
+
+  <p class="prose">A React 19 single-page application with 27 pages and a shared component library. All styles are inline — no Tailwind, no CSS-in-JS library. CSS variables define the design tokens.</p>
+
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">Auth Pages</div>
+      <div class="card-body">Landing, Login, Signup, ForgotPassword, ResetPassword, AuthCallback, Onboarding</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Core App Pages</div>
+      <div class="card-body">Dashboard, Companies, Leads, Prospect (Discovery), Sequences, Settings, Analytics</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Advanced Pages</div>
+      <div class="card-body">ICP, Persona, Targeting, Database, EmailFinder, CompanyDirectory, BookingPage, Tasks, Notifications</div>
+    </div>
+  </div>
+
+  <div class="s-label">Key UI Components</div>
+  <div class="tags">
+    <span class="tag">Globe (WebGL)</span>
+    <span class="tag">MacBook Scroll</span>
+    <span class="tag">Bento Grid</span>
+    <span class="tag">Company Cards</span>
+    <span class="tag">Lead Table</span>
+    <span class="tag">Prospect Search</span>
+    <span class="tag">Sequence Builder</span>
+    <span class="tag">Analytics Charts</span>
+    <span class="tag">Signal Cards</span>
+    <span class="tag">Add Company Modal</span>
+    <span class="tag">ICP Score Rings</span>
+    <span class="tag">Email Preview</span>
+  </div>
+
+  <!-- ── CHAPTER 12: DEPLOYMENT ── -->
+  <div class="chapter" id="deployment">
+    <span class="chapter-num">12</span>
+    <h2>Deployment &amp; Infrastructure</h2>
+  </div>
+
+  <div class="diagram">
+    <div class="diagram-title">Deployment Architecture</div>
+    <div class="arch">
+      <div>
+        <div class="arch-col-title">Frontend</div>
+        <div class="arch-box">Vercel CDN<div class="ab-sub">sonarleads.vercel.app</div></div>
+        <div class="arch-box">Vite Build<div class="ab-sub">Static SPA → CDN edge</div></div>
+        <div class="arch-box">7 Code-Split Chunks<div class="ab-sub">Companies, Leads, Sequences…</div></div>
+      </div>
+      <div>
+        <div class="arch-col-title">Backend</div>
+        <div class="arch-box">Vercel Fluid Compute<div class="ab-sub">backend-ten-beta-29.vercel.app</div></div>
+        <div class="arch-box">FastAPI ASGI<div class="ab-sub">api/index.py entry</div></div>
+        <div class="arch-box">7 Cron Schedules<div class="ab-sub">vercel.json crons</div></div>
+      </div>
+      <div>
+        <div class="arch-col-title">Data</div>
+        <div class="arch-box">Supabase<div class="ab-sub">PostgreSQL + Auth</div></div>
+        <div class="arch-box">AWS SQS<div class="ab-sub">4 queues · bulk jobs</div></div>
+        <div class="arch-box">PostHog + Sentry<div class="ab-sub">Observability</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Frontend Deploy</div>
+      <div class="card-body">
+        <code>VERCEL_PROJECT_ID=prj_jz9... vercel --prod</code><br/><br/>
+        Run from repo root. Vercel reads <code>dashboard/</code> as the project root directory (configured in project settings). Vite builds into <code>dashboard/dist/</code>. Build time: ~20s.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Backend Deploy</div>
+      <div class="card-body">
+        <code>VERCEL_PROJECT_ID=prj_GvD... vercel --prod</code><br/><br/>
+        Run from repo root. Vercel installs Python deps from <code>backend/requirements.txt</code> via uv. <code>api/index.py</code> is the ASGI handler. Build time: ~3s (uv is fast).
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHAPTER 13: CURRENT STATE ── -->
+  <div class="chapter" id="current">
+    <span class="chapter-num">13</span>
+    <h2>Current State &amp; What's Next</h2>
+  </div>
+
+  <div class="s-label">What's Working in Production</div>
+  <div class="tags">
+    <span class="tag green">Companies CRUD + Enrichment</span>
+    <span class="tag green">Similar Companies (G2/Capterra/Crunchbase)</span>
+    <span class="tag green">Buying Signals (evidence-only)</span>
+    <span class="tag green">PDL Prospect Search</span>
+    <span class="tag green">Lead Enrichment (Hunter/Apollo/ProxyCurl)</span>
+    <span class="tag green">Email Verification (SMTP)</span>
+    <span class="tag green">ICP Scoring</span>
+    <span class="tag green">Email Sequences</span>
+    <span class="tag green">Email Open/Click Tracking</span>
+    <span class="tag green">GitHub + HN Scrapers (cron)</span>
+    <span class="tag green">Globe Visualisation</span>
+    <span class="tag green">Supabase Auth (JWT)</span>
+    <span class="tag green">Prompt Injection Protection</span>
+    <span class="tag green">Audit Logging</span>
+  </div>
+
+  <div class="s-label" style="margin-top:24px;">Pending / To Do</div>
+  <div class="tags">
+    <span class="tag amber">Rotate Supabase / Hunter / Apollo API keys</span>
+    <span class="tag amber">Enable email confirmation in Supabase dashboard</span>
+    <span class="tag amber">Admin panel features</span>
+    <span class="tag blue">Vendor chunk size optimisation (2.8MB bundle)</span>
+    <span class="tag blue">Mobile-responsive layouts</span>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="grid-4" style="margin-top:40px;">
+    <div class="stat-card">
+      <div class="big">19</div>
+      <div class="sm">Backend Files</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">27</div>
+      <div class="sm">Frontend Pages</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">12+</div>
+      <div class="sm">External APIs</div>
+    </div>
+    <div class="stat-card">
+      <div class="big">~$0.01</div>
+      <div class="sm">Cost Per Enrichment</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  SONAR — FINAL PROJECT REPORT &nbsp;·&nbsp; AI-POWERED B2B LEAD INTELLIGENCE &nbsp;·&nbsp; INTERNAL USE ONLY
+</div>
+
+</body>
+</html>
