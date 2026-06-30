@@ -243,13 +243,98 @@ def _handle_bulk_analyze(job_id: str, user_id: str, payload: dict):
         list(pool.map(_analyze_one, companies))
 
 
+def _handle_batch_dm(job_id: str, user_id: str, payload: dict):
+    """Generate LinkedIn DMs for a batch of companies using Groq."""
+    import requests as _requests
+
+    company_ids = payload.get('company_ids', [])
+    persona     = payload.get('persona', 'decision maker')
+    groq_key    = payload.get('groq_key') or os.getenv('GROQ_API_KEY', '')
+
+    if not groq_key:
+        raise ValueError('Groq API key required for batch DM')
+
+    if company_ids:
+        co_res = supabase.table('companies').select(
+            'id,name,industry,size,description,tech_stack,recent_news,job_openings'
+        ).in_('id', company_ids).eq('user_id', user_id).execute()
+    else:
+        co_res = supabase.table('companies').select(
+            'id,name,industry,size,description,tech_stack,recent_news,job_openings'
+        ).eq('user_id', user_id).execute()
+    companies = co_res.data or []
+
+    completed = 0
+    errors    = 0
+
+    def _dm_one(company):
+        nonlocal completed, errors
+        cid  = company['id']
+        name = company.get('name', '')
+        try:
+            stack = company.get('tech_stack') or []
+            news  = company.get('recent_news') or []
+            jobs  = company.get('job_openings') or []
+            context = (
+                f"Company: {name}\nIndustry: {company.get('industry') or ''}\n"
+                f"Size: {company.get('size') or ''}\n"
+                f"Description: {(company.get('description') or '')[:300]}\n"
+                f"Tech stack: {', '.join(stack[:5]) if isinstance(stack, list) else ''}\n"
+                f"Recent news: {news[0].get('title', '') if isinstance(news, list) and news else ''}\n"
+                f"Open role: {jobs[0].get('title', '') if isinstance(jobs, list) and jobs else ''}"
+            )
+            res = _requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
+                json={
+                    'model': 'llama-3.1-70b-versatile',
+                    'messages': [{'role': 'user', 'content': (
+                        f"Write a short, personalised LinkedIn cold outreach message (under 300 chars) "
+                        f"to a {persona} at {name}.\n\nContext:\n{context}\n\n"
+                        "Rules:\n- Specific observation about their company\n- One value prop\n"
+                        "- Soft CTA\n- No emojis. Under 300 chars.\nReturn ONLY the message text."
+                    )}],
+                    'max_tokens': 120,
+                    'temperature': 0.7,
+                },
+                timeout=12,
+            )
+            if res.status_code == 200:
+                msg = res.json()['choices'][0]['message']['content'].strip().strip('"')
+                supabase.table('companies').update({'linkedin_dm': msg}).eq('id', cid).eq('user_id', user_id).execute()
+            completed += 1
+        except Exception:
+            errors += 1
+        update_job(job_id, supabase, completed=completed, errors=errors, status='running')
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        list(pool.map(_dm_one, companies))
+
+
 # ─── Dispatch table ───────────────────────────────────────────────────────────
 
 HANDLERS = {
     'bulk_enrichment':  _handle_bulk_enrichment,
     'bulk_maps_enrich': _handle_bulk_maps_enrich,
     'bulk_analyze':     _handle_bulk_analyze,
+    'batch_dm':         _handle_batch_dm,
 }
+
+
+# ─── Heartbeat ────────────────────────────────────────────────────────────────
+
+def _heartbeat_loop(n_queues: int):
+    """Write a heartbeat to Supabase every 60s so the API can detect worker health."""
+    while True:
+        try:
+            supabase.table('worker_heartbeats').update({
+                'updated_at':    time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                'status':        'running',
+                'queues_watched': n_queues,
+            }).eq('id', 'sonar-worker').execute()
+        except Exception as e:
+            print(f'[worker] Heartbeat failed: {e}', flush=True)
+        time.sleep(60)
 
 
 # ─── Main polling loop ────────────────────────────────────────────────────────
@@ -262,6 +347,9 @@ def run():
         sys.exit(1)
 
     print(f'[worker] Watching queues: {list(active_queues.keys())}', flush=True)
+
+    import threading
+    threading.Thread(target=_heartbeat_loop, args=(len(active_queues),), daemon=True).start()
 
     while True:
         for job_type, queue_url in active_queues.items():

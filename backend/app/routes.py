@@ -2424,7 +2424,7 @@ Be conservative and accurate. No explanation."""
                                 if not response_text and _groq_key:
                                     try:
                                         completion = client.chat.completions.create(
-                                            model="llama-3.3-70b-versatile",
+                                            model="llama-3.1-70b-versatile",
                                             messages=[{"role": "user", "content": prompt}],
                                             temperature=0.1,
                                             max_tokens=150,
@@ -4822,7 +4822,7 @@ Respond in JSON only:
 
             try:
                 completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model="llama-3.1-70b-versatile",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
                     max_tokens=150,
@@ -4880,7 +4880,7 @@ def _call_ai(prompt: str, max_tokens: int = 300, user_id: str = None, feature: s
         r = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}],
+            json={"model": "llama-3.1-70b-versatile", "messages": [{"role": "user", "content": prompt}],
                   "max_tokens": max_tokens, "temperature": 0.2},
             timeout=20,
         )
@@ -4892,7 +4892,7 @@ def _call_ai(prompt: str, max_tokens: int = 300, user_id: str = None, feature: s
             if user_id:
                 posthog.capture(user_id, "$ai_generation", {
                     "$ai_provider": "groq",
-                    "$ai_model": "llama-3.3-70b-versatile",
+                    "$ai_model": "llama-3.1-70b-versatile",
                     "$ai_input_tokens": usage.get("prompt_tokens"),
                     "$ai_output_tokens": usage.get("completion_tokens"),
                     "$ai_latency": round(latency, 3),
@@ -5380,6 +5380,37 @@ async def bulk_maps_enrich_async(
     return {"job_id": job_id, "status": "queued"}
 
 
+
+@router.post("/companies/batch-dm/async")
+async def batch_dm_async(
+    payload: dict = {},
+    authorization: str = Header(...)
+):
+    """Dispatch batch LinkedIn DM generation to SQS worker. Returns job_id to poll."""
+    user_id = get_user_id(authorization)
+    job_id = dispatch_job("batch_dm", user_id, {
+        "company_ids": payload.get("company_ids", []),
+        "persona":     payload.get("persona", "decision maker"),
+        "groq_key":    os.environ.get("GROQ_API_KEY", ""),
+    }, supabase)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/worker/health")
+async def worker_health(authorization: str = Header(...)):
+    """Check if the SQS worker is alive based on last heartbeat."""
+    get_user_id(authorization)
+    res = supabase.table("worker_heartbeats").select("*").eq("id", "sonar-worker").limit(1).execute()
+    if not res.data:
+        return {"status": "unknown", "last_seen": None}
+    row = res.data[0]
+    from datetime import datetime, timezone
+    last = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+    age_seconds = (datetime.now(timezone.utc) - last).total_seconds()
+    status = "healthy" if age_seconds < 180 else "stale" if age_seconds < 600 else "down"
+    return {"status": status, "last_seen": row["updated_at"], "age_seconds": int(age_seconds)}
+
+
 # ─── PROFILE ROUTES ─────────────────────────────────────────
 
 @router.get("/profile")
@@ -5852,7 +5883,7 @@ Return ONLY valid JSON in this exact structure, no explanation:
         r = _req.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-            json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1800, "temperature": 0.7},
+            json={"model": "llama-3.1-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1800, "temperature": 0.7},
             timeout=30,
         )
         d = r.json()
@@ -6572,7 +6603,7 @@ async def check_sequence_replies(request: Request):
                         f"Reply:\n{body_text[:600]}\n\n"
                         "Reply with ONLY the category name."
                     )
-                    pl = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": classify_prompt}], "max_tokens": 10, "temperature": 0}
+                    pl = {"model": "llama-3.1-70b-versatile", "messages": [{"role": "user", "content": classify_prompt}], "max_tokens": 10, "temperature": 0}
                     req = _ureq3.Request("https://api.groq.com/openai/v1/chat/completions",
                         data=_jl3.dumps(pl).encode(),
                         headers={"Authorization": f"Bearer {_groq_key_reply}", "Content-Type": "application/json"},
@@ -7992,6 +8023,8 @@ async def prospect_people_search(payload: dict, authorization: str = Header(...)
             timeout=20,
         )
         data = res.json()
+        if res.status_code == 402:
+            raise HTTPException(status_code=402, detail="PDL credits exhausted — top up at peopledatalabs.com.")
         if res.status_code not in (200, 404):
             raise HTTPException(
                 status_code=502,
@@ -8681,7 +8714,7 @@ RULES:
             res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1400, "temperature": 0.05},
+                json={"model": "llama-3.1-70b-versatile", "messages": [{"role": "user", "content": prompt}], "max_tokens": 1400, "temperature": 0.05},
                 timeout=25,
             )
             raw = res.json().get("choices",[{}])[0].get("message",{}).get("content","").strip()

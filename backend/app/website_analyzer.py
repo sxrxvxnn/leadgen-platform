@@ -603,7 +603,7 @@ def analyze_with_groq(website_data: dict, company_name: str, industry: str, desc
             'https://api.groq.com/openai/v1/chat/completions',
             headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
             json={
-                'model': 'llama-3.3-70b-versatile',
+                'model': 'llama-3.1-70b-versatile',
                 'messages': [
                     {'role': 'system', 'content': SYSTEM_INSTRUCTION},
                     {'role': 'user',   'content': user_content},

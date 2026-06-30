@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment, bulkCreateCompanies, invalidateCache } from '../services/api'
+import { getCompanies, updateCompany, deleteCompany, bulkDeleteCompanies, getCompanyLeads, checkCompliance, autofillCompanyLinkedIn, analyzeCompany, enrichPipeline, getCompanySignals, fetchCompanyFunding, deepEnrichCompany, bulkDeepEnrichCompanies, findLookalikesForCompany, generateLinkedInDM, getCompanyActivities, createCompanyActivity, deleteCompanyActivity, findDuplicateCompanies, mergeCompanies, getCompanyAlerts, markCompanyAlertSeen, refreshCompanyAlerts, listCompanySegments, createCompanySegment, deleteCompanySegment, bulkCreateCompanies, invalidateCache, listJobs, getJob } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
 import { useFeatureFlags } from '../context/FeatureFlagContext'
@@ -1548,6 +1548,36 @@ export default function Companies() {
   const [showSpreadsheet, setShowSpreadsheet] = useState(false)
   const [bulkEnriching, setBulkEnriching] = useState(false)
   const [bulkEnrichProgress, setBulkEnrichProgress] = useState(null)
+  const [activeJob, setActiveJob] = useState(null)
+
+  // Poll active SQS jobs — picks up background jobs even after page refresh
+  useEffect(() => {
+    let timer
+    async function pollJobs() {
+      try {
+        const res = await listJobs()
+        const running = (res.data || []).find(j => j.status === 'running' || j.status === 'queued')
+        if (running) {
+          setActiveJob(running)
+          timer = setTimeout(async () => {
+            try {
+              const jr = await getJob(running.id)
+              setActiveJob(jr.data)
+              if (jr.data?.status === 'completed' || jr.data?.status === 'failed') {
+                setTimeout(() => setActiveJob(null), 5000)
+              }
+            } catch {}
+          }, 3000)
+        } else {
+          setActiveJob(null)
+        }
+      } catch {}
+    }
+    pollJobs()
+    const interval = setInterval(pollJobs, 8000)
+    return () => { clearInterval(interval); clearTimeout(timer) }
+  }, [])
+
   const [showBulkMenu, setShowBulkMenu] = useState(false)
   const bulkMenuRef = useRef(null)
   const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
@@ -2065,6 +2095,25 @@ export default function Companies() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: maps.running ? 'rgba(74,124,89,0.05)' : 'rgba(74,124,89,0.06)', border: `1px solid rgba(74,124,89,0.2)`, borderRadius: '8px', marginBottom: '12px' }}>
             {maps.running && <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid #4a7c59', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: '#4a7c59', fontWeight: '500' }}>{maps.msg}</span>
+          </div>
+        )}
+
+        {activeJob && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(231,0,11,0.04)', border: '1px solid rgba(231,0,11,0.2)', borderRadius: '8px', marginBottom: '12px' }}>
+            {(activeJob.status === 'running' || activeJob.status === 'queued') && (
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid var(--accent)', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+            )}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.02em', color: activeJob.status === 'completed' ? '#4a7c59' : activeJob.status === 'failed' ? 'var(--accent)' : 'var(--accent)', fontWeight: '500' }}>
+              {activeJob.status === 'queued' && `Background job queued — ${activeJob.type.replace(/_/g, ' ')} (${activeJob.total} companies)`}
+              {activeJob.status === 'running' && `Background job running — ${activeJob.completed ?? 0}/${activeJob.total} ${activeJob.type.replace(/_/g, ' ')}`}
+              {activeJob.status === 'completed' && `Background job done — ${activeJob.completed}/${activeJob.total} ${activeJob.type.replace(/_/g, ' ')}`}
+              {activeJob.status === 'failed' && `Background job failed — ${activeJob.error_message || activeJob.type}`}
+            </span>
+            {activeJob.status === 'running' && activeJob.total > 0 && (
+              <div style={{ flex: 1, height: '4px', background: 'rgba(231,0,11,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.round((activeJob.completed / activeJob.total) * 100)}%`, background: 'var(--accent)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+              </div>
+            )}
           </div>
         )}
 
