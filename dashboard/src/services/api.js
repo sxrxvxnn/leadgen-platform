@@ -371,4 +371,9 @@ export const createFromTemplate      = (template_id, name) => api.post('/sequenc
 export const getActiveAnnouncements = () => api.get('/announcements/active')
 export const getPublicChangelog     = () => api.get('/changelog/public')
 
+// ─── WORKER / CRON STATUS ────────────────────────────────────────
+export const getWorkerHealth   = () => api.get('/worker/health')
+export const getCronStatus     = () => api.get('/cron/status')
+export const exportCompaniesCsv = () => api.get('/companies/export-csv', { responseType: 'blob' })
+
 export default api

@@ -1969,6 +1969,10 @@ export default function Companies() {
             style={{ ...s.secondaryBtn, color: showSegmentSave ? 'var(--text)' : 'var(--text-muted)' }}>
             ⊞ Save Filter
           </button>}
+          <button onClick={exportCompaniesCSV} disabled={companies.length === 0}
+            style={{ ...s.secondaryBtn, color: 'var(--text-muted)', opacity: companies.length === 0 ? 0.4 : 1 }}>
+            ↓ Export CSV
+          </button>
           <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.04em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"

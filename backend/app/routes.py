@@ -6219,10 +6219,26 @@ async def unenroll_lead(seq_id: str, enrollment_id: str, authorization: str = He
     return {"ok": True}
 
 
+
+import time as _time_mod
+
+def _log_cron(name: str, status: str, duration_ms: int, error: str = None):
+    """Record a cron run result to Supabase for monitoring."""
+    try:
+        supabase.table("cron_runs").update({
+            "last_run_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "status":      status,
+            "duration_ms": duration_ms,
+            "error":       error,
+        }).eq("cron_name", name).execute()
+    except Exception:
+        pass
+
 @router.post("/sequences/process-cron")
 async def process_sequence_cron(request: Request):
     """Cron endpoint — processes all due sequence enrollments."""
     verify_cron_auth(request)
+    _t0 = _time_mod.time()
     import datetime as _dt
     import smtplib as _smtplib
     import urllib.parse as _urlparse
@@ -6505,6 +6521,7 @@ async def process_sequence_cron(request: Request):
             except Exception:
                 pass
 
+    _log_cron("process-sequences", "ok", int((_time_mod.time()-_t0)*1000))
     return {"processed": processed, "errors": errors, "total_due": len(due), "skipped_rate_limit": skipped_rate, "skipped_timezone": skipped_tz}
 
 
@@ -7564,6 +7581,32 @@ async def export_leads_csv(authorization: str = Header(...)):
     )
 
 
+
+
+@router.get("/companies/export-csv")
+async def export_companies_csv(authorization: str = Header(...)):
+    user_id = get_user_id(authorization)
+    companies = supabase.table("companies").select(
+        "name,website,industry,size,location,description,company_type,tech_stack,employee_count,followers,founded,phone,linkedin_url,status,icp_score,enriched_at,created_at"
+    ).eq("user_id", user_id).order("created_at", desc=True).execute().data or []
+
+    fields = ["name","website","industry","size","location","description","company_type",
+              "employee_count","followers","founded","phone","linkedin_url","status","icp_score","created_at"]
+    out = _io.StringIO()
+    writer = _csv.DictWriter(out, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    for co in companies:
+        row = {f: co.get(f) or "" for f in fields}
+        if isinstance(row.get("tech_stack"), list):
+            row["tech_stack"] = ", ".join(row["tech_stack"])
+        writer.writerow(row)
+
+    return Response(
+        content=out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="sonar-companies.csv"'},
+    )
+
 # ═══════════════════════════════════════════════════════════════════
 # LINKEDIN ENRICHMENT VIA PROXYCURL
 # ═══════════════════════════════════════════════════════════════════
@@ -8422,25 +8465,47 @@ async def database_scrape(authorization: str = Header(...)):
         _scrape_state["running"] = False
 
 
+
+
+@router.get("/cron/status")
+async def cron_status(authorization: str = Header(...)):
+    """Return last run info for all cron jobs."""
+    get_user_id(authorization)
+    res = supabase.table("cron_runs").select("*").execute()
+    return res.data or []
+
+
 @router.post("/cron/scrape-github")
 async def cron_scrape_github(request: Request):
     """Vercel cron endpoint — runs daily to grow the contact database."""
     verify_cron_auth(request)
 
-    qi     = _scrape_state.get("query_index", 0)
-    result = run_scrape_job(supabase, query_index=qi, max_users=100)
-    _scrape_state["last_result"] = result
-    _scrape_state["last_run"]    = datetime.utcnow().isoformat() + "Z"
-    _scrape_state["query_index"] = (qi + 1) % len(SCRAPE_QUERIES)
-    return {"ok": True, **result}
+    _t0 = _time_mod.time()
+    try:
+        qi     = _scrape_state.get("query_index", 0)
+        result = run_scrape_job(supabase, query_index=qi, max_users=100)
+        _scrape_state["last_result"] = result
+        _scrape_state["last_run"]    = datetime.utcnow().isoformat() + "Z"
+        _scrape_state["query_index"] = (qi + 1) % len(SCRAPE_QUERIES)
+        _log_cron("scrape-github", "ok", int((_time_mod.time()-_t0)*1000))
+        return {"ok": True, **result}
+    except Exception as _e:
+        _log_cron("scrape-github", "error", int((_time_mod.time()-_t0)*1000), str(_e)[:200])
+        raise
 
 
 @router.post("/cron/scrape-hn")
 async def cron_scrape_hn(request: Request):
     """Scrape the latest 'Ask HN: Who is hiring?' thread (runs weekly)."""
     verify_cron_auth(request)
-    result = run_hn_scrape_job(supabase, max_posts=200)
-    return {"ok": True, **result}
+    _t0 = _time_mod.time()
+    try:
+        result = run_hn_scrape_job(supabase, max_posts=200)
+        _log_cron("scrape-hn", "ok", int((_time_mod.time()-_t0)*1000))
+        return {"ok": True, **result}
+    except Exception as _e:
+        _log_cron("scrape-hn", "error", int((_time_mod.time()-_t0)*1000), str(_e)[:200])
+        raise
 
 
 @router.post("/cron/enrich-contacts")
@@ -8450,44 +8515,49 @@ async def cron_enrich_contacts(request: Request):
     Runs daily — processes up to 40 contacts per invocation to stay within timeout.
     """
     verify_cron_auth(request)
+    _t0 = _time_mod.time()
+    try:
+        rows = (
+            supabase.table("sonar_contacts")
+            .select("id,first_name,last_name,domain,job_company_name")
+            .is_("email", "null")
+            .not_.is_("domain", "null")
+            .not_.is_("first_name", "null")
+            .not_.is_("last_name", "null")
+            .order("scraped_at", desc=True)
+            .limit(40)
+            .execute()
+        ).data or []
 
-    rows = (
-        supabase.table("sonar_contacts")
-        .select("id,first_name,last_name,domain,job_company_name")
-        .is_("email", "null")
-        .not_.is_("domain", "null")
-        .not_.is_("first_name", "null")
-        .not_.is_("last_name", "null")
-        .order("scraped_at", desc=True)
-        .limit(40)
-        .execute()
-    ).data or []
-
-    enriched = skipped = errors = 0
-    for row in rows:
-        fn     = (row.get("first_name") or "").strip()
-        ln     = (row.get("last_name") or "").strip()
-        domain = (row.get("domain") or "").strip()
-        if not fn or not ln or not domain:
-            skipped += 1
-            continue
-        try:
-            hit = _find_email(fn, ln, domain, row.get("job_company_name") or "")
-            if hit.get("email"):
-                supabase.table("sonar_contacts").update({
-                    "email":          hit["email"],
-                    "email_score":    hit.get("email_score"),
-                    "email_provider": hit.get("email_provider"),
-                    "updated_at":     datetime.utcnow().isoformat() + "Z",
-                }).eq("id", row["id"]).execute()
-                enriched += 1
-            else:
+        enriched = skipped = errors = 0
+        for row in rows:
+            fn     = (row.get("first_name") or "").strip()
+            ln     = (row.get("last_name") or "").strip()
+            domain = (row.get("domain") or "").strip()
+            if not fn or not ln or not domain:
                 skipped += 1
-        except Exception as e:
-            print(f"[EnrichCron] error {row['id']}: {e}")
-            errors += 1
+                continue
+            try:
+                hit = _find_email(fn, ln, domain, row.get("job_company_name") or "")
+                if hit.get("email"):
+                    supabase.table("sonar_contacts").update({
+                        "email":          hit["email"],
+                        "email_score":    hit.get("email_score"),
+                        "email_provider": hit.get("email_provider"),
+                        "updated_at":     datetime.utcnow().isoformat() + "Z",
+                    }).eq("id", row["id"]).execute()
+                    enriched += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                print(f"[EnrichCron] error {row['id']}: {e}")
+                errors += 1
 
-    return {"ok": True, "enriched": enriched, "skipped": skipped, "errors": errors, "processed": len(rows)}
+        _log_cron("enrich-contacts", "ok", int((_time_mod.time()-_t0)*1000))
+        return {"ok": True, "enriched": enriched, "skipped": skipped, "errors": errors, "processed": len(rows)}
+    except Exception as _e:
+        _log_cron("enrich-contacts", "error", int((_time_mod.time()-_t0)*1000), str(_e)[:200])
+        raise
 
 
 @router.post("/cron/refresh-contacts")
@@ -8497,53 +8567,56 @@ async def cron_refresh_contacts(request: Request):
     Runs weekly — keeps the Sonar DB fresh.
     """
     verify_cron_auth(request)
+    _t0 = _time_mod.time()
+    try:
+        from app.github_scraper import _enrich_profile
 
-    from app.github_scraper import _enrich_profile
+        rows = (
+            supabase.table("sonar_contacts")
+            .select("id,source,source_id,updated_at")
+            .eq("source", "github")
+            .order("updated_at", desc=False)
+            .limit(50)
+            .execute()
+        ).data or []
 
-    cutoff = datetime.utcnow().isoformat() + "Z"
-    # We'll filter in Python since supabase-py interval arithmetic is awkward
-    rows = (
-        supabase.table("sonar_contacts")
-        .select("id,source,source_id,updated_at")
-        .eq("source", "github")
-        .order("updated_at", desc=False)
-        .limit(50)
-        .execute()
-    ).data or []
+        refreshed = skipped = errors = 0
+        from datetime import timedelta
+        cutoff_dt = datetime.utcnow() - timedelta(days=90)
 
-    refreshed = skipped = errors = 0
-    from datetime import timedelta
-    cutoff_dt = datetime.utcnow() - timedelta(days=90)
+        for row in rows:
+            updated_raw = row.get("updated_at") or ""
+            try:
+                updated_dt = datetime.fromisoformat(updated_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                updated_dt = datetime(2000, 1, 1)
 
-    for row in rows:
-        updated_raw = row.get("updated_at") or ""
-        try:
-            updated_dt = datetime.fromisoformat(updated_raw.replace("Z", "+00:00")).replace(tzinfo=None)
-        except Exception:
-            updated_dt = datetime(2000, 1, 1)
-
-        if updated_dt > cutoff_dt:
-            skipped += 1
-            continue
-
-        username = row.get("source_id") or ""
-        if not username:
-            skipped += 1
-            continue
-
-        try:
-            profile = _enrich_profile(username)
-            if profile:
-                profile["updated_at"] = datetime.utcnow().isoformat() + "Z"
-                supabase.table("sonar_contacts").update(profile).eq("id", row["id"]).execute()
-                refreshed += 1
-            else:
+            if updated_dt > cutoff_dt:
                 skipped += 1
-        except Exception as e:
-            print(f"[RefreshCron] error {row['id']}: {e}")
-            errors += 1
+                continue
 
-    return {"ok": True, "refreshed": refreshed, "skipped": skipped, "errors": errors}
+            username = row.get("source_id") or ""
+            if not username:
+                skipped += 1
+                continue
+
+            try:
+                profile = _enrich_profile(username)
+                if profile:
+                    profile["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                    supabase.table("sonar_contacts").update(profile).eq("id", row["id"]).execute()
+                    refreshed += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                print(f"[RefreshCron] error {row['id']}: {e}")
+                errors += 1
+
+        _log_cron("refresh-contacts", "ok", int((_time_mod.time()-_t0)*1000))
+        return {"ok": True, "refreshed": refreshed, "skipped": skipped, "errors": errors}
+    except Exception as _e:
+        _log_cron("refresh-contacts", "error", int((_time_mod.time()-_t0)*1000), str(_e)[:200])
+        raise
 
 
 @router.post("/webhooks/{webhook_id}/test")
@@ -9861,6 +9934,7 @@ async def save_warmup_config(payload: dict, authorization: str = Header(...)):
 async def warmup_cron(request: Request):
     """Vercel cron endpoint — runs daily to send warm-up emails for all enabled users."""
     verify_cron_auth(request)
+    _t0 = _time_mod.time()
     import smtplib as _smtp_wu
     from email.mime.text      import MIMEText      as _MIMEText_wu
     from email.mime.multipart import MIMEMultipart as _MIMEMultipart_wu
@@ -9944,6 +10018,7 @@ async def warmup_cron(request: Request):
         supabase.table("warmup_configs").update({"daily_target": daily_target}).eq("user_id", user_id).execute()
         results.append({"user_id": user_id, "day": day, "target": daily_target, "sent": sent_count, "errors": errors})
 
+    _log_cron("warmup", "ok", int((_time_mod.time()-_t0)*1000))
     return {"ok": True, "results": results}
 
 
