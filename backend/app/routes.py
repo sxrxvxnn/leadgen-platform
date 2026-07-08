@@ -3855,7 +3855,8 @@ async def bulk_autofill_companies(
 
             if website_data:
                 if needs_type:
-                    ct, _ = classify_company_type_rules(website_data)
+                    _desc_for_type = company.get("description") or update_data.get("description") or ""
+                    ct, _ = classify_company_type_rules(website_data, _desc_for_type)
                     if ct:
                         update_data["company_type"] = ct
                 if needs_desc:
@@ -4006,7 +4007,8 @@ async def bulk_autofill_companies(
                                 if _name_is_distinctive(company_name) or _website_matches_company(company_name, ws2):
                                     update_data["website"] = li_website
                             if needs_type and not update_data.get("company_type"):
-                                ct2, _ = classify_company_type_rules(ws2)
+                                _desc_for_type2 = company.get("description") or update_data.get("description") or ""
+                                ct2, _ = classify_company_type_rules(ws2, _desc_for_type2)
                                 if ct2: update_data["company_type"] = ct2
                             if needs_desc and not update_data.get("description"):
                                 desc2 = (ws2.get("meta_description") or
@@ -4022,12 +4024,14 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
-            # Groq inference — fills industry/founded/specialties if still blank after LI scrape
+            # Groq inference — fills industry/founded/specialties/company_type if still blank after LI scrape
             _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
             _desc_bulk = update_data.get("description") or company.get("description") or ""
+            _missing_type_bulk = needs_type and not update_data.get("company_type") and not company.get("company_type")
             _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
                             (not update_data.get("founded") and not company.get("founded")) or \
-                            (not update_data.get("specialties") and not company.get("specialties"))
+                            (not update_data.get("specialties") and not company.get("specialties")) or \
+                            _missing_type_bulk
             if _groq_key_bulk and _desc_bulk and _missing_bulk:
                 try:
                     import json as _json_bulk
@@ -4036,8 +4040,12 @@ async def bulk_autofill_companies(
                         'Extract these fields. Be specific and concise.\n'
                         '- industry: industry name (e.g. "Software Development", "Financial Services")\n'
                         '- founded: 4-digit founding year only (omit if unsure)\n'
-                        '- specialties: 3-5 comma-separated specialty areas\n\n'
-                        'Respond ONLY as JSON: {"industry":"...","founded":"...","specialties":"..."}\n'
+                        '- specialties: 3-5 comma-separated specialty areas\n'
+                        '- company_type: exactly one of "Product" (SaaS/software product company), '
+                        '"Service" (consulting/outsourcing/agency), or "Hybrid" (both). '
+                        'Look for signals: pricing pages, free trial, subscription → Product; '
+                        'client projects, staff augmentation, IT services → Service.\n\n'
+                        'Respond ONLY as JSON: {"industry":"...","founded":"...","specialties":"...","company_type":"..."}\n'
                         'Use null for fields you are not confident about.'
                     )
                     _gr = requests.post(
@@ -4045,7 +4053,7 @@ async def bulk_autofill_companies(
                         headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
                         json={"model": "llama-3.1-8b-instant",
                               "messages": [{"role": "user", "content": _bp}],
-                              "max_tokens": 120, "temperature": 0.1},
+                              "max_tokens": 150, "temperature": 0.1},
                         timeout=10,
                     )
                     if _gr.status_code == 200:
@@ -4064,6 +4072,9 @@ async def bulk_autofill_companies(
                             if not update_data.get("specialties") and not company.get("specialties") and \
                                _xb.get("specialties") and _xb["specialties"] not in (None, "null"):
                                 update_data["specialties"] = str(_xb["specialties"])
+                            if _missing_type_bulk and _xb.get("company_type") and \
+                               _xb["company_type"] in ("Product", "Service", "Hybrid"):
+                                update_data["company_type"] = _xb["company_type"]
                 except Exception:
                     pass
 
