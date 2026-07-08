@@ -1293,11 +1293,13 @@ async def bulk_delete_companies(
     if not ids:
         raise HTTPException(status_code=400, detail="No ids provided")
     try:
-        supabase.table("companies")\
-            .delete()\
-            .in_("id", ids)\
-            .eq("user_id", user_id)\
-            .execute()
+        CHUNK = 100
+        for i in range(0, len(ids), CHUNK):
+            supabase.table("companies")\
+                .delete()\
+                .in_("id", ids[i:i + CHUNK])\
+                .eq("user_id", user_id)\
+                .execute()
         posthog.capture(user_id, "companies_bulk_deleted", {"count": len(ids)})
         return {"deleted": len(ids)}
     except Exception as e:
