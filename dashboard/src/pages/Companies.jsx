@@ -1796,105 +1796,6 @@ function CompanyCard({
         )}
       </div>
 
-      {/* ── Sub-cards: Employee Count + Funding ── */}
-      <div style={{ marginTop: 8 }}>
-        {/* Company Funding — full width now that employee count is in the info grid */}
-        <div
-          style={{
-            background: 'var(--bg)',
-            border: '1px solid rgba(196,193,189,0.55)',
-            borderLeft: '4px solid #16a34a',
-            borderRadius: 8,
-            padding: '16px 20px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#16a34a"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                <polyline points="17 6 23 6 23 12" />
-              </svg>
-              <span
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: 'var(--text)',
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                Company funding
-              </span>
-            </div>
-            <button
-              onClick={handleFetchFunding}
-              disabled={fetchingFunding}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                padding: '4px 10px',
-                background: 'transparent',
-                border: '1px solid rgba(22,163,74,0.35)',
-                borderRadius: 5,
-                color: fetchingFunding ? 'var(--text-muted)' : '#16a34a',
-                cursor: fetchingFunding ? 'default' : 'pointer',
-                opacity: fetchingFunding ? 0.6 : 1,
-                letterSpacing: '0.04em',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {fetchingFunding ? 'Fetching…' : 'Fetch Funding'}
-            </button>
-          </div>
-          <p
-            style={{
-              fontSize: 12,
-              color: 'var(--text-muted)',
-              margin: '0 0 10px',
-              lineHeight: 1.5,
-            }}
-          >
-            Funding rounds, amounts, and participating investors.
-          </p>
-          {company.revenue || fundingResult?.ok ? (
-            <p
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 22,
-                fontWeight: 700,
-                color: '#16a34a',
-                margin: 0,
-                letterSpacing: '-0.03em',
-              }}
-            >
-              {fundingResult?.ok ? fundingResult.value : company.revenue}
-            </p>
-          ) : fundingResult?.ok === false ? (
-            <p style={{ fontSize: 12, color: 'var(--accent)', margin: 0 }}>{fundingResult.msg}</p>
-          ) : (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontStyle: 'italic' }}>
-              Not available — click Fetch Funding or enter via Edit.
-            </p>
-          )}
-        </div>
-      </div>
-
       {/* ── Deep Intelligence card — gated by feature flag ── */}
       {showEnrichCards && isEnabled('company_enrich_cards') && (
         <div
@@ -2349,6 +2250,69 @@ function CompanyCard({
               </div>
             </div>
           )}
+
+          {/* Funding */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              padding: '12px 18px',
+              borderTop: '1px solid rgba(196,193,189,0.3)',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-muted)',
+                minWidth: 110,
+                paddingTop: 2,
+                flexShrink: 0,
+              }}
+            >
+              Funding
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {company.revenue || fundingResult?.ok ? (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: '#16a34a',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {fundingResult?.ok ? fundingResult.value : company.revenue}
+                </span>
+              ) : fundingResult?.ok === false ? (
+                <span style={{ fontSize: 12, color: 'var(--accent)' }}>{fundingResult.msg}</span>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Not available
+                </span>
+              )}
+              <button
+                onClick={handleFetchFunding}
+                disabled={fetchingFunding}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  padding: '3px 8px',
+                  background: 'transparent',
+                  border: '1px solid rgba(22,163,74,0.35)',
+                  borderRadius: 4,
+                  color: fetchingFunding ? 'var(--text-muted)' : '#16a34a',
+                  cursor: fetchingFunding ? 'default' : 'pointer',
+                  opacity: fetchingFunding ? 0.6 : 1,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {fetchingFunding ? 'Fetching...' : 'Fetch Funding'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
