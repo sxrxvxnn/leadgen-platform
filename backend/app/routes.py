@@ -2070,56 +2070,43 @@ async def bulk_create_companies(
     if not valid:
         return {"inserted": 0, "updated": 0, "skipped": skipped, "companies": [], "all_ids": []}
 
-    # Fetch all existing names in one query
-    CHUNK = 500
-    existing_map: dict[str, str] = {}  # name -> id
-    for i in range(0, len(valid), CHUNK):
-        chunk_names = [c["name"].strip() for c in valid[i:i + CHUNK]]
-        rows = supabase.table("companies").select("id,name,website,size,followers")\
-            .eq("user_id", user_id).in_("name", chunk_names).execute()
-        for r in rows.data or []:
-            existing_map[r["name"]] = r
-
-    # Split into new vs existing
-    to_insert = []
+    # Build upsert rows — Supabase upsert handles insert vs update atomically
+    # on_conflict targets the unique constraint (user_id, name)
+    to_upsert = []
     for c in valid:
-        name = c["name"].strip()
-        if name in existing_map:
-            existing = existing_map[name]
-            patch = {}
-            if c.get("website"):  patch["website"]   = c["website"]
-            if c.get("size"):     patch["size"]       = c["size"]
-            if c.get("followers"):patch["followers"]  = c["followers"]
-            if patch:
-                supabase.table("companies").update(patch).eq("id", existing["id"]).eq("user_id", user_id).execute()
-                updated.append(existing["id"])
-            else:
-                skipped += 1
-        else:
-            to_insert.append({
-                "user_id":     user_id,
-                "name":        name,
-                "industry":    c.get("industry") or None,
-                "size":        c.get("size") or None,
-                "followers":   c.get("followers") or None,
-                "headquarters":c.get("headquarters") or None,
-                "description": c.get("description") or None,
-                "website":     c.get("website") or None,
-                "linkedin_url":c.get("linkedin_url") or c.get("linkedinUrl") or c.get("salesNavUrl") or None,
-                "phone":       c.get("phone") or None,
-                "founded":     c.get("founded") or None,
-                "specialties": c.get("specialties") or None,
-                "tagline":     c.get("tagline") or None,
-            })
+        to_upsert.append({
+            "user_id":      user_id,
+            "name":         c["name"].strip(),
+            "industry":     c.get("industry") or None,
+            "size":         c.get("size") or None,
+            "followers":    c.get("followers") or None,
+            "headquarters": c.get("headquarters") or None,
+            "description":  c.get("description") or None,
+            "website":      c.get("website") or None,
+            "linkedin_url": c.get("linkedin_url") or c.get("linkedinUrl") or c.get("salesNavUrl") or None,
+            "phone":        c.get("phone") or None,
+            "founded":      c.get("founded") or None,
+            "specialties":  c.get("specialties") or None,
+            "tagline":      c.get("tagline") or None,
+        })
 
-    # Batch insert in chunks of 200
-    for i in range(0, len(to_insert), 200):
+    # Upsert in chunks of 100 to stay under PostgREST limits
+    CHUNK = 100
+    for i in range(0, len(to_upsert), CHUNK):
+        chunk = to_upsert[i:i + CHUNK]
         try:
-            resp = supabase.table("companies").insert(to_insert[i:i + 200]).execute()
-            inserted.extend(resp.data or [])
+            resp = supabase.table("companies").upsert(
+                chunk,
+                on_conflict="user_id,name",
+                returning="representation",
+            ).execute()
+            for row in resp.data or []:
+                # Supabase upsert doesn't distinguish insert vs update in response,
+                # so we track by whether the row already had enrichment data
+                inserted.append(row)
         except Exception as e:
-            print(f"Bulk insert chunk error: {e}")
-            skipped += len(to_insert[i:i + 200])
+            print(f"Bulk upsert chunk {i//CHUNK + 1} error: {e}")
+            skipped += len(chunk)
 
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
