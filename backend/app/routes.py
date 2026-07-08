@@ -5415,6 +5415,23 @@ async def run_dm_scan_async(
     return {"job_id": job_id, "status": "queued"}
 
 
+@router.get("/internal/search-profiles")
+async def internal_search_profiles(company: str, token: str = ""):
+    """
+    Internal endpoint called by the EC2 worker to run web searches via Vercel IPs
+    (EC2 IPs are blocked by search engines). Returns LinkedIn profile candidates.
+    """
+    expected = os.getenv("INTERNAL_TOKEN", "")
+    if not expected or token != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    results = _ddg_search(
+        f'site:linkedin.com/in "{company}" CEO OR Founder OR CTO OR COO OR CMO OR CFO OR Director OR "VP " OR "Head of"',
+        limit=12,
+    )
+    return {"results": results}
+
+
 @router.post("/companies/batch-dm/async")
 async def batch_dm_async(
     payload: dict = {},
