@@ -3281,14 +3281,19 @@ export default function Companies() {
   const [activeJob, setActiveJob] = useState(null)
 
   // Poll active SQS jobs — picks up background jobs even after page refresh
+  const [dismissedJobId, setDismissedJobId] = useState(null)
   useEffect(() => {
     let timer
     async function pollJobs() {
       try {
         const res = await listJobs()
-        const running = (res.data || []).find(
-          (j) => j.status === 'running' || j.status === 'queued'
-        )
+        const STALE_MS = 30 * 60 * 1000
+        const running = (res.data || []).find((j) => {
+          if (j.status !== 'running' && j.status !== 'queued') return false
+          if (j.id === dismissedJobId) return false
+          const age = Date.now() - new Date(j.created_at).getTime()
+          return age < STALE_MS
+        })
         if (running) {
           setActiveJob(running)
           timer = setTimeout(async () => {
@@ -3311,7 +3316,7 @@ export default function Companies() {
       clearInterval(interval)
       clearTimeout(timer)
     }
-  }, [])
+  }, [dismissedJobId])
 
   const [showBulkMenu, setShowBulkMenu] = useState(false)
   const bulkMenuRef = useRef(null)
@@ -4758,6 +4763,25 @@ export default function Companies() {
               {activeJob.status === 'failed' &&
                 `Background job failed — ${activeJob.error_message || activeJob.type}`}
             </span>
+            <button
+              onClick={() => {
+                setDismissedJobId(activeJob.id)
+                setActiveJob(null)
+              }}
+              style={{
+                marginLeft: 'auto',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                fontSize: 14,
+                lineHeight: 1,
+                padding: '0 2px',
+                flexShrink: 0,
+              }}
+            >
+              ×
+            </button>
             {activeJob.status === 'running' && activeJob.total > 0 && (
               <div
                 style={{
