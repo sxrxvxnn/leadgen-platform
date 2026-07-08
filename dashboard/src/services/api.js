@@ -9,18 +9,26 @@ const CACHE_TTL = 30_000
 function _cacheGet(key) {
   const entry = _cache.get(key)
   if (!entry) return null
-  if (Date.now() - entry.ts > CACHE_TTL) { _cache.delete(key); return null }
+  if (Date.now() - entry.ts > CACHE_TTL) {
+    _cache.delete(key)
+    return null
+  }
   return entry.data
 }
-function _cacheSet(key, data) { _cache.set(key, { data, ts: Date.now() }) }
+function _cacheSet(key, data) {
+  _cache.set(key, { data, ts: Date.now() })
+}
 export function invalidateCache(...keys) {
-  if (keys.length === 0) { _cache.clear(); return }
+  if (keys.length === 0) {
+    _cache.clear()
+    return
+  }
   for (const k of keys) _cache.delete(k)
 }
 
 const api = axios.create({
   baseURL: BASE_URL,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
 })
 
 api.interceptors.request.use((config) => {
@@ -42,8 +50,11 @@ api.interceptors.response.use(
         original._retried = true
         try {
           if (!_refreshPromise) {
-            _refreshPromise = api.post('/auth/refresh', { refresh_token: refreshToken })
-              .finally(() => { _refreshPromise = null })
+            _refreshPromise = api
+              .post('/auth/refresh', { refresh_token: refreshToken })
+              .finally(() => {
+                _refreshPromise = null
+              })
           }
           const res = await _refreshPromise
           const newToken = res.data.access_token
@@ -70,7 +81,9 @@ function _tokenExpiresAt(token) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
     return (payload.exp || 0) * 1000
-  } catch { return 0 }
+  } catch {
+    return 0
+  }
 }
 
 // Call before any streaming fetch — refreshes token if <5 min remain
@@ -78,7 +91,7 @@ async function ensureFreshToken() {
   const token = localStorage.getItem('token')
   if (!token) return
   const expiresAt = _tokenExpiresAt(token)
-  if (expiresAt - Date.now() > 5 * 60 * 1000) return  // still has 5+ min
+  if (expiresAt - Date.now() > 5 * 60 * 1000) return // still has 5+ min
   const refreshToken = localStorage.getItem('refreshToken')
   if (!refreshToken) return
   try {
@@ -109,9 +122,13 @@ async function _streamingFetch(url, body, onProgress) {
   }
   if (!response.ok) {
     const txt = await response.text()
-    try { throw new Error(JSON.parse(txt).detail || txt) } catch { throw new Error(txt) }
+    try {
+      throw new Error(JSON.parse(txt).detail || txt)
+    } catch {
+      throw new Error(txt)
+    }
   }
-  const reader  = response.body.getReader()
+  const reader = response.body.getReader()
   const decoder = new TextDecoder()
   const results = []
   let buffer = ''
@@ -134,10 +151,10 @@ async function _streamingFetch(url, body, onProgress) {
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────
-export const login         = (data) => api.post('/auth/login', data)
-export const signup        = (data) => api.post('/auth/signup', data)
+export const login = (data) => api.post('/auth/login', data)
+export const signup = (data) => api.post('/auth/signup', data)
 export const forgotPassword = (email) => api.post('/auth/forgot-password', { email })
-export const resetPassword  = (recovery_token, new_password) =>
+export const resetPassword = (recovery_token, new_password) =>
   api.post('/auth/reset-password', { recovery_token, new_password })
 
 // ─── LEADS ────────────────────────────────────────────────────
@@ -148,16 +165,40 @@ export const getLeads = async () => {
   _cacheSet('/leads', res)
   return res
 }
-export const createLead = (data) => { invalidateCache('/leads'); return api.post('/leads', data) }
-export const updateLead = (id, data) => { invalidateCache('/leads'); return api.patch(`/leads/${id}`, data) }
-export const deleteLead = (id) => { invalidateCache('/leads'); return api.delete(`/leads/${id}`) }
-export const bulkDeleteLeads = (ids) => { invalidateCache('/leads'); return api.post('/leads/bulk-delete', { ids }) }
+export const createLead = (data) => {
+  invalidateCache('/leads')
+  return api.post('/leads', data)
+}
+export const updateLead = (id, data) => {
+  invalidateCache('/leads')
+  return api.patch(`/leads/${id}`, data)
+}
+export const deleteLead = (id) => {
+  invalidateCache('/leads')
+  return api.delete(`/leads/${id}`)
+}
+export const bulkDeleteLeads = (ids) => {
+  invalidateCache('/leads')
+  return api.post('/leads/bulk-delete', { ids })
+}
 export const bulkScoreLeads = (ids) => api.post('/leads/bulk-score', { ids })
 export const bulkEnrichLeads = (ids) => api.post('/leads/bulk-enrich', { ids })
-export const bulkCreateLeads = (data) => { invalidateCache('/leads'); return api.post('/leads/bulk', data) }
-export const starLead = (id, starred) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/star`, { starred }) }
-export const updateConnectionStatus = (id, connection_status) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/connection-status`, { connection_status }) }
-export const spreadsheetUpdateLead = (id, data) => { invalidateCache('/leads'); return api.patch(`/leads/${id}/spreadsheet`, data) }
+export const bulkCreateLeads = (data) => {
+  invalidateCache('/leads')
+  return api.post('/leads/bulk', data)
+}
+export const starLead = (id, starred) => {
+  invalidateCache('/leads')
+  return api.patch(`/leads/${id}/star`, { starred })
+}
+export const updateConnectionStatus = (id, connection_status) => {
+  invalidateCache('/leads')
+  return api.patch(`/leads/${id}/connection-status`, { connection_status })
+}
+export const spreadsheetUpdateLead = (id, data) => {
+  invalidateCache('/leads')
+  return api.patch(`/leads/${id}/spreadsheet`, data)
+}
 export const autofillBulk = (leadIds, batchStart = 0) =>
   api.post('/leads/autofill-bulk', {
     lead_ids: leadIds,
@@ -177,11 +218,26 @@ export const getCompanies = async () => {
   _cacheSet('/companies', res)
   return res
 }
-export const createCompany = (data) => { invalidateCache('/companies'); return api.post('/companies', data) }
-export const updateCompany = (id, data) => { invalidateCache('/companies'); return api.patch(`/companies/${id}`, data) }
-export const deleteCompany = (id) => { invalidateCache('/companies'); return api.delete(`/companies/${id}`) }
-export const bulkDeleteCompanies = (ids) => { invalidateCache('/companies'); return api.delete('/companies', { data: { ids } }) }
-export const bulkCreateCompanies = (companies) => { invalidateCache('/companies'); return api.post('/companies/bulk', { companies }) }
+export const createCompany = (data) => {
+  invalidateCache('/companies')
+  return api.post('/companies', data)
+}
+export const updateCompany = (id, data) => {
+  invalidateCache('/companies')
+  return api.patch(`/companies/${id}`, data)
+}
+export const deleteCompany = (id) => {
+  invalidateCache('/companies')
+  return api.delete(`/companies/${id}`)
+}
+export const bulkDeleteCompanies = (ids) => {
+  invalidateCache('/companies')
+  return api.delete('/companies', { data: { ids } })
+}
+export const bulkCreateCompanies = (companies) => {
+  invalidateCache('/companies')
+  return api.post('/companies/bulk', { companies })
+}
 export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyze-website`, payload)
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId) =>
@@ -194,18 +250,22 @@ export const fetchCompanyFunding = (id) => api.post(`/companies/${id}/fetch-fund
 export const deepEnrichCompany = (id) => api.post(`/companies/${id}/deep-enrich`)
 export const bulkDeepEnrichCompanies = (companyIds = [], onProgress) =>
   _streamingFetch('/companies/bulk-deep-enrich', { company_ids: companyIds }, onProgress)
-export const findLookalikesForCompany = (id, refresh = false) => api.post(`/companies/${id}/lookalike`, {}, { params: refresh ? { refresh: true } : {} })
-export const generateLinkedInDM = (id, persona = '') => api.post(`/companies/${id}/generate-dm`, { persona })
+export const findLookalikesForCompany = (id, refresh = false) =>
+  api.post(`/companies/${id}/lookalike`, {}, { params: refresh ? { refresh: true } : {} })
+export const generateLinkedInDM = (id, persona = '') =>
+  api.post(`/companies/${id}/generate-dm`, { persona })
 export const getCompanyActivities = (id) => api.get(`/companies/${id}/activities`)
 export const createCompanyActivity = (id, data) => api.post(`/companies/${id}/activities`, data)
 export const deleteCompanyActivity = (actId) => api.delete(`/company-activities/${actId}`)
 export const findDuplicateCompanies = () => api.post('/companies/find-duplicates')
-export const mergeCompanies = (keepId, deleteId) => api.post(`/companies/${keepId}/merge/${deleteId}`)
+export const mergeCompanies = (keepId, deleteId) =>
+  api.post(`/companies/${keepId}/merge/${deleteId}`)
 export const getCompanyAlerts = () => api.get('/companies/alerts')
 export const markCompanyAlertSeen = (id) => api.patch(`/companies/alerts/${id}/seen`)
 export const refreshCompanyAlerts = () => api.post('/companies/alerts/refresh')
 export const listCompanySegments = () => api.get('/company-segments')
-export const createCompanySegment = (name, filters) => api.post('/company-segments', { name, filters })
+export const createCompanySegment = (name, filters) =>
+  api.post('/company-segments', { name, filters })
 export const deleteCompanySegment = (id) => api.delete(`/company-segments/${id}`)
 export const prefillCompany = (name, websiteUrl) =>
   api.post('/companies/prefill', {
@@ -214,7 +274,8 @@ export const prefillCompany = (name, websiteUrl) =>
   })
 export const updateCompanySizeByName = (name, size) =>
   api.patch('/companies/size-by-name', { name, size })
-export const getTechnoparkDirectory = (params = {}) => api.get('/companies/technopark-directory', { params })
+export const getTechnoparkDirectory = (params = {}) =>
+  api.get('/companies/technopark-directory', { params })
 export const mapsDiscover = (payload) => api.post('/companies/maps-discover', payload)
 export const bulkMapsEnrich = (companyIds = [], onProgress) =>
   _streamingFetch('/companies/bulk-maps-enrich', { company_ids: companyIds }, onProgress)
@@ -245,13 +306,13 @@ export const updatePersona = (id, data) => api.patch(`/personas/${id}`, data)
 export const deletePersona = (id) => api.delete(`/personas/${id}`)
 
 // ─── ASYNC JOBS (SQS-backed) ──────────────────────────────────────────────────
-export const getJob          = (jobId) => api.get(`/jobs/${jobId}`)
-export const listJobs        = ()       => api.get('/jobs')
+export const getJob = (jobId) => api.get(`/jobs/${jobId}`)
+export const listJobs = () => api.get('/jobs')
 
 export const bulkAutofillCompaniesAsync = (companyIds, liCookie = '') =>
   api.post('/companies/bulk-autofill/async', {
     company_ids: companyIds,
-    li_cookie:   liCookie,
+    li_cookie: liCookie,
   })
 
 export const bulkAnalyzeCompaniesAsync = (companyIds) =>
@@ -261,44 +322,46 @@ export const bulkMapsEnrichAsync = (companyIds) =>
   api.post('/companies/bulk-maps-enrich/async', { company_ids: companyIds })
 
 // ─── BUYING SIGNALS ───────────────────────────────────────────────
-export const getCompanySignals  = (id) => api.get(`/companies/${id}/signals`)
-export const detectCompanySignals = (id, force = false) => api.post(`/companies/${id}/signals`, { force })
-export const getLeadSignals     = (id) => api.get(`/leads/${id}/signals`)
+export const getCompanySignals = (id) => api.get(`/companies/${id}/signals`)
+export const detectCompanySignals = (id, force = false) =>
+  api.post(`/companies/${id}/signals`, { force })
+export const getLeadSignals = (id) => api.get(`/leads/${id}/signals`)
 
 // ─── EMAIL TRACKING ───────────────────────────────────────────────
-export const trackEmail    = (id, subject, body) => api.post(`/leads/${id}/track-email`, { subject, body })
+export const trackEmail = (id, subject, body) =>
+  api.post(`/leads/${id}/track-email`, { subject, body })
 export const getEmailOpens = (id) => api.get(`/leads/${id}/email-opens`)
 
 // ─── ACTIVITY TIMELINE ────────────────────────────────────────────
-export const logActivity  = (id, event_type, data = {}) => api.post(`/leads/${id}/activity`, { event_type, data })
-export const getActivity  = (id) => api.get(`/leads/${id}/activity`)
+export const logActivity = (id, event_type, data = {}) =>
+  api.post(`/leads/${id}/activity`, { event_type, data })
+export const getActivity = (id) => api.get(`/leads/${id}/activity`)
 
 // ─── TASKS ────────────────────────────────────────────────────────
-export const getAllTasks    = (completed = false) => api.get(`/tasks?completed=${completed}`)
-export const getLeadTasks  = (id) => api.get(`/leads/${id}/tasks`)
-export const createTask    = (leadId, data) => api.post(`/leads/${leadId}/tasks`, data)
-export const updateTask    = (id, data) => api.patch(`/tasks/${id}`, data)
-export const deleteTask    = (id) => api.delete(`/tasks/${id}`)
+export const getAllTasks = (completed = false) => api.get(`/tasks?completed=${completed}`)
+export const getLeadTasks = (id) => api.get(`/leads/${id}/tasks`)
+export const createTask = (leadId, data) => api.post(`/leads/${leadId}/tasks`, data)
+export const updateTask = (id, data) => api.patch(`/tasks/${id}`, data)
+export const deleteTask = (id) => api.delete(`/tasks/${id}`)
 
 // ─── EMAIL TEMPLATES ──────────────────────────────────────────────
-export const getTemplates    = () => api.get('/email-templates')
-export const createTemplate  = (data) => api.post('/email-templates', data)
-export const updateTemplate  = (id, data) => api.patch(`/email-templates/${id}`, data)
-export const deleteTemplate  = (id) => api.delete(`/email-templates/${id}`)
+export const getTemplates = () => api.get('/email-templates')
+export const createTemplate = (data) => api.post('/email-templates', data)
+export const updateTemplate = (id, data) => api.patch(`/email-templates/${id}`, data)
+export const deleteTemplate = (id) => api.delete(`/email-templates/${id}`)
 
 // ─── CSV IMPORT / EXPORT ──────────────────────────────────────────
 export const importLeadsCSV = (csvText) =>
   api.post('/leads/import-csv', csvText, { headers: { 'Content-Type': 'text/plain' } })
-export const exportLeadsCSV = () =>
-  api.get('/leads/export-csv', { responseType: 'blob' })
+export const exportLeadsCSV = () => api.get('/leads/export-csv', { responseType: 'blob' })
 
 // ─── LINKEDIN ENRICHMENT (Proxycurl) ──────────────────────────────
 export const enrichLeadLinkedIn = (id) => api.post(`/leads/${id}/enrich-linkedin`)
 
 // ─── EMAIL VERIFICATION ───────────────────────────────────────────
-export const verifyLeadEmail      = (id) => api.post(`/leads/${id}/verify-email`)
-export const bulkVerifyEmails     = (lead_ids) => api.post('/leads/bulk-verify', { lead_ids })
-export const getUnverifiedCount   = () => api.get('/leads/unverified-count')
+export const verifyLeadEmail = (id) => api.post(`/leads/${id}/verify-email`)
+export const bulkVerifyEmails = (lead_ids) => api.post('/leads/bulk-verify', { lead_ids })
+export const getUnverifiedCount = () => api.get('/leads/unverified-count')
 
 // ─── DASHBOARD ────────────────────────────────────────────────────
 export const getDashboardSummary = () => api.get('/dashboard/summary')
@@ -309,71 +372,78 @@ export const sendLeadEmail = (id, payload) => api.post(`/leads/${id}/send-email`
 
 // ─── PROSPECT SEARCH ─────────────────────────────────────────────
 export const prospectPeopleSearch = (payload) => api.post('/prospect/people-search', payload)
-export const prospectRevealEmail  = (personId) => api.post('/prospect/reveal-email', { person_id: personId })
-export const prospectAddLead      = (person) => api.post('/prospect/add-lead', { person })
+export const prospectRevealEmail = (personId) =>
+  api.post('/prospect/reveal-email', { person_id: personId })
+export const prospectAddLead = (person) => api.post('/prospect/add-lead', { person })
 
 // ─── SEQUENCES ────────────────────────────────────────────────────
-export const listSequences       = () => api.get('/sequences')
-export const enrollInSequence    = (seqId, leadIds) => api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
-export const listEnrollments     = (seqId) => api.get(`/sequences/${seqId}/enrollments`)
-export const unenrollLead        = (seqId, enrollmentId) => api.delete(`/sequences/${seqId}/enrollments/${enrollmentId}`)
-export const markReplied         = (seqId, enrollmentId) => api.patch(`/sequences/${seqId}/enrollments/${enrollmentId}/reply`)
-export const getSequenceAnalytics= (seqId) => api.get(`/sequences/${seqId}/analytics`)
-export const getSequenceSendStats= () => api.get('/sequences/send-stats')
+export const listSequences = () => api.get('/sequences')
+export const enrollInSequence = (seqId, leadIds) =>
+  api.post(`/sequences/${seqId}/enroll`, { lead_ids: leadIds })
+export const listEnrollments = (seqId) => api.get(`/sequences/${seqId}/enrollments`)
+export const unenrollLead = (seqId, enrollmentId) =>
+  api.delete(`/sequences/${seqId}/enrollments/${enrollmentId}`)
+export const markReplied = (seqId, enrollmentId) =>
+  api.patch(`/sequences/${seqId}/enrollments/${enrollmentId}/reply`)
+export const getSequenceAnalytics = (seqId) => api.get(`/sequences/${seqId}/analytics`)
+export const getSequenceSendStats = () => api.get('/sequences/send-stats')
 
 // ─── PROFILE SMTP CONFIG ──────────────────────────────────────────
-export const getSmtpConfig    = () => api.get('/profile/smtp-config')
-export const saveSmtpConfig   = (config) => api.patch('/profile/smtp-config', config)
+export const getSmtpConfig = () => api.get('/profile/smtp-config')
+export const saveSmtpConfig = (config) => api.patch('/profile/smtp-config', config)
 export const deleteSmtpConfig = () => api.delete('/profile/smtp-config')
 
 // ─── SEGMENTS ────────────────────────────────────────────────────
-export const listSegments   = () => api.get('/segments')
-export const createSegment  = (name, filters) => api.post('/segments', { name, filters })
-export const updateSegment  = (id, data) => api.patch(`/segments/${id}`, data)
-export const deleteSegment  = (id) => api.delete(`/segments/${id}`)
+export const listSegments = () => api.get('/segments')
+export const createSegment = (name, filters) => api.post('/segments', { name, filters })
+export const updateSegment = (id, data) => api.patch(`/segments/${id}`, data)
+export const deleteSegment = (id) => api.delete(`/segments/${id}`)
 
 // ─── UNSUBSCRIBES ─────────────────────────────────────────────────
-export const listUnsubscribes  = () => api.get('/unsubscribes')
-export const addUnsubscribe    = (email) => api.post('/unsubscribes', { email })
+export const listUnsubscribes = () => api.get('/unsubscribes')
+export const addUnsubscribe = (email) => api.post('/unsubscribes', { email })
 export const removeUnsubscribe = (id) => api.delete(`/unsubscribes/${id}`)
 
 // ─── MEETING SCHEDULER ────────────────────────────────────────────
-export const getCalConfig  = () => api.get('/profile/cal')
+export const getCalConfig = () => api.get('/profile/cal')
 export const saveCalConfig = (data) => api.patch('/profile/cal', data)
 
 // ─── JOB CHANGE ALERTS ────────────────────────────────────────────
 export const listJobChangeAlerts = () => api.get('/job-change-alerts')
-export const markAllAlertsSeen   = () => api.patch('/job-change-alerts/mark-seen')
-export const dismissAlert        = (id) => api.delete(`/job-change-alerts/${id}`)
+export const markAllAlertsSeen = () => api.patch('/job-change-alerts/mark-seen')
+export const dismissAlert = (id) => api.delete(`/job-change-alerts/${id}`)
 
 // ─── FEATURE FLAGS ────────────────────────────────────────────────
-export const getFeatureFlags   = () => api.get('/feature-flags')
+export const getFeatureFlags = () => api.get('/feature-flags')
 export const updateFeatureFlag = (name, enabled) => api.patch(`/feature-flags/${name}`, { enabled })
 
 // ─── DOMAIN HEALTH ────────────────────────────────────────────────
-export const checkDomainHealth = (domain) => api.get('/profile/domain-health', { params: { domain } })
+export const checkDomainHealth = (domain) =>
+  api.get('/profile/domain-health', { params: { domain } })
 
 // ─── STANDALONE TASKS ─────────────────────────────────────────────
 export const createStandaloneTask = (data) => api.post('/tasks', data)
 
 // ─── EMAIL WARM-UP ─────────────────────────────────────────────────
-export const getWarmupConfig  = () => api.get('/profile/warmup-config')
+export const getWarmupConfig = () => api.get('/profile/warmup-config')
 export const saveWarmupConfig = (data) => api.patch('/profile/warmup-config', data)
 
 // ─── AI ICEBREAKER ────────────────────────────────────────────────
 export const generateIcebreaker = (leadId) => api.post(`/leads/${leadId}/ai-icebreaker`)
 
 // ─── SEQUENCE TEMPLATES ───────────────────────────────────────────
-export const listSequenceTemplates   = () => api.get('/sequences/templates')
-export const createFromTemplate      = (template_id, name) => api.post('/sequences/from-template', { template_id, name })
+export const listSequenceTemplates = () => api.get('/sequences/templates')
+export const createFromTemplate = (template_id, name) =>
+  api.post('/sequences/from-template', { template_id, name })
 
 // ─── ADMIN-MANAGED CONTENT (PUBLIC) ───────────────────────────────
 export const getActiveAnnouncements = () => api.get('/announcements/active')
-export const getPublicChangelog     = () => api.get('/changelog/public')
+export const getPublicChangelog = () => api.get('/changelog/public')
 
 // ─── WORKER / CRON STATUS ────────────────────────────────────────
-export const getWorkerHealth   = () => api.get('/worker/health')
-export const getCronStatus     = () => api.get('/cron/status')
+export const getWorkerHealth = () => api.get('/worker/health')
+export const getCronStatus = () => api.get('/cron/status')
 export const exportCompaniesCsv = () => api.get('/companies/export-csv', { responseType: 'blob' })
+export const runDmScan = (companyId) => api.post(`/companies/${companyId}/run-dm-scan/async`)
 
 export default api

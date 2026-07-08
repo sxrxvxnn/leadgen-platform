@@ -14,7 +14,7 @@ from supabase import create_client
 
 load_dotenv()
 
-from .queue import QUEUE_URLS, update_job
+from .queue import QUEUE_URLS, QUEUE_TIMEOUTS, update_job
 
 # ─── Supabase client ──────────────────────────────────────────────────────────
 supabase = create_client(
@@ -311,13 +311,131 @@ def _handle_batch_dm(job_id: str, user_id: str, payload: dict):
         list(pool.map(_dm_one, companies))
 
 
+def _handle_playwright_dm_find(job_id: str, user_id: str, payload: dict):
+    """Run the linkedin_scraper VerificationScraper for one company and insert verified leads directly to Supabase."""
+    import subprocess
+    import sys as _sys
+
+    company_url    = payload.get('company_url', '')
+    company_db_id  = payload.get('company_db_id', '')   # Supabase UUID of the company row
+    company_name   = payload.get('company_name', '')
+
+    scraper_dir    = os.getenv('LINKEDIN_SCRAPER_DIR', '/home/ec2-user/linkedin_scraper')
+    session_file   = os.getenv('LINKEDIN_SESSION_FILE', f'{scraper_dir}/linkedin_session.json')
+    python_bin     = os.getenv('LINKEDIN_SCRAPER_PYTHON', f'{scraper_dir}/.venv/bin/python3')
+    script         = os.path.join(scraper_dir, 'samples', 'verify_decision_makers.py')
+
+    if not company_url:
+        raise ValueError('company_url is required for playwright_dm_find')
+
+    update_job(job_id, supabase, status='running', completed=0)
+
+    cmd = [
+        python_bin, script,
+        '--company', company_url,
+        '--json-output',
+        '--session-file', session_file,
+    ]
+
+    print(f'[worker] Running: {" ".join(cmd)}', flush=True)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=1400,
+            cwd=scraper_dir,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError('LinkedIn DM scan timed out after 23 min')
+
+    stdout = result.stdout.strip()
+    if result.returncode != 0:
+        stderr_tail = result.stderr[-800:] if result.stderr else ''
+        raise RuntimeError(f'Scraper exited with code {result.returncode}.\n{stderr_tail}')
+
+    # The script prints one JSON object as its last line
+    json_line = ''
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith('{'):
+            json_line = line
+            break
+
+    if not json_line:
+        raise RuntimeError(f'No JSON output from scraper.\nstdout: {stdout[-400:]}')
+
+    data     = json.loads(json_line)
+    verified = data.get('verified', [])
+    meta     = data.get('meta', {})
+
+    if not verified:
+        update_job(job_id, supabase, status='completed', completed=0)
+        print(f'[worker] No verified leads found for {company_url}', flush=True)
+        return
+
+    resolved_name = meta.get('name') or company_name
+
+    leads_to_insert = [
+        {
+            'user_id':     user_id,
+            'name':        dm.get('name', ''),
+            'title':       dm.get('current_title_at_company') or dm.get('title', ''),
+            'company':     resolved_name,
+            'profile_url': dm.get('profile_url', ''),
+            'location':    meta.get('headquarters'),
+            'status':      'new',
+            'notes': (
+                f"[{dm.get('role_category', '')}] verified at {resolved_name}. "
+                f"Matched: {', '.join(dm.get('matched_keywords', []))}. "
+                f"Source: playwright_dm_find"
+            ),
+        }
+        for dm in verified
+        if dm.get('name') and dm.get('profile_url')
+    ]
+
+    # Deduplicate by profile_url per user — fetch existing URLs first
+    existing_urls = {
+        r['profile_url']
+        for r in (
+            supabase.table('leads')
+            .select('profile_url')
+            .eq('user_id', user_id)
+            .in_('profile_url', [l['profile_url'] for l in leads_to_insert])
+            .execute()
+            .data or []
+        )
+    }
+    new_leads = [l for l in leads_to_insert if l['profile_url'] not in existing_urls]
+
+    inserted = 0
+    if new_leads:
+        supabase.table('leads').insert(new_leads).execute()
+        inserted = len(new_leads)
+
+    # Mark the company row as having had a DM scan run
+    if company_db_id:
+        try:
+            supabase.table('companies').update(
+                {'dm_scan_status': 'done', 'dm_scan_count': inserted}
+            ).eq('id', company_db_id).eq('user_id', user_id).execute()
+        except Exception:
+            pass
+
+    update_job(job_id, supabase, status='completed', completed=inserted)
+    print(f'[worker] playwright_dm_find: inserted {inserted} leads for {resolved_name}', flush=True)
+
+
 # ─── Dispatch table ───────────────────────────────────────────────────────────
 
 HANDLERS = {
-    'bulk_enrichment':  _handle_bulk_enrichment,
-    'bulk_maps_enrich': _handle_bulk_maps_enrich,
-    'bulk_analyze':     _handle_bulk_analyze,
-    'batch_dm':         _handle_batch_dm,
+    'bulk_enrichment':    _handle_bulk_enrichment,
+    'bulk_maps_enrich':   _handle_bulk_maps_enrich,
+    'bulk_analyze':       _handle_bulk_analyze,
+    'batch_dm':           _handle_batch_dm,
+    'playwright_dm_find': _handle_playwright_dm_find,
 }
 
 
@@ -358,7 +476,7 @@ def run():
                     QueueUrl=queue_url,
                     MaxNumberOfMessages=1,
                     WaitTimeSeconds=POLL_WAIT,
-                    VisibilityTimeout=VISIBILITY_TIMEOUT,
+                    VisibilityTimeout=QUEUE_TIMEOUTS.get(job_type, VISIBILITY_TIMEOUT),
                 )
                 messages = resp.get('Messages', [])
             except Exception as e:

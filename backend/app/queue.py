@@ -16,10 +16,16 @@ def _client():
 
 
 QUEUE_URLS: dict[str, str] = {
-    'bulk_enrichment':  os.getenv('SQS_BULK_ENRICHMENT_URL', ''),
-    'bulk_maps_enrich': os.getenv('SQS_BULK_MAPS_ENRICH_URL', ''),
-    'bulk_analyze':     os.getenv('SQS_BULK_ANALYZE_URL', ''),
-    'batch_dm':         os.getenv('SQS_BATCH_DM_URL', ''),
+    'bulk_enrichment':   os.getenv('SQS_BULK_ENRICHMENT_URL', ''),
+    'bulk_maps_enrich':  os.getenv('SQS_BULK_MAPS_ENRICH_URL', ''),
+    'bulk_analyze':      os.getenv('SQS_BULK_ANALYZE_URL', ''),
+    'batch_dm':          os.getenv('SQS_BATCH_DM_URL', ''),
+    'playwright_dm_find': os.getenv('SQS_PLAYWRIGHT_DM_URL', ''),
+}
+
+# Per-job-type SQS visibility timeouts (seconds). DM scans take up to 20 min.
+QUEUE_TIMEOUTS: dict[str, int] = {
+    'playwright_dm_find': 1500,  # 25 min
 }
 
 

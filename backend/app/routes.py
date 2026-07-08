@@ -5381,6 +5381,31 @@ async def bulk_maps_enrich_async(
 
 
 
+@router.post("/companies/{company_id}/run-dm-scan/async")
+async def run_dm_scan_async(
+    company_id: str,
+    authorization: str = Header(...)
+):
+    """Dispatch a Playwright DM scan for one company to the SQS worker. Returns job_id."""
+    validate_uuid(company_id, "company_id")
+    user_id = get_user_id(authorization)
+
+    co = supabase.table("companies").select("id,name,linkedin_url").eq("id", company_id).eq("user_id", user_id).maybe_single().execute()
+    if not co.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    linkedin_url = co.data.get("linkedin_url", "")
+    if not linkedin_url:
+        raise HTTPException(status_code=400, detail="Company has no LinkedIn URL — add it first")
+
+    job_id = dispatch_job("playwright_dm_find", user_id, {
+        "company_url":    linkedin_url,
+        "company_db_id":  company_id,
+        "company_name":   co.data.get("name", ""),
+    }, supabase)
+    return {"job_id": job_id, "status": "queued"}
+
+
 @router.post("/companies/batch-dm/async")
 async def batch_dm_async(
     payload: dict = {},
