@@ -328,39 +328,31 @@ _HEADERS_WORKER = {
 
 def _ddg_linkedin_search(company_name: str, limit: int = 10) -> list[dict]:
     """
-    Search DuckDuckGo for LinkedIn profiles of decision makers at a company.
-    Returns list of {url, title, snippet}.
+    Search for LinkedIn decision-maker profiles via the Vercel backend's
+    /internal/search-profiles endpoint. Vercel IPs are not blocked by search
+    engines; EC2 IPs are.
     """
     import requests as _req
-    from bs4 import BeautifulSoup
 
-    query = f'site:linkedin.com/in "{company_name}" ({_DM_TITLES})'
+    api_base = os.getenv('API_BASE_URL', 'https://leadgenengineplatform-api.vercel.app/api')
+    token    = os.getenv('INTERNAL_TOKEN', '')
+
+    if not token:
+        print('[worker] INTERNAL_TOKEN not set — cannot search for profiles', flush=True)
+        return []
+
     try:
         resp = _req.get(
-            'https://html.duckduckgo.com/html/',
-            params={'q': query},
-            headers=_HEADERS_WORKER,
-            timeout=15,
+            f'{api_base}/internal/search-profiles',
+            params={'company': company_name, 'token': token},
+            timeout=30,
         )
-        if resp.status_code != 200:
-            return []
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        results = []
-        for a in soup.select('a.result__a')[:limit]:
-            href = a.get('href', '')
-            if 'linkedin.com/in/' not in href:
-                continue
-            title = a.get_text(strip=True)
-            parent = a.find_parent('div', class_='result')
-            snippet = ''
-            if parent:
-                s = parent.select_one('.result__snippet')
-                snippet = s.get_text(strip=True) if s else ''
-            results.append({'url': href, 'title': title, 'snippet': snippet})
-        return results
+        if resp.status_code == 200:
+            return resp.json().get('results', [])
+        print(f'[worker] search-profiles returned {resp.status_code}: {resp.text[:200]}', flush=True)
     except Exception as e:
-        print(f'[worker] DDG search error: {e}', flush=True)
-        return []
+        print(f'[worker] search-profiles error: {e}', flush=True)
+    return []
 
 
 def _jina_fetch(url: str) -> str:
