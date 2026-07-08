@@ -393,6 +393,84 @@ def _fetch_via_wayback(url: str, timeout: int = 10) -> str | None:
     return None
 
 
+def _jina_fetch_linkedin_md(url: str) -> str:
+    """Fetch a LinkedIn company page via Jina Reader, returns markdown. Free, no login needed."""
+    base = url.rstrip('/')
+    for li_url in [base + '/about/', base + '/']:
+        try:
+            r = requests.get(
+                f'https://r.jina.ai/{li_url}',
+                headers={
+                    'Accept': 'text/plain',
+                    'X-Return-Format': 'markdown',
+                    'User-Agent': 'Mozilla/5.0 (compatible; LeadGenBot/1.0)',
+                },
+                timeout=20,
+            )
+            if r.status_code == 200 and len(r.text) > 200 and 'linkedin.com' in r.text.lower():
+                return r.text
+        except Exception:
+            continue
+    return ''
+
+
+def _parse_jina_linkedin_md(md: str, result: dict) -> None:
+    """Parse Jina markdown of a LinkedIn company page, filling missing fields in result."""
+    if not result.get('followers'):
+        m = re.search(r'([\d,]+)\s*followers', md, re.I)
+        if m:
+            result['followers'] = m.group(0).strip()
+
+    if not result.get('industry'):
+        m = re.search(r'(?:^|\n)\s*[*\-]?\s*Industry\s*[:\|]\s*(.+?)(?:\n|$)', md, re.I | re.M)
+        if not m:
+            m = re.search(r'\bIndustry\b\s*\n\s*(.+?)(?:\n|$)', md, re.I | re.M)
+        if m:
+            result['industry'] = m.group(1).strip()
+
+    if not result.get('employee_count'):
+        m = re.search(r'Company size\s*[:\|]?\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
+        if not m:
+            m = re.search(r'([\d,]+\s*[-–]\s*[\d,]+\s*employees)', md, re.I)
+        if not m:
+            m = re.search(r'([\d,]+\+?\s*employees)', md, re.I)
+        if m:
+            result['employee_count'] = m.group(1).strip()
+
+    if not result.get('location'):
+        m = re.search(r'(?:Headquarters|HQ|Location)\s*[:\|]?\s*(.+?)(?:\n|$)', md, re.I | re.M)
+        if m:
+            val = m.group(1).strip()
+            if val and 'linkedin.com' not in val.lower():
+                result['location'] = val
+
+    if not result.get('founded'):
+        m = re.search(r'Founded\s*[:\|]?\s*(\d{4})', md, re.I)
+        if m:
+            result['founded'] = m.group(1)
+
+    if not result.get('specialties'):
+        m = re.search(r'Specialties?\s*[:\|]?\s*(.+?)(?:\n\n|\n[A-Z#]|$)', md, re.I | re.S)
+        if m:
+            val = m.group(1).strip().replace('\n', ', ')
+            if len(val) > 8:
+                result['specialties'] = val
+
+    if not result.get('website'):
+        m = re.search(r'Website\s*[:\|]?\s*(https?://[^\s\)>\]]+)', md, re.I)
+        if not m:
+            m = re.search(r'Website\s*[:\|]?\s*\[([^\]]+)\]\((https?://[^\)]+)\)', md, re.I)
+        if m:
+            ws = m.group(2) if m.lastindex and m.lastindex >= 2 else m.group(1)
+            if ws and 'linkedin.com' not in ws:
+                result['website'] = ws
+
+    if not result.get('description'):
+        m = re.search(r'(?:About us|Overview|About)\s*\n+(.{30,500}?)(?:\n\n|\n##|$)', md, re.I | re.S)
+        if m:
+            result['description'] = _html.unescape(m.group(1).strip())
+
+
 def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str = '') -> dict:
     """Scrape public LinkedIn company About page for all visible fields."""
     result = {
@@ -679,4 +757,17 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
 
     except Exception as e:
         print(f"LinkedIn scrape error for {linkedin_url}: {e}")
+
+    # Jina Reader fallback — covers Firecrawl credit exhaustion and direct-HTTP login walls.
+    # Only runs when key structured fields are missing (won't slow down successful scrapes).
+    if not fast:
+        missing_key = not result.get('industry') or not result.get('employee_count') or not result.get('specialties')
+        if missing_key:
+            try:
+                jina_md = _jina_fetch_linkedin_md(linkedin_url)
+                if jina_md:
+                    _parse_jina_linkedin_md(jina_md, result)
+            except Exception:
+                pass
+
     return result
