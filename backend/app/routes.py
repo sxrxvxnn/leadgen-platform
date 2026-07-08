@@ -5398,11 +5398,14 @@ async def run_dm_scan_async(
     if not linkedin_url:
         raise HTTPException(status_code=400, detail="Company has no LinkedIn URL — add it first")
 
-    job_id = dispatch_job("playwright_dm_find", user_id, {
-        "company_url":    linkedin_url,
-        "company_db_id":  company_id,
-        "company_name":   co.data.get("name", ""),
-    }, supabase)
+    try:
+        job_id = dispatch_job("playwright_dm_find", user_id, {
+            "company_url":    linkedin_url,
+            "company_db_id":  company_id,
+            "company_name":   co.data.get("name", ""),
+        }, supabase)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to dispatch job: {e}")
     return {"job_id": job_id, "status": "queued"}
 
 
