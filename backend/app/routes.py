@@ -2056,64 +2056,70 @@ async def bulk_create_companies(
     updated = []
     skipped = 0
 
-    for company in companies:
-        try:
-            if not company.get("name"):
-                skipped += 1
-                continue
-
-            name = company["name"].strip()
-
-            # Check if this company already exists for this user
-            existing = supabase.table("companies")\
-                .select("id, website, size, followers")\
-                .eq("user_id", user_id)\
-                .eq("name", name)\
-                .execute()
-
-            if existing.data:
-                # Upsert — overwrite website / size / followers with CSV values when provided.
-                # CSV is the source of truth for these fields; autofill enrichment data
-                # (linkedin_url, description, headquarters) is left untouched.
-                existing_id = existing.data[0]["id"]
-                patch = {}
-                if company.get("website"):
-                    patch["website"] = company["website"]
-                if company.get("size"):
-                    patch["size"] = company["size"]
-                if company.get("followers"):
-                    patch["followers"] = company["followers"]
-
-                if patch:
-                    supabase.table("companies").update(patch).eq("id", existing_id).eq("user_id", user_id).execute()
-                    updated.append(existing_id)
-                else:
-                    skipped += 1
-                continue
-
-            data = {
-                "user_id": user_id,
-                "name": name,
-                "industry": company.get("industry") or None,
-                "size": company.get("size") or None,
-                "followers": company.get("followers") or None,
-                "headquarters": company.get("headquarters") or None,
-                "description": company.get("description") or None,
-                "website": company.get("website") or None,
-                "linkedin_url": company.get("linkedin_url") or company.get("linkedinUrl") or company.get("salesNavUrl") or None,
-                "phone": company.get("phone") or None,
-                "founded": company.get("founded") or None,
-                "specialties": company.get("specialties") or None,
-                "tagline": company.get("tagline") or None,
-            }
-
-            response = supabase.table("companies").insert(data).execute()
-            inserted.append(response.data[0])
-
-        except Exception as e:
-            print(f"Company insert error: {e}")
+    # Normalise and deduplicate incoming list
+    valid = []
+    seen_names = set()
+    for c in companies:
+        name = (c.get("name") or "").strip()
+        if not name or name in seen_names:
             skipped += 1
             continue
+        seen_names.add(name)
+        valid.append(c)
+
+    if not valid:
+        return {"inserted": 0, "updated": 0, "skipped": skipped, "companies": [], "all_ids": []}
+
+    # Fetch all existing names in one query
+    CHUNK = 500
+    existing_map: dict[str, str] = {}  # name -> id
+    for i in range(0, len(valid), CHUNK):
+        chunk_names = [c["name"].strip() for c in valid[i:i + CHUNK]]
+        rows = supabase.table("companies").select("id,name,website,size,followers")\
+            .eq("user_id", user_id).in_("name", chunk_names).execute()
+        for r in rows.data or []:
+            existing_map[r["name"]] = r
+
+    # Split into new vs existing
+    to_insert = []
+    for c in valid:
+        name = c["name"].strip()
+        if name in existing_map:
+            existing = existing_map[name]
+            patch = {}
+            if c.get("website"):  patch["website"]   = c["website"]
+            if c.get("size"):     patch["size"]       = c["size"]
+            if c.get("followers"):patch["followers"]  = c["followers"]
+            if patch:
+                supabase.table("companies").update(patch).eq("id", existing["id"]).eq("user_id", user_id).execute()
+                updated.append(existing["id"])
+            else:
+                skipped += 1
+        else:
+            to_insert.append({
+                "user_id":     user_id,
+                "name":        name,
+                "industry":    c.get("industry") or None,
+                "size":        c.get("size") or None,
+                "followers":   c.get("followers") or None,
+                "headquarters":c.get("headquarters") or None,
+                "description": c.get("description") or None,
+                "website":     c.get("website") or None,
+                "linkedin_url":c.get("linkedin_url") or c.get("linkedinUrl") or c.get("salesNavUrl") or None,
+                "phone":       c.get("phone") or None,
+                "founded":     c.get("founded") or None,
+                "specialties": c.get("specialties") or None,
+                "tagline":     c.get("tagline") or None,
+            })
+
+    # Batch insert in chunks of 200
+    for i in range(0, len(to_insert), 200):
+        try:
+            resp = supabase.table("companies").insert(to_insert[i:i + 200]).execute()
+            inserted.extend(resp.data or [])
+        except Exception as e:
+            print(f"Bulk insert chunk error: {e}")
+            skipped += len(to_insert[i:i + 200])
 
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
