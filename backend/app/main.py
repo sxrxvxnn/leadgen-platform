@@ -28,6 +28,7 @@ _IS_PROD = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
 _DEFAULT_FLAGS = [
     {"name": "ui_sounds", "label": "UI Sound Effects", "description": "Keyboard click and button tap sounds throughout the app", "enabled": True, "category": "ui"},
+    {"name": "find_dms", "label": "DM Finder", "description": "Find decision-maker LinkedIn DMs via automated Playwright scan", "enabled": True, "category": "outreach"},
 ]
 
 @asynccontextmanager
