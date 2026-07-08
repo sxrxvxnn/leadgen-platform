@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import os
 
 from .routes import router
+from .database import supabase
 from .rate_limit import limiter
 from .security import path_rate_limit_middleware, log_api_error
 
@@ -25,12 +26,23 @@ if _sentry_dsn:
 _IS_PROD = os.getenv("ENVIRONMENT", "development").lower() == "production"
 
 
+_DEFAULT_FLAGS = [
+    {"name": "ui_sounds", "label": "UI Sound Effects", "description": "Keyboard click and button tap sounds throughout the app", "enabled": True, "category": "ui"},
+]
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     posthog.api_key = os.getenv("POSTHOG_PROJECT_TOKEN", "")
     posthog.host = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
     posthog.enable_exception_autocapture = True
+    try:
+        existing = {r["name"] for r in supabase.table("feature_flags").select("name").execute().data or []}
+        to_seed = [f for f in _DEFAULT_FLAGS if f["name"] not in existing]
+        if to_seed:
+            supabase.table("feature_flags").insert(to_seed).execute()
+    except Exception:
+        pass
     yield
     posthog.flush()
 
