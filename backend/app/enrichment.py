@@ -378,6 +378,7 @@ def enrich_lead(name: str, company: str, website: str = None) -> dict:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FIRECRAWL — LinkedIn scraping + enhanced web search
+# Falls back to Jina Reader (scrape) / DuckDuckGo (search) when credits are exhausted
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import os as _os
@@ -385,45 +386,108 @@ import os as _os
 FIRECRAWL_KEY  = _os.environ.get("FIRECRAWL_API_KEY", "")
 FIRECRAWL_BASE = "https://api.firecrawl.dev/v1"
 
+# Status codes that mean Firecrawl credits are gone — fall back immediately
+_FC_EXHAUSTED_CODES = {402, 429}
+
 
 def _fc_headers() -> dict:
     return {"Authorization": f"Bearer {FIRECRAWL_KEY}", "Content-Type": "application/json"}
 
 
-def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
-    """Scrape a URL via Firecrawl, return markdown. Empty string on any failure."""
-    if not FIRECRAWL_KEY:
-        return ""
+# ── Jina Reader fallback (free, no API key) ───────────────────────────────────
+
+def _jina_scrape(url: str) -> str:
+    """Scrape a URL via Jina Reader. Free, no API key, no credits."""
     try:
-        res = requests.post(
-            f"{FIRECRAWL_BASE}/scrape",
-            json={"url": url, "formats": ["markdown"], "onlyMainContent": True, "waitFor": wait_ms},
-            headers=_fc_headers(),
-            timeout=45,
+        res = requests.get(
+            f"https://r.jina.ai/{url}",
+            headers={**_HEADERS, "Accept": "text/plain", "X-Return-Format": "markdown"},
+            timeout=30,
         )
-        if res.status_code == 200:
-            return res.json().get("data", {}).get("markdown", "")
+        if res.status_code == 200 and len(res.text) > 80:
+            return res.text
     except Exception:
         pass
     return ""
 
 
-def _fc_search(query: str, limit: int = 5) -> list:
-    """Web search via Firecrawl. Returns list of result dicts."""
-    if not FIRECRAWL_KEY:
-        return []
+def _ddg_search(query: str, limit: int = 5) -> list:
+    """
+    Web search via DuckDuckGo HTML. Free, no API key.
+    Returns list of {url, title, description, markdown} — same shape as Firecrawl results.
+    """
     try:
-        res = requests.post(
-            f"{FIRECRAWL_BASE}/search",
-            json={"query": query, "limit": limit},
-            headers=_fc_headers(),
-            timeout=25,
+        resp = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers=_HEADERS,
+            timeout=12,
         )
-        if res.status_code == 200:
-            return res.json().get("data", [])
+        if resp.status_code != 200:
+            return []
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, "html.parser")
+        results = []
+        for a in soup.select("a.result__a")[:limit]:
+            href = a.get("href", "")
+            title = a.get_text(strip=True)
+            snippet_tag = a.find_parent("div", class_="result")
+            snippet = ""
+            if snippet_tag:
+                s = snippet_tag.select_one(".result__snippet")
+                snippet = s.get_text(strip=True) if s else ""
+            if href:
+                results.append({
+                    "url": href,
+                    "title": title,
+                    "description": snippet,
+                    "markdown": snippet,
+                })
+        return results
     except Exception:
-        pass
-    return []
+        return []
+
+
+# ── Firecrawl with fallback ───────────────────────────────────────────────────
+
+def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
+    """Scrape a URL. Tries Firecrawl first, falls back to Jina Reader."""
+    if FIRECRAWL_KEY:
+        try:
+            res = requests.post(
+                f"{FIRECRAWL_BASE}/scrape",
+                json={"url": url, "formats": ["markdown"], "onlyMainContent": True, "waitFor": wait_ms},
+                headers=_fc_headers(),
+                timeout=45,
+            )
+            if res.status_code == 200:
+                return res.json().get("data", {}).get("markdown", "")
+            if res.status_code not in _FC_EXHAUSTED_CODES:
+                return ""
+            # Credits exhausted — fall through to Jina
+        except Exception:
+            pass
+    return _jina_scrape(url)
+
+
+def _fc_search(query: str, limit: int = 5) -> list:
+    """Web search. Tries Firecrawl first, falls back to DuckDuckGo."""
+    if FIRECRAWL_KEY:
+        try:
+            res = requests.post(
+                f"{FIRECRAWL_BASE}/search",
+                json={"query": query, "limit": limit},
+                headers=_fc_headers(),
+                timeout=25,
+            )
+            if res.status_code == 200:
+                return res.json().get("data", [])
+            if res.status_code not in _FC_EXHAUSTED_CODES:
+                return []
+            # Credits exhausted — fall through to DDG
+        except Exception:
+            pass
+    return _ddg_search(query, limit)
 
 
 # ── LinkedIn scraper ──────────────────────────────────────────────────────────
@@ -485,10 +549,12 @@ def _parse_linkedin_md(md: str) -> dict:
 
 def scrape_linkedin_profile(li_url: str) -> dict:
     """
-    Scrape a public LinkedIn profile via Firecrawl.
+    Scrape a public LinkedIn profile. Tries Firecrawl first, falls back to Jina Reader.
     No user credentials or cookies used — only publicly accessible data.
     """
     md = _fc_scrape(li_url, wait_ms=4000)
+    if not md or len(md) < 80:
+        md = _jina_scrape(li_url)
     if not md or len(md) < 80:
         return {}
     return _parse_linkedin_md(md)

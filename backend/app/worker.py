@@ -311,92 +311,164 @@ def _handle_batch_dm(job_id: str, user_id: str, payload: dict):
         list(pool.map(_dm_one, companies))
 
 
+_DM_TITLES = (
+    'CEO OR Founder OR "Co-Founder" OR CTO OR COO OR CMO OR CFO OR CISO OR CRO OR CPO '
+    'OR President OR "Vice President" OR "VP " OR Director OR "Head of"'
+)
+
+_HEADERS_WORKER = {
+    'User-Agent': (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/120.0.0.0 Safari/537.36'
+    ),
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+
+
+def _ddg_linkedin_search(company_name: str, limit: int = 10) -> list[dict]:
+    """
+    Search DuckDuckGo for LinkedIn profiles of decision makers at a company.
+    Returns list of {url, title, snippet}.
+    """
+    import requests as _req
+    from bs4 import BeautifulSoup
+
+    query = f'site:linkedin.com/in "{company_name}" ({_DM_TITLES})'
+    try:
+        resp = _req.get(
+            'https://html.duckduckgo.com/html/',
+            params={'q': query},
+            headers=_HEADERS_WORKER,
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return []
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        results = []
+        for a in soup.select('a.result__a')[:limit]:
+            href = a.get('href', '')
+            if 'linkedin.com/in/' not in href:
+                continue
+            title = a.get_text(strip=True)
+            parent = a.find_parent('div', class_='result')
+            snippet = ''
+            if parent:
+                s = parent.select_one('.result__snippet')
+                snippet = s.get_text(strip=True) if s else ''
+            results.append({'url': href, 'title': title, 'snippet': snippet})
+        return results
+    except Exception as e:
+        print(f'[worker] DDG search error: {e}', flush=True)
+        return []
+
+
+def _jina_fetch(url: str) -> str:
+    """Fetch a URL via Jina Reader. Returns markdown or empty string."""
+    import requests as _req
+    try:
+        res = _req.get(
+            f'https://r.jina.ai/{url}',
+            headers={**_HEADERS_WORKER, 'Accept': 'text/plain', 'X-Return-Format': 'markdown'},
+            timeout=25,
+        )
+        if res.status_code == 200 and len(res.text) > 100:
+            return res.text
+    except Exception:
+        pass
+    return ''
+
+
+def _parse_dm_from_search(title: str, snippet: str) -> tuple[str, str]:
+    """
+    Extract name and job title from a DDG search result title/snippet.
+    LinkedIn titles look like: "John Smith - CEO at Acme | LinkedIn"
+    """
+    import re
+    name, job_title = '', ''
+
+    # Title format: "First Last - Title at Company | LinkedIn"
+    m = re.match(r'^(.+?)\s*[-–|]\s*(.+?)(?:\s*[|@·].*)?$', title)
+    if m:
+        name = m.group(1).strip()
+        job_title = m.group(2).strip()
+        # Remove trailing "| LinkedIn" artefacts
+        job_title = re.sub(r'\s*\|\s*LinkedIn.*$', '', job_title, flags=re.IGNORECASE).strip()
+
+    # Fallback: first part of snippet may have the title
+    if not job_title and snippet:
+        sm = re.search(r'(?:CEO|CTO|CFO|COO|CMO|CRO|CPO|CISO|Founder|Director|VP|President|Head of[^,\n]+)', snippet, re.IGNORECASE)
+        if sm:
+            job_title = sm.group(0).strip()
+
+    return name, job_title
+
+
 def _handle_playwright_dm_find(job_id: str, user_id: str, payload: dict):
-    """Run the linkedin_scraper VerificationScraper for one company and insert verified leads directly to Supabase."""
-    import subprocess
-    import sys as _sys
+    """
+    Find decision makers for a company via DuckDuckGo search + Jina Reader.
+    No LinkedIn session or Playwright required.
+    """
+    company_url  = payload.get('company_url', '')
+    company_db_id = payload.get('company_db_id', '')
+    company_name  = payload.get('company_name', '')
 
-    company_url    = payload.get('company_url', '')
-    company_db_id  = payload.get('company_db_id', '')   # Supabase UUID of the company row
-    company_name   = payload.get('company_name', '')
+    # Derive company name from LinkedIn URL slug if not provided
+    if not company_name and company_url:
+        slug = company_url.rstrip('/').split('/')[-1]
+        company_name = slug.replace('-', ' ').title()
 
-    scraper_dir    = os.getenv('LINKEDIN_SCRAPER_DIR', '/home/ec2-user/linkedin_scraper')
-    session_file   = os.getenv('LINKEDIN_SESSION_FILE', f'{scraper_dir}/linkedin_session.json')
-    python_bin     = os.getenv('LINKEDIN_SCRAPER_PYTHON', f'{scraper_dir}/.venv/bin/python3')
-    script         = os.path.join(scraper_dir, 'samples', 'verify_decision_makers.py')
-
-    if not company_url:
-        raise ValueError('company_url is required for playwright_dm_find')
+    if not company_name:
+        raise ValueError('company_name or company_url required for dm_find')
 
     update_job(job_id, supabase, status='running', completed=0)
+    print(f'[worker] dm_find: searching for decision makers at "{company_name}"', flush=True)
 
-    cmd = [
-        python_bin, script,
-        '--company', company_url,
-        '--json-output',
-        '--session-file', session_file,
-    ]
+    search_results = _ddg_linkedin_search(company_name, limit=12)
+    print(f'[worker] dm_find: found {len(search_results)} candidate profiles', flush=True)
 
-    print(f'[worker] Running: {" ".join(cmd)}', flush=True)
+    leads_to_insert = []
+    seen_urls: set[str] = set()
 
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=1400,
-            cwd=scraper_dir,
-        )
-    except subprocess.TimeoutExpired:
-        raise RuntimeError('LinkedIn DM scan timed out after 23 min')
+    for r in search_results:
+        profile_url = r['url'].split('?')[0].rstrip('/')
+        if profile_url in seen_urls or 'linkedin.com/in/' not in profile_url:
+            continue
+        seen_urls.add(profile_url)
 
-    stdout = result.stdout.strip()
-    if result.returncode != 0:
-        stderr_tail = result.stderr[-800:] if result.stderr else ''
-        raise RuntimeError(f'Scraper exited with code {result.returncode}.\n{stderr_tail}')
+        name, job_title = _parse_dm_from_search(r['title'], r['snippet'])
+        if not name:
+            continue
 
-    # The script prints one JSON object as its last line
-    json_line = ''
-    for line in reversed(stdout.splitlines()):
-        line = line.strip()
-        if line.startswith('{'):
-            json_line = line
-            break
+        # Try Jina Reader for richer profile details
+        md = _jina_fetch(profile_url)
+        if md and 'sign in' not in md.lower()[:200]:
+            import re
+            # Override name from H1 if present
+            h1 = re.search(r'^#\s+(.+)$', md, re.MULTILINE)
+            if h1:
+                name = h1.group(1).strip()
+            # Override title from profile headline
+            h2 = re.search(r'^##\s+(.+)$', md, re.MULTILINE)
+            if h2 and not job_title:
+                job_title = h2.group(1).strip()
 
-    if not json_line:
-        raise RuntimeError(f'No JSON output from scraper.\nstdout: {stdout[-400:]}')
+        leads_to_insert.append({
+            'user_id':     user_id,
+            'name':        name,
+            'title':       job_title,
+            'company':     company_name,
+            'profile_url': profile_url,
+            'status':      'new',
+            'notes':       f'Source: dm_find (search+jina). Company: {company_name}',
+        })
 
-    data     = json.loads(json_line)
-    verified = data.get('verified', [])
-    meta     = data.get('meta', {})
-
-    if not verified:
+    if not leads_to_insert:
         update_job(job_id, supabase, status='completed', completed=0)
-        print(f'[worker] No verified leads found for {company_url}', flush=True)
+        print(f'[worker] dm_find: no leads found for {company_name}', flush=True)
         return
 
-    resolved_name = meta.get('name') or company_name
-
-    leads_to_insert = [
-        {
-            'user_id':     user_id,
-            'name':        dm.get('name', ''),
-            'title':       dm.get('current_title_at_company') or dm.get('title', ''),
-            'company':     resolved_name,
-            'profile_url': dm.get('profile_url', ''),
-            'location':    meta.get('headquarters'),
-            'status':      'new',
-            'notes': (
-                f"[{dm.get('role_category', '')}] verified at {resolved_name}. "
-                f"Matched: {', '.join(dm.get('matched_keywords', []))}. "
-                f"Source: playwright_dm_find"
-            ),
-        }
-        for dm in verified
-        if dm.get('name') and dm.get('profile_url')
-    ]
-
-    # Deduplicate by profile_url per user — fetch existing URLs first
+    # Deduplicate against existing leads for this user
     existing_urls = {
         r['profile_url']
         for r in (
@@ -415,7 +487,7 @@ def _handle_playwright_dm_find(job_id: str, user_id: str, payload: dict):
         supabase.table('leads').insert(new_leads).execute()
         inserted = len(new_leads)
 
-    # Mark the company row as having had a DM scan run
+    # Mark company as scanned
     if company_db_id:
         try:
             supabase.table('companies').update(
@@ -425,7 +497,7 @@ def _handle_playwright_dm_find(job_id: str, user_id: str, payload: dict):
             pass
 
     update_job(job_id, supabase, status='completed', completed=inserted)
-    print(f'[worker] playwright_dm_find: inserted {inserted} leads for {resolved_name}', flush=True)
+    print(f'[worker] dm_find: inserted {inserted} leads for {company_name}', flush=True)
 
 
 # ─── Dispatch table ───────────────────────────────────────────────────────────
