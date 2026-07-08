@@ -528,12 +528,23 @@ async def bulk_enrich_emails_selected(payload: dict, authorization: str = Header
 async def get_companies(authorization: str = Header(...)):
     user_id = get_user_id(authorization)
     try:
-        response = supabase.table("companies")\
-            .select("*,is_saas,industry,specialties")\
-            .eq("user_id", user_id)\
-            .order("created_at", desc=True)\
-            .execute()
-        return {"companies": response.data}
+        all_companies = []
+        PAGE = 1000
+        offset = 0
+        while True:
+            resp = supabase.table("companies")\
+                .select("*,is_saas,industry,specialties")\
+                .eq("user_id", user_id)\
+                .order("created_at", desc=True)\
+                .range(offset, offset + PAGE - 1)\
+                .execute()
+            if not resp.data:
+                break
+            all_companies.extend(resp.data)
+            if len(resp.data) < PAGE:
+                break
+            offset += PAGE
+        return {"companies": all_companies}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
