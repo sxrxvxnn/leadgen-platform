@@ -3784,9 +3784,9 @@ async def bulk_autofill_companies(
         if ws_url and not ws_url.startswith("http"):
             ws_url = "https://" + ws_url
 
-        needs_desc      = not bool(company.get("description"))
+        needs_desc      = True   # always re-fetch: previous run may have had wrong website data
         needs_hq        = not bool(company.get("headquarters"))
-        needs_type      = not bool(company.get("company_type"))
+        needs_type      = True   # always re-classify: classifier was fixed this session
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
@@ -3894,16 +3894,22 @@ async def bulk_autofill_companies(
                 update_data["linkedin_url"] = li_url_confirmed
 
             # ── Step 5: Apply DDGS snippet results (fetched in parallel at top) ───
-            # If we now have a confirmed LinkedIn URL (from website HTML), re-run DDGS
-            # with the real slug — more accurate than the name-guess used above.
+            # The parallel thread used a name-guess slug. If we now have a confirmed
+            # LinkedIn URL from website HTML with a different slug, do one more lookup.
             _snip = _snip_res[0]
             if li_url_confirmed and (needs_size or needs_followers or needs_hq):
                 _m2 = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url_confirmed)
                 if _m2:
-                    _real_slug = _m2.group(1)
-                    _raw_slug = (_snip_res[0] or {}).get("_slug_used", "")
-                    if _real_slug != _raw_slug:
-                        # Real slug differs from name-guess — worth a second lookup
+                    _real_slug = _m2.group(1).lower()
+                    # Build what the name-guess slug would have been
+                    _raw2 = _re_mod.sub(r'[^a-z0-9 ]', ' ',
+                                        clean_name_for_search(company_name).lower())
+                    _sw2  = [w for w in _raw2.split()
+                             if w not in {'inc','llc','ltd','pvt','corp','co',
+                                          'the','and','of','by','group','private',
+                                          'limited','company'}]
+                    _name_slug = "-".join(_sw2)
+                    if _real_slug != _name_slug:
                         with _DDGS_SEM:
                             try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
                             except Exception: pass
