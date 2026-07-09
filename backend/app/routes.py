@@ -3642,6 +3642,39 @@ async def bulk_autofill_companies(
         words = _sig_words(company_name)
         return len(words) >= 2 or (len(words) == 1 and len(words[0]) >= 7)
 
+    # Generic industries Groq produces that are too vague to be useful — block them
+    _GENERIC_INDS = {
+        'technology', 'software', 'internet', 'domain registration',
+        'other', 'n/a', 'unknown', 'various', 'general', 'information technology',
+    }
+
+    # Signals that a page is a parked/for-sale domain — not a real company site
+    _DOMAIN_SALE_SIGNALS = [
+        'available for purchase', 'this domain is for sale', 'buy this domain',
+        'domain name is for sale', 'domain for sale', 'make an offer',
+        'inquire about this domain', 'sedoparking', 'hugedomains',
+        'is available for purchase', '.io is available',
+    ]
+
+    def _desc_is_valid(d: str) -> bool:
+        """Return False for CSS selectors, page titles, bare URLs, or for-sale pages."""
+        if not d or len(d.strip()) < 25:
+            return False
+        dl = d.lower().strip()
+        # CSS selectors leaked from scraping
+        if _re_mod.search(r'[a-z]\[href|\.css|{[\s\S]*?}', dl):
+            return False
+        # Bare URLs or filenames
+        if _re_mod.match(r'^https?://', dl) or dl.endswith(('.io', '.com', '.net', '.org')):
+            return False
+        # Page title patterns (e.g. "Home | Company", "Home Page")
+        if _re_mod.search(r'\|\s*[A-Z]|home page$|home \||\bindex\b', dl, _re_mod.I):
+            return False
+        # Domain for sale
+        if any(s in dl for s in _DOMAIN_SALE_SIGNALS):
+            return False
+        return True
+
     def _website_matches_company(company_name: str, website_data: dict) -> bool:
         """Return True if website content plausibly belongs to this company.
 
@@ -3657,6 +3690,9 @@ async def bulk_autofill_companies(
             website_data.get("hero", ""),
             website_data.get("first_para", ""),
         ])).lower()
+        # Reject domain-for-sale pages outright
+        if any(s in page_text for s in _DOMAIN_SALE_SIGNALS):
+            return False
         clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
         words = [w for w in clean.split() if len(w) > 2 and w not in _SITE_GENERIC]
         if not words:
@@ -3865,7 +3901,7 @@ async def bulk_autofill_companies(
                     _d = (website_data.get("meta_description") or
                           website_data.get("first_para") or
                           (website_data.get("hero", "")[:300].strip() or None))
-                    if _d:
+                    if _d and _desc_is_valid(str(_d)):
                         update_data["description"] = _d
                 if needs_hq and not update_data.get("headquarters"):
                     if website_data.get("location"):
@@ -3962,7 +3998,8 @@ async def bulk_autofill_companies(
                             update_data["size"] = str(li_res["employee_count"])
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = li_res["location"]
-                        if li_res.get("description") and needs_desc and not update_data.get("description"):
+                        if li_res.get("description") and needs_desc and not update_data.get("description") \
+                                and _desc_is_valid(li_res["description"]):
                             update_data["description"] = li_res["description"]
                         if li_res.get("founded") and not company.get("founded"):
                             update_data["founded"] = li_res["founded"]
@@ -3970,7 +4007,8 @@ async def bulk_autofill_companies(
                             update_data["specialties"] = li_res["specialties"]
                         if li_res.get("tagline"):
                             update_data["tagline"] = li_res["tagline"]
-                        if li_res.get("industry") and li_res["industry"].strip().lower() not in _BAD_IND:
+                        if li_res.get("industry") and li_res["industry"].strip().lower() not in _BAD_IND \
+                                and li_res["industry"].strip().lower() not in _GENERIC_INDS:
                             update_data["industry"] = li_res["industry"]
                             _ind = li_res["industry"].lower()
                             _mapped = next((v for k, v in _LI_MAP.items() if k in _ind), None)
@@ -4026,9 +4064,11 @@ async def bulk_autofill_companies(
                         _mb = _re_mod.search(r'\{[^}]+\}', _rb, _re_mod.DOTALL)
                         if _mb:
                             _xb = _json_bulk.loads(_mb.group(0))
+                            _gr_ind = _xb.get("industry")
                             if not update_data.get("industry") and not company.get("industry") and \
-                               _xb.get("industry") and _xb["industry"] not in (None, "null"):
-                                update_data["industry"] = str(_xb["industry"])
+                               _gr_ind and _gr_ind not in (None, "null") and \
+                               str(_gr_ind).strip().lower() not in _GENERIC_INDS:
+                                update_data["industry"] = str(_gr_ind)
                             if not update_data.get("founded") and not company.get("founded") and \
                                _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
                                 _yr_b = str(_xb["founded"]).strip()

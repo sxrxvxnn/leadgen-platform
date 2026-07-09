@@ -453,14 +453,23 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
             result['followers'] = m.group(0).strip()
 
     if not result.get('industry'):
+        # Same-line: "Industry: Software Development"
         m = re.search(r'(?:^|\n)\s*[*\-]?\s*Industry\s*[:\|]\s*(.+?)(?:\n|$)', md, re.I | re.M)
         if not m:
-            m = re.search(r'\bIndustry\b\s*\n\s*(.+?)(?:\n|$)', md, re.I | re.M)
+            # Next-line: "Industry\nSoftware Development"
+            m = re.search(r'\bIndustry\b\s*\n\s*([A-Z][^\n]{2,80}?)(?:\n|$)', md, re.I | re.M)
+        if not m:
+            # Bold variant
+            m = re.search(r'\*{1,2}Industry\*{1,2}\s*:?\s*\n?\s*([A-Z][^\n*]{2,80}?)(?:\n|$)', md, re.I | re.M)
         if m:
-            result['industry'] = m.group(1).strip()
+            result['industry'] = m.group(1).strip().rstrip('*').strip()
 
     if not result.get('employee_count'):
-        m = re.search(r'Company size\s*[:\|]?\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
+        # Same-line: "Company size: 51-200 employees"
+        m = re.search(r'Company\s*size\s*[:\|]\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
+        if not m:
+            # Next-line: "Company size\n51-200 employees"
+            m = re.search(r'Company\s*size\s*\n\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
         if not m:
             m = re.search(r'([\d,]+\s*[-–]\s*[\d,]+\s*employees)', md, re.I)
         if not m:
@@ -469,10 +478,27 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
             result['employee_count'] = m.group(1).strip()
 
     if not result.get('location'):
-        m = re.search(r'(?:Headquarters|HQ|Location)\s*[:\|]?\s*(.+?)(?:\n|$)', md, re.I | re.M)
-        if m:
-            val = m.group(1).strip()
-            if val and 'linkedin.com' not in val.lower():
+        # LinkedIn renders HQ in two formats:
+        # 1. Same line:  "Headquarters: San Francisco, CA"
+        # 2. Next line:  "Headquarters\nSan Francisco, CA"
+        # The old regex only caught format 1 — hence 92% HQ missing rate.
+        _hq_m = re.search(
+            r'(?:Headquarters|HQ)\s*[:\|]\s*(.+?)(?:\n|$)', md, re.I | re.M
+        )
+        if not _hq_m:
+            # Next-line format: label alone on its line, value on the next
+            _hq_m = re.search(
+                r'(?:Headquarters|HQ)\s*\n\s*([A-Z][^\n]{2,80}?)(?:\n|$)', md, re.I | re.M
+            )
+        if not _hq_m:
+            # Markdown bold variant: **Headquarters** or **HQ**
+            _hq_m = re.search(
+                r'\*{1,2}(?:Headquarters|HQ)\*{1,2}\s*:?\s*\n?\s*([A-Z][^\n*]{2,80}?)(?:\n|$)',
+                md, re.I | re.M
+            )
+        if _hq_m:
+            val = _hq_m.group(1).strip().rstrip('*').strip()
+            if val and 'linkedin.com' not in val.lower() and len(val) > 2:
                 result['location'] = val
 
     if not result.get('founded'):
