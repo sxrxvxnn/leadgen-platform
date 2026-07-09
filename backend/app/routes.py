@@ -3574,7 +3574,7 @@ async def bulk_autofill_companies(
     import threading as _threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from .website_analyzer import fetch_website_content, classify_company_type_rules
+    from .website_analyzer import fetch_website_content, classify_company_type_rules, classify_website_saas
 
     # Fetch target companies
     try:
@@ -3894,9 +3894,12 @@ async def bulk_autofill_companies(
                 _li_from_site = website_data.get("linkedin_url")
                 _desc_for_type = company.get("description") or update_data.get("description") or ""
                 if needs_type:
-                    ct, _ = classify_company_type_rules(website_data, _desc_for_type)
-                    if ct:
-                        update_data["company_type"] = ct
+                    _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
+                    if _cls["confidence"] >= 30:  # only save if at least some signal
+                        update_data["company_type"] = _cls["company_type"]
+                        update_data["is_saas"] = _cls["is_saas"]
+                        update_data["saas_category"] = _cls["category"]
+                        update_data["type_confidence"] = _cls["confidence"]
                 if needs_desc and not update_data.get("description"):
                     _d = (website_data.get("meta_description") or
                           website_data.get("first_para") or
@@ -10229,3 +10232,74 @@ async def company_suggest(q: str = ""):
         pass
 
     return results
+
+
+# ── Website Classification Engine ─────────────────────────────────────────────
+
+@router.post("/internal/classify-website")
+async def classify_website_endpoint(request: Request):
+    """Classify one or more company websites as SaaS / Non-SaaS Product / Service.
+
+    Body (single): {"url": "https://example.com", "description": "optional"}
+    Body (batch):  {"urls": ["https://a.com", "https://b.com"]}
+
+    Returns per-URL: {category, company_type, is_saas, confidence, scores, low_confidence}
+    Recommended filter: confidence >= 70 to include; flag below that for manual review.
+    """
+    from .website_analyzer import fetch_website_content, classify_website_saas
+    from concurrent.futures import ThreadPoolExecutor, as_completed as _asc
+    import json as _j
+
+    payload  = await request.json()
+    token    = request.headers.get("X-Internal-Token", "")
+    if token != INTERNAL_TOKEN:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    # Accept single URL or batch list
+    single_url = payload.get("url", "").strip()
+    urls = payload.get("urls") or ([single_url] if single_url else [])
+    description = payload.get("description", "")
+    if not urls:
+        return JSONResponse({"error": "provide 'url' or 'urls'"}, status_code=400)
+
+    def _classify_one(url: str, desc: str = "") -> dict:
+        if not url.startswith("http"):
+            url = "https://" + url
+        try:
+            wd = fetch_website_content(url, fast=False)
+            result = classify_website_saas(wd, url, desc)
+            result["url"] = url
+            # Fallback: if low-confidence or no website data, try DDG snippets
+            if (not wd or result["low_confidence"]) and result["confidence"] < 50:
+                try:
+                    from duckduckgo_search import DDGS as _DDGS2
+                    domain = url.split("//")[-1].split("/")[0]
+                    snippets = []
+                    with _DDGS_SEM:
+                        with _DDGS2() as d:
+                            for q in [f"site:{domain} pricing", f"site:{domain} services"]:
+                                for r in d.text(q, max_results=3):
+                                    snippets.append(r.get("body", ""))
+                    if snippets:
+                        ddgs_text = " ".join(snippets)
+                        result = classify_website_saas(wd, url, desc, ddgs_snippets=ddgs_text)
+                        result["url"] = url
+                        result["used_ddgs_fallback"] = True
+                except Exception:
+                    pass
+            return result
+        except Exception as e:
+            return {"url": url, "error": str(e), "category": "Service",
+                    "confidence": 0, "low_confidence": True}
+
+    if len(urls) == 1:
+        return JSONResponse(_classify_one(urls[0], description))
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_classify_one, u): u for u in urls[:200]}
+        for f in _asc(futures):
+            r = f.result()
+            results[r.get("url", futures[f])] = r
+
+    return JSONResponse({"results": results, "total": len(results)})

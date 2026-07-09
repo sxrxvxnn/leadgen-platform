@@ -399,6 +399,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             'first_para': first_para,
             'location': location,
             'linkedin_url': linkedin_url_in_html,
+            'scan_text': scan_text[:50_000] if not fast else '',  # raw HTML+bundle for tech stack
         }
     except Exception:
         return None
@@ -910,6 +911,252 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     # can't have their login/pricing buttons detected by BeautifulSoup, causing false
     # Service classifications. Better to leave it blank than be confidently wrong.
     return None, "Low"
+
+
+def classify_website_saas(
+    website_data: dict | None,
+    url: str = "",
+    description: str = "",
+    ddgs_snippets: str = "",
+) -> dict:
+    """Weighted scoring classifier per the SonarLeads Classification Engine spec.
+
+    Returns:
+        {
+            "category":       "SaaS" | "Non-SaaS Product" | "Service",
+            "company_type":   "Product" | "Service" | "Hybrid",
+            "is_saas":        bool,
+            "confidence":     int (0-100),
+            "scores":         {"saas": int, "product": int, "service": int},
+            "low_confidence": bool,   # True when top-two within 3 points
+        }
+    """
+
+    # ── Keyword signal tables (term → weight) ────────────────────────────────
+    _SAAS = {
+        'free trial': 5, 'start free trial': 5, 'try for free': 5,
+        'dashboard': 5,
+        'pricing': 4, 'pricing plan': 4, 'view pricing': 4,
+        'log in': 4, 'login': 4, 'sign in': 4,
+        'subscription': 4, 'subscribe': 3,
+        ' api ': 4, 'api access': 4, 'rest api': 4, 'graphql': 3,
+        'per user': 2, 'per seat': 2, 'per month': 3, 'per year': 3,
+        'sign up': 2, 'create account': 2, 'get started free': 3,
+        'billing': 3, 'upgrade plan': 3, 'cancel anytime': 3,
+        'saas': 5, 'software as a service': 5,
+        'cloud platform': 4, 'cloud-based': 3,
+        'integrations': 3, 'workflow automation': 3,
+        'onboarding': 2, 'in-app': 2,
+    }
+    _PRODUCT = {
+        'hardware': 5, 'device': 4, 'equipment': 3,
+        'buy now': 4, 'add to cart': 4, 'shop now': 3,
+        'one-time purchase': 3, 'one time payment': 3,
+        'cart': 3, 'checkout': 3,
+        'download': 3, 'install': 2,
+        'warranty': 3, 'specifications': 2,
+        'license key': 3, 'perpetual license': 3,
+        'on-premise': 4, 'on premise': 4, 'on-prem': 4,
+        'desktop app': 3, 'desktop application': 3,
+        'physical product': 3, 'ships to': 2, 'shipping': 2,
+    }
+    _SERVICE = {
+        'consulting': 5, 'consultancy': 5,
+        'agency': 5, 'digital agency': 5,
+        'request a quote': 5, 'request quote': 5, 'get a quote': 5,
+        'portfolio': 4, 'our work': 3, 'case studies': 3, 'case study': 3,
+        'we help': 3, 'we partner': 2,
+        'managed services': 3, 'managed service provider': 4,
+        'schedule a call': 3, 'book a call': 3, 'book a demo': 2,
+        'implementation': 2, 'deployment services': 2,
+        'staff augmentation': 5, 'outsourcing': 5,
+        'dedicated team': 4, 'hire developers': 4,
+        'offshore': 3, 'nearshore': 3,
+        'it consulting': 4, 'it services': 4,
+    }
+
+    # ── Nav tab signals ───────────────────────────────────────────────────────
+    _NAV_SAAS    = ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'status']
+    _NAV_PRODUCT = ['shop', 'store', 'cart', 'catalog', 'products', 'buy']
+    _NAV_SERVICE = ['services', 'industries', 'solutions', 'clients', 'case studies', 'our work']
+
+    # ── CTA button patterns ───────────────────────────────────────────────────
+    _CTA_SAAS    = ['start free trial', 'get started free', 'try for free', 'start for free',
+                    'sign up free', 'create free account', 'get started']
+    _CTA_PRODUCT = ['buy now', 'add to cart', 'shop now', 'order now', 'purchase']
+    _CTA_SERVICE = ['request a quote', 'request quote', 'get a quote', 'schedule a call',
+                    'book a call', 'contact us', 'get in touch', 'talk to us']
+
+    # ── URL / subdomain signals ───────────────────────────────────────────────
+    _URL_SAAS    = [r'app\.', r'dashboard\.', r'api\.', r'/pricing', r'/signup', r'/login', r'/docs']
+    _URL_PRODUCT = [r'/shop', r'/store', r'/cart', r'/products', r'/catalog', r'store\.']
+    _URL_SERVICE = [r'/services', r'/consulting', r'/agency', r'/portfolio']
+
+    # ── Tech stack fingerprints (in raw HTML/JS) ─────────────────────────────
+    _TECH_SAAS = [
+        ('js.stripe.com', 4), ('stripe.com/v3', 4),
+        ('auth0.com', 4), ('okta.com', 3),
+        ('widget.intercom.io', 3), ('app.intercom.io', 3),
+        ('chargebee.com', 4), ('recurly.com', 4), ('paddle.com', 3),
+        ('segment.com', 2), ('cdn.segment.com', 2),
+        ('mixpanel.com', 2), ('amplitude.com', 2),
+        ('launchdarkly.com', 3),
+        ('pendo.io', 2), ('heap.io', 2),
+        ('app.getbeamer.com', 2),
+        ('appcues.com', 2), ('userpilot.com', 2),
+    ]
+    _TECH_PRODUCT = [
+        ('cdn.shopify.com', 5), ('shopify.com', 4),
+        ('woocommerce', 4), ('wc-api', 3),
+        ('bigcommerce.com', 4), ('bigcommerce', 3),
+        ('magento', 3), ('mage', 2),
+        ('snipcart.com', 3), ('ecwid.com', 3),
+        ('squarespace.com/commerce', 2),
+    ]
+
+    # ─────────────────────────────────────────────────────────────────────────
+    scores = {'saas': 0, 'product': 0, 'service': 0}
+
+    if not website_data and not description and not ddgs_snippets:
+        return {
+            'category': 'Service', 'company_type': 'Service',
+            'is_saas': False, 'confidence': 0,
+            'scores': scores, 'low_confidence': True,
+        }
+
+    # Build text corpus from page content (weight: 1.0×)
+    page_text = ' '.join(filter(None, [
+        website_data.get('header', '') if website_data else '',
+        website_data.get('nav', '') if website_data else '',
+        website_data.get('hero', '') if website_data else '',
+        website_data.get('pricing', '') if website_data else '',
+        website_data.get('full_text', '')[:3000] if website_data else '',
+        website_data.get('meta_description', '') if website_data else '',
+        description,
+    ])).lower()
+
+    nav_text  = (website_data.get('nav', '') if website_data else '').lower()
+    full_text = (website_data.get('full_text', '') if website_data else '').lower()
+    scan_text = (website_data.get('scan_text', '') if website_data else '').lower()
+
+    # 1. Keyword scoring (1.0× weight) ────────────────────────────────────────
+    for term, weight in _SAAS.items():
+        if term in page_text:
+            scores['saas'] += weight
+    for term, weight in _PRODUCT.items():
+        if term in page_text:
+            scores['product'] += weight
+    for term, weight in _SERVICE.items():
+        if term in page_text:
+            scores['service'] += weight
+
+    # 2. Nav tab scoring (1.0× weight) ────────────────────────────────────────
+    for tab in _NAV_SAAS:
+        if tab in nav_text:
+            scores['saas'] += 3
+    for tab in _NAV_PRODUCT:
+        if tab in nav_text:
+            scores['product'] += 3
+    for tab in _NAV_SERVICE:
+        if tab in nav_text:
+            scores['service'] += 2
+
+    # 3. CTA button scoring (1.0× weight) ─────────────────────────────────────
+    for cta in _CTA_SAAS:
+        if cta in page_text:
+            scores['saas'] += 4
+    for cta in _CTA_PRODUCT:
+        if cta in page_text:
+            scores['product'] += 4
+    for cta in _CTA_SERVICE:
+        if cta in page_text:
+            scores['service'] += 3
+
+    # 4. URL / subdomain patterns (1.0× weight) ────────────────────────────────
+    url_l = url.lower()
+    for pat in _URL_SAAS:
+        if re.search(pat, url_l):
+            scores['saas'] += 3
+    for pat in _URL_PRODUCT:
+        if re.search(pat, url_l):
+            scores['product'] += 3
+    for pat in _URL_SERVICE:
+        if re.search(pat, url_l):
+            scores['service'] += 2
+
+    # 5. HTML structural signals (1.0× weight) ────────────────────────────────
+    if website_data:
+        if website_data.get('has_login_detected'):    scores['saas'] += 4
+        if website_data.get('has_web_app_link'):      scores['saas'] += 3
+        if website_data.get('has_pricing_detected'):  scores['saas'] += 4
+        if website_data.get('has_mobile_app'):        scores['saas'] += 3
+        if website_data.get('has_app_store_link'):    scores['saas'] += 3
+        if website_data.get('has_play_store_link'):   scores['saas'] += 3
+
+    # 6. Tech stack fingerprints (0.7× weight) ────────────────────────────────
+    if scan_text:
+        for fingerprint, weight in _TECH_SAAS:
+            if fingerprint in scan_text:
+                scores['saas'] += int(weight * 0.7)
+        for fingerprint, weight in _TECH_PRODUCT:
+            if fingerprint in scan_text:
+                scores['product'] += int(weight * 0.7)
+
+    # 7. DDG/G2/Capterra/LinkedIn snippets (0.8× weight) ─────────────────────
+    if ddgs_snippets:
+        snip_l = ddgs_snippets.lower()
+        for term, weight in _SAAS.items():
+            if term in snip_l:
+                scores['saas'] += int(weight * 0.8)
+        for term, weight in _SERVICE.items():
+            if term in snip_l:
+                scores['service'] += int(weight * 0.8)
+        for term, weight in _PRODUCT.items():
+            if term in snip_l:
+                scores['product'] += int(weight * 0.8)
+        # G2/Capterra presence is a very strong SaaS signal
+        if 'g2.com' in snip_l or 'capterra.com' in snip_l or 'getapp.com' in snip_l:
+            scores['saas'] += int(8 * 0.9)
+
+    # ── Decision ─────────────────────────────────────────────────────────────
+    total = scores['saas'] + scores['product'] + scores['service']
+    if total == 0:
+        return {
+            'category': 'Service', 'company_type': 'Service',
+            'is_saas': False, 'confidence': 0,
+            'scores': scores, 'low_confidence': True,
+        }
+
+    winner = max(scores, key=scores.get)
+    win_score = scores[winner]
+    sorted_scores = sorted(scores.values(), reverse=True)
+    runner_up = sorted_scores[1] if len(sorted_scores) > 1 else 0
+
+    confidence = int(win_score / total * 100)
+    low_confidence = (win_score - runner_up) <= 3
+
+    # Map winner to output fields
+    if winner == 'saas':
+        category, company_type, is_saas = 'SaaS', 'Product', True
+    elif winner == 'product':
+        category, company_type, is_saas = 'Non-SaaS Product', 'Product', False
+    else:
+        category, company_type, is_saas = 'Service', 'Service', False
+
+    # Hybrid: substantial service AND saas scores together
+    if winner == 'saas' and scores['service'] >= scores['saas'] * 0.5:
+        company_type = 'Hybrid'
+    if winner == 'service' and scores['saas'] >= scores['service'] * 0.5:
+        company_type = 'Hybrid'; is_saas = False
+
+    return {
+        'category':     category,
+        'company_type': company_type,
+        'is_saas':      is_saas,
+        'confidence':   confidence,
+        'scores':       scores,
+        'low_confidence': low_confidence,
+    }
 
 
 # Keep backward compatibility
