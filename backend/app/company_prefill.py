@@ -485,6 +485,21 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
         'founded': None,
         'specialties': None,
     }
+    # Jina Reader first — free, no credits, no auth wall, handles JS rendering.
+    # With Firecrawl credits exhausted, Jina is now the primary LinkedIn data source.
+    # If Jina returns all core fields, skip the slow HTML path entirely.
+    _jina_attempted = False
+    if not fast and not li_cookie:
+        try:
+            _jina_md_early = _jina_fetch_linkedin_md(linkedin_url)
+            if _jina_md_early:
+                _parse_jina_linkedin_md(_jina_md_early, result)
+                _jina_attempted = True
+        except Exception:
+            pass
+        if result.get('industry') and result.get('employee_count') and result.get('description'):
+            return result  # Jina gave us enough — skip HTML scraping entirely
+
     try:
         base = linkedin_url.rstrip('/')
         # The /about/ endpoint exposes phone, founded, specialties, industry in full.
@@ -758,9 +773,8 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
     except Exception as e:
         print(f"LinkedIn scrape error for {linkedin_url}: {e}")
 
-    # Jina Reader fallback — covers Firecrawl credit exhaustion and direct-HTTP login walls.
-    # Only runs when key structured fields are missing (won't slow down successful scrapes).
-    if not fast:
+    # Jina fallback — only if not already attempted at the top (avoids double-fetch).
+    if not fast and not _jina_attempted:
         missing_key = not result.get('industry') or not result.get('employee_count') or not result.get('specialties')
         if missing_key:
             try:
