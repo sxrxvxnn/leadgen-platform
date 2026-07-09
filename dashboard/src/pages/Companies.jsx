@@ -5362,7 +5362,11 @@ export default function Companies() {
       </div>
 
       {showAddModal && (
-        <AddCompanyModal onClose={() => setShowAddModal(false)} onRefresh={fetchCompanies} />
+        <AddCompanyModal
+          onClose={() => setShowAddModal(false)}
+          onRefresh={fetchCompanies}
+          onAdded={(company) => setCompanies((prev) => [company, ...prev])}
+        />
       )}
       {showBulkAdd && (
         <BulkAddModal

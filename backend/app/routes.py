@@ -2061,9 +2061,12 @@ async def bulk_create_companies(
 ):
     user_id = get_user_id(authorization)
     companies = payload.get("companies", [])
-    print(f"DEBUG companies bulk: received {len(companies)} companies, first: {companies[0].get('name') if companies else 'none'}")
     if not companies:
         raise HTTPException(status_code=400, detail="No companies provided")
+
+    MAX_IMPORT = 10_000
+    if len(companies) > MAX_IMPORT:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_IMPORT:,} companies per import. Split into smaller batches.")
 
     inserted = []
     updated = []
@@ -2103,7 +2106,8 @@ async def bulk_create_companies(
             "tagline":      c.get("tagline") or None,
         })
 
-    # Upsert in chunks of 100 to stay under PostgREST limits
+    # Upsert in chunks of 100 to stay under PostgREST limits.
+    # On chunk failure fall back to row-by-row so only truly invalid rows are skipped.
     CHUNK = 100
     for i in range(0, len(to_upsert), CHUNK):
         chunk = to_upsert[i:i + CHUNK]
@@ -2114,12 +2118,22 @@ async def bulk_create_companies(
                 returning="representation",
             ).execute()
             for row in resp.data or []:
-                # Supabase upsert doesn't distinguish insert vs update in response,
-                # so we track by whether the row already had enrichment data
                 inserted.append(row)
         except Exception as e:
-            print(f"Bulk upsert chunk {i//CHUNK + 1} error: {e}")
-            skipped += len(chunk)
+            print(f"Bulk upsert chunk {i//CHUNK + 1} failed ({e}), retrying row-by-row")
+            for row in chunk:
+                try:
+                    r = supabase.table("companies").upsert(
+                        [row],
+                        on_conflict="user_id,name",
+                        returning="representation",
+                    ).execute()
+                    if r.data:
+                        inserted.extend(r.data)
+                    else:
+                        skipped += 1
+                except Exception:
+                    skipped += 1
 
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
