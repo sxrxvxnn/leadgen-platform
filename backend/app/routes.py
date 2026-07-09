@@ -3827,8 +3827,9 @@ async def bulk_autofill_companies(
                         )
 
             # Reject websites that don't mention the company — prevents wrong matches
-            # like "ABOUT Healthcare" → healthcare.gov
-            if website_data and needs_site:
+            # like "ABOUT Healthcare" → healthcare.gov, "Gamma" → paint company
+            # Run for ALL companies, not just ones that needed site discovery
+            if website_data:
                 if not _website_matches_company(company_name, website_data):
                     website_data = None
                     update_data.pop("website", None)
@@ -3858,8 +3859,11 @@ async def bulk_autofill_companies(
                     update_data["compliance"] = ", ".join(_comp)
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
-            # Priority: existing DB value → website HTML social link → slug guess
-            li_url = company.get("linkedin_url") or _li_from_site or ""
+            # li_url_confirmed = URLs from real sources (stored / website HTML)
+            # li_url           = also includes name-guessed slug for lookups only
+            # Only save confirmed URLs to DB — guesses create false data
+            li_url_confirmed = company.get("linkedin_url") or _li_from_site or ""
+            li_url = li_url_confirmed
             if needs_linkedin and not li_url:
                 _raw = _re_mod.sub(r'[^a-z0-9 ]', ' ',
                                    clean_name_for_search(company_name).lower())
@@ -3869,8 +3873,9 @@ async def bulk_autofill_companies(
                                     'limited','company'}]
                 if _sw:
                     li_url = "https://www.linkedin.com/company/" + "-".join(_sw) + "/"
-            if li_url:
-                update_data["linkedin_url"] = li_url
+                    # li_url is now a guess — NOT saved yet, used for DDGS/Jina only
+            if li_url_confirmed:
+                update_data["linkedin_url"] = li_url_confirmed
 
             # ── Step 5: LinkedIn data from search snippets ────────────────────────
             # Search engine result snippets for linkedin.com/company pages contain
@@ -3879,7 +3884,8 @@ async def bulk_autofill_companies(
             if needs_size or needs_followers or needs_hq:
                 _m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url) if li_url else None
                 _li_slug = _m.group(1) if _m else ""
-                _snip = _ddgs_linkedin_snippet(company_name, _li_slug)
+                with _DDGS_SEM:
+                    _snip = _ddgs_linkedin_snippet(company_name, _li_slug)
                 if _snip.get("followers") and needs_followers:
                     update_data["followers"] = _snip["followers"]
                 if _snip.get("employee_count") and needs_size:
@@ -3903,6 +3909,11 @@ async def bulk_autofill_companies(
                     if li_md:
                         li_res = {}
                         _parse_jina_linkedin_md(li_md, li_res)
+                        # If Jina returned real data from a guessed URL, the URL is valid — save it
+                        if not li_url_confirmed and li_res and any(li_res.get(f) for f in
+                                ("followers","employee_count","industry","description")):
+                            update_data["linkedin_url"] = li_url
+                            li_url_confirmed = li_url
                         _BAD_IND = {'private company','privately held','public company',
                                     'partnership','sole proprietorship','government agency'}
                         _LI_MAP = {
@@ -3957,7 +3968,9 @@ async def bulk_autofill_companies(
                             (not update_data.get("founded") and not company.get("founded")) or \
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             _missing_type_bulk
-            if _groq_key_bulk and _desc_bulk and _missing_bulk:
+            # Require a meaningful description (>80 chars) before asking Groq
+            # Short/empty descriptions cause hallucinations like "Home Improvement" for "Gamma"
+            if _groq_key_bulk and len(_desc_bulk) > 80 and _missing_bulk:
                 try:
                     import json as _json_bulk
                     _bp = (
@@ -3976,7 +3989,7 @@ async def bulk_autofill_companies(
                     _gr = requests.post(
                         "https://api.groq.com/openai/v1/chat/completions",
                         headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
-                        json={"model": "llama-3.1-8b-instant",
+                        json={"model": "llama-3.3-70b-versatile",
                               "messages": [{"role": "user", "content": _bp}],
                               "max_tokens": 150, "temperature": 0.1},
                         timeout=10,

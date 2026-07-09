@@ -747,6 +747,13 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         'product-based', 'product company', 'white label', 'white-label',
         'our software product', 'software product',
         'mobile app', 'our app',  # weaker — service firms also say "we build mobile apps"
+        # Management platform signals — SaaS products use these, not service companies
+        'management system', 'management platform', 'management software',
+        'performance management', 'hr platform', 'hr software', 'hr system',
+        'built for hr', 'built for teams', 'built for managers',
+        'get a demo', 'request a demo', 'book a demo', 'schedule a demo',
+        # Nav-level pricing signal — service companies rarely have a Pricing nav item
+        'pricing', 'see pricing', 'view pricing',
     ]
     # Counter-signals: product_weak hits don't count when these are present
     # (service company building a product FOR clients, not selling it as SaaS)
@@ -758,6 +765,8 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
 
     # ── Service signals ────────────────────────────────────────────
     # Strong: explicitly describes a services business model
+    # NOTE: 'technology company', 'tech company', 'software development company',
+    # 'it company', 'it firm' removed — too generic, apply equally to SaaS products
     service_strong = [
         'it services', 'software services', 'managed services', 'managed service provider',
         'consulting services', 'outsourcing', 'staff augmentation', 'body shopping',
@@ -765,19 +774,18 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         'delivery center', 'engineering services', 'development services',
         'service provider', 'technology services', 'digital services',
         'it solutions and services', 'software development services',
-        'software development company', 'it company', 'it firm',
-        'technology company', 'tech company', 'digital agency',
-        'solutions company', 'engineering company', 'it consulting',
+        'digital agency', 'solutions company', 'engineering company', 'it consulting',
         'dedicated team', 'hire developers', 'hire our', 'talent solutions',
         'digital transformation services', 'digital transformation company',
         'erp implementation', 'crm implementation', 'system integration',
         'software delivery', 'agile delivery', 'project delivery',
     ]
     # Weak: pattern common in service companies, less definitive
+    # NOTE: 'talent' removed — HR SaaS products use "talent management" heavily
     service_weak = [
         'for our clients', 'client engagement', 'client projects', 'client work',
         'custom development', 'bespoke', 'tailored solutions', 'custom software',
-        'resource augmentation', 'workforce solutions', 'talent',
+        'resource augmentation', 'workforce solutions',
         'digital transformation',  # used almost exclusively by IT service firms
         'contact us to', 'talk to our', 'get in touch',  # service-only primary CTA
         'we partner with', 'our expertise', 'our capabilities',
@@ -852,12 +860,10 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     if s_weak_count >= 2 and not has_login and not has_pricing and not has_mobile_app and not has_web_app and p_strong_count == 0:
         return "Service", "Medium"
 
-    # Tier 7: Site loaded with content but zero product signals → lean Service
-    # Only fires if NO app, login, pricing, or web-app links were found.
-    meaningful_content = site_loaded and len(text.strip()) > 200
-    if meaningful_content and not has_login and not has_pricing and not has_mobile_app and not has_web_app and p_strong_count == 0:
-        return "Service", "Low"
-
+    # Tier 7: No confident signals — return None so AI/Groq can decide.
+    # Removed the old "lean Service" default: JS-rendered SaaS sites (like PerformYard)
+    # can't have their login/pricing buttons detected by BeautifulSoup, causing false
+    # Service classifications. Better to leave it blank than be confidently wrong.
     return None, "Low"
 
 
