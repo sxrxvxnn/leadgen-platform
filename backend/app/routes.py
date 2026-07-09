@@ -3576,6 +3576,9 @@ async def bulk_autofill_companies(
         scrape_linkedin_data as _scrape_li,
         search_linkedin_url_by_domain, search_linkedin_url_direct,
         search_company_website, clean_name_for_search,
+        _jina_fetch_linkedin_md, _parse_jina_linkedin_md,
+        _web_search as _bulk_web_search,
+        _SKIP_DOMAINS as _SKIP_DOM,
     )
 
     def _ddgs_run(fn, *args, timeout=15):
@@ -3759,14 +3762,11 @@ async def bulk_autofill_companies(
             pass
 
     def _autofill_one(company: dict) -> dict:
-        company_name = company.get("name", "")
+        company_name = company.get("name", "").strip()
         ws_url       = company.get("website") or ""
         if ws_url and not ws_url.startswith("http"):
             ws_url = "https://" + ws_url
 
-        # Always refresh live/analysis data; skip structural fields set by user.
-        # size (employee range) is stable and LinkedIn only returns coarse ranges —
-        # keep the existing value to avoid overwriting with a less accurate category.
         needs_desc      = True
         needs_hq        = True
         needs_type      = True
@@ -3784,261 +3784,202 @@ async def bulk_autofill_companies(
         update_data = {}
 
         try:
-            # ── Step 1: find official website via DDGS if missing ─────────────
-            if needs_site and not ws_url:
-                found = _ddgs_run(search_company_website, company_name, timeout=20)
-                if found:
-                    ws_url = found
-                    update_data["website"] = ws_url
-
-            # ── Step 1b: LinkedIn-first website discovery ─────────────────────
-            # A correct LinkedIn company "About" section always lists the official
-            # site. Searching LinkedIn by name is often MORE reliable than a raw
-            # web search because the company itself controls the page.
-            # Strategy:
-            #   • Distinctive name (≥2 sig-words OR 1 word ≥7 chars) → trust the
-            #     LinkedIn-listed website directly; it's highly unlikely to be wrong.
-            #   • Ambiguous name (single short word like "Apex") → use the LinkedIn-
-            #     listed website as a candidate but still validate its content against
-            #     the company name before saving, matching multiple entities risk.
-            # This runs when we still need both the website AND the LinkedIn URL, OR
-            # when DDGS Step 1 returned nothing (ws_url is still empty).
+            # ── Step 1: LinkedIn URL — slug guess (instant, no network) ──────────
+            # Convert company name to likely LinkedIn slug. Correct 60-70% of the
+            # time; Step 3 verifies and falls back to search when wrong.
             li_url = company.get("linkedin_url") or ""
-            if needs_linkedin and (needs_site and not ws_url or (needs_site and not update_data.get("website"))):
-                try:
-                    _li_candidate = _ddgs_run(
-                        search_linkedin_url_direct, clean_name_for_search(company_name)
-                    ) or ""
-                    if _li_candidate and _linkedin_slug_matches(company_name, _li_candidate):
-                        # Scrape the LinkedIn page just for its About-section website
-                        _li_data_early = _scrape_li(_li_candidate, fast=False, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
-                        _li_ws_early = _li_data_early.get("website") or ""
-                        if _li_ws_early:
-                            if not _li_ws_early.startswith("http"):
-                                _li_ws_early = "https://" + _li_ws_early
-                            if _name_is_distinctive(company_name):
-                                # Trust directly — no content-validation needed
-                                ws_url = _li_ws_early
-                                update_data["website"] = ws_url
-                                update_data["linkedin_website"] = ws_url  # same source
-                            else:
-                                # Ambiguous name: treat as candidate, validate in Step 2
-                                ws_url = _li_ws_early
-                                update_data["website"] = ws_url
-                                update_data["linkedin_website"] = _li_ws_early
-                                # _website_matches_company check will run in Step 2
-                        # Either way, lock in the LinkedIn URL we found
-                        li_url = _li_candidate
-                        update_data["linkedin_url"] = li_url
-                        needs_linkedin = False  # don't re-search in Step 3
-                except Exception:
-                    pass
+            _slug_guessed = False
+            if not li_url:
+                _raw_name = _re_mod.sub(r'[^a-z0-9 ]', ' ',
+                                        clean_name_for_search(company_name).lower())
+                _slug_words = [w for w in _raw_name.split()
+                               if w not in {'inc', 'llc', 'ltd', 'pvt', 'corp',
+                                            'co', 'the', 'and', 'of', 'by',
+                                            'group', 'private', 'limited', 'company'}]
+                if _slug_words:
+                    li_url = "https://www.linkedin.com/company/" + "-".join(_slug_words) + "/"
+                    _slug_guessed = True
 
-            # ── Step 2: scrape website ────────────────────────────────────────
-            # fast=False (5s connect / 12s read) — fast=True's 2s kills ~80% of
-            # Indian IT sites. 20 workers × 12s ≈ 10 min for 1000 companies max.
-            website_data = None
-            _ws_url_used = None
-            if ws_url:
-                website_data = fetch_website_content(ws_url, fast=False)
-                _ws_url_used = ws_url
-                if not website_data:
-                    parsed = urlparse(ws_url)
-                    if not parsed.netloc.startswith("www."):
-                        _www = parsed.scheme + "://www." + parsed.netloc + parsed.path
-                        website_data = fetch_website_content(_www, fast=False)
-                        if website_data: _ws_url_used = _www
-                if not website_data and ws_url.startswith("http://"):
-                    _https = "https://" + ws_url[7:]
-                    website_data = fetch_website_content(_https, fast=False)
-                    if website_data: _ws_url_used = _https
+            # ── Step 2: Parallel LinkedIn (Jina) + website fetch ─────────────────
+            # Jina Reader is free, unlimited, and JS-renders LinkedIn pages without
+            # credentials — replaces Firecrawl entirely for LinkedIn scraping.
+            from concurrent.futures import ThreadPoolExecutor as _TPool
 
-            # Accuracy guard: reject website if its content doesn't mention the
-            # company name. Prevents "Cinch Business Solutions" → greencirclelife.com
-            # style mismatches where DDGS returns the wrong domain.
-            # Skipped when the website came directly from a validated LinkedIn About
-            # page for a distinctive company name — that source is authoritative.
-            _li_sourced_website = update_data.get("linkedin_website") == update_data.get("website") and bool(update_data.get("linkedin_website"))
-            if website_data and needs_site and _ws_url_used and not _li_sourced_website:
-                if not _website_matches_company(company_name, website_data):
-                    website_data = None
-                    _ws_url_used = None
-                    # Retract the URL we were about to save — it's the wrong company's site
-                    update_data.pop("website", None)
-                    ws_url = ""  # don't use for LinkedIn domain search either
+            def _jina_li_fetch():
+                return _jina_fetch_linkedin_md(li_url) if li_url else ""
 
-            if website_data:
-                if needs_type:
-                    _desc_for_type = company.get("description") or update_data.get("description") or ""
-                    ct, _ = classify_company_type_rules(website_data, _desc_for_type)
-                    if ct:
-                        update_data["company_type"] = ct
-                if needs_desc:
-                    desc = (website_data.get("meta_description") or
-                            website_data.get("first_para") or
-                            (website_data.get("hero", "")[:300].strip() or None))
-                    if desc:
-                        update_data["description"] = desc
-                if needs_hq:
-                    loc = website_data.get("location")
-                    if loc:
-                        update_data["headquarters"] = loc
-                compliance = website_data.get("compliance_detected") or []
-                if compliance and not company.get("compliance"):
-                    update_data["compliance"] = ", ".join(compliance)
+            def _ws_fetch():
+                if not ws_url:
+                    return None
+                wd = fetch_website_content(ws_url, fast=False)
+                if not wd:
+                    _p = urlparse(ws_url)
+                    if not _p.netloc.startswith("www."):
+                        _www_url = _p.scheme + "://www." + _p.netloc + _p.path
+                        wd = fetch_website_content(_www_url, fast=False)
+                return wd
 
-            # ── Step 3: LinkedIn URL ──────────────────────────────────────────
-            # Prefer update_data["linkedin_url"] — may have been set by Step 1b.
-            li_url = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
+            with _TPool(max_workers=2) as _pex:
+                _li_future = _pex.submit(_jina_li_fetch)
+                _ws_future = _pex.submit(_ws_fetch)
 
-            if needs_linkedin:
-                # Tier 1: LinkedIn href already in scraped HTML (free, instant)
-                if website_data and website_data.get("linkedin_url"):
-                    candidate = website_data["linkedin_url"]
-                    if _linkedin_slug_matches(company_name, candidate):
-                        li_url = candidate
+            li_md = _li_future.result() or ""
+            website_data = _ws_future.result()
 
-                # Tier 2: DDGS by domain — far more precise than name search
-                if not li_url and ws_url:
-                    candidate = _ddgs_run(search_linkedin_url_by_domain, ws_url) or ""
-                    if candidate and _linkedin_slug_matches(company_name, candidate):
-                        li_url = candidate
+            # ── Step 3: Verify LinkedIn page belongs to this company ─────────────
+            # If the slug was guessed, confirm the page content matches the company.
+            # If not, search for the correct URL (Brave first, DDGS fallback).
+            if _slug_guessed:
+                _name_words = [w.lower() for w in company_name.split() if len(w) > 2]
+                _first_sig = _name_words[0] if _name_words else ""
+                _md_lower = li_md.lower()
+                _li_verified = bool(li_md) and bool(_first_sig) and _first_sig in _md_lower
+                if not _li_verified:
+                    _sq = f'site:linkedin.com/company "{clean_name_for_search(company_name)}"'
+                    _sr = _bulk_web_search(_sq, count=5)
+                    _correct = next(
+                        (r.get("href", r.get("url", "")) for r in _sr
+                         if "linkedin.com/company/" in r.get("href", r.get("url", ""))),
+                        ""
+                    )
+                    if _correct and _correct != li_url:
+                        li_url = _correct
+                        li_md = _jina_fetch_linkedin_md(li_url) or ""
+                    elif not _correct:
+                        li_url = ""
+                        li_md = ""
 
-                # Tier 3: DDGS by company name (last resort)
-                if not li_url:
-                    candidate = _ddgs_run(
-                        search_linkedin_url_direct, clean_name_for_search(company_name)
-                    ) or ""
-                    if candidate and _linkedin_slug_matches(company_name, candidate):
-                        li_url = candidate
-
-                if li_url:
+            # ── Step 4: Parse LinkedIn markdown ──────────────────────────────────
+            _BAD_INDUSTRIES = {
+                'private company', 'privately held', 'public company',
+                'partnership', 'sole proprietorship', 'government agency',
+            }
+            _LI_CLASS_MAP = {
+                'software development': 'IT Services',
+                'information technology': 'IT Services',
+                'it services': 'IT Services',
+                'computer software': 'SaaS',
+                'internet': 'SaaS',
+                'financial services': 'Fintech',
+                'banking': 'Banking',
+                'insurance': 'Insurance',
+                'hospital': 'Healthtech',
+                'health': 'Healthtech',
+                'e-learning': 'Edtech',
+                'education': 'Edtech',
+                'logistics': 'Logistics',
+                'transportation': 'Logistics',
+                'retail': 'Retail',
+                'real estate': 'Real Estate',
+                'venture capital': 'VC / Investment',
+                'private equity': 'VC / Investment',
+                'marketing': 'Media',
+                'broadcast': 'Media',
+                'management consulting': 'Consulting',
+                'consulting': 'Consulting',
+                'nonprofit': 'Non-profit',
+                'government': 'Government',
+                'security': 'Cybersecurity',
+                'cybersecurity': 'Cybersecurity',
+                'manufacturing': 'Manufacturing',
+                'e-commerce': 'E-commerce',
+            }
+            li_result = {}
+            if li_md:
+                _parse_jina_linkedin_md(li_md, li_result)
+                if li_url and (needs_linkedin or _slug_guessed):
                     update_data["linkedin_url"] = li_url
 
-            # ── Step 4: scrape LinkedIn page (fast=False — all 4 UAs, 8s each) ─
-            # Also captures website URL from LinkedIn about section. If we had no
-            # website yet, use it to scrape for description/HQ/type. Otherwise it's
-            # stored for cross-validation against the website we already have.
-            if li_url and (needs_size or needs_followers or needs_hq or needs_desc or needs_site or needs_li_verify):
-                try:
-                    li_data = _scrape_li(li_url, fast=False, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
-                    if li_data.get("followers") and needs_followers:
-                        update_data["followers"] = li_data["followers"]
-                    if li_data.get("employee_count") and needs_size:
-                        update_data["size"] = str(li_data["employee_count"])
-                    if li_data.get("location") and needs_hq and not update_data.get("headquarters"):
-                        update_data["headquarters"] = li_data["location"]
+            if li_result.get("followers") and needs_followers:
+                update_data["followers"] = li_result["followers"]
+            if li_result.get("employee_count") and needs_size:
+                update_data["size"] = str(li_result["employee_count"])
+            if li_result.get("location") and needs_hq:
+                update_data["headquarters"] = li_result["location"]
+            if li_result.get("description") and needs_desc:
+                update_data["description"] = li_result["description"]
+            if li_result.get("founded") and not company.get("founded"):
+                update_data["founded"] = li_result["founded"]
+            if li_result.get("specialties"):
+                update_data["specialties"] = li_result["specialties"]
+            if li_result.get("tagline"):
+                update_data["tagline"] = li_result["tagline"]
+            if li_result.get("industry") and \
+               li_result["industry"].strip().lower() not in _BAD_INDUSTRIES:
+                update_data["industry"] = li_result["industry"]
+                ind_lower = li_result["industry"].lower()
+                mapped = next((v for k, v in _LI_CLASS_MAP.items() if k in ind_lower), None)
+                if mapped and (not company.get("classification") or
+                               company.get("classification") == "Unclassified"):
+                    update_data["classification"] = mapped
 
-                    # Description — LinkedIn's About Overview is authoritative; use directly
-                    if li_data.get("description") and needs_desc and not update_data.get("description"):
-                        update_data["description"] = li_data["description"]
+            # ── Step 5: Website from LinkedIn About section ───────────────────────
+            li_website = li_result.get("website") or ""
+            if li_website and not li_website.startswith("http"):
+                li_website = "https://" + li_website
+            if li_website:
+                update_data["linkedin_website"] = li_website
+            elif needs_li_verify:
+                update_data["linkedin_website"] = ""
 
-                    # Phone — don't overwrite (could have been manually verified)
-                    if li_data.get("phone") and not update_data.get("phone") and not company.get("phone"):
-                        update_data["phone"] = li_data["phone"]
+            if li_website and not website_data:
+                _ws2 = fetch_website_content(li_website, fast=False)
+                if _ws2:
+                    if needs_site and not update_data.get("website"):
+                        if _name_is_distinctive(company_name) or \
+                           _website_matches_company(company_name, _ws2):
+                            update_data["website"] = li_website
+                            ws_url = li_website
+                    website_data = _ws2
 
-                    # Founded year — stable once known, don't overwrite
-                    if li_data.get("founded") and not company.get("founded"):
-                        update_data["founded"] = li_data["founded"]
+            # ── Step 6: Search for website if still missing ───────────────────────
+            if needs_site and not ws_url and not update_data.get("website"):
+                _site_res = _bulk_web_search(
+                    f'"{clean_name_for_search(company_name)}" official website', count=5
+                )
+                for _r in _site_res:
+                    _cand = _r.get("href") or _r.get("url") or ""
+                    if not _cand:
+                        continue
+                    _dom = urlparse(_cand).netloc.lower().replace("www.", "")
+                    if _dom and not any(_d in _dom for _d in _SKIP_DOM):
+                        _wd = fetch_website_content(_cand, fast=False)
+                        if _wd and _website_matches_company(company_name, _wd):
+                            ws_url = _cand
+                            update_data["website"] = ws_url
+                            website_data = _wd
+                            break
 
-                    # Specialties — always refresh from LinkedIn (authoritative source)
-                    if li_data.get("specialties"):
-                        update_data["specialties"] = li_data["specialties"]
+            # ── Step 7: Analyze website for type, description, HQ ────────────────
+            _desc_for_type = (li_result.get("description") or
+                              company.get("description") or
+                              update_data.get("description") or "")
+            if website_data:
+                _li_sourced = (update_data.get("linkedin_website") == update_data.get("website")
+                               and bool(update_data.get("linkedin_website")))
+                if needs_site and not _li_sourced and \
+                   not _website_matches_company(company_name, website_data):
+                    website_data = None
+                else:
+                    if needs_type:
+                        ct, _ = classify_company_type_rules(website_data, _desc_for_type)
+                        if ct:
+                            update_data["company_type"] = ct
+                    if needs_desc and not update_data.get("description"):
+                        _desc_ws = (website_data.get("meta_description") or
+                                    website_data.get("first_para") or
+                                    (website_data.get("hero", "")[:300].strip() or None))
+                        if _desc_ws:
+                            update_data["description"] = _desc_ws
+                    if needs_hq and not update_data.get("headquarters"):
+                        _loc_ws = website_data.get("location")
+                        if _loc_ws:
+                            update_data["headquarters"] = _loc_ws
+                    _comp = website_data.get("compliance_detected") or []
+                    if _comp and not company.get("compliance"):
+                        update_data["compliance"] = ", ".join(_comp)
 
-                    # Tagline — always refresh
-                    if li_data.get("tagline"):
-                        update_data["tagline"] = li_data["tagline"]
-
-                    # Industry — always overwrite (LinkedIn is authoritative)
-                    # Skip non-industry placeholders LinkedIn sometimes returns
-                    _BAD_INDUSTRIES = {
-                        'private company', 'privately held', 'public company',
-                        'partnership', 'sole proprietorship', 'government agency',
-                    }
-                    if li_data.get("industry") and \
-                       li_data["industry"].strip().lower() not in _BAD_INDUSTRIES:
-                        update_data["industry"] = li_data["industry"]
-
-                    # Industry → classification (if not already set)
-                    if li_data.get("industry") and \
-                       li_data["industry"].strip().lower() not in _BAD_INDUSTRIES and \
-                       (not company.get("classification") or company.get("classification") == "Unclassified"):
-                        _LI_CLASS_MAP = {
-                            'software development': 'IT Services',
-                            'information technology': 'IT Services',
-                            'it services': 'IT Services',
-                            'computer software': 'SaaS',
-                            'internet': 'SaaS',
-                            'financial services': 'Fintech',
-                            'banking': 'Banking',
-                            'insurance': 'Insurance',
-                            'hospital': 'Healthtech',
-                            'health': 'Healthtech',
-                            'e-learning': 'Edtech',
-                            'education': 'Edtech',
-                            'logistics': 'Logistics',
-                            'transportation': 'Logistics',
-                            'retail': 'Retail',
-                            'real estate': 'Real Estate',
-                            'venture capital': 'VC / Investment',
-                            'private equity': 'VC / Investment',
-                            'marketing': 'Media',
-                            'broadcast': 'Media',
-                            'management consulting': 'Consulting',
-                            'consulting': 'Consulting',
-                            'nonprofit': 'Non-profit',
-                            'government': 'Government',
-                            'security': 'Cybersecurity',
-                            'cybersecurity': 'Cybersecurity',
-                            'manufacturing': 'Manufacturing',
-                            'e-commerce': 'E-commerce',
-                        }
-                        ind_lower = (li_data.get("industry") or "").lower()
-                        mapped = next((v for k, v in _LI_CLASS_MAP.items() if k in ind_lower), None)
-                        if mapped:
-                            update_data["classification"] = mapped
-
-                    # LinkedIn about section often lists the official website.
-                    # Use it to scrape for description/type/HQ if website was unknown,
-                    # and always record it (even "" if absent) for accuracy cross-checks.
-                    li_website = li_data.get("website") or ""
-                    if li_website and not li_website.startswith("http"):
-                        li_website = "https://" + li_website
-                    # Always capture LinkedIn's stated website — keeps it fresh across fill runs.
-                    # needs_li_verify still gates whether Step 4 fires at all for complete records.
-                    if li_website:
-                        update_data["linkedin_website"] = li_website
-                    elif needs_li_verify:
-                        update_data["linkedin_website"] = ""  # sentinel: scraped, nothing listed
-                    if li_website and not website_data:
-                        ws2 = fetch_website_content(li_website, fast=False)
-                        if ws2:
-                            if needs_site and not update_data.get("website"):
-                                # For ambiguous company names (single short generic word) an
-                                # incorrect LinkedIn match could list its own site, which
-                                # would be wrong for us. Validate the content first.
-                                # For distinctive names this is guaranteed correct so skip.
-                                if _name_is_distinctive(company_name) or _website_matches_company(company_name, ws2):
-                                    update_data["website"] = li_website
-                            if needs_type and not update_data.get("company_type"):
-                                _desc_for_type2 = company.get("description") or update_data.get("description") or ""
-                                ct2, _ = classify_company_type_rules(ws2, _desc_for_type2)
-                                if ct2: update_data["company_type"] = ct2
-                            if needs_desc and not update_data.get("description"):
-                                desc2 = (ws2.get("meta_description") or
-                                         ws2.get("first_para") or
-                                         (ws2.get("hero", "")[:300].strip() or None))
-                                if desc2: update_data["description"] = desc2
-                            if needs_hq and not update_data.get("headquarters"):
-                                loc2 = ws2.get("location")
-                                if loc2: update_data["headquarters"] = loc2
-                            if not company.get("compliance") and not update_data.get("compliance"):
-                                comp2 = ws2.get("compliance_detected") or []
-                                if comp2: update_data["compliance"] = ", ".join(comp2)
-                except Exception:
-                    pass
-
-            # Groq inference — fills industry/founded/specialties/company_type if still blank after LI scrape
+            # ── Step 8: Groq gap-fill ─────────────────────────────────────────────
             _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
             _desc_bulk = update_data.get("description") or company.get("description") or ""
             _missing_type_bulk = needs_type and not update_data.get("company_type") and not company.get("company_type")
@@ -4092,39 +4033,9 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
-            # ── Step 5: DDGS snippet — employee count, followers, HQ ──────────
-            # Runs regardless of whether li_url was found:
-            #   • With slug: targets the exact company page (most precise)
-            #   • Without slug: name-only query still surfaces LinkedIn cards
-            #     from search engine knowledge panels with employee/follower data
-            _needs_size_still      = needs_size      and not update_data.get("size")
-            _needs_followers_still = needs_followers  and not update_data.get("followers")
-            _needs_hq_still        = needs_hq         and not update_data.get("headquarters")
-            if _needs_size_still or _needs_followers_still or _needs_hq_still:
-                _m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url) if li_url else None
-                li_slug = _m.group(1) if _m else ""
-                snippet = _ddgs_run(_ddgs_linkedin_snippet, company_name, li_slug, timeout=20)
-                if snippet:
-                    if snippet.get("followers") and _needs_followers_still:
-                        update_data["followers"] = snippet["followers"]
-                    if snippet.get("employee_count") and _needs_size_still:
-                        update_data["size"] = str(snippet["employee_count"])
-                    if snippet.get("headquarters") and _needs_hq_still:
-                        update_data["headquarters"] = snippet["headquarters"]
-
-            # ── Step 6: DDGS general company info — description / HQ last resort ─
-            # When website + LinkedIn both failed, a plain company name search often
-            # returns snippets from Tracxn / Clutch / LinkedIn with useful metadata.
-            _needs_desc_still = needs_desc and not update_data.get("description")
-            _needs_hq_still2  = needs_hq   and not update_data.get("headquarters")
-            if _needs_desc_still or _needs_hq_still2:
-                _ddgs_run(_ddgs_general_info, company_name, update_data, _needs_desc_still, _needs_hq_still2, timeout=20)
-
-            # ── Step 7: mine description text for still-missing size / HQ ──────
-            # Directory snippets (Tracxn, Clutch, AmbitionBox) embed employee count
-            # and location inside the description we already fetched — e.g.
-            # "has 5000 & Above employees" or "based in Kerala". Extract them here
-            # instead of making another DDGS call.
+            # ── Step 9: mine description text for still-missing size / HQ ─────────
+            # Description from LinkedIn / website often embeds employee count and
+            # location — extract without any extra network calls.
             desc_text = update_data.get("description") or company.get("description") or ""
             if desc_text:
                 if needs_size and not update_data.get("size"):
@@ -4163,7 +4074,7 @@ async def bulk_autofill_companies(
     result_queue = _queue.Queue()
 
     def _run_pool():
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        with ThreadPoolExecutor(max_workers=50) as executor:
             futures = {executor.submit(_autofill_one, c): c for c in companies}
             for future in as_completed(futures):
                 try:
