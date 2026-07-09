@@ -5,9 +5,9 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 # Cap concurrent DDGS calls to 5 — prevents DuckDuckGo rate-limiting during bulk autofill
-_DDGS_SEM = _threading_mod.Semaphore(5)
+_DDGS_SEM = _threading_mod.Semaphore(8)
 # Cap concurrent Jina Reader calls to 5 — Jina rate-limits aggressively at higher concurrency
-_JINA_SEM = _threading_mod.Semaphore(5)
+_JINA_SEM = _threading_mod.Semaphore(7)
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response, RedirectResponse
 import base64
@@ -3784,36 +3784,52 @@ async def bulk_autofill_companies(
         if ws_url and not ws_url.startswith("http"):
             ws_url = "https://" + ws_url
 
-        needs_desc      = True
-        needs_hq        = True
-        needs_type      = True
+        needs_desc      = not bool(company.get("description"))
+        needs_hq        = not bool(company.get("headquarters"))
+        needs_type      = not bool(company.get("company_type"))
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
-        needs_followers = True
+        needs_followers = not bool(company.get("followers"))
 
         update_data = {}
 
         try:
-            # ── Step 1: Find company website ──────────────────────────────────────
-            # search_company_website tries _guess_domain (instant HEAD requests)
-            # first, then falls back to web search (Brave → DDGS). Domain guessing
-            # succeeds ~50% of the time without any search API call.
-            if needs_site and not ws_url:
-                _ws_res = [None]
-                def _find_ws():
-                    try:
-                        _ws_res[0] = search_company_website(company_name)
-                    except Exception:
-                        pass
-                _wt = _threading_mod.Thread(target=_find_ws, daemon=True)
-                _wt.start()
-                _wt.join(timeout=25)
-                if _ws_res[0]:
-                    _dom = urlparse(_ws_res[0]).netloc.replace("www.", "")
-                    if _dom_relevant(_dom, company_name):
-                        ws_url = _ws_res[0]
-                        update_data["website"] = ws_url
+            # ── Steps 1+5 in parallel: website discovery + DDGS LinkedIn snippet ──
+            # These are fully independent — run concurrently to save 5-10s per company.
+            # Website discovery: _guess_domain HEAD requests first (~instant), then
+            # web search fallback. DDGS: name-based slug guess for follower/size/HQ.
+            _ws_res   = [None]
+            _snip_res = [{}]
+
+            def _find_ws():
+                if needs_site and not ws_url:
+                    try: _ws_res[0] = search_company_website(company_name)
+                    except Exception: pass
+
+            def _find_snip():
+                if needs_size or needs_followers or needs_hq:
+                    _raw = _re_mod.sub(r'[^a-z0-9 ]', ' ',
+                                       clean_name_for_search(company_name).lower())
+                    _sw = [w for w in _raw.split()
+                           if w not in {'inc','llc','ltd','pvt','corp','co',
+                                        'the','and','of','by','group','private',
+                                        'limited','company'}]
+                    _slug = "-".join(_sw) if _sw else ""
+                    with _DDGS_SEM:
+                        try: _snip_res[0] = _ddgs_linkedin_snippet(company_name, _slug)
+                        except Exception: pass
+
+            _wt  = _threading_mod.Thread(target=_find_ws,   daemon=True)
+            _st  = _threading_mod.Thread(target=_find_snip, daemon=True)
+            _wt.start(); _st.start()
+            _wt.join(timeout=12); _st.join(timeout=10)
+
+            if _ws_res[0]:
+                _dom = urlparse(_ws_res[0]).netloc.replace("www.", "")
+                if _dom_relevant(_dom, company_name):
+                    ws_url = _ws_res[0]
+                    update_data["website"] = ws_url
 
             # ── Step 2: Scrape website ────────────────────────────────────────────
             website_data = None
@@ -3877,21 +3893,26 @@ async def bulk_autofill_companies(
             if li_url_confirmed:
                 update_data["linkedin_url"] = li_url_confirmed
 
-            # ── Step 5: LinkedIn data from search snippets ────────────────────────
-            # Search engine result snippets for linkedin.com/company pages contain
-            # follower counts, employee ranges, HQ, and industry directly in the
-            # snippet text — no LinkedIn login required.
-            if needs_size or needs_followers or needs_hq:
-                _m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url) if li_url else None
-                _li_slug = _m.group(1) if _m else ""
-                with _DDGS_SEM:
-                    _snip = _ddgs_linkedin_snippet(company_name, _li_slug)
-                if _snip.get("followers") and needs_followers:
-                    update_data["followers"] = _snip["followers"]
-                if _snip.get("employee_count") and needs_size:
-                    update_data["size"] = str(_snip["employee_count"])
-                if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
-                    update_data["headquarters"] = _snip["headquarters"]
+            # ── Step 5: Apply DDGS snippet results (fetched in parallel at top) ───
+            # If we now have a confirmed LinkedIn URL (from website HTML), re-run DDGS
+            # with the real slug — more accurate than the name-guess used above.
+            _snip = _snip_res[0]
+            if li_url_confirmed and (needs_size or needs_followers or needs_hq):
+                _m2 = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', li_url_confirmed)
+                if _m2:
+                    _real_slug = _m2.group(1)
+                    _raw_slug = (_snip_res[0] or {}).get("_slug_used", "")
+                    if _real_slug != _raw_slug:
+                        # Real slug differs from name-guess — worth a second lookup
+                        with _DDGS_SEM:
+                            try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
+                            except Exception: pass
+            if _snip.get("followers") and needs_followers:
+                update_data["followers"] = _snip["followers"]
+            if _snip.get("employee_count") and needs_size:
+                update_data["size"] = str(_snip["employee_count"])
+            if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
+                update_data["headquarters"] = _snip["headquarters"]
 
             # ── Step 6: Jina LinkedIn (semaphore-gated fallback) ─────────────────
             # Jina renders LinkedIn pages but is rate-limited; cap to 5 concurrent.
@@ -4057,7 +4078,7 @@ async def bulk_autofill_companies(
     result_queue = _queue.Queue()
 
     def _run_pool():
-        with ThreadPoolExecutor(max_workers=15) as executor:
+        with ThreadPoolExecutor(max_workers=25) as executor:
             futures = {executor.submit(_autofill_one, c): c for c in companies}
             for future in as_completed(futures):
                 try:
