@@ -85,7 +85,29 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             except Exception:
                 return None
         if res.status_code != 200:
-            return None
+            # ScrapingBee fallback for blocked/JS-gated sites
+            sb_key = os.environ.get("SCRAPINGBEE_API_KEY", "")
+            if sb_key and not fast:
+                try:
+                    sb_res = requests.get(
+                        "https://app.scrapingbee.com/api/v1/",
+                        params={
+                            "api_key": sb_key,
+                            "url": url,
+                            "render_js": "true",
+                            "premium_proxy": "false",
+                            "block_ads": "true",
+                        },
+                        timeout=35,
+                    )
+                    if sb_res.status_code == 200 and len(sb_res.text) > 2000:
+                        res = sb_res
+                    else:
+                        return None
+                except Exception:
+                    return None
+            else:
+                return None
 
         raw_html = res.text  # keep raw for regex scanning before BeautifulSoup strips JS
         resolved_url = res.url  # canonical URL after following redirects
@@ -118,6 +140,29 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
                             if len(_content) >= 150_000:
                                 break
                         spa_bundle_text += _content.decode('utf-8', errors='ignore')
+                except Exception:
+                    pass
+
+        # ScrapingBee fallback for SPAs where bundle fetch still left minimal content
+        _visible_len = len(BeautifulSoup(raw_html, 'html.parser').get_text(strip=True))
+        if _visible_len < 300 and not fast:
+            sb_key = os.environ.get("SCRAPINGBEE_API_KEY", "")
+            if sb_key:
+                try:
+                    sb_res = requests.get(
+                        "https://app.scrapingbee.com/api/v1/",
+                        params={
+                            "api_key": sb_key,
+                            "url": url,
+                            "render_js": "true",
+                            "premium_proxy": "false",
+                            "block_ads": "true",
+                        },
+                        timeout=35,
+                    )
+                    if sb_res.status_code == 200 and len(sb_res.text) > 2000:
+                        raw_html = sb_res.text
+                        spa_bundle_text = ""  # SB returns rendered HTML, no need for bundle
                 except Exception:
                     pass
 

@@ -318,10 +318,36 @@ _LI_HEADERS = {
 }
 
 
+def _scrapingbee_fetch(url: str, render_js: bool = True, timeout: int = 30) -> str | None:
+    """Fetch via ScrapingBee — JS rendering, proxy rotation, LinkedIn-compatible.
+    Returns raw HTML or None. Activated by SCRAPINGBEE_API_KEY env var."""
+    sb_key = os.environ.get("SCRAPINGBEE_API_KEY", "")
+    if not sb_key:
+        return None
+    try:
+        r = requests.get(
+            "https://app.scrapingbee.com/api/v1/",
+            params={
+                "api_key": sb_key,
+                "url": url,
+                "render_js": "true" if render_js else "false",
+                "premium_proxy": "false",
+                "block_ads": "true",
+                "block_resources": "false",
+            },
+            timeout=timeout + 5,
+        )
+        if r.status_code == 200 and len(r.text) > 2000:
+            return r.text
+    except Exception:
+        pass
+    return None
+
+
 def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> str | None:
     """Fetch a LinkedIn page's HTML.
-    Tries Firecrawl first (bypasses anti-bot), falls back to direct HTTP with multiple UAs.
-    fast=True skips Firecrawl (too slow for bulk) and uses shorter direct-HTTP timeout.
+    Priority: Firecrawl → ScrapingBee → direct HTTP (multiple UAs).
+    fast=True skips paid scrapers (too slow for bulk) and uses shorter timeouts.
     li_cookie: 'li_at' session cookie for authenticated scraping.
     """
     _LOGIN_WALL = 'keep in touch with people you know'
@@ -343,6 +369,11 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
                         return html
             except Exception:
                 pass
+
+        # ScrapingBee fallback — activates when Firecrawl is out of credits or unset
+        sb_html = _scrapingbee_fetch(url, render_js=True, timeout=30)
+        if sb_html and len(sb_html) > 3000 and _LOGIN_WALL not in sb_html[:5000]:
+            return sb_html
 
     # Direct HTTP fallback — multiple user agents
     ua_list = _LI_UA_LIST[:2] if fast else _LI_UA_LIST
