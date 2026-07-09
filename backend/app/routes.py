@@ -2071,16 +2071,26 @@ async def bulk_create_companies(
     inserted = []
     updated = []
     skipped = 0
+    skipped_names = []  # names that genuinely failed to insert
 
-    # Normalise and deduplicate incoming list
+    # Normalise — skip blank names, merge within-batch duplicates
     valid = []
-    seen_names = set()
+    seen_names = {}  # name → index in valid
+    _MERGE_FIELDS = ["industry", "size", "website", "linkedin_url", "headquarters",
+                     "description", "phone", "founded", "specialties", "tagline", "followers"]
     for c in companies:
         name = (c.get("name") or "").strip()
-        if not name or name in seen_names:
+        if not name:
             skipped += 1
             continue
-        seen_names.add(name)
+        if name in seen_names:
+            # Merge non-null fields from this duplicate into the first occurrence
+            first = valid[seen_names[name]]
+            for key in _MERGE_FIELDS:
+                if not first.get(key) and c.get(key):
+                    first[key] = c[key]
+            continue  # duplicate merged, not counted as skipped
+        seen_names[name] = len(valid)
         valid.append(c)
 
     if not valid:
@@ -2132,8 +2142,10 @@ async def bulk_create_companies(
                         inserted.extend(r.data)
                     else:
                         skipped += 1
+                        skipped_names.append(row.get("name", ""))
                 except Exception:
                     skipped += 1
+                    skipped_names.append(row.get("name", ""))
 
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
@@ -2145,6 +2157,7 @@ async def bulk_create_companies(
         "inserted": len(inserted),
         "updated": len(updated),
         "skipped": skipped,
+        "skipped_names": skipped_names,
         "companies": inserted,
         "all_ids": [c["id"] for c in inserted] + updated,
     }
