@@ -3,6 +3,11 @@ import threading as _threading_mod
 import requests
 from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
+
+# Module-level concurrency guards reused by any endpoint that does LinkedIn lookups.
+# Values are permissive — actual rate limiting is handled by Firecrawl key rotation.
+_DDGS_SEM = _threading_mod.Semaphore(5)
+_JINA_SEM = _threading_mod.Semaphore(5)
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response, RedirectResponse
 import base64
