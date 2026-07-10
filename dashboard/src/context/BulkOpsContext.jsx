@@ -102,6 +102,8 @@ export function BulkOpsProvider({ children }) {
             filled++
             setAutofill((p) => ({ ...p, filledCount: filled }))
             dispatch(result)
+          } else if (result?.success === false && result?.message) {
+            setAutofill((p) => ({ ...p, msg: `⚠ ${result.message}` }))
           }
         })
       }
