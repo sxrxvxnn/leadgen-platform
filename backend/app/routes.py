@@ -3914,8 +3914,7 @@ async def bulk_autofill_companies(
                 if _cls["confidence"] >= 30:
                     update_data["company_type"] = _cls["company_type"]
                     update_data["is_saas"] = _cls["is_saas"]
-                    update_data["saas_category"] = _cls["category"]
-                    update_data["type_confidence"] = _cls["confidence"]
+                    # saas_category / type_confidence columns don't exist in DB yet — skip
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
@@ -4121,6 +4120,8 @@ async def bulk_autofill_companies(
                     "filled": list(update_data.keys()), "update": update_data}
 
         except Exception as e:
+            import traceback as _tb
+            print(f"[autofill_one] ERROR for {company_name} ({company.get('id')}): {e}\n{_tb.format_exc()}", flush=True)
             return {"id": company["id"], "name": company_name, "success": False,
                     "filled": [], "update": {}, "message": str(e)}
 
