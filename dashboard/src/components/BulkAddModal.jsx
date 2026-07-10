@@ -222,6 +222,7 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
       setResult({
         inserted: res.data.inserted,
         updated: res.data.updated || 0,
+        merged: res.data.merged || 0,
         skipped: res.data.skipped,
         skippedNames: res.data.skipped_names || [],
       })
@@ -1510,6 +1511,9 @@ function ResultView({ result, onReset, onClose, s }) {
         >
           {result.inserted} added
           {result.updated > 0 ? ` · ${result.updated} updated` : ''}
+          {result.merged > 0 ? (
+            <span style={{ color: 'var(--text-muted)' }}> · {result.merged} duplicates merged</span>
+          ) : null}
           {result.skipped > 0 ? (
             <>
               {' · '}

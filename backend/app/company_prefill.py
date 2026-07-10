@@ -354,12 +354,21 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
 
     # Firecrawl — handles JS rendering and LinkedIn anti-bot; skip in fast/bulk mode
     if not fast and not li_cookie:
-        fc_key = os.environ.get("FIRECRAWL_API_KEY", "")
-        if fc_key:
+        _fc_keys = list(dict.fromkeys(
+            k for k in [
+                os.environ.get("FIRECRAWL_API_KEY", ""),
+                os.environ.get("FIRECRAWL_API_KEY_1", ""),
+                os.environ.get("FIRECRAWL_API_KEY_2", ""),
+                os.environ.get("FIRECRAWL_API_KEY_3", ""),
+                os.environ.get("FIRECRAWL_API_KEY_4", ""),
+                os.environ.get("FIRECRAWL_API_KEY_5", ""),
+            ] if k
+        ))
+        for _fc_key in _fc_keys:
             try:
                 fc_res = requests.post(
                     "https://api.firecrawl.dev/v1/scrape",
-                    headers={"Authorization": f"Bearer {fc_key}", "Content-Type": "application/json"},
+                    headers={"Authorization": f"Bearer {_fc_key}", "Content-Type": "application/json"},
                     json={"url": url, "formats": ["html"], "timeout": 30000},
                     timeout=35,
                 )
@@ -367,8 +376,12 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
                     html = fc_res.json().get("data", {}).get("html", "")
                     if html and len(html) > 3000 and _LOGIN_WALL not in html[:5000]:
                         return html
+                    break  # succeeded but content insufficient — don't try other keys
+                if fc_res.status_code not in (402, 429):
+                    break  # non-credit error — stop trying
+                # 402/429 → key exhausted, try next
             except Exception:
-                pass
+                break
 
         # ScrapingBee fallback — activates when Firecrawl is out of credits or unset
         sb_html = _scrapingbee_fetch(url, render_js=True, timeout=30)
