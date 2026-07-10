@@ -3914,7 +3914,8 @@ async def bulk_autofill_companies(
                 if _cls["confidence"] >= 30:
                     update_data["company_type"] = _cls["company_type"]
                     update_data["is_saas"] = _cls["is_saas"]
-                    # saas_category / type_confidence columns don't exist in DB yet — skip
+                    update_data["saas_category"] = _cls["category"]
+                    update_data["type_confidence"] = _cls["confidence"]
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
