@@ -94,16 +94,16 @@ _buckets: dict[str, deque] = defaultdict(deque)
 
 # Most-specific match wins (checked in order).
 _PATH_LIMITS: list[tuple[str, int]] = [
-    # Bulk AI / scraping — most expensive; tight limit per IP
-    ("/bulk-autofill",     4),
-    ("/bulk-analyze",      4),
-    ("/bulk-maps-enrich",  4),
-    ("/autofill-bulk",     4),
+    # Bulk AI / scraping — most expensive; limit per IP per path
+    ("/bulk-autofill",     20),
+    ("/bulk-analyze",      20),
+    ("/bulk-maps-enrich",  10),
+    ("/autofill-bulk",     20),
     # Single-company AI calls
-    ("/analyze-website",  10),
-    ("/check-compliance", 10),
-    ("/autofill-linkedin",10),
-    ("/autofill",         20),   # single-lead autofill
+    ("/analyze-website",  15),
+    ("/check-compliance", 15),
+    ("/autofill-linkedin",15),
+    ("/autofill",         30),   # single-lead autofill
     # Discovery & enrichment  (paid external APIs)
     ("/maps-discover",    15),
     ("/people-search",    20),
@@ -244,7 +244,9 @@ async def path_rate_limit_middleware(request: Request, call_next):
 
     ip  = request.client.host if request.client else "0.0.0.0"
     lim = _path_limit(path)
-    key = f"{lim}:{ip}"   # group IPs by the limit tier they triggered
+    # Key by path + ip so different endpoints don't share the same bucket
+    matched = next((frag for frag, _ in _PATH_LIMITS if frag and frag in path), "default")
+    key = f"{matched}:{ip}"
     now = time.monotonic()
 
     bucket = _buckets[key]
