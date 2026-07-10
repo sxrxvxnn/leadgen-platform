@@ -2641,9 +2641,15 @@ async def analyze_company_website(
 
         # If no AI key and rules were Low-confidence, still return rule result
         if not result and not rule_type:
+            _has_any_key = bool(gemini_key or groq_key or openrouter_key or openai_key)
             raise HTTPException(
                 status_code=400,
-                detail="No AI key available and website signals are ambiguous. Add Gemini (free at aistudio.google.com), Groq, OpenRouter, or OpenAI key in Settings."
+                detail=(
+                    "Website signals are ambiguous — could not determine company type. "
+                    "Set type manually on the card."
+                    if _has_any_key else
+                    "No AI key available and website signals are ambiguous. Add Gemini (free at aistudio.google.com), Groq, OpenRouter, or OpenAI key in Settings."
+                )
             )
 
         # ── Step 4: merge rule result with AI result ────────────────
@@ -4026,9 +4032,27 @@ async def bulk_autofill_companies(
                         if _li_ws:
                             if not _li_ws.startswith("http"):
                                 _li_ws = "https://" + _li_ws
-                            update_data["linkedin_website"] = _li_ws
-                            if needs_site and not update_data.get("website"):
-                                update_data["website"] = _li_ws
+                            # Domain mismatch guard — don't write a LinkedIn website
+                            # that belongs to a different company (e.g. wrong slug → Netflix page)
+                            _stored_ws_root = ""
+                            _li_ws_root = ""
+                            try:
+                                from urllib.parse import urlparse as _up_lws
+                                def _rdom(u):
+                                    h = _up_lws(u if "://" in u else "https://"+u).netloc.replace("www.","").lower()
+                                    p = h.split(".")
+                                    return ".".join(p[-2:]) if len(p) >= 2 else h
+                                _stored_ws_root = _rdom(company.get("website") or ws_url or "")
+                                _li_ws_root = _rdom(_li_ws)
+                            except Exception:
+                                pass
+                            if _stored_ws_root and _li_ws_root and _stored_ws_root != _li_ws_root:
+                                # Wrong page — discard guessed LinkedIn URL too
+                                update_data.pop("linkedin_url", None)
+                            else:
+                                update_data["linkedin_website"] = _li_ws
+                                if needs_site and not update_data.get("website"):
+                                    update_data["website"] = _li_ws
                 except Exception:
                     pass
 
