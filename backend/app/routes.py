@@ -2076,25 +2076,57 @@ async def bulk_create_companies(
     merged  = 0
     skipped_names = []  # names that genuinely failed to insert
 
-    # Normalise — skip blank names, merge within-batch duplicates
+    # Normalise — skip blank names, merge within-batch duplicates.
+    # Dedup priority: (1) linkedin_url match → always same company
+    #                 (2) name match with no distinguishing linkedin_url → same company
+    #                 (3) same name but different linkedin_urls → keep both (different companies)
     valid = []
-    seen_names = {}  # name → index in valid
+    seen_li_urls = {}  # normalised linkedin_url → index in valid
+    seen_names   = {}  # name → index in valid
     _MERGE_FIELDS = ["industry", "size", "website", "linkedin_url", "headquarters",
                      "description", "phone", "founded", "specialties", "tagline", "followers"]
+
+    def _norm_li(url):
+        u = (url or "").strip().lower()
+        return u.rstrip("/").split("?")[0] if u else ""
+
     for c in companies:
         name = (c.get("name") or "").strip()
         if not name:
             skipped += 1
             continue
-        if name in seen_names:
-            # Merge non-null fields from this duplicate into the first occurrence
-            first = valid[seen_names[name]]
+
+        li = _norm_li(
+            c.get("linkedin_url") or c.get("linkedinUrl") or c.get("salesNavUrl") or ""
+        )
+
+        # ── 1. LinkedIn URL match → definite duplicate ────────────────────────
+        if li and li in seen_li_urls:
+            first = valid[seen_li_urls[li]]
             for key in _MERGE_FIELDS:
                 if not first.get(key) and c.get(key):
                     first[key] = c[key]
             merged += 1
             continue
-        seen_names[name] = len(valid)
+
+        # ── 2. Name match ─────────────────────────────────────────────────────
+        if name in seen_names:
+            existing_li = _norm_li(valid[seen_names[name]].get("linkedin_url") or "")
+            if not existing_li or not li or existing_li == li:
+                # Same name and no conflicting linkedin_url → same company
+                first = valid[seen_names[name]]
+                for key in _MERGE_FIELDS:
+                    if not first.get(key) and c.get(key):
+                        first[key] = c[key]
+                merged += 1
+                continue
+            # Same name but different linkedin_urls → different companies, allow both
+
+        # ── 3. New unique entry ───────────────────────────────────────────────
+        idx = len(valid)
+        if li:
+            seen_li_urls[li] = idx
+        seen_names[name] = idx
         valid.append(c)
 
     if not valid:
