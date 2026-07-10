@@ -3892,14 +3892,6 @@ async def bulk_autofill_companies(
             if website_data:
                 # LinkedIn URL is often in the website footer's social links
                 _li_from_site = website_data.get("linkedin_url")
-                _desc_for_type = company.get("description") or update_data.get("description") or ""
-                if needs_type:
-                    _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
-                    if _cls["confidence"] >= 30:  # only save if at least some signal
-                        update_data["company_type"] = _cls["company_type"]
-                        update_data["is_saas"] = _cls["is_saas"]
-                        update_data["saas_category"] = _cls["category"]
-                        update_data["type_confidence"] = _cls["confidence"]
                 if needs_desc and not update_data.get("description"):
                     _d = (website_data.get("meta_description") or
                           website_data.get("first_para") or
@@ -3912,6 +3904,18 @@ async def bulk_autofill_companies(
                 _comp = website_data.get("compliance_detected") or []
                 if _comp and not company.get("compliance"):
                     update_data["compliance"] = ", ".join(_comp)
+
+            # Classifier runs regardless of whether website_data is available —
+            # classify_website_saas handles website_data=None gracefully using
+            # description alone. This ensures old wrong types get overwritten.
+            if needs_type:
+                _desc_for_type = company.get("description") or update_data.get("description") or ""
+                _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
+                if _cls["confidence"] >= 30:
+                    update_data["company_type"] = _cls["company_type"]
+                    update_data["is_saas"] = _cls["is_saas"]
+                    update_data["saas_category"] = _cls["category"]
+                    update_data["type_confidence"] = _cls["confidence"]
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
@@ -4031,7 +4035,9 @@ async def bulk_autofill_companies(
             # ── Step 7: Groq gap-fill ─────────────────────────────────────────────
             _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
             _desc_bulk = update_data.get("description") or company.get("description") or ""
-            _missing_type_bulk = needs_type and not update_data.get("company_type") and not company.get("company_type")
+            # needs_type=True means we always want to re-classify; only skip Groq
+            # if the weighted classifier already wrote a type into update_data
+            _missing_type_bulk = needs_type and not update_data.get("company_type")
             _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
                             (not update_data.get("founded") and not company.get("founded")) or \
                             (not update_data.get("specialties") and not company.get("specialties")) or \
