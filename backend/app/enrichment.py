@@ -382,16 +382,51 @@ def enrich_lead(name: str, company: str, website: str = None) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import os as _os
+import threading as _fc_thread
 
-FIRECRAWL_KEY  = _os.environ.get("FIRECRAWL_API_KEY", "")
+# Collect up to 5 keys: legacy FIRECRAWL_API_KEY plus FIRECRAWL_API_KEY_1..5
+_FIRECRAWL_KEYS = list(dict.fromkeys(
+    k for k in [
+        _os.environ.get("FIRECRAWL_API_KEY", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_1", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_2", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_3", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_4", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_5", ""),
+    ] if k
+))
+FIRECRAWL_KEY  = _FIRECRAWL_KEYS[0] if _FIRECRAWL_KEYS else ""  # legacy compat
 FIRECRAWL_BASE = "https://api.firecrawl.dev/v1"
 
-# Status codes that mean Firecrawl credits are gone — fall back immediately
+# Status codes that mean credits are gone — rotate to next key
 _FC_EXHAUSTED_CODES = {402, 429}
 
+# Module-global key index — advances on exhaustion; sticky for EC2 long-running process
+_fc_key_lock = _fc_thread.Lock()
+_fc_key_idx  = 0
 
-def _fc_headers() -> dict:
-    return {"Authorization": f"Bearer {FIRECRAWL_KEY}", "Content-Type": "application/json"}
+
+def _fc_active_key() -> str:
+    if not _FIRECRAWL_KEYS:
+        return ""
+    with _fc_key_lock:
+        return _FIRECRAWL_KEYS[_fc_key_idx % len(_FIRECRAWL_KEYS)]
+
+
+def _fc_rotate(exhausted_idx: int) -> None:
+    """Advance to next key if we're still on the exhausted one."""
+    if not _FIRECRAWL_KEYS:
+        return
+    global _fc_key_idx
+    with _fc_key_lock:
+        if _fc_key_idx % len(_FIRECRAWL_KEYS) == exhausted_idx:
+            _fc_key_idx += 1
+            nxt = (_fc_key_idx % len(_FIRECRAWL_KEYS)) + 1
+            print(f"[firecrawl] Key #{exhausted_idx + 1} exhausted → rotating to key #{nxt}", flush=True)
+
+
+def _fc_headers(key: str = "") -> dict:
+    return {"Authorization": f"Bearer {key or _fc_active_key()}", "Content-Type": "application/json"}
 
 
 # ── Jina Reader fallback (free, no API key) ───────────────────────────────────
@@ -451,40 +486,52 @@ def _ddg_search(query: str, limit: int = 5) -> list:
 # ── Firecrawl with fallback ───────────────────────────────────────────────────
 
 def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
-    """Scrape a URL. Tries Firecrawl first, falls back to Jina Reader."""
-    if FIRECRAWL_KEY:
+    """Scrape a URL. Tries each Firecrawl key in rotation, falls back to Jina Reader."""
+    if not _FIRECRAWL_KEYS:
+        return _jina_scrape(url)
+    for _ in range(len(_FIRECRAWL_KEYS)):
+        with _fc_key_lock:
+            idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
+        key = _FIRECRAWL_KEYS[idx]
         try:
             res = requests.post(
                 f"{FIRECRAWL_BASE}/scrape",
                 json={"url": url, "formats": ["markdown"], "onlyMainContent": True, "waitFor": wait_ms},
-                headers=_fc_headers(),
+                headers=_fc_headers(key),
                 timeout=45,
             )
             if res.status_code == 200:
                 return res.json().get("data", {}).get("markdown", "")
-            if res.status_code not in _FC_EXHAUSTED_CODES:
-                return ""
-            # Credits exhausted — fall through to Jina
+            if res.status_code in _FC_EXHAUSTED_CODES:
+                _fc_rotate(idx)
+                continue  # try next key
+            return ""  # other error — no retry
         except Exception:
             pass
     return _jina_scrape(url)
 
 
 def _fc_search(query: str, limit: int = 5) -> list:
-    """Web search. Tries Firecrawl first, falls back to DuckDuckGo."""
-    if FIRECRAWL_KEY:
+    """Web search. Tries each Firecrawl key in rotation, falls back to DuckDuckGo."""
+    if not _FIRECRAWL_KEYS:
+        return _ddg_search(query, limit)
+    for _ in range(len(_FIRECRAWL_KEYS)):
+        with _fc_key_lock:
+            idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
+        key = _FIRECRAWL_KEYS[idx]
         try:
             res = requests.post(
                 f"{FIRECRAWL_BASE}/search",
                 json={"query": query, "limit": limit},
-                headers=_fc_headers(),
+                headers=_fc_headers(key),
                 timeout=25,
             )
             if res.status_code == 200:
                 return res.json().get("data", [])
-            if res.status_code not in _FC_EXHAUSTED_CODES:
-                return []
-            # Credits exhausted — fall through to DDG
+            if res.status_code in _FC_EXHAUSTED_CODES:
+                _fc_rotate(idx)
+                continue  # try next key
+            return []  # other error — no retry
         except Exception:
             pass
     return _ddg_search(query, limit)

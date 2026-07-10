@@ -1,5 +1,10 @@
 import { createContext, useContext, useRef, useState } from 'react'
-import { bulkAutofillCompanies, bulkAnalyzeCompanies, bulkMapsEnrich } from '../services/api'
+import {
+  bulkAutofillCompanies,
+  bulkAutofillCompaniesAsync,
+  bulkAnalyzeCompanies,
+  bulkMapsEnrich,
+} from '../services/api'
 
 const BulkOpsContext = createContext(null)
 
@@ -80,11 +85,43 @@ export function BulkOpsProvider({ children }) {
   }
 
   // Sequential enrichment — one company at a time for maximum accuracy.
-  // Used automatically after add (single or bulk) so each company gets
-  // full API quota instead of competing with 25 parallel workers.
+  // Batches > 10: dispatched to SQS/EC2 worker so it survives page reloads.
+  // Batches ≤ 10: runs in-browser with live progress (immediate feedback).
+  const ASYNC_ENRICH_THRESHOLD = 10
   async function runAutoEnrich(companyIds) {
     if (autofill.running) return
     const total = companyIds.length
+
+    // ── Large batch: hand off to background worker ──────────────────────────
+    if (total > ASYNC_ENRICH_THRESHOLD) {
+      setAutofill({
+        running: true,
+        msg: `Queuing ${total} companies for background enrichment…`,
+        filledCount: 0,
+        total,
+      })
+      try {
+        await bulkAutofillCompaniesAsync(companyIds)
+        setAutofill({
+          running: false,
+          msg: `${total} companies queued — enriching in background, reload to see results`,
+          filledCount: 0,
+          total,
+        })
+      } catch (e) {
+        setAutofill({
+          running: false,
+          msg: 'Queue failed — ' + e.message,
+          filledCount: 0,
+          total: 0,
+        })
+      } finally {
+        setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 12000)
+      }
+      return
+    }
+
+    // ── Small batch: sequential in-browser with live progress ───────────────
     setAutofill({
       running: true,
       msg: `Auto-enriching ${total} ${total === 1 ? 'company' : 'companies'}…`,

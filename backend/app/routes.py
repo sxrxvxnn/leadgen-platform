@@ -2073,6 +2073,7 @@ async def bulk_create_companies(
     inserted = []
     updated = []
     skipped = 0
+    merged  = 0
     skipped_names = []  # names that genuinely failed to insert
 
     # Normalise — skip blank names, merge within-batch duplicates
@@ -2091,12 +2092,13 @@ async def bulk_create_companies(
             for key in _MERGE_FIELDS:
                 if not first.get(key) and c.get(key):
                     first[key] = c[key]
-            continue  # duplicate merged, not counted as skipped
+            merged += 1
+            continue
         seen_names[name] = len(valid)
         valid.append(c)
 
     if not valid:
-        return {"inserted": 0, "updated": 0, "skipped": skipped, "companies": [], "all_ids": []}
+        return {"inserted": 0, "updated": 0, "merged": merged, "skipped": skipped, "companies": [], "all_ids": []}
 
     # Build upsert rows — Supabase upsert handles insert vs update atomically
     # on_conflict targets the unique constraint (user_id, name)
@@ -2152,12 +2154,14 @@ async def bulk_create_companies(
     posthog.capture(user_id, "companies_bulk_created", {
         "inserted": len(inserted),
         "updated": len(updated),
+        "merged": merged,
         "skipped": skipped,
         "total": len(companies),
     })
     return {
         "inserted": len(inserted),
         "updated": len(updated),
+        "merged": merged,
         "skipped": skipped,
         "skipped_names": skipped_names,
         "companies": inserted,
