@@ -356,19 +356,12 @@ def _ddg_linkedin_search(company_name: str, limit: int = 10) -> list[dict]:
 
 
 def _jina_fetch(url: str) -> str:
-    """Fetch a URL via Jina Reader. Returns markdown or empty string."""
-    import requests as _req
+    """Fetch a URL via Firecrawl. Returns markdown or empty string."""
+    from .enrichment import _fc_scrape
     try:
-        res = _req.get(
-            f'https://r.jina.ai/{url}',
-            headers={**_HEADERS_WORKER, 'Accept': 'text/plain', 'X-Return-Format': 'markdown'},
-            timeout=25,
-        )
-        if res.status_code == 200 and len(res.text) > 100:
-            return res.text
+        return _fc_scrape(url, wait_ms=4000)
     except Exception:
-        pass
-    return ''
+        return ''
 
 
 def _parse_dm_from_search(title: str, snippet: str) -> tuple[str, str]:

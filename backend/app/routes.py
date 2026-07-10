@@ -3,11 +3,6 @@ import threading as _threading_mod
 import requests
 from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
-
-# Cap concurrent DDGS calls to 5 — prevents DuckDuckGo rate-limiting during bulk autofill
-_DDGS_SEM = _threading_mod.Semaphore(8)
-# Cap concurrent Jina Reader calls to 5 — Jina rate-limits aggressively at higher concurrency
-_JINA_SEM = _threading_mod.Semaphore(7)
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response, RedirectResponse
 import base64
@@ -5298,6 +5293,37 @@ def health_check():
     return {"status": "ok"}
 
 
+@router.get("/admin/firecrawl-keys")
+async def check_firecrawl_keys(authorization: str = Header(...)):
+    """Test each configured Firecrawl key and report credit status."""
+    get_user_id(authorization)
+    from .enrichment import _FIRECRAWL_KEYS, FIRECRAWL_BASE
+    results = []
+    for i, key in enumerate(_FIRECRAWL_KEYS, 1):
+        try:
+            res = requests.post(
+                f"{FIRECRAWL_BASE}/scrape",
+                json={"url": "https://example.com", "formats": ["markdown"], "onlyMainContent": True},
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                timeout=20,
+            )
+            if res.status_code == 200:
+                status = "ok"
+            elif res.status_code in (402, 429):
+                status = "exhausted"
+            else:
+                status = f"error_{res.status_code}"
+        except Exception as e:
+            status = f"error_{str(e)[:40]}"
+        results.append({
+            "key_number": i,
+            "suffix": f"...{key[-6:]}",
+            "status": status,
+        })
+    active = sum(1 for r in results if r["status"] == "ok")
+    return {"keys": results, "total": len(results), "active": active}
+
+
 # ─── ASYNC JOB API (SQS-backed) ──────────────────────────────────────────────
 
 from .queue import dispatch_job, get_job
@@ -5408,7 +5434,7 @@ async def internal_search_profiles(company: str, token: str = ""):
     if not expected or token != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    results = _ddg_search(
+    results = _fc_search(
         f'site:linkedin.com/in "{company}" CEO OR Founder OR CTO OR COO OR CMO OR CFO OR Director OR "VP " OR "Head of"',
         limit=12,
     )
@@ -7773,7 +7799,7 @@ from app.enrichment import (
     find_linkedin_url as _find_linkedin_url,
     find_domain_contacts as _find_domain_contacts,
     waterfall_find_email as _waterfall_find_email,
-    _ddg_search,
+    _fc_search,
 )
 
 
