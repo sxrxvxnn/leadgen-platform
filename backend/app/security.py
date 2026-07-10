@@ -115,6 +115,11 @@ _PATH_LIMITS: list[tuple[str, int]] = [
 
 _SKIP_PATHS = frozenset(["/", "/health", "/api/health", "/docs", "/redoc", "/openapi.json"])
 
+# Bulk streaming endpoints have Supabase-backed per-user rate limits inside the route handler.
+# Skip the in-process limiter for them — it causes false positives on Fluid Compute where
+# a single function instance may handle concurrent requests from different users.
+_BULK_PATHS = ("/bulk-autofill", "/bulk-analyze", "/bulk-maps-enrich", "/autofill-bulk")
+
 
 def _path_limit(path: str) -> int:
     for fragment, limit in _PATH_LIMITS:
@@ -240,6 +245,9 @@ async def path_rate_limit_middleware(request: Request, call_next):
     """Sliding-window rate limiter applied to every route by path category."""
     path = request.url.path
     if path in _SKIP_PATHS:
+        return await call_next(request)
+    # Bulk endpoints have per-user DB-backed rate limits; skip in-process limiter
+    if any(frag in path for frag in _BULK_PATHS):
         return await call_next(request)
 
     ip  = request.client.host if request.client else "0.0.0.0"
