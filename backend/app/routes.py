@@ -2180,122 +2180,40 @@ async def check_compliance(
             raise HTTPException(status_code=404, detail="Company not found")
         company = co_res.data[0]
 
-        groq_key        = payload.get("groq_key")       or os.getenv("GROQ_API_KEY", "")
-        gemini_key      = payload.get("gemini_key")     or os.getenv("GEMINI_API_KEY", "")
-        openrouter_key  = payload.get("openrouter_key") or os.getenv("OPENROUTER_API_KEY", "")
-        website = company.get("website", "")
+        gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
+        website    = company.get("website", "")
 
-        compliance_found = []
-        has_security_team = "Unknown"
-        security_notes = ""
-        confidence = "Low"
+        from .website_analyzer import fetch_website_content
+        from .compliance_detector import detect_compliance, format_for_db
 
-        # Step 1 — scrape website for compliance text (most reliable)
-        if website:
-            from .website_analyzer import fetch_website_content
-            website_data = fetch_website_content(website)
-            if website_data:
-                compliance_found = website_data.get("compliance_detected", [])
-                full_text = website_data.get("full_text", "").lower()
-                # Check for security team signals
-                security_signals = ["security team", "security engineer", "ciso", "chief security", "infosec", "information security", "security operations"]
-                if any(s in full_text for s in security_signals):
-                    has_security_team = "Yes"
-                    confidence = "High"
-                else:
-                    has_security_team = "Unknown"
-                    confidence = "Medium"
-                security_notes = f"Detected from website: {website}"
+        website_data = fetch_website_content(website) if website else None
+        detection    = detect_compliance(website_data, gemini_key=gemini_key)
 
-        # Step 2 — use AI to verify and add more context only if AI key available
-        if (groq_key or gemini_key or openrouter_key) and company.get("name"):
-            company_name = company.get("name", "")
-            industry = company.get("industry", "")
-            description = company.get("description", "")
+        compliance_str     = format_for_db(detection)
+        frameworks         = detection["frameworks"]
+        has_security_team  = detection["has_security_team"]
+        confidence         = detection["confidence"]
+        source             = detection["source"]
 
-            prompt = f"""Company: {company_name}
-Industry: {industry or "Unknown"}
-Description: {description or "None"}
-Compliance certifications detected from their website: {compliance_found}
-
-Does this company have a security team based on their description?
-
-Reply with ONLY valid JSON:
-{{"additional_compliance": [], "has_security_team": "Yes" or "No" or "Unknown", "confidence": "High" or "Medium" or "Low", "notes": "one sentence"}}
-
-IMPORTANT: Return additional_compliance as empty array []. Only use website-detected compliance above. Do not guess or infer certifications from industry."""
-
-            try:
-                content = ""
-                if gemini_key:
-                    res = requests.post(
-                        f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}',
-                        headers={'Content-Type': 'application/json'},
-                        json={'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'temperature': 0.1, 'maxOutputTokens': 200}},
-                        timeout=15
-                    )
-                    d = res.json()
-                    if 'error' not in d:
-                        content = d['candidates'][0]['content']['parts'][0]['text'].strip()
-                if not content and openrouter_key:
-                    res = requests.post(
-                        'https://openrouter.ai/api/v1/chat/completions',
-                        headers={'Authorization': f'Bearer {openrouter_key}', 'Content-Type': 'application/json',
-                                 'HTTP-Referer': 'https://leadgen.app', 'X-Title': 'Leadgen Platform'},
-                        json={'model': 'google/gemini-2.0-flash-exp:free', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 200, 'temperature': 0.1},
-                        timeout=15
-                    )
-                    d = res.json()
-                    if 'choices' in d:
-                        content = d['choices'][0]['message']['content'].strip()
-                if not content and groq_key:
-                    res = requests.post(
-                        'https://api.groq.com/openai/v1/chat/completions',
-                        headers={'Authorization': f'Bearer {groq_key}', 'Content-Type': 'application/json'},
-                        json={'model': 'llama-3.1-8b-instant', 'messages': [{'role': 'user', 'content': prompt}], 'max_tokens': 200, 'temperature': 0.1},
-                        timeout=10
-                    )
-                    d = res.json()
-                    if 'choices' in d:
-                        content = d['choices'][0]['message']['content'].strip()
-
-                import re, json as jsonlib
-                content = re.sub(r'^```json\s*', '', content)
-                content = re.sub(r'\s*```$', '', content)
-                ai_result = jsonlib.loads(content)
-
-                # Only add AI compliance if it's not already found and is credible
-                additional = ai_result.get("additional_compliance", [])
-                for item in additional:
-                    if item and item not in compliance_found:
-                        compliance_found.append(item)
-
-                if has_security_team == "Unknown":
-                    has_security_team = ai_result.get("has_security_team", "Unknown")
-                    confidence = ai_result.get("confidence", confidence)
-                    security_notes = ai_result.get("notes", security_notes)
-
-            except Exception as e:
-                print(f"AI compliance error: {e}")
-
-        compliance_str = ", ".join(compliance_found) if compliance_found else "None detected"
-
-        # Save to database
-        if compliance_found:
-            supabase.table("companies").update({"compliance": compliance_str}).eq("id", company_id).eq("user_id", user_id).execute()
+        # Persist if anything credible was found
+        credible = [f for f in frameworks if f["tier"] in ("Certified", "Attested")]
+        if credible:
+            supabase.table("companies").update({"compliance": compliance_str}) \
+                .eq("id", company_id).eq("user_id", user_id).execute()
 
         posthog.capture(user_id, "company_compliance_checked", {
-            "compliance_found": len(compliance_found),
+            "frameworks_found": len(frameworks),
+            "certified_count":  sum(1 for f in frameworks if f["tier"] == "Certified"),
             "has_security_team": has_security_team,
-            "confidence": confidence,
-            "source": "website+ai" if website else "ai_only",
+            "confidence":        confidence,
+            "source":            source,
         })
         return {
-            "compliance": compliance_str,
+            "compliance":       compliance_str,
+            "frameworks":       frameworks,
             "has_security_team": has_security_team,
-            "security_notes": security_notes,
-            "confidence": confidence,
-            "source": "Website scraping + AI verification" if website else "AI only"
+            "confidence":       confidence,
+            "source":           source,
         }
 
     except HTTPException:
@@ -3907,9 +3825,17 @@ async def bulk_autofill_companies(
                 if needs_hq and not update_data.get("headquarters"):
                     if website_data.get("location"):
                         update_data["headquarters"] = website_data["location"]
-                _comp = website_data.get("compliance_detected") or []
-                if _comp and not company.get("compliance"):
-                    update_data["compliance"] = ", ".join(_comp)
+                # Use 34-framework detector; only write if company has no compliance yet
+                if not company.get("compliance"):
+                    try:
+                        from .compliance_detector import detect_compliance, format_for_db
+                        _det = detect_compliance(website_data)
+                        _credible = [f for f in _det["frameworks"]
+                                     if f["tier"] in ("Certified", "Attested")]
+                        if _credible:
+                            update_data["compliance"] = format_for_db(_det)
+                    except Exception:
+                        pass
 
             # Classifier runs regardless of whether website_data is available —
             # classify_website_saas handles website_data=None gracefully using
