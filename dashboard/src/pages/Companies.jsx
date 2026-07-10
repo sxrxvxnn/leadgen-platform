@@ -664,6 +664,8 @@ function CompanyCard({
     )
   )
   const [showActionsMenu, setShowActionsMenu] = useState(false)
+  const [checkingCompliance, setCheckingCompliance] = useState(false)
+  const [complianceFrameworks, setComplianceFrameworks] = useState(null)
   const actionsMenuRef = useRef(null)
 
   useEffect(() => {
@@ -924,6 +926,23 @@ function CompanyCard({
       setEnrichResult({ ok: false, msg: e.response?.data?.detail || e.message || 'Enrich failed' })
     } finally {
       setDeepEnriching(false)
+    }
+  }
+
+  async function handleCheckCompliance() {
+    setCheckingCompliance(true)
+    setComplianceFrameworks(null)
+    try {
+      const res = await checkCompliance(company.id)
+      const { frameworks, compliance } = res.data
+      setComplianceFrameworks(frameworks || [])
+      if (compliance && compliance !== 'None detected') {
+        onUpdate(company.id, { compliance })
+      }
+    } catch {
+      setComplianceFrameworks([])
+    } finally {
+      setCheckingCompliance(false)
     }
   }
 
@@ -1404,7 +1423,9 @@ function CompanyCard({
                 }}
                 onClick={() => setShowActionsMenu((v) => !v)}
               >
-                {fillingLI || analyzing || pipelining || deepEnriching ? 'Running…' : 'Actions ▾'}
+                {fillingLI || analyzing || pipelining || deepEnriching || checkingCompliance
+                  ? 'Running…'
+                  : 'Actions ▾'}
               </button>
               {showActionsMenu && (
                 <div
@@ -1423,7 +1444,9 @@ function CompanyCard({
                   }}
                 >
                   <button
-                    disabled={fillingLI || analyzing || pipelining || deepEnriching}
+                    disabled={
+                      fillingLI || analyzing || pipelining || deepEnriching || checkingCompliance
+                    }
                     onClick={() => {
                       setShowActionsMenu(false)
                       handleFullEnrich()
@@ -1439,14 +1462,17 @@ function CompanyCard({
                       fontFamily: 'var(--font-mono)',
                       fontSize: 11,
                       color:
-                        fillingLI || analyzing || pipelining || deepEnriching
+                        fillingLI || analyzing || pipelining || deepEnriching || checkingCompliance
                           ? 'var(--text-muted)'
                           : 'var(--accent)',
                       cursor:
-                        fillingLI || analyzing || pipelining || deepEnriching
+                        fillingLI || analyzing || pipelining || deepEnriching || checkingCompliance
                           ? 'default'
                           : 'pointer',
-                      opacity: fillingLI || analyzing || pipelining || deepEnriching ? 0.5 : 1,
+                      opacity:
+                        fillingLI || analyzing || pipelining || deepEnriching || checkingCompliance
+                          ? 0.5
+                          : 1,
                     }}
                   >
                     {fillingLI
@@ -1481,6 +1507,39 @@ function CompanyCard({
                     }}
                   >
                     {cachedSignals?.length ? `${cachedSignals.length} Signals` : 'Signals'}
+                  </button>
+                  <button
+                    disabled={checkingCompliance}
+                    onClick={() => {
+                      setShowActionsMenu(false)
+                      handleCheckCompliance()
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '9px 14px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderBottom: '1px solid var(--border)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: checkingCompliance
+                        ? 'var(--text-muted)'
+                        : complianceFrameworks?.length || company.compliance
+                          ? '#4a7c59'
+                          : 'var(--text-muted)',
+                      cursor: checkingCompliance ? 'default' : 'pointer',
+                      opacity: checkingCompliance ? 0.5 : 1,
+                    }}
+                  >
+                    {checkingCompliance
+                      ? 'Scanning…'
+                      : complianceFrameworks !== null
+                        ? `${complianceFrameworks.length} Framework${complianceFrameworks.length !== 1 ? 's' : ''}`
+                        : company.compliance
+                          ? 'Re-check Compliance'
+                          : 'Check Compliance'}
                   </button>
                   <button
                     onClick={() => {
@@ -1656,10 +1715,86 @@ function CompanyCard({
               </p>
             </div>
           ) : null}
-          {company.compliance ? (
-            <div>
-              <p style={card.fieldLabel}>Compliance</p>
-              <p style={card.fieldValue}>{company.compliance}</p>
+          {company.compliance || complianceFrameworks !== null ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <p style={card.fieldLabel}>
+                Compliance
+                {complianceFrameworks !== null && (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      color: 'var(--text-muted)',
+                      fontWeight: 400,
+                    }}
+                  >
+                    {checkingCompliance ? '— scanning…' : '— live scan'}
+                  </span>
+                )}
+              </p>
+              {checkingCompliance ? (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                  Scanning website…
+                </p>
+              ) : complianceFrameworks !== null ? (
+                complianceFrameworks.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                    None detected
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 2 }}>
+                    {complianceFrameworks.map((fw) => {
+                      const tc =
+                        fw.tier === 'Certified'
+                          ? {
+                              color: '#4a7c59',
+                              bg: 'rgba(74,124,89,0.08)',
+                              border: 'rgba(74,124,89,0.3)',
+                            }
+                          : fw.tier === 'Attested'
+                            ? {
+                                color: '#0369a1',
+                                bg: 'rgba(3,105,161,0.07)',
+                                border: 'rgba(3,105,161,0.25)',
+                              }
+                            : fw.tier === 'Supports'
+                              ? {
+                                  color: '#a86448',
+                                  bg: 'rgba(168,100,72,0.07)',
+                                  border: 'rgba(168,100,72,0.25)',
+                                }
+                              : {
+                                  color: 'var(--text-muted)',
+                                  bg: 'transparent',
+                                  border: 'var(--border)',
+                                }
+                      return (
+                        <span
+                          key={fw.framework}
+                          title={fw.evidence?.[0] || fw.tier}
+                          style={{
+                            padding: '2px 7px',
+                            border: `1px solid ${tc.border}`,
+                            borderRadius: 3,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: tc.color,
+                            letterSpacing: '0.5px',
+                            background: tc.bg,
+                            fontFamily: 'var(--font-mono)',
+                            cursor: 'default',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {fw.symbol} {fw.framework} {fw.confidence}%
+                        </span>
+                      )
+                    })}
+                  </div>
+                )
+              ) : (
+                <p style={card.fieldValue}>{company.compliance}</p>
+              )}
             </div>
           ) : null}
         </div>
