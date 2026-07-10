@@ -178,6 +178,8 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             soup.find('meta', attrs={'name': re.compile(r'^twitter:description$', re.I)})
         )
         meta_description = (meta_desc_tag.get('content', '') if meta_desc_tag else '').strip()
+        title_tag = soup.find('title')
+        page_title = (title_tag.get_text(strip=True) if title_tag else '').strip()
 
         # ── HTML-level signals ────────────────────────────────────────────────
         # Use scan_text (raw HTML + JS bundle) so React SPAs surface their links.
@@ -395,6 +397,7 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             'has_web_app_link': has_web_app_link,
             'compliance_detected': found_compliance,
             'social_profiles_detected': scraped_socials,
+            'title': page_title,
             'meta_description': meta_description,
             'first_para': first_para,
             'location': location,
@@ -1042,12 +1045,21 @@ def classify_website_saas(
         }
 
     # Build text corpus from page content (weight: 1.0×)
+    # Title is explicitly included so "Performance Management Platform" in <title> scores SaaS
     page_text = ' '.join(filter(None, [
+        website_data.get('title', '') if website_data else '',
         website_data.get('header', '') if website_data else '',
         website_data.get('nav', '') if website_data else '',
         website_data.get('hero', '') if website_data else '',
         website_data.get('pricing', '') if website_data else '',
         website_data.get('full_text', '')[:3000] if website_data else '',
+        website_data.get('meta_description', '') if website_data else '',
+        description,
+    ])).lower()
+
+    # Meta corpus — title + meta_description only (company's own words, not page body)
+    meta_corpus = ' '.join(filter(None, [
+        website_data.get('title', '') if website_data else '',
         website_data.get('meta_description', '') if website_data else '',
         description,
     ])).lower()
@@ -1119,7 +1131,22 @@ def classify_website_saas(
             if fingerprint in scan_text:
                 scores['product'] += int(weight * 0.7)
 
-    # 7. DDG/G2/Capterra/LinkedIn snippets (0.8× weight) ─────────────────────
+    # 7. Meta tag scoring (0.9× weight) — title + meta_description only ─────────
+    # These are the company's own words, so signal quality is high but weight is
+    # slightly reduced vs body text to avoid over-indexing short descriptions.
+    _META_SAAS    = ['software', 'platform', 'saas', 'crm', 'erp', 'tool', 'app',
+                     'suite', 'solution', 'management system', 'cloud service']
+    _META_SERVICE = ['consulting', 'consultancy', 'agency', 'advisory',
+                     'outsourcing', 'managed services']
+    if meta_corpus:
+        for term in _META_SAAS:
+            if term in meta_corpus:
+                scores['saas'] += int(2 * 0.9)  # +1 (floored) per meta SaaS term
+        for term in _META_SERVICE:
+            if term in meta_corpus:
+                scores['service'] += int(2 * 0.9)
+
+    # 8. DDG/G2/Capterra/LinkedIn snippets (0.8× weight) ─────────────────────
     if ddgs_snippets:
         snip_l = ddgs_snippets.lower()
         for term, weight in _SAAS.items():

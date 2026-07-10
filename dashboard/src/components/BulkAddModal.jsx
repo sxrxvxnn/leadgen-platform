@@ -5,6 +5,7 @@ import {
   getTechnoparkDirectory,
   bulkCreateLeads,
 } from '../services/api'
+import { useBulkOps } from '../context/BulkOpsContext'
 
 const TABS = [
   { key: 'manual', label: 'Manual Entry' },
@@ -17,6 +18,7 @@ let _id = 0
 const newRow = () => ({ id: ++_id, name: '', website: '', status: 'idle', filled: null })
 
 export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual' }) {
+  const { runAutoEnrich } = useBulkOps()
   const [tab, setTab] = useState(initialTab)
   const [rows, setRows] = useState([newRow(), newRow(), newRow()])
   const [fillTarget, setFillTarget] = useState(null)
@@ -216,6 +218,7 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
     setImporting(true)
     try {
       const res = await bulkCreateCompanies(companies)
+      const insertedIds = (res.data.companies || []).map((c) => c.id).filter(Boolean)
       setResult({
         inserted: res.data.inserted,
         updated: res.data.updated || 0,
@@ -223,6 +226,8 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
         skippedNames: res.data.skipped_names || [],
       })
       onRefresh()
+      // Auto-enrich sequentially — one company at a time for best accuracy
+      if (insertedIds.length) runAutoEnrich(insertedIds)
     } catch (e) {
       console.error('Bulk import error:', e)
     } finally {
@@ -299,6 +304,7 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
       const payload = toAdd.map((c) => ({ name: c.name, website: c.website || null }))
       const res = await bulkCreateCompanies(payload)
       const { inserted, updated } = res.data
+      const insertedIds = (res.data.companies || []).map((c) => c.id).filter(Boolean)
 
       // Also create leads for contacts from Technopark directory
       const leadPayload = toAdd
@@ -314,7 +320,7 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
       }
 
       setTpAddMsg(
-        `Done — ${inserted} added${updated ? ` · ${updated} updated` : ''}${leadPayload.length ? ` · ${leadPayload.length} contacts imported` : ''}. Use "Fill All" to enrich.`
+        `Done — ${inserted} added${updated ? ` · ${updated} updated` : ''}${leadPayload.length ? ` · ${leadPayload.length} contacts imported` : ''}. Auto-enriching…`
       )
       setTpSelected(new Set())
       // Refresh already_added flags
@@ -325,6 +331,8 @@ export default function BulkAddModal({ onClose, onRefresh, initialTab = 'manual'
       })
       setTpData(refreshed.data)
       onRefresh()
+      // Auto-enrich sequentially after Technopark import
+      if (insertedIds.length) runAutoEnrich(insertedIds)
     } catch (e) {
       setTpAddMsg('Error: ' + e.message)
     } finally {
