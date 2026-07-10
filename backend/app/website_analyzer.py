@@ -85,29 +85,19 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
             except Exception:
                 return None
         if res.status_code != 200:
-            # ScrapingBee fallback for blocked/JS-gated sites
-            sb_key = os.environ.get("SCRAPINGBEE_API_KEY", "")
-            if sb_key and not fast:
-                try:
-                    sb_res = requests.get(
-                        "https://app.scrapingbee.com/api/v1/",
-                        params={
-                            "api_key": sb_key,
-                            "url": url,
-                            "render_js": "true",
-                            "premium_proxy": "false",
-                            "block_ads": "true",
-                        },
-                        timeout=35,
-                    )
-                    if sb_res.status_code == 200 and len(sb_res.text) > 2000:
-                        res = sb_res
-                    else:
-                        return None
-                except Exception:
-                    return None
-            else:
+            if fast:
                 return None
+            # Firecrawl fallback for blocked/JS-gated sites
+            from .enrichment import _fc_scrape as _fc_scrape_wa
+            fc_md = _fc_scrape_wa(url, wait_ms=4000)
+            if fc_md and len(fc_md) > 200:
+                return {
+                    "url": url, "full_text": fc_md, "scan_text": fc_md,
+                    "compliance_detected": [], "has_mobile_app": False,
+                    "social_profiles": {}, "title": "", "meta_description": "",
+                    "review_presence": None, "app_store_presence": None,
+                }
+            return None
 
         raw_html = res.text  # keep raw for regex scanning before BeautifulSoup strips JS
         resolved_url = res.url  # canonical URL after following redirects
@@ -143,28 +133,14 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
                 except Exception:
                     pass
 
-        # ScrapingBee fallback for SPAs where bundle fetch still left minimal content
+        # Firecrawl fallback for SPAs where direct fetch left minimal visible content
         _visible_len = len(BeautifulSoup(raw_html, 'html.parser').get_text(strip=True))
         if _visible_len < 300 and not fast:
-            sb_key = os.environ.get("SCRAPINGBEE_API_KEY", "")
-            if sb_key:
-                try:
-                    sb_res = requests.get(
-                        "https://app.scrapingbee.com/api/v1/",
-                        params={
-                            "api_key": sb_key,
-                            "url": url,
-                            "render_js": "true",
-                            "premium_proxy": "false",
-                            "block_ads": "true",
-                        },
-                        timeout=35,
-                    )
-                    if sb_res.status_code == 200 and len(sb_res.text) > 2000:
-                        raw_html = sb_res.text
-                        spa_bundle_text = ""  # SB returns rendered HTML, no need for bundle
-                except Exception:
-                    pass
+            from .enrichment import _fc_scrape as _fc_scrape_spa
+            fc_md = _fc_scrape_spa(url, wait_ms=5000)
+            if fc_md and len(fc_md) > 200:
+                raw_html = fc_md
+                spa_bundle_text = ""  # FC returns rendered markdown, no bundle scan needed
 
         # Combine raw HTML + bundle text for URL scanning
         scan_text = raw_html + spa_bundle_text

@@ -377,8 +377,7 @@ def enrich_lead(name: str, company: str, website: str = None) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIRECRAWL — LinkedIn scraping + enhanced web search
-# Falls back to Jina Reader (scrape) / DuckDuckGo (search) when credits are exhausted
+# FIRECRAWL — LinkedIn scraping + enhanced web search (4-key rotation)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import os as _os
@@ -429,66 +428,10 @@ def _fc_headers(key: str = "") -> dict:
     return {"Authorization": f"Bearer {key or _fc_active_key()}", "Content-Type": "application/json"}
 
 
-# ── Jina Reader fallback (free, no API key) ───────────────────────────────────
-
-def _jina_scrape(url: str) -> str:
-    """Scrape a URL via Jina Reader. Free, no API key, no credits."""
-    try:
-        res = requests.get(
-            f"https://r.jina.ai/{url}",
-            headers={**_HEADERS, "Accept": "text/plain", "X-Return-Format": "markdown"},
-            timeout=30,
-        )
-        if res.status_code == 200 and len(res.text) > 80:
-            return res.text
-    except Exception:
-        pass
-    return ""
-
-
-def _ddg_search(query: str, limit: int = 5) -> list:
-    """
-    Web search via DuckDuckGo HTML. Free, no API key.
-    Returns list of {url, title, description, markdown} — same shape as Firecrawl results.
-    """
-    try:
-        resp = requests.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": query},
-            headers=_HEADERS,
-            timeout=12,
-        )
-        if resp.status_code != 200:
-            return []
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, "html.parser")
-        results = []
-        for a in soup.select("a.result__a")[:limit]:
-            href = a.get("href", "")
-            title = a.get_text(strip=True)
-            snippet_tag = a.find_parent("div", class_="result")
-            snippet = ""
-            if snippet_tag:
-                s = snippet_tag.select_one(".result__snippet")
-                snippet = s.get_text(strip=True) if s else ""
-            if href:
-                results.append({
-                    "url": href,
-                    "title": title,
-                    "description": snippet,
-                    "markdown": snippet,
-                })
-        return results
-    except Exception:
-        return []
-
-
-# ── Firecrawl with fallback ───────────────────────────────────────────────────
-
 def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
-    """Scrape a URL. Tries each Firecrawl key in rotation, falls back to Jina Reader."""
+    """Scrape a URL using the active Firecrawl key, rotating on exhaustion."""
     if not _FIRECRAWL_KEYS:
-        return _jina_scrape(url)
+        return ""
     for _ in range(len(_FIRECRAWL_KEYS)):
         with _fc_key_lock:
             idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
@@ -504,17 +447,17 @@ def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
                 return res.json().get("data", {}).get("markdown", "")
             if res.status_code in _FC_EXHAUSTED_CODES:
                 _fc_rotate(idx)
-                continue  # try next key
-            return ""  # other error — no retry
+                continue
+            return ""
         except Exception:
             pass
-    return _jina_scrape(url)
+    return ""
 
 
 def _fc_search(query: str, limit: int = 5) -> list:
-    """Web search. Tries each Firecrawl key in rotation, falls back to DuckDuckGo."""
+    """Web search using the active Firecrawl key, rotating on exhaustion."""
     if not _FIRECRAWL_KEYS:
-        return _ddg_search(query, limit)
+        return []
     for _ in range(len(_FIRECRAWL_KEYS)):
         with _fc_key_lock:
             idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
@@ -530,11 +473,11 @@ def _fc_search(query: str, limit: int = 5) -> list:
                 return res.json().get("data", [])
             if res.status_code in _FC_EXHAUSTED_CODES:
                 _fc_rotate(idx)
-                continue  # try next key
-            return []  # other error — no retry
+                continue
+            return []
         except Exception:
             pass
-    return _ddg_search(query, limit)
+    return []
 
 
 # ── LinkedIn scraper ──────────────────────────────────────────────────────────
@@ -595,13 +538,8 @@ def _parse_linkedin_md(md: str) -> dict:
 
 
 def scrape_linkedin_profile(li_url: str) -> dict:
-    """
-    Scrape a public LinkedIn profile. Tries Firecrawl first, falls back to Jina Reader.
-    No user credentials or cookies used — only publicly accessible data.
-    """
+    """Scrape a public LinkedIn profile via Firecrawl. No credentials used."""
     md = _fc_scrape(li_url, wait_ms=4000)
-    if not md or len(md) < 80:
-        md = _jina_scrape(li_url)
     if not md or len(md) < 80:
         return {}
     return _parse_linkedin_md(md)

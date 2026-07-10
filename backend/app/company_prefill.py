@@ -354,39 +354,30 @@ def _fetch_linkedin_html(url: str, fast: bool = False, li_cookie: str = '') -> s
 
     # Firecrawl — handles JS rendering and LinkedIn anti-bot; skip in fast/bulk mode
     if not fast and not li_cookie:
-        _fc_keys = list(dict.fromkeys(
-            k for k in [
-                os.environ.get("FIRECRAWL_API_KEY", ""),
-                os.environ.get("FIRECRAWL_API_KEY_1", ""),
-                os.environ.get("FIRECRAWL_API_KEY_2", ""),
-                os.environ.get("FIRECRAWL_API_KEY_3", ""),
-                os.environ.get("FIRECRAWL_API_KEY_4", ""),
-                os.environ.get("FIRECRAWL_API_KEY_5", ""),
-            ] if k
-        ))
-        for _fc_key in _fc_keys:
-            try:
-                fc_res = requests.post(
-                    "https://api.firecrawl.dev/v1/scrape",
-                    headers={"Authorization": f"Bearer {_fc_key}", "Content-Type": "application/json"},
-                    json={"url": url, "formats": ["html"], "timeout": 30000},
-                    timeout=35,
-                )
-                if fc_res.status_code == 200:
-                    html = fc_res.json().get("data", {}).get("html", "")
-                    if html and len(html) > 3000 and _LOGIN_WALL not in html[:5000]:
-                        return html
-                    break  # succeeded but content insufficient — don't try other keys
-                if fc_res.status_code not in (402, 429):
-                    break  # non-credit error — stop trying
-                # 402/429 → key exhausted, try next
-            except Exception:
-                break
-
-        # ScrapingBee fallback — activates when Firecrawl is out of credits or unset
-        sb_html = _scrapingbee_fetch(url, render_js=True, timeout=30)
-        if sb_html and len(sb_html) > 3000 and _LOGIN_WALL not in sb_html[:5000]:
-            return sb_html
+        from .enrichment import _FIRECRAWL_KEYS, FIRECRAWL_BASE, _fc_rotate, _fc_key_idx, _fc_key_lock
+        if _FIRECRAWL_KEYS:
+            for _ in range(len(_FIRECRAWL_KEYS)):
+                with _fc_key_lock:
+                    _idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
+                _key = _FIRECRAWL_KEYS[_idx]
+                try:
+                    _res = requests.post(
+                        f"{FIRECRAWL_BASE}/scrape",
+                        headers={"Authorization": f"Bearer {_key}", "Content-Type": "application/json"},
+                        json={"url": url, "formats": ["html"], "timeout": 30000},
+                        timeout=35,
+                    )
+                    if _res.status_code == 200:
+                        _html = _res.json().get("data", {}).get("html", "")
+                        if _html and len(_html) > 3000 and _LOGIN_WALL not in _html[:5000]:
+                            return _html
+                        break
+                    if _res.status_code in (402, 429):
+                        _fc_rotate(_idx)
+                        continue
+                    break
+                except Exception:
+                    break
 
     # Direct HTTP fallback — multiple user agents
     ua_list = _LI_UA_LIST[:2] if fast else _LI_UA_LIST
@@ -438,21 +429,14 @@ def _fetch_via_wayback(url: str, timeout: int = 10) -> str | None:
 
 
 def _jina_fetch_linkedin_md(url: str) -> str:
-    """Fetch a LinkedIn company page via Jina Reader, returns markdown. Free, no login needed."""
+    """Fetch a LinkedIn company page via Firecrawl, returns markdown."""
+    from .enrichment import _fc_scrape
     base = url.rstrip('/')
     for li_url in [base + '/about/', base + '/']:
         try:
-            r = requests.get(
-                f'https://r.jina.ai/{li_url}',
-                headers={
-                    'Accept': 'text/plain',
-                    'X-Return-Format': 'markdown',
-                    'User-Agent': 'Mozilla/5.0 (compatible; LeadGenBot/1.0)',
-                },
-                timeout=20,
-            )
-            if r.status_code == 200 and len(r.text) > 200 and 'linkedin.com' in r.text.lower():
-                return r.text
+            md = _fc_scrape(li_url, wait_ms=4000)
+            if md and len(md) > 200 and 'linkedin' in li_url.lower():
+                return md
         except Exception:
             continue
     return ''
