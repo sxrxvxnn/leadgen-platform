@@ -947,6 +947,14 @@ def classify_website_saas(
         'cloud platform': 4, 'cloud-based': 3,
         'integrations': 3, 'workflow automation': 3,
         'onboarding': 2, 'in-app': 2,
+        # Management / HR / vertical SaaS patterns
+        'management software': 4, 'management platform': 4,
+        'hr platform': 4, 'hr software': 4, 'hr system': 3,
+        'performance management': 3, 'talent management': 3,
+        'performance review': 3, 'employee engagement': 3,
+        'project management': 3, 'crm software': 4, 'erp software': 4,
+        'accounting software': 4, 'payroll software': 4,
+        'built for teams': 2, 'built for hr': 2,
     }
     _PRODUCT = {
         'hardware': 5, 'device': 4, 'equipment': 3,
@@ -960,32 +968,41 @@ def classify_website_saas(
         'desktop app': 3, 'desktop application': 3,
         'physical product': 3, 'ships to': 2, 'shipping': 2,
     }
+    # Service signals — STRICT: only terms exclusive to service/agency companies.
+    # REMOVED intentionally:
+    #   'consulting' / 'it consulting' — appears in customer review industry labels on SaaS sites
+    #     (e.g. G2 reviewers say "Jason J. | IT Consulting" — this is the reviewer's industry)
+    #   'project delivery' / 'client projects' — generic; appear in HR SaaS AI demo content
+    #   'professional services' / 'development services' — SaaS companies have PS teams
+    #   'it services' — too broad
     _SERVICE = {
-        'consulting': 5, 'consultancy': 5,
-        'agency': 5, 'digital agency': 5,
-        'request a quote': 5, 'request quote': 5, 'get a quote': 5,
-        'portfolio': 4, 'our work': 3, 'case studies': 3, 'case study': 3,
-        'we help': 3, 'we partner': 2,
-        'managed services': 3, 'managed service provider': 4,
-        'schedule a call': 3, 'book a call': 3, 'book a demo': 2,
-        'implementation': 2, 'deployment services': 2,
+        'consultancy': 5,
+        'consulting firm': 5, 'consulting company': 5,
+        'digital agency': 5, 'creative agency': 5, 'marketing agency': 5,
+        'advertising agency': 5, 'design agency': 5, 'we are an agency': 5,
+        'request a quote': 5, 'request quote': 5, 'get a quote': 5, 'request a proposal': 5,
         'staff augmentation': 5, 'outsourcing': 5,
-        'dedicated team': 4, 'hire developers': 4,
-        'offshore': 3, 'nearshore': 3,
-        'it consulting': 4, 'it services': 4,
+        'dedicated team': 4, 'hire developers': 4, 'hire our': 4,
+        'offshore development': 4, 'nearshore development': 4,
+        'managed services': 4, 'managed service provider': 4,
+        'custom development': 4, 'bespoke': 4,
+        'implementation services': 3,
     }
 
     # ── Nav tab signals ───────────────────────────────────────────────────────
     _NAV_SAAS    = ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'status']
-    _NAV_PRODUCT = ['shop', 'store', 'cart', 'catalog', 'products', 'buy']
-    _NAV_SERVICE = ['services', 'industries', 'solutions', 'clients', 'case studies', 'our work']
+    _NAV_PRODUCT = ['shop', 'store', 'cart', 'catalog', 'buy']
+    # 'solutions', 'industries', 'case studies' removed — SaaS companies use all of these
+    _NAV_SERVICE = ['services', 'clients', 'our work', 'expertise', 'what we do']
 
     # ── CTA button patterns ───────────────────────────────────────────────────
     _CTA_SAAS    = ['start free trial', 'get started free', 'try for free', 'start for free',
                     'sign up free', 'create free account', 'get started']
     _CTA_PRODUCT = ['buy now', 'add to cart', 'shop now', 'order now', 'purchase']
-    _CTA_SERVICE = ['request a quote', 'request quote', 'get a quote', 'schedule a call',
-                    'book a call', 'contact us', 'get in touch', 'talk to us']
+    # 'contact us', 'get in touch', 'book a demo', 'schedule a call' removed —
+    # enterprise SaaS companies use all of these as primary CTAs
+    _CTA_SERVICE = ['request a quote', 'request quote', 'get a quote', 'request a proposal',
+                    'get a proposal']
 
     # ── URL / subdomain signals ───────────────────────────────────────────────
     _URL_SAAS    = [r'app\.', r'dashboard\.', r'api\.', r'/pricing', r'/signup', r'/login', r'/docs']
