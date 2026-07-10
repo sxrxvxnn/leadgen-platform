@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { prefillCompany, createCompany, deepEnrichCompany } from '../services/api'
+import { useBulkOps } from '../context/BulkOpsContext'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
@@ -14,6 +15,7 @@ const EMPTY_FORM = {
 }
 
 export default function AddCompanyModal({ onClose, onRefresh, onAdded }) {
+  const { runAutoEnrich } = useBulkOps()
   const [name, setName] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [step, setStep] = useState('input') // input | loading | form | saved | error
@@ -143,9 +145,13 @@ export default function AddCompanyModal({ onClose, onRefresh, onAdded }) {
       } else {
         onRefresh?.()
       }
-      // Trigger deep enrich silently in background — don't await or show errors
+      // Trigger deep enrich (tech stack, jobs, etc.) silently in background
       const newId = newCompany?.id || created?.data?.id
-      if (newId) deepEnrichCompany(newId).catch(() => {})
+      if (newId) {
+        deepEnrichCompany(newId).catch(() => {})
+        // Auto-enrich basic fields (LinkedIn, website, HQ, type, industry…)
+        runAutoEnrich([newId])
+      }
     } catch (e) {
       const raw = e.response?.data?.detail || e.message || 'Save failed.'
       const msg =
