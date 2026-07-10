@@ -3407,7 +3407,7 @@ async def bulk_deep_enrich_companies(
 ):
     """Run all 8 enrichment jobs for multiple companies in parallel (5 workers)."""
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-deep-enrich", limit=20, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-deep-enrich", limit=200, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _bde_threading
@@ -3523,7 +3523,7 @@ async def bulk_autofill_companies(
 ):
     """Autofill data for multiple companies in parallel (20 workers)."""
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-autofill", limit=30, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-autofill", limit=500, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _threading
@@ -4163,7 +4163,7 @@ async def bulk_analyze_companies(
     from fastapi.responses import StreamingResponse
 
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-analyze", limit=30, window_minutes=60)
+    _check_user_rate_limit(user_id, "bulk-analyze", limit=500, window_minutes=60)
     company_ids = payload.get("company_ids", [])
     gemini_key      = payload.get("gemini_key")      or os.getenv("GEMINI_API_KEY", "")
     openai_key      = payload.get("openai_key")      or os.getenv("OPENAI_API_KEY", "")
@@ -5291,6 +5291,83 @@ Return empty array if not sure."""
 @router.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+def _send_resend_email(to_email: str, subject: str, body_text: str) -> bool:
+    """Send a transactional email via Resend. Returns True on success."""
+    key = os.getenv("RESEND_API_KEY", "")
+    if not key or not to_email:
+        return False
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "from": "Sonar <onboarding@resend.dev>",
+                "to": [to_email],
+                "subject": subject,
+                "text": body_text,
+            },
+            timeout=15,
+        )
+        return r.status_code in (200, 201, 202)
+    except Exception:
+        return False
+
+
+def _get_user_email(user_id: str) -> str | None:
+    try:
+        resp = supabase_auth.admin.get_user_by_id(user_id)
+        return resp.user.email if resp and resp.user else None
+    except Exception:
+        return None
+
+
+@router.post("/notify/enrichment-complete")
+async def notify_enrichment_complete(payload: dict = {}, authorization: str = Header(...)):
+    """Send a Resend email to the user when their enrichment job finishes."""
+    user_id  = get_user_id(authorization)
+    email    = _get_user_email(user_id)
+    count    = payload.get("count", 0)
+    total    = payload.get("total", 0)
+    dur_min  = payload.get("duration_min", 0)
+    subject  = f"Enrichment complete — {count}/{total} companies updated"
+    body     = (
+        f"Hi,\n\n"
+        f"Your enrichment job on Sonar has finished.\n\n"
+        f"  • {count} of {total} companies were updated\n"
+        f"  • Duration: ~{dur_min} minutes\n\n"
+        f"Open Sonar to review your companies:\n"
+        f"https://sonarleads.vercel.app\n\n"
+        f"— Sonar"
+    )
+    ok = _send_resend_email(email, subject, body)
+    return {"ok": ok, "to": email}
+
+
+@router.post("/internal/notify-job-complete")
+async def internal_notify_job_complete(payload: dict = {}, token: str = ""):
+    """Called by the EC2 worker after an async enrichment job finishes."""
+    expected = os.getenv("INTERNAL_TOKEN", "")
+    if not expected or token != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    user_id = payload.get("user_id", "")
+    email   = _get_user_email(user_id)
+    count   = payload.get("count", 0)
+    total   = payload.get("total", 0)
+    dur_min = payload.get("duration_min", 0)
+    subject = f"Background enrichment complete — {count}/{total} companies updated"
+    body    = (
+        f"Hi,\n\n"
+        f"Your background enrichment job on Sonar has finished.\n\n"
+        f"  • {count} of {total} companies were updated\n"
+        f"  • Duration: ~{dur_min} minutes\n\n"
+        f"Open Sonar to see results:\n"
+        f"https://sonarleads.vercel.app\n\n"
+        f"— Sonar"
+    )
+    ok = _send_resend_email(email, subject, body)
+    return {"ok": ok}
 
 
 @router.get("/admin/firecrawl-keys")
@@ -8051,7 +8128,7 @@ def _build_pdl_sql(payload: dict) -> str:
 @router.post("/prospect/people-search")
 async def prospect_people_search(payload: dict, authorization: str = Header(...)):
     user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "people-search", limit=30, window_minutes=60)
+    _check_user_rate_limit(user_id, "people-search", limit=200, window_minutes=60)
 
     page     = max(1, int(payload.get("page", 1)))
     per_page = 10
