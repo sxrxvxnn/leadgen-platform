@@ -3589,6 +3589,7 @@ export default function Companies() {
 
         const scalar = (v) => {
           if (v === null || v === undefined) return ''
+          if (typeof v === 'boolean') return v ? 'Yes' : 'No'
           if (typeof v === 'object') {
             if (Array.isArray(v))
               return v
@@ -3601,6 +3602,16 @@ export default function Companies() {
               .join('; ')
           }
           return String(v)
+        }
+
+        // Derive SaaS label: prefer saas_category; fall back from company_type + is_saas
+        const saasLabel = (c) => {
+          if (c.saas_category) return c.saas_category
+          if (c.is_saas === true) return 'SaaS'
+          if (c.is_saas === false) {
+            return c.company_type === 'Service' ? 'Service' : 'Non-SaaS Product'
+          }
+          return c.company_type || ''
         }
 
         // ── Sort ──────────────────────────────────────────────────────
@@ -3622,10 +3633,12 @@ export default function Companies() {
           { label: 'Classification', key: 'classification', w: 16 },
           { label: 'Status', key: 'prospect_status', w: 14 },
           { label: 'Industry', key: 'industry', w: 22 },
-          { label: 'Type', key: 'company_type', w: 14 },
+          { label: 'SaaS / Type', key: '__saas_label__', w: 18 },
+          { label: 'Is SaaS', key: 'is_saas', w: 10 },
           { label: 'HQ', key: 'headquarters', w: 24 },
           { label: 'Employees', key: 'size', w: 12 },
           { label: 'Followers', key: 'followers', w: 12 },
+          { label: 'Founded', key: 'founded', w: 10 },
           { label: 'Website', key: 'website', w: 34 },
           { label: 'LinkedIn URL', key: 'linkedin_url', w: 34 },
           { label: 'Compliance', key: 'compliance', w: 14 },
@@ -3678,7 +3691,11 @@ export default function Companies() {
 
         // ── Build Companies sheet ─────────────────────────────────────
         const ws1Data = [COLS.map((c) => c.label)]
-        sorted.forEach((c) => ws1Data.push(COLS.map((col) => scalar(c[col.key]))))
+        sorted.forEach((c) =>
+          ws1Data.push(
+            COLS.map((col) => (col.key === '__saas_label__' ? saasLabel(c) : scalar(c[col.key])))
+          )
+        )
 
         const ws1 = XLSX.utils.aoa_to_sheet(ws1Data)
         ws1['!cols'] = COLS.map((c) => ({ wch: c.w }))
