@@ -5376,31 +5376,50 @@ async def internal_notify_job_complete(payload: dict = {}, token: str = ""):
 
 
 @router.get("/admin/firecrawl-keys")
-async def check_firecrawl_keys(authorization: str = Header(...)):
-    """Test each configured Firecrawl key and report credit status."""
-    get_user_id(authorization)
+async def check_firecrawl_keys(request: Request, authorization: Optional[str] = Header(None)):
+    """Test each configured Firecrawl key and report credit status.
+    Accepts either a user JWT (Authorization header) or INTERNAL_TOKEN (X-Internal-Token header).
+    Uses the credit-usage endpoint — does NOT consume credits."""
+    internal_tok = request.headers.get("X-Internal-Token", "")
+    if internal_tok and internal_tok == os.getenv("INTERNAL_TOKEN", ""):
+        pass  # allowed via internal token
+    elif authorization:
+        get_user_id(authorization)
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     from .enrichment import _FIRECRAWL_KEYS, FIRECRAWL_BASE
     results = []
     for i, key in enumerate(_FIRECRAWL_KEYS, 1):
         try:
-            res = requests.post(
-                f"{FIRECRAWL_BASE}/scrape",
-                json={"url": "https://example.com", "formats": ["markdown"], "onlyMainContent": True},
-                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                timeout=20,
+            res = requests.get(
+                f"{FIRECRAWL_BASE}/team/credit-usage",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=15,
             )
             if res.status_code == 200:
+                data = res.json()
+                remaining = data.get("creditsRemaining", data.get("remaining", "?"))
+                used = data.get("creditsUsed", data.get("used", "?"))
                 status = "ok"
             elif res.status_code in (402, 429):
+                remaining, used = 0, "?"
                 status = "exhausted"
+            elif res.status_code == 401:
+                remaining, used = "?", "?"
+                status = "invalid_key"
             else:
+                remaining, used = "?", "?"
                 status = f"error_{res.status_code}"
         except Exception as e:
+            remaining, used = "?", "?"
             status = f"error_{str(e)[:40]}"
         results.append({
             "key_number": i,
             "suffix": f"...{key[-6:]}",
             "status": status,
+            "credits_remaining": remaining,
+            "credits_used": used,
         })
     active = sum(1 for r in results if r["status"] == "ok")
     return {"keys": results, "total": len(results), "active": active}
