@@ -3604,8 +3604,8 @@ async def bulk_autofill_companies(
 
     # Generic industries Groq produces that are too vague to be useful — block them
     _GENERIC_INDS = {
-        'technology', 'software', 'internet', 'domain registration',
-        'other', 'n/a', 'unknown', 'various', 'general', 'information technology',
+        'other', 'n/a', 'unknown', 'various', 'general',
+        'domain registration',
     }
 
     # Signals that a page is a parked/for-sale domain — not a real company site
@@ -3628,10 +3628,14 @@ async def bulk_autofill_companies(
         if _re_mod.match(r'^https?://', dl) or dl.endswith(('.io', '.com', '.net', '.org')):
             return False
         # Page title patterns (e.g. "Home | Company", "About | Acme Inc")
-        # Only reject short-word-before-pipe patterns, not real descriptions that use | as separator
+        # Only reject actual page title patterns, not real descriptions using | as separator
         if _re_mod.search(r'^(?:home|about|contact|products?|services?|index)\s*\|'
                           r'|\|\s*(?:home|inc\.?|ltd\.?|llc\.?|pvt\.?|corp\.?)(?:\s|$)'
                           r'|home page$|\bindex\b', dl, _re_mod.I):
+            return False
+        # LinkedIn sidebar labels (not company descriptions)
+        if _re_mod.search(r'^company size\s*[:.]|^industry\s*[:.]|^type\s*[:.]\s*(public|private)'
+                          r'|^headquarters\s*[:.]|^founded\s*[:.]|\d+[-–]\d+\s*employees', dl):
             return False
         # Domain for sale
         if any(s in dl for s in _DOMAIN_SALE_SIGNALS):
@@ -3911,9 +3915,9 @@ async def bulk_autofill_companies(
             # classify_website_saas handles website_data=None gracefully using
             # description alone. This ensures old wrong types get overwritten.
             if needs_type:
-                _desc_for_type = company.get("description") or update_data.get("description") or ""
+                _desc_for_type = update_data.get("description") or company.get("description") or ""
                 _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
-                if _cls["confidence"] >= 30:
+                if _cls["confidence"] >= 20:
                     update_data["company_type"] = _cls["company_type"]
                     update_data["is_saas"] = _cls["is_saas"]
                     update_data["saas_category"] = _cls["category"]
@@ -4060,6 +4064,53 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
+            # ── Step 6.5: ProxyCurl company lookup ────────────────────────────────
+            # Provides the same structured data as single-company /autofill-linkedin.
+            # Only runs when we have a confirmed LinkedIn URL and are still missing
+            # key structured fields (industry, founded, specialties, description).
+            _pc_key = os.environ.get("PROXYCURL_API_KEY", "")
+            _li_url_for_pc = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
+            _pc_missing = (
+                (not update_data.get("industry") and not company.get("industry")) or
+                (not update_data.get("founded") and not company.get("founded")) or
+                (not update_data.get("specialties") and not company.get("specialties")) or
+                (needs_size and not update_data.get("size")) or
+                (needs_followers and not update_data.get("followers")) or
+                (needs_hq and not update_data.get("headquarters")) or
+                (needs_desc and not update_data.get("description"))
+            )
+            if _pc_key and _li_url_for_pc and _pc_missing:
+                try:
+                    _pc_res = requests.get(
+                        "https://nubela.co/proxycurl/api/linkedin/company",
+                        params={"url": _li_url_for_pc, "use_cache": "if-present", "fallback_to_cache": "on-error"},
+                        headers={"Authorization": f"Bearer {_pc_key}"},
+                        timeout=15,
+                    )
+                    if _pc_res.status_code == 200:
+                        _pc = _pc_res.json()
+                        if not update_data.get("industry") and not company.get("industry") and _pc.get("industry"):
+                            update_data["industry"] = _pc["industry"]
+                        if not update_data.get("founded") and not company.get("founded") and _pc.get("founded_year"):
+                            update_data["founded"] = str(_pc["founded_year"])
+                        if not update_data.get("specialties") and not company.get("specialties") and _pc.get("specialities"):
+                            _sp = _pc["specialities"]
+                            update_data["specialties"] = ", ".join(str(s) for s in _sp) if isinstance(_sp, list) else str(_sp)
+                        if needs_followers and not update_data.get("followers") and _pc.get("follower_count"):
+                            update_data["followers"] = str(_pc["follower_count"])
+                        if needs_size and not update_data.get("size") and _pc.get("company_size_on_linkedin"):
+                            update_data["size"] = str(_pc["company_size_on_linkedin"])
+                        if needs_desc and not update_data.get("description") and _pc.get("description"):
+                            update_data["description"] = _pc["description"]
+                        if needs_hq and not update_data.get("headquarters") and _pc.get("hq"):
+                            _hq_pc = _pc["hq"]
+                            _hq_parts = [_hq_pc.get("city"), _hq_pc.get("state"), _hq_pc.get("country")]
+                            _hq_str = ", ".join(p for p in _hq_parts if p)
+                            if _hq_str:
+                                update_data["headquarters"] = _hq_str
+                except Exception:
+                    pass
+
             # ── Step 6b: Search-based enrichment for still-missing key fields ────
             # When LinkedIn scrape + website scrape failed, search business directories.
             # This is the last data-gathering step before Groq — filling description here
@@ -4187,17 +4238,21 @@ async def bulk_autofill_companies(
                     _bp = (
                         f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
                         'Extract these fields. Be specific and concise.\n'
-                        '- industry: industry name (e.g. "Software Development", "Financial Services")\n'
-                        '- founded: 4-digit founding year only (omit if unsure)\n'
-                        '- headquarters: city and country only (e.g. "Bangalore, India") — omit if not mentioned\n'
-                        '- specialties: 3-5 comma-separated specialty areas\n'
-                        '- company_type: exactly one of "Product" (SaaS/software product company), '
-                        '"Service" (consulting/outsourcing/agency), or "Hybrid" (both). '
-                        'Look for signals: pricing pages, free trial, subscription → Product; '
-                        'client projects, staff augmentation, IT services → Service.\n\n'
+                        '- industry: SPECIFIC industry name. Use terms like "Software Development", '
+                        '"IT Consulting", "Data Analytics", "Cybersecurity", "E-commerce", '
+                        '"Financial Services", "Healthtech", "EdTech". '
+                        'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
+                        '- founded: 4-digit founding year only (omit if not mentioned)\n'
+                        '- headquarters: city and country only (e.g. "Bangalore, India") — only if mentioned\n'
+                        '- specialties: 3-5 comma-separated specific capability areas\n'
+                        '- company_type: exactly one of "Product" (sells software/SaaS product), '
+                        '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
+                        'Signals → Product: subscription, SaaS, platform, free trial; '
+                        'Service: client projects, consulting, outsourcing, staff augmentation.\n\n'
                         'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
-                        'Use null for fields you are not confident about.'
+                        'Use null for fields you cannot determine with confidence.'
                     )
+                    print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
                     _gr = requests.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_bulk}",
                         headers={"Content-Type": "application/json"},
@@ -4205,9 +4260,11 @@ async def bulk_autofill_companies(
                               "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
                         timeout=12,
                     )
+                    print(f"[gemini_bulk] status={_gr.status_code} for {company_name}", flush=True)
                     if _gr.status_code == 200:
                         _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        _mb = _re_mod.search(r'\{[^}]+\}', _rb, _re_mod.DOTALL)
+                        print(f"[gemini_bulk] response={_rb[:200]}", flush=True)
+                        _mb = _re_mod.search(r'\{.*\}', _rb, _re_mod.DOTALL)
                         if _mb:
                             _xb = _json_bulk.loads(_mb.group(0))
                             _gr_ind = _xb.get("industry")
