@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 # Values are permissive — actual rate limiting is handled by Firecrawl key rotation.
 _DDGS_SEM = _threading_mod.Semaphore(5)
 _JINA_SEM = _threading_mod.Semaphore(5)
+_GEMINI_SEM = _threading_mod.Semaphore(5)  # cap concurrent Gemini calls — free tier is 15 RPM
 from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import Response, RedirectResponse
 import base64
@@ -2593,18 +2594,23 @@ async def analyze_company_website(
                     company.get("industry", ""), company.get("description", ""), groq_key
                 )
 
-        # If no AI key and rules were Low-confidence, still return rule result
+        # If no AI key and rules were Low-confidence, return a low-confidence placeholder
+        # so the frontend never shows "⚠ Website signals are ambiguous" error.
         if not result and not rule_type:
-            _has_any_key = bool(gemini_key or groq_key or openrouter_key or openai_key)
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Website signals are ambiguous — could not determine company type. "
-                    "Set type manually on the card."
-                    if _has_any_key else
-                    "No AI key available and website signals are ambiguous. Add Gemini (free at aistudio.google.com), Groq, OpenRouter, or OpenAI key in Settings."
-                )
-            )
+            return {
+                "success": True,
+                "analysis": {
+                    "company_type": None,
+                    "is_saas": None,
+                    "confidence": 0,
+                    "low_confidence": True,
+                    "compliance": [],
+                    "website_summary": None,
+                    "products_or_services": [],
+                    "company_type_confidence": None,
+                },
+                "company_id": company_id,
+            }
 
         # ── Step 4: merge rule result with AI result ────────────────
         # Normalize "Services" → "Service" for consistency
@@ -4066,8 +4072,7 @@ async def bulk_autofill_companies(
 
             # ── Step 6.5: ProxyCurl company lookup ────────────────────────────────
             # Provides the same structured data as single-company /autofill-linkedin.
-            # Only runs when we have a confirmed LinkedIn URL and are still missing
-            # key structured fields (industry, founded, specialties, description).
+            # Runs with OR without a LinkedIn URL — uses resolve endpoint when URL unknown.
             _pc_key = os.environ.get("PROXYCURL_API_KEY", "")
             _li_url_for_pc = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
             _pc_missing = (
@@ -4079,6 +4084,29 @@ async def bulk_autofill_companies(
                 (needs_hq and not update_data.get("headquarters")) or
                 (needs_desc and not update_data.get("description"))
             )
+            # If no LinkedIn URL, resolve it via ProxyCurl company resolver (2 credits)
+            if _pc_key and not _li_url_for_pc and _pc_missing:
+                try:
+                    _ws_for_resolve = update_data.get("website") or company.get("website") or ws_url or ""
+                    _resolve_params: dict = {"company_name": company_name}
+                    if _ws_for_resolve:
+                        _resolve_params["company_website"] = _ws_for_resolve
+                    _resolve_r = requests.get(
+                        "https://nubela.co/proxycurl/api/linkedin/company/resolve",
+                        params=_resolve_params,
+                        headers={"Authorization": f"Bearer {_pc_key}"},
+                        timeout=12,
+                    )
+                    if _resolve_r.status_code == 200:
+                        _resolved_li = _resolve_r.json()
+                        _resolved_url = _resolved_li.get("url") or ""
+                        if _resolved_url:
+                            _li_url_for_pc = _resolved_url
+                            if not update_data.get("linkedin_url") and not company.get("linkedin_url"):
+                                update_data["linkedin_url"] = _resolved_url
+                            print(f"[proxycurl_resolve] Resolved {company_name} → {_resolved_url}", flush=True)
+                except Exception:
+                    pass
             if _pc_key and _li_url_for_pc and _pc_missing:
                 try:
                     _pc_res = requests.get(
@@ -4235,6 +4263,7 @@ async def bulk_autofill_companies(
             if _gemini_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
                 try:
                     import json as _json_bulk
+                    import time as _time_bulk
                     _bp = (
                         f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
                         'Extract these fields. Be specific and concise.\n'
@@ -4253,13 +4282,19 @@ async def bulk_autofill_companies(
                         'Use null for fields you cannot determine with confidence.'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
-                    _gr = requests.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_bulk}",
-                        headers={"Content-Type": "application/json"},
-                        json={"contents": [{"parts": [{"text": _bp}]}],
-                              "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
-                        timeout=12,
-                    )
+                    with _GEMINI_SEM:
+                        _gr = None
+                        for _g_attempt in range(3):
+                            _gr = requests.post(
+                                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_bulk}",
+                                headers={"Content-Type": "application/json"},
+                                json={"contents": [{"parts": [{"text": _bp}]}],
+                                      "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
+                                timeout=20,
+                            )
+                            if _gr.status_code != 429:
+                                break
+                            _time_bulk.sleep(4 * (_g_attempt + 1))
                     print(f"[gemini_bulk] status={_gr.status_code} for {company_name}", flush=True)
                     if _gr.status_code == 200:
                         _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()

@@ -1306,7 +1306,7 @@ function CompanyCard({
                   : `⚠ ${fillResult.msg}`}
               </p>
             )}
-            {analyzeResult && (
+            {analyzeResult && !(analyzeResult.ok && analyzeResult.analysis?.low_confidence) && (
               <p
                 style={{
                   fontSize: 11,
