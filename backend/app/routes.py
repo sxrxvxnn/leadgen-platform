@@ -2951,7 +2951,7 @@ async def autofill_company_from_linkedin(
                     'Use null for fields you are not confident about.'
                 )
                 _g = requests.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_li}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_gemini_key_li}",
                     headers={"Content-Type": "application/json"},
                     json={"contents": [{"parts": [{"text": _li_prompt}]}],
                           "generationConfig": {"temperature": 0.1, "maxOutputTokens": 150}},
@@ -2977,7 +2977,7 @@ async def autofill_company_from_linkedin(
         if _gemini_key_li and li.get("description") and not li.get("tagline"):
             try:
                 _tg = requests.post(
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_li}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_gemini_key_li}",
                     headers={"Content-Type": "application/json"},
                     json={"contents": [{"parts": [{"text": (
                               f"Write ONE sentence (max 15 words) summarizing what this company does.\n"
@@ -3206,7 +3206,7 @@ async def fetch_company_funding(company_id: str, authorization: str = Header(...
 
         import requests as _freq
         gres = _freq.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_fund_gemini_key}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_fund_gemini_key}",
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": (
                     f"Extract funding info for company '{name}' from these web snippets:\n\n{combined}\n\n"
@@ -3643,9 +3643,18 @@ async def bulk_autofill_companies(
                           r'|\|\s*(?:home|inc\.?|ltd\.?|llc\.?|pvt\.?|corp\.?)(?:\s|$)'
                           r'|home page$|\bindex\b', dl, _re_mod.I):
             return False
-        # LinkedIn sidebar labels (not company descriptions)
-        if _re_mod.search(r'^company size\s*[:.]|^industry\s*[:.]|^type\s*[:.]\s*(public|private)'
-                          r'|^headquarters\s*[:.]|^founded\s*[:.]|\d+[-–]\d+\s*employees', dl):
+        # LinkedIn sidebar labels (not company descriptions).
+        # Catches both colon-separated ("Headquarters: City") and space-separated
+        # ("Headquarters Thiruvananthapuram, Kerala Type Privately Held Founded 2016...")
+        if _re_mod.search(
+            r'^company size\s*[:.]|^industry\s*[:.]'
+            r'|^type\s*[:.]\s*(public|private|privately|non.profit)'
+            r'|^headquarters\s*[:.]\s*|^headquarters\s+[A-Za-z]'
+            r'|^founded\s*[:.]|^founded\s+\d{4}'
+            r'|^locations?\s+primary|^website\s+http'
+            r'|\d+[-–]\d+\s*employees',
+            dl
+        ):
             return False
         # Domain for sale
         if any(s in dl for s in _DOMAIN_SALE_SIGNALS):
@@ -4119,8 +4128,12 @@ async def bulk_autofill_companies(
                         headers={"Authorization": f"Bearer {_pc_key}"},
                         timeout=15,
                     )
+                    print(f"[proxycurl_bulk] {company_name} status={_pc_res.status_code}", flush=True)
                     if _pc_res.status_code == 200:
                         _pc = _pc_res.json()
+                        print(f"[proxycurl_bulk] {company_name} industry={_pc.get('industry')} "
+                              f"founded={_pc.get('founded_year')} "
+                              f"specialties={str(_pc.get('specialities',''))[:80]}", flush=True)
                         if not update_data.get("industry") and not company.get("industry") and _pc.get("industry"):
                             update_data["industry"] = _pc["industry"]
                         if not update_data.get("founded") and not company.get("founded") and _pc.get("founded_year"):
@@ -4140,8 +4153,10 @@ async def bulk_autofill_companies(
                             _hq_str = ", ".join(p for p in _hq_parts if p)
                             if _hq_str:
                                 update_data["headquarters"] = _hq_str
-                except Exception:
-                    pass
+                    else:
+                        print(f"[proxycurl_bulk] {company_name} FAILED: {_pc_res.text[:100]}", flush=True)
+                except Exception as _pc_ex:
+                    print(f"[proxycurl_bulk] {company_name} EXCEPTION: {_pc_ex}", flush=True)
 
             # ── Step 6b: Search-based enrichment for still-missing key fields ────
             # When LinkedIn scrape + website scrape failed, search business directories.
@@ -4286,20 +4301,31 @@ async def bulk_autofill_companies(
                         'Use null for fields you cannot determine with confidence.'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
+                    import random as _rand_bulk
+                    _rand_bulk.seed()
+                    _time_bulk.sleep(_rand_bulk.uniform(1, 6))  # jitter to stagger concurrent invocations
                     with _GEMINI_SEM:
                         _gr = None
-                        for _g_attempt in range(3):
-                            _gr = requests.post(
-                                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_bulk}",
-                                headers={"Content-Type": "application/json"},
-                                json={"contents": [{"parts": [{"text": _bp}]}],
-                                      "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
-                                timeout=20,
-                            )
-                            if _gr.status_code != 429:
+                        # Try gemini-1.5-flash first (separate quota pool), fall back to 2.0-flash
+                        for _g_model in ("gemini-1.5-flash", "gemini-2.0-flash"):
+                            for _g_attempt in range(2):
+                                _gr = requests.post(
+                                    f"https://generativelanguage.googleapis.com/v1beta/models/{_g_model}:generateContent?key={_gemini_key_bulk}",
+                                    headers={"Content-Type": "application/json"},
+                                    json={"contents": [{"parts": [{"text": _bp}]}],
+                                          "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
+                                    timeout=20,
+                                )
+                                if _gr.status_code == 200:
+                                    break
+                                if _gr.status_code == 429:
+                                    print(f"[gemini_bulk] 429 body={_gr.text[:150]}", flush=True)
+                                    _time_bulk.sleep(5 * (_g_attempt + 1))
+                                else:
+                                    break
+                            if _gr and _gr.status_code == 200:
                                 break
-                            _time_bulk.sleep(4 * (_g_attempt + 1))
-                    print(f"[gemini_bulk] status={_gr.status_code} for {company_name}", flush=True)
+                    print(f"[gemini_bulk] status={_gr.status_code} model={_g_model} for {company_name}", flush=True)
                     if _gr.status_code == 200:
                         _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                         print(f"[gemini_bulk] response={_rb[:200]}", flush=True)
@@ -5144,7 +5170,7 @@ def _call_ai(prompt: str, max_tokens: int = 300, user_id: str = None, feature: s
     if not content and gemini_key:
         t0 = _time.monotonic()
         r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": prompt}]}],
                   "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens}},
@@ -5158,7 +5184,7 @@ def _call_ai(prompt: str, max_tokens: int = 300, user_id: str = None, feature: s
             if user_id:
                 posthog.capture(user_id, "$ai_generation", {
                     "$ai_provider": "gemini",
-                    "$ai_model": "gemini-2.0-flash",
+                    "$ai_model": "gemini-1.5-flash",
                     "$ai_input_tokens": usage.get("promptTokenCount"),
                     "$ai_output_tokens": usage.get("candidatesTokenCount"),
                     "$ai_latency": round(latency, 3),
