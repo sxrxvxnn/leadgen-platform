@@ -3627,8 +3627,11 @@ async def bulk_autofill_companies(
         # Bare URLs or filenames
         if _re_mod.match(r'^https?://', dl) or dl.endswith(('.io', '.com', '.net', '.org')):
             return False
-        # Page title patterns (e.g. "Home | Company", "Home Page")
-        if _re_mod.search(r'\|\s*[A-Z]|home page$|home \||\bindex\b', dl, _re_mod.I):
+        # Page title patterns (e.g. "Home | Company", "About | Acme Inc")
+        # Only reject short-word-before-pipe patterns, not real descriptions that use | as separator
+        if _re_mod.search(r'^(?:home|about|contact|products?|services?|index)\s*\|'
+                          r'|\|\s*(?:home|inc\.?|ltd\.?|llc\.?|pvt\.?|corp\.?)(?:\s|$)'
+                          r'|home page$|\bindex\b', dl, _re_mod.I):
             return False
         # Domain for sale
         if any(s in dl for s in _DOMAIN_SALE_SIGNALS):
@@ -4161,7 +4164,15 @@ async def bulk_autofill_companies(
 
             # ── Step 7: Gemini gap-fill ───────────────────────────────────────────
             _gemini_key_bulk = os.environ.get("GEMINI_API_KEY", "")
+            # Build context: description → tagline → specialties as fallbacks
+            # so Gemini runs even when only a tagline or specialties are known
             _desc_bulk = update_data.get("description") or company.get("description") or ""
+            if len(_desc_bulk) < 40:
+                _tgl = update_data.get("tagline") or company.get("tagline") or ""
+                _spc = update_data.get("specialties") or company.get("specialties") or ""
+                _extra = " | ".join(filter(None, [_tgl, _spc]))
+                if _extra:
+                    _desc_bulk = (_desc_bulk + " " + _extra).strip() if _desc_bulk else _extra
             # needs_type=True means we always want to re-classify; only skip AI
             # if the weighted classifier already wrote a type into update_data
             _missing_type_bulk = needs_type and not update_data.get("company_type")
