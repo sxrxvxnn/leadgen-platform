@@ -447,7 +447,7 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
     if not result.get('followers'):
         m = re.search(r'([\d,]+)\s*followers', md, re.I)
         if m:
-            result['followers'] = m.group(0).strip()
+            result['followers'] = m.group(1).strip().replace(',', '')
 
     if not result.get('industry'):
         # Same-line: "Industry: Software Development"
@@ -577,7 +577,7 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
             desc_content = og_desc.get('content', '')
             m = re.search(r'([\d,]+)\s*followers', desc_content, re.I)
             if m:
-                result['followers'] = m.group(0).strip()
+                result['followers'] = m.group(1).strip().replace(',', '')
             tl_m = re.search(r'followers?\s+on\s+LinkedIn\.\s+(.{5,200})', desc_content, re.I)
             if tl_m:
                 tl_text = _html.unescape(tl_m.group(1).strip())
@@ -717,9 +717,9 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
                 if isinstance(fc, dict):
                     cnt = fc.get('followerCount') or fc.get('count')
                     if cnt is not None:
-                        result['followers'] = f"{cnt} followers"
+                        result['followers'] = str(cnt)
                 elif isinstance(fc, int):
-                    result['followers'] = f"{fc} followers"
+                    result['followers'] = str(fc)
             # Recurse into nested dicts/lists
             for v in obj.values():
                 if isinstance(v, (dict, list)):
@@ -759,7 +759,7 @@ def scrape_linkedin_data(linkedin_url: str, fast: bool = False, li_cookie: str =
         if not result['followers']:
             m = re.search(r'([\d,]+)\s*followers', html, re.I)
             if m:
-                result['followers'] = m.group(0).strip()
+                result['followers'] = m.group(1).strip().replace(',', '')
 
         if not result['location']:
             val = _extract_after_label('Headquarters', html)

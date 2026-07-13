@@ -2882,7 +2882,7 @@ async def autofill_company_from_linkedin(
                     body = sr.get("body", "")
                     if not li.get("followers"):
                         m = _re2.search(r'([\d,]+)\s*followers', body, _re2.I)
-                        if m: li["followers"] = m.group(0).strip()
+                        if m: li["followers"] = m.group(1).strip().replace(',', '')
                     if not li.get("description") and len(body) > 40:
                         li["description"] = body[:280]
                     if li.get("followers") and li.get("description"): break
@@ -2911,7 +2911,7 @@ async def autofill_company_from_linkedin(
                         sp = pc["specialities"]
                         li["specialties"] = ", ".join(str(s) for s in sp) if isinstance(sp, list) else str(sp)
                     if not li.get("followers") and pc.get("follower_count"):
-                        li["followers"] = f"{pc['follower_count']:,} followers"
+                        li["followers"] = str(pc["follower_count"])
                     if not li.get("employee_count") and pc.get("company_size_on_linkedin"):
                         li["employee_count"] = str(pc["company_size_on_linkedin"])
                     if not li.get("description") and pc.get("description"):
@@ -3074,9 +3074,13 @@ async def autofill_company_from_linkedin(
         if li.get("location"):
             update_data["headquarters"] = li["location"]
         if li.get("followers"):
-            update_data["followers"] = li["followers"]
+            _fv0 = re.sub(r'\s*followers?\b.*', '', str(li["followers"]), flags=re.I).strip().replace(',', '')
+            if _fv0:
+                update_data["followers"] = _fv0
         if li.get("employee_count"):
-            update_data["size"] = str(li["employee_count"])
+            _sv0 = re.sub(r'\s*employees?\b.*', '', str(li["employee_count"]), flags=re.I).strip().replace(',', '')
+            if _sv0:
+                update_data["size"] = _sv0
         if li.get("description"):
             update_data["description"] = li["description"]
         if li.get("phone"):
@@ -3556,6 +3560,8 @@ async def bulk_autofill_companies(
         _SKIP_DOMAINS as _SKIP_DOM,
         _domain_is_relevant as _dom_relevant,
     )
+    from .company_enrichment import detect_tech_stack as _detect_tech_stack
+    from .enrichment import _fc_search as _bulk_fc_search
 
     def _ddgs_run(fn, *args, timeout=15):
         """Run fn under _DDGS_SEM (max 3 concurrent DDGS calls) with a per-call timeout.
@@ -3873,6 +3879,37 @@ async def bulk_autofill_companies(
                     except Exception:
                         pass
 
+            # ── Step 3b: Tech stack detection ────────────────────────────────────
+            if ws_url and not company.get("tech_stack"):
+                try:
+                    _ts = _detect_tech_stack(ws_url)
+                    if _ts:
+                        update_data["tech_stack"] = _ts
+                except Exception:
+                    pass
+
+            # ── Step 3c: Compliance from website text (even partial) ──────────
+            # Runs here so it fires even when the full website scrape fails but
+            # we still have some text from meta/hero/description.
+            if not company.get("compliance") and not update_data.get("compliance"):
+                _comp_text = ""
+                if website_data:
+                    _comp_text = " ".join(filter(None, [
+                        website_data.get("full_text", "")[:15000],
+                        website_data.get("scan_text", "")[:5000],
+                    ]))
+                if not _comp_text:
+                    _comp_text = (update_data.get("description") or company.get("description") or "")
+                if _comp_text:
+                    try:
+                        from .compliance_detector import detect_compliance, format_for_db
+                        _det = detect_compliance({"full_text": _comp_text, "scan_text": _comp_text})
+                        _credible = [f for f in _det["frameworks"] if f["tier"] in ("Certified", "Attested")]
+                        if _credible:
+                            update_data["compliance"] = format_for_db(_det)
+                    except Exception:
+                        pass
+
             # Classifier runs regardless of whether website_data is available —
             # classify_website_saas handles website_data=None gracefully using
             # description alone. This ensures old wrong types get overwritten.
@@ -3925,9 +3962,13 @@ async def bulk_autofill_companies(
                             try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
                             except Exception: pass
             if _snip.get("followers") and needs_followers:
-                update_data["followers"] = _snip["followers"]
+                _fv = _re_mod.sub(r'\s*followers?\b.*', '', str(_snip["followers"]), flags=_re_mod.I).strip().replace(',', '')
+                if _fv:
+                    update_data["followers"] = _fv
             if _snip.get("employee_count") and needs_size:
-                update_data["size"] = str(_snip["employee_count"])
+                _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
+                if _sv:
+                    update_data["size"] = _sv
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
                 update_data["headquarters"] = _snip["headquarters"]
 
@@ -3968,9 +4009,13 @@ async def bulk_autofill_companies(
                             'manufacturing':'Manufacturing','e-commerce':'E-commerce',
                         }
                         if li_res.get("followers") and needs_followers and not update_data.get("followers"):
-                            update_data["followers"] = li_res["followers"]
+                            _fv2 = _re_mod.sub(r'\s*followers?\b.*', '', str(li_res["followers"]), flags=_re_mod.I).strip().replace(',', '')
+                            if _fv2:
+                                update_data["followers"] = _fv2
                         if li_res.get("employee_count") and needs_size and not update_data.get("size"):
-                            update_data["size"] = str(li_res["employee_count"])
+                            _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
+                            if _sv2:
+                                update_data["size"] = _sv2
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = li_res["location"]
                         if li_res.get("description") and needs_desc and not update_data.get("description") \
@@ -4018,6 +4063,55 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
+            # ── Step 6b: Search-based enrichment for still-missing key fields ────
+            # When LinkedIn scrape failed, search company directories for structured data.
+            _still_need_hq      = needs_hq and not update_data.get("headquarters")
+            _still_need_founded = not update_data.get("founded") and not company.get("founded")
+            _still_need_size    = needs_size and not update_data.get("size")
+            if _still_need_hq or _still_need_founded or _still_need_size:
+                try:
+                    _sq = f'"{company_name}" company founded headquarters employees'
+                    _sr = _bulk_fc_search(_sq, limit=5)
+                    for _s in _sr:
+                        _body = " ".join(filter(None, [
+                            _s.get("description", ""), _s.get("title", ""), _s.get("markdown", "")[:500]
+                        ]))
+                        if _still_need_founded and not update_data.get("founded"):
+                            _fm = _re_mod.search(
+                                r'(?:founded|established|since|incorporated)\s*(?:in\s*)?(\b(?:19|20)\d{2}\b)',
+                                _body, _re_mod.I
+                            )
+                            if not _fm:
+                                _fm = _re_mod.search(r'\b((?:19|20)\d{2})\b(?=.*(?:founded|established|since))', _body, _re_mod.I)
+                            if _fm:
+                                _yr = _fm.group(1)
+                                if 1950 <= int(_yr) <= 2025:
+                                    update_data["founded"] = _yr
+                                    _still_need_founded = False
+                        if _still_need_size and not update_data.get("size"):
+                            _em = _re_mod.search(
+                                r'(\d[\d,]*(?:\s*[-–]\s*\d[\d,]+)?(?:\+)?)\s*employees?',
+                                _body, _re_mod.I
+                            )
+                            if _em:
+                                _ev = _em.group(1).replace(",", "").strip()
+                                update_data["size"] = _ev
+                                _still_need_size = False
+                        if _still_need_hq and not update_data.get("headquarters"):
+                            _hm = _re_mod.search(
+                                r'(?:headquartered?|based|located|offices?)\s+in\s+([A-Z][a-zA-Z\s]{2,30}(?:,\s*[A-Z][a-zA-Z\s]{2,25})?)',
+                                _body, _re_mod.I
+                            )
+                            if _hm:
+                                _hv = _hm.group(1).strip()
+                                if len(_hv) < 60:
+                                    update_data["headquarters"] = _hv
+                                    _still_need_hq = False
+                        if not _still_need_hq and not _still_need_founded and not _still_need_size:
+                            break
+                except Exception:
+                    pass
+
             # ── Step 7: Groq gap-fill ─────────────────────────────────────────────
             _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
             _desc_bulk = update_data.get("description") or company.get("description") or ""
@@ -4027,6 +4121,7 @@ async def bulk_autofill_companies(
             _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
                             (not update_data.get("founded") and not company.get("founded")) or \
                             (not update_data.get("specialties") and not company.get("specialties")) or \
+                            (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
             # Require a meaningful description (>80 chars) before asking Groq
             # Short/empty descriptions cause hallucinations like "Home Improvement" for "Gamma"
@@ -4038,12 +4133,13 @@ async def bulk_autofill_companies(
                         'Extract these fields. Be specific and concise.\n'
                         '- industry: industry name (e.g. "Software Development", "Financial Services")\n'
                         '- founded: 4-digit founding year only (omit if unsure)\n'
+                        '- headquarters: city and country only (e.g. "Bangalore, India") — omit if not mentioned\n'
                         '- specialties: 3-5 comma-separated specialty areas\n'
                         '- company_type: exactly one of "Product" (SaaS/software product company), '
                         '"Service" (consulting/outsourcing/agency), or "Hybrid" (both). '
                         'Look for signals: pricing pages, free trial, subscription → Product; '
                         'client projects, staff augmentation, IT services → Service.\n\n'
-                        'Respond ONLY as JSON: {"industry":"...","founded":"...","specialties":"...","company_type":"..."}\n'
+                        'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
                         'Use null for fields you are not confident about.'
                     )
                     _gr = requests.post(
@@ -4067,8 +4163,13 @@ async def bulk_autofill_companies(
                             if not update_data.get("founded") and not company.get("founded") and \
                                _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
                                 _yr_b = str(_xb["founded"]).strip()
-                                if _re_mod.match(r'^\d{4}$', _yr_b) and 1800 <= int(_yr_b) <= 2030 and _yr_b in _desc_bulk:
+                                if _re_mod.match(r'^\d{4}$', _yr_b) and 1800 <= int(_yr_b) <= 2030:
                                     update_data["founded"] = _yr_b
+                            if needs_hq and not update_data.get("headquarters") and \
+                               _xb.get("headquarters") and str(_xb["headquarters"]).strip() not in ("", "None", "null"):
+                                _hq_v = str(_xb["headquarters"]).strip()
+                                if len(_hq_v) < 60:
+                                    update_data["headquarters"] = _hq_v
                             if not update_data.get("specialties") and not company.get("specialties") and \
                                _xb.get("specialties") and _xb["specialties"] not in (None, "null"):
                                 update_data["specialties"] = str(_xb["specialties"])
