@@ -3074,11 +3074,13 @@ async def autofill_company_from_linkedin(
         if li.get("location"):
             update_data["headquarters"] = li["location"]
         if li.get("followers"):
-            _fv0 = re.sub(r'\s*followers?\b.*', '', str(li["followers"]), flags=re.I).strip().replace(',', '')
+            import re as _re_li
+            _fv0 = _re_li.sub(r'\s*followers?\b.*', '', str(li["followers"]), flags=_re_li.I).strip().replace(',', '')
             if _fv0:
                 update_data["followers"] = _fv0
         if li.get("employee_count"):
-            _sv0 = re.sub(r'\s*employees?\b.*', '', str(li["employee_count"]), flags=re.I).strip().replace(',', '')
+            import re as _re_li
+            _sv0 = _re_li.sub(r'\s*employees?\b.*', '', str(li["employee_count"]), flags=_re_li.I).strip().replace(',', '')
             if _sv0:
                 update_data["size"] = _sv0
         if li.get("description"):
@@ -4076,7 +4078,15 @@ async def bulk_autofill_companies(
                              'yellow pages', 'justdial', 'indiamart', 'tradeindia')
             if _still_need_hq or _still_need_founded or _still_need_size or _still_need_desc or _still_need_ws6b:
                 try:
-                    _sq6b = f'"{company_name}" company'
+                    # Use clean name without legal suffixes for better search recall
+                    _cn6b = _re_mod.sub(
+                        r'\s*[\(\[]?(?:P(?:vt)?|Private|Public)\s*[\)\]]?\s*'
+                        r'(?:Ltd|Limited|Inc|Corp|Corporation|LLP|LLC|Pty|PLC)\.?\b',
+                        '', company_name, flags=_re_mod.I
+                    ).strip().strip(',').strip()
+                    if not _cn6b or len(_cn6b) < 4:
+                        _cn6b = company_name
+                    _sq6b = f'{_cn6b} company'
                     if _still_need_hq or _still_need_founded:
                         _sq6b += ' founded headquarters'
                     if _still_need_size:
@@ -4168,46 +4178,6 @@ async def bulk_autofill_companies(
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
-            # Run Groq if we have any description (lowered threshold from 80→20).
-            # If still no description, run a name-only pass for industry+type (avoid founded/HQ
-            # hallucinations by not asking for them without a description).
-            if _groq_key_bulk and not _desc_bulk and _missing_bulk:
-                try:
-                    import json as _json_bulk
-                    _bp_name = (
-                        f'Company name: {company_name}\n\n'
-                        'Based solely on this company name, infer:\n'
-                        '- industry: (e.g. "Software Development", "IT Consulting") — only if clear from name\n'
-                        '- company_type: exactly one of "Product", "Service", or "Hybrid"\n'
-                        '- specialties: 2-3 areas suggested by the name only\n\n'
-                        'Respond ONLY as JSON: {"industry":"...","company_type":"...","specialties":"..."}\n'
-                        'Use null for any field you are not confident about.'
-                    )
-                    _gr_name = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
-                        json={"model": "llama-3.3-70b-versatile",
-                              "messages": [{"role": "user", "content": _bp_name}],
-                              "max_tokens": 100, "temperature": 0.1},
-                        timeout=8,
-                    )
-                    if _gr_name.status_code == 200:
-                        _rb_name = _gr_name.json()["choices"][0]["message"]["content"].strip()
-                        _mb_name = _re_mod.search(r'\{[^}]+\}', _rb_name, _re_mod.DOTALL)
-                        if _mb_name:
-                            _xb_name = _json_bulk.loads(_mb_name.group(0))
-                            _gn_ind = _xb_name.get("industry")
-                            if not update_data.get("industry") and not company.get("industry") and \
-                               _gn_ind and str(_gn_ind).strip().lower() not in _GENERIC_INDS:
-                                update_data["industry"] = str(_gn_ind)
-                            if _missing_type_bulk and _xb_name.get("company_type") and \
-                               _xb_name["company_type"] in ("Product", "Service", "Hybrid"):
-                                update_data["company_type"] = _xb_name["company_type"]
-                            if not update_data.get("specialties") and not company.get("specialties") and \
-                               _xb_name.get("specialties") and _xb_name["specialties"] not in (None, "null"):
-                                update_data["specialties"] = str(_xb_name["specialties"])
-                except Exception:
-                    pass
             if _groq_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
                 try:
                     import json as _json_bulk
