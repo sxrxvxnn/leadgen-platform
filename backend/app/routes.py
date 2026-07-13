@@ -2925,11 +2925,10 @@ async def autofill_company_from_linkedin(
 
         # Groq inference fallback — fills remaining blanks when ProxyCurl key is absent.
         # Uses the description we already scraped to infer industry, founded, specialties.
-        _groq_key_li = os.environ.get("GROQ_API_KEY", "")
+        _gemini_key_li = os.environ.get("GEMINI_API_KEY", "")
         # Only use description scraped from LinkedIn — never fall back to stored description
-        # (stored descriptions may be user notes / LinkedIn post snippets, not company info)
         _desc_li = li.get("description") or ""
-        if _groq_key_li and _desc_li and (not li.get("industry") or not li.get("founded") or not li.get("specialties")):
+        if _gemini_key_li and _desc_li and (not li.get("industry") or not li.get("founded") or not li.get("specialties")):
             try:
                 import json as _json_li
                 _li_prompt = (
@@ -2942,15 +2941,14 @@ async def autofill_company_from_linkedin(
                     'Use null for fields you are not confident about.'
                 )
                 _g = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {_groq_key_li}", "Content-Type": "application/json"},
-                    json={"model": "llama-3.1-8b-instant",
-                          "messages": [{"role": "user", "content": _li_prompt}],
-                          "max_tokens": 120, "temperature": 0.1},
-                    timeout=10,
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_li}",
+                    headers={"Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": _li_prompt}]}],
+                          "generationConfig": {"temperature": 0.1, "maxOutputTokens": 150}},
+                    timeout=12,
                 )
                 if _g.status_code == 200:
-                    _raw_li = _g.json()["choices"][0]["message"]["content"].strip()
+                    _raw_li = _g.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                     _m_li = _re.search(r'\{[^}]+\}', _raw_li, _re.DOTALL)
                     if _m_li:
                         _ex = _json_li.loads(_m_li.group(0))
@@ -2958,31 +2956,29 @@ async def autofill_company_from_linkedin(
                             li["industry"] = str(_ex["industry"])
                         if not li.get("founded") and _ex.get("founded") and str(_ex["founded"]) not in ("", "None", "null"):
                             _yr = str(_ex["founded"]).strip()
-                            # Only accept years that appear literally in the description — prevents hallucination
-                            if _re.match(r'^\d{4}$', _yr) and 1800 <= int(_yr) <= 2030 and _yr in _desc_li:
+                            if _re.match(r'^\d{4}$', _yr) and 1800 <= int(_yr) <= 2030:
                                 li["founded"] = _yr
                         if not li.get("specialties") and _ex.get("specialties") and _ex["specialties"] not in (None, "null"):
                             li["specialties"] = str(_ex["specialties"])
             except Exception:
                 pass
 
-        # Generate a clean one-liner tagline from the real LinkedIn description using Groq
-        if _groq_key_li and li.get("description") and not li.get("tagline"):
+        # Generate a clean one-liner tagline from the LinkedIn description using Gemini
+        if _gemini_key_li and li.get("description") and not li.get("tagline"):
             try:
                 _tg = requests.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {_groq_key_li}", "Content-Type": "application/json"},
-                    json={"model": "llama-3.1-8b-instant",
-                          "messages": [{"role": "user", "content": (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_li}",
+                    headers={"Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": (
                               f"Write ONE sentence (max 15 words) summarizing what this company does.\n"
                               f"Company: {company_name}\nDescription: {li['description'][:500]}\n"
                               "Respond with ONLY the sentence, no quotes."
-                          )}],
-                          "max_tokens": 60, "temperature": 0.2},
-                    timeout=8,
+                          )}]}],
+                          "generationConfig": {"temperature": 0.2, "maxOutputTokens": 80}},
+                    timeout=10,
                 )
                 if _tg.status_code == 200:
-                    _tagline = _tg.json()["choices"][0]["message"]["content"].strip().strip('"').strip("'").rstrip(".")
+                    _tagline = _tg.json()["candidates"][0]["content"]["parts"][0]["text"].strip().strip('"').strip("'").rstrip(".")
                     if len(_tagline) > 10:
                         li["tagline"] = _tagline
             except Exception:
@@ -3194,30 +3190,26 @@ async def fetch_company_funding(company_id: str, authorization: str = Header(...
             return {"success": False, "message": "No funding data found"}
 
         combined = " | ".join(snippets[:8])[:2500]
-        groq_key = os.environ.get("GROQ_API_KEY", "")
-        if not groq_key:
-            return {"success": False, "message": "Groq key not configured"}
+        _fund_gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        if not _fund_gemini_key:
+            return {"success": False, "message": "Gemini key not configured"}
 
         import requests as _freq
         gres = _freq.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [{"role": "user", "content": (
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_fund_gemini_key}",
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": (
                     f"Extract funding info for company '{name}' from these web snippets:\n\n{combined}\n\n"
                     'Return ONLY JSON: {"stage":"Seed/Series A/Series B/etc or null","amount":"e.g. $5M or null","investors":"main investor names or null"}\n'
                     "Use null for fields that are not clearly stated. Only include data that is specifically about this company."
-                )}],
-                "max_tokens": 150,
-                "temperature": 0.1,
-            },
+                )}]}],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 150}},
             timeout=12,
         )
         if gres.status_code != 200:
             return {"success": False, "message": "AI extraction failed"}
 
-        raw = gres.json()["choices"][0]["message"]["content"].strip()
+        raw = gres.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
         m = _fre.search(r'\{[^}]+\}', raw, _fre.DOTALL)
         if not m:
             return {"success": False, "message": "Could not parse funding response"}
@@ -4167,10 +4159,10 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
-            # ── Step 7: Groq gap-fill ─────────────────────────────────────────────
-            _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
+            # ── Step 7: Gemini gap-fill ───────────────────────────────────────────
+            _gemini_key_bulk = os.environ.get("GEMINI_API_KEY", "")
             _desc_bulk = update_data.get("description") or company.get("description") or ""
-            # needs_type=True means we always want to re-classify; only skip Groq
+            # needs_type=True means we always want to re-classify; only skip AI
             # if the weighted classifier already wrote a type into update_data
             _missing_type_bulk = needs_type and not update_data.get("company_type")
             _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
@@ -4178,7 +4170,7 @@ async def bulk_autofill_companies(
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
-            if _groq_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
+            if _gemini_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
                 try:
                     import json as _json_bulk
                     _bp = (
@@ -4196,15 +4188,14 @@ async def bulk_autofill_companies(
                         'Use null for fields you are not confident about.'
                     )
                     _gr = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
-                        json={"model": "llama-3.3-70b-versatile",
-                              "messages": [{"role": "user", "content": _bp}],
-                              "max_tokens": 150, "temperature": 0.1},
-                        timeout=10,
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_gemini_key_bulk}",
+                        headers={"Content-Type": "application/json"},
+                        json={"contents": [{"parts": [{"text": _bp}]}],
+                              "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
+                        timeout=12,
                     )
                     if _gr.status_code == 200:
-                        _rb = _gr.json()["choices"][0]["message"]["content"].strip()
+                        _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                         _mb = _re_mod.search(r'\{[^}]+\}', _rb, _re_mod.DOTALL)
                         if _mb:
                             _xb = _json_bulk.loads(_mb.group(0))
