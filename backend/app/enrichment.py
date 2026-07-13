@@ -400,50 +400,69 @@ FIRECRAWL_BASE = "https://api.firecrawl.dev/v1"
 # Status codes that mean credits are gone — rotate to next key
 _FC_EXHAUSTED_CODES = {402, 429}
 
-# Module-global key index — advances on exhaustion; sticky for EC2 long-running process
-_fc_key_lock = _fc_thread.Lock()
-_fc_key_idx  = 0
+import random as _fc_random
+
+# Round-robin key index with random start so different Vercel instances
+# spread load across keys instead of all hammering key #1.
+_fc_key_lock      = _fc_thread.Lock()
+_fc_key_idx       = _fc_random.randint(0, max(0, len(_FIRECRAWL_KEYS) - 1))
+_fc_exhausted_set: set = set()  # indices confirmed exhausted this process lifetime
 
 
-def _fc_active_key() -> str:
+def _fc_active_key() -> tuple:
+    """Return (key, idx) of the next non-exhausted key, or ('', -1) if all gone."""
+    global _fc_key_idx
     if not _FIRECRAWL_KEYS:
-        return ""
+        return "", -1
+    n = len(_FIRECRAWL_KEYS)
     with _fc_key_lock:
-        return _FIRECRAWL_KEYS[_fc_key_idx % len(_FIRECRAWL_KEYS)]
+        for _ in range(n):
+            idx = _fc_key_idx % n
+            if idx not in _fc_exhausted_set:
+                return _FIRECRAWL_KEYS[idx], idx
+            _fc_key_idx += 1  # skip this exhausted slot
+    return "", -1
+
+
+def _fc_advance() -> None:
+    """Round-robin: move to next key after a successful call."""
+    global _fc_key_idx
+    with _fc_key_lock:
+        _fc_key_idx += 1
 
 
 def _fc_rotate(exhausted_idx: int) -> None:
-    """Advance to next key if we're still on the exhausted one."""
-    if not _FIRECRAWL_KEYS:
-        return
+    """Mark a key exhausted and advance past it."""
     global _fc_key_idx
     with _fc_key_lock:
-        if _fc_key_idx % len(_FIRECRAWL_KEYS) == exhausted_idx:
-            _fc_key_idx += 1
-            nxt = (_fc_key_idx % len(_FIRECRAWL_KEYS)) + 1
-            print(f"[firecrawl] Key #{exhausted_idx + 1} exhausted → rotating to key #{nxt}", flush=True)
+        _fc_exhausted_set.add(exhausted_idx)
+        _fc_key_idx += 1
+        active = len(_FIRECRAWL_KEYS) - len(_fc_exhausted_set)
+        print(f"[firecrawl] Key #{exhausted_idx + 1} exhausted — {active} key(s) remaining", flush=True)
 
 
 def _fc_headers(key: str = "") -> dict:
-    return {"Authorization": f"Bearer {key or _fc_active_key()}", "Content-Type": "application/json"}
+    k = key or (_fc_active_key()[0] if not key else key)
+    return {"Authorization": f"Bearer {k}", "Content-Type": "application/json"}
 
 
 def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
-    """Scrape a URL using the active Firecrawl key, rotating on exhaustion."""
+    """Scrape a URL with round-robin key distribution and exhaustion fallback."""
     if not _FIRECRAWL_KEYS:
         return ""
     for _ in range(len(_FIRECRAWL_KEYS)):
-        with _fc_key_lock:
-            idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
-        key = _FIRECRAWL_KEYS[idx]
+        key, idx = _fc_active_key()
+        if not key:
+            return ""
         try:
             res = requests.post(
                 f"{FIRECRAWL_BASE}/scrape",
                 json={"url": url, "formats": ["markdown"], "onlyMainContent": True, "waitFor": wait_ms},
-                headers=_fc_headers(key),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 timeout=45,
             )
             if res.status_code == 200:
+                _fc_advance()  # round-robin to next key on success
                 return res.json().get("data", {}).get("markdown", "")
             if res.status_code in _FC_EXHAUSTED_CODES:
                 _fc_rotate(idx)
@@ -455,21 +474,22 @@ def _fc_scrape(url: str, wait_ms: int = 3000) -> str:
 
 
 def _fc_search(query: str, limit: int = 5) -> list:
-    """Web search using the active Firecrawl key, rotating on exhaustion."""
+    """Web search with round-robin key distribution and exhaustion fallback."""
     if not _FIRECRAWL_KEYS:
         return []
     for _ in range(len(_FIRECRAWL_KEYS)):
-        with _fc_key_lock:
-            idx = _fc_key_idx % len(_FIRECRAWL_KEYS)
-        key = _FIRECRAWL_KEYS[idx]
+        key, idx = _fc_active_key()
+        if not key:
+            return []
         try:
             res = requests.post(
                 f"{FIRECRAWL_BASE}/search",
                 json={"query": query, "limit": limit},
-                headers=_fc_headers(key),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 timeout=25,
             )
             if res.status_code == 200:
+                _fc_advance()  # round-robin to next key on success
                 return res.json().get("data", [])
             if res.status_code in _FC_EXHAUSTED_CODES:
                 _fc_rotate(idx)
