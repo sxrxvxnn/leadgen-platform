@@ -1009,26 +1009,25 @@ async def prefill_company(
         if _li_website:
             _scraped_root = _root_domain_pf(_li_website)
             if _stored_root and _scraped_root and _stored_root != _scraped_root:
-                print(f"Prefill domain mismatch: company website={_stored_root}, LinkedIn website={_scraped_root} — clearing LinkedIn data")
-                linkedin_url = None
-                linkedin_people_url = None
-                linkedin_data = {}
+                # Allow abbreviations: "analystortech" ↔ "analystortechnologies"
+                _sc1 = _stored_root.split(".")[0].replace("-", "").replace("_", "").lower()
+                _sc2 = _scraped_root.split(".")[0].replace("-", "").replace("_", "").lower()
+                if _sc1 not in _sc2 and _sc2 not in _sc1:
+                    print(f"Prefill domain mismatch: company website={_stored_root}, LinkedIn website={_scraped_root} — clearing LinkedIn data")
+                    linkedin_url = None
+                    linkedin_people_url = None
+                    linkedin_data = {}
         elif linkedin_data:
-            # LinkedIn scraped but no website listed — check slug vs domain core strictly.
-            # When the company lists no website, we can't do a definitive domain check,
-            # so require the slug to start with or equal the domain core (not just contain it).
-            # "waycom" starts with "way" → allow. "waywayapp" starts with "way" → allow.
-            # "way-com" scrubbed = "waycom" starts with "way" → allow.
-            # "somethingway" starts with "something" not "way" → reject.
+            # LinkedIn scraped but no website listed — check slug vs domain core.
+            # Normalize both by stripping hyphens so "aot-technologies" matches "aottechnologies".
             _slug_m = _re.search(r'linkedin\.com/company/([a-zA-Z0-9-]+)', linkedin_url or '')
             if _slug_m and _stored_root:
-                _dom_core = _stored_root.split(".")[0]
+                _dom_core = _stored_root.split(".")[0].replace("-", "").replace("_", "").lower()
                 _raw_slug = _slug_m.group(1).lower()
                 _slug_parts = _raw_slug.split("-")
-                _slug = _raw_slug.replace("-", "")
+                _slug = _raw_slug.replace("-", "").replace("_", "")
                 # Reject letter-by-letter slugs like "w-a-y"
                 _is_letter_slug = len(_slug_parts) > 1 and all(len(p) == 1 for p in _slug_parts)
-                # Require slug to START with dom_core (or be exactly dom_core)
                 _slug_starts = _slug.startswith(_dom_core) if len(_dom_core) >= 3 else True
                 _mismatch = _is_letter_slug or (len(_dom_core) >= 3 and not _slug_starts)
                 if _mismatch:
@@ -2844,27 +2843,32 @@ async def autofill_company_from_linkedin(
                 except Exception:
                     return ""
             _stored_root = _root_domain(stored_website)
-            # Check 1: website domain mismatch (only when LinkedIn has a website listed)
+            # Check 1: website domain mismatch — use core substring match to allow
+            # abbreviations (e.g. "analystortech.com" ↔ "analystortechnologies.com").
             if li.get("website"):
                 _scraped_root = _root_domain(li.get("website", ""))
                 if _stored_root and _scraped_root and _stored_root != _scraped_root:
-                    # Clear the wrong stored LinkedIn URL so future searches start fresh
-                    if _li_url_source == "stored":
-                        supabase.table("companies").update({"linkedin_url": None}).eq("id", company_id).execute()
-                    return {
-                        "success": False, "filled": [], "update": {}, "linkedin_url": None,
-                        "message": (
-                            f"The LinkedIn page found has website \"{li.get('website')}\" "
-                            f"but this company's domain is \"{stored_website}\" — wrong match. "
-                            "The saved LinkedIn URL has been cleared. "
-                            "Please paste the correct LinkedIn URL via Edit on the card."
-                        ),
-                    }
-            # Check 2: LinkedIn slug vs. stored domain core (fallback when LinkedIn has no website)
+                    _stored_core = _stored_root.split(".")[0].replace("-", "").replace("_", "").lower()
+                    _scraped_core = _scraped_root.split(".")[0].replace("-", "").replace("_", "").lower()
+                    _is_abbrev = (_stored_core in _scraped_core or _scraped_core in _stored_core)
+                    if not _is_abbrev:
+                        if _li_url_source == "stored":
+                            supabase.table("companies").update({"linkedin_url": None}).eq("id", company_id).execute()
+                        return {
+                            "success": False, "filled": [], "update": {}, "linkedin_url": None,
+                            "message": (
+                                f"The LinkedIn page found has website \"{li.get('website')}\" "
+                                f"but this company's domain is \"{stored_website}\" — wrong match. "
+                                "The saved LinkedIn URL has been cleared. "
+                                "Please paste the correct LinkedIn URL via Edit on the card."
+                            ),
+                        }
+            # Check 2: LinkedIn slug vs. stored domain core — normalize both by removing
+            # hyphens/underscores so "aot-technologies" matches domain core "aottechnologies".
             _slug_match = _re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin_url or '')
             if _slug_match and _stored_root:
-                _dom_core = _stored_root.split(".")[0]  # e.g. "way" from "way.com"
-                _slug = _slug_match.group(1).lower().replace("-", "")
+                _dom_core = _stored_root.split(".")[0].replace("-", "").replace("_", "").lower()
+                _slug = _slug_match.group(1).lower().replace("-", "").replace("_", "")
                 if len(_dom_core) >= 3 and len(_slug) >= 3:
                     if _dom_core not in _slug and _slug not in _dom_core:
                         if _li_url_source == "stored":
