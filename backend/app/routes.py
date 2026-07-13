@@ -4064,50 +4064,95 @@ async def bulk_autofill_companies(
                     pass
 
             # ── Step 6b: Search-based enrichment for still-missing key fields ────
-            # When LinkedIn scrape failed, search company directories for structured data.
+            # When LinkedIn scrape + website scrape failed, search business directories.
+            # This is the last data-gathering step before Groq — filling description here
+            # is critical because Groq only runs when a description is available.
             _still_need_hq      = needs_hq and not update_data.get("headquarters")
             _still_need_founded = not update_data.get("founded") and not company.get("founded")
             _still_need_size    = needs_size and not update_data.get("size")
-            if _still_need_hq or _still_need_founded or _still_need_size:
+            _still_need_desc    = needs_desc and not update_data.get("description") and not (company.get("description") or "").strip()
+            _still_need_ws6b    = needs_site and not update_data.get("website") and not ws_url
+            _BAD_SNIPPETS = ('search for', 'find companies', 'directory of', 'list of companies',
+                             'yellow pages', 'justdial', 'indiamart', 'tradeindia')
+            if _still_need_hq or _still_need_founded or _still_need_size or _still_need_desc or _still_need_ws6b:
                 try:
-                    _sq = f'"{company_name}" company founded headquarters employees'
-                    _sr = _bulk_fc_search(_sq, limit=5)
-                    for _s in _sr:
-                        _body = " ".join(filter(None, [
-                            _s.get("description", ""), _s.get("title", ""), _s.get("markdown", "")[:500]
-                        ]))
+                    _sq6b = f'"{company_name}" company'
+                    if _still_need_hq or _still_need_founded:
+                        _sq6b += ' founded headquarters'
+                    if _still_need_size:
+                        _sq6b += ' employees'
+                    _sr6b = _bulk_fc_search(_sq6b, limit=5)
+                    for _s6b in _sr6b:
+                        _s6b_url   = _s6b.get("url", "")
+                        _s6b_desc  = _s6b.get("description", "")
+                        _s6b_md    = (_s6b.get("markdown") or "")[:600]
+                        _body6b    = " ".join(filter(None, [_s6b_desc, _s6b.get("title",""), _s6b_md]))
+                        # Website discovery from search results
+                        if _still_need_ws6b and _s6b_url:
+                            try:
+                                from urllib.parse import urlparse as _up6b
+                                _dom6b = _up6b(_s6b_url).netloc.lower().replace("www.", "")
+                                _name_words6b = set(_re_mod.sub(r'[^a-z]', ' ',
+                                    clean_name_for_search(company_name).lower()).split()) - {
+                                    'pvt','ltd','private','limited','technologies','tech',
+                                    'solutions','india','innovations','consultancy','services'}
+                                _skip_domains = {'linkedin','google','facebook','twitter','glassdoor',
+                                                 'ambitionbox','justdial','indiamart','yellowpages',
+                                                 'zaubacorp','mca','tracxn','crunchbase','clutch'}
+                                if (any(w in _dom6b for w in _name_words6b if len(w) > 3) and
+                                        not any(s in _dom6b for s in _skip_domains)):
+                                    _ws6b_url = _s6b_url.split('?')[0].rstrip('/')
+                                    update_data["website"] = _ws6b_url
+                                    ws_url = _ws6b_url
+                                    _still_need_ws6b = False
+                            except Exception:
+                                pass
+                        # Description extraction
+                        if _still_need_desc and len(_s6b_desc) > 40:
+                            if not any(bad in _s6b_desc.lower() for bad in _BAD_SNIPPETS):
+                                update_data["description"] = _s6b_desc[:500]
+                                _still_need_desc = False
+                        # Founded year
                         if _still_need_founded and not update_data.get("founded"):
-                            _fm = _re_mod.search(
+                            _fm6b = _re_mod.search(
                                 r'(?:founded|established|since|incorporated)\s*(?:in\s*)?(\b(?:19|20)\d{2}\b)',
-                                _body, _re_mod.I
+                                _body6b, _re_mod.I
                             )
-                            if not _fm:
-                                _fm = _re_mod.search(r'\b((?:19|20)\d{2})\b(?=.*(?:founded|established|since))', _body, _re_mod.I)
-                            if _fm:
-                                _yr = _fm.group(1)
-                                if 1950 <= int(_yr) <= 2025:
-                                    update_data["founded"] = _yr
+                            if not _fm6b:
+                                _fm6b = _re_mod.search(r'\b((?:19|20)\d{2})\b(?=.*(?:founded|established|since))', _body6b, _re_mod.I)
+                            if _fm6b:
+                                _yr6b = _fm6b.group(1)
+                                if 1950 <= int(_yr6b) <= 2025:
+                                    update_data["founded"] = _yr6b
                                     _still_need_founded = False
+                        # Employees / size
                         if _still_need_size and not update_data.get("size"):
-                            _em = _re_mod.search(
+                            _em6b = _re_mod.search(
                                 r'(\d[\d,]*(?:\s*[-–]\s*\d[\d,]+)?(?:\+)?)\s*employees?',
-                                _body, _re_mod.I
+                                _body6b, _re_mod.I
                             )
-                            if _em:
-                                _ev = _em.group(1).replace(",", "").strip()
-                                update_data["size"] = _ev
+                            if _em6b:
+                                update_data["size"] = _em6b.group(1).replace(",", "").strip()
                                 _still_need_size = False
+                        # HQ — broad pattern + LinkedIn knowledge-panel pattern (· City, Country ·)
                         if _still_need_hq and not update_data.get("headquarters"):
-                            _hm = _re_mod.search(
+                            _hm6b = _re_mod.search(
                                 r'(?:headquartered?|based|located|offices?)\s+in\s+([A-Z][a-zA-Z\s]{2,30}(?:,\s*[A-Z][a-zA-Z\s]{2,25})?)',
-                                _body, _re_mod.I
+                                _body6b, _re_mod.I
                             )
-                            if _hm:
-                                _hv = _hm.group(1).strip()
-                                if len(_hv) < 60:
-                                    update_data["headquarters"] = _hv
+                            if not _hm6b:
+                                # LinkedIn snippet: "· Bengaluru, Karnataka, India ·"
+                                _hm6b = _re_mod.search(
+                                    r'[·•]\s*([A-Z][a-zA-Z\s]+,\s*[A-Z][a-zA-Z\s]+(?:,\s*India)?)\s*[·•]',
+                                    _body6b
+                                )
+                            if _hm6b:
+                                _hv6b = _hm6b.group(1).strip()
+                                if len(_hv6b) < 70:
+                                    update_data["headquarters"] = _hv6b
                                     _still_need_hq = False
-                        if not _still_need_hq and not _still_need_founded and not _still_need_size:
+                        if not any([_still_need_hq, _still_need_founded, _still_need_size,
+                                    _still_need_desc, _still_need_ws6b]):
                             break
                 except Exception:
                     pass
@@ -4123,9 +4168,47 @@ async def bulk_autofill_companies(
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
-            # Require a meaningful description (>80 chars) before asking Groq
-            # Short/empty descriptions cause hallucinations like "Home Improvement" for "Gamma"
-            if _groq_key_bulk and len(_desc_bulk) > 80 and _missing_bulk:
+            # Run Groq if we have any description (lowered threshold from 80→20).
+            # If still no description, run a name-only pass for industry+type (avoid founded/HQ
+            # hallucinations by not asking for them without a description).
+            if _groq_key_bulk and not _desc_bulk and _missing_bulk:
+                try:
+                    import json as _json_bulk
+                    _bp_name = (
+                        f'Company name: {company_name}\n\n'
+                        'Based solely on this company name, infer:\n'
+                        '- industry: (e.g. "Software Development", "IT Consulting") — only if clear from name\n'
+                        '- company_type: exactly one of "Product", "Service", or "Hybrid"\n'
+                        '- specialties: 2-3 areas suggested by the name only\n\n'
+                        'Respond ONLY as JSON: {"industry":"...","company_type":"...","specialties":"..."}\n'
+                        'Use null for any field you are not confident about.'
+                    )
+                    _gr_name = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
+                        json={"model": "llama-3.3-70b-versatile",
+                              "messages": [{"role": "user", "content": _bp_name}],
+                              "max_tokens": 100, "temperature": 0.1},
+                        timeout=8,
+                    )
+                    if _gr_name.status_code == 200:
+                        _rb_name = _gr_name.json()["choices"][0]["message"]["content"].strip()
+                        _mb_name = _re_mod.search(r'\{[^}]+\}', _rb_name, _re_mod.DOTALL)
+                        if _mb_name:
+                            _xb_name = _json_bulk.loads(_mb_name.group(0))
+                            _gn_ind = _xb_name.get("industry")
+                            if not update_data.get("industry") and not company.get("industry") and \
+                               _gn_ind and str(_gn_ind).strip().lower() not in _GENERIC_INDS:
+                                update_data["industry"] = str(_gn_ind)
+                            if _missing_type_bulk and _xb_name.get("company_type") and \
+                               _xb_name["company_type"] in ("Product", "Service", "Hybrid"):
+                                update_data["company_type"] = _xb_name["company_type"]
+                            if not update_data.get("specialties") and not company.get("specialties") and \
+                               _xb_name.get("specialties") and _xb_name["specialties"] not in (None, "null"):
+                                update_data["specialties"] = str(_xb_name["specialties"])
+                except Exception:
+                    pass
+            if _groq_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
                 try:
                     import json as _json_bulk
                     _bp = (
