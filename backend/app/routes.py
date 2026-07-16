@@ -3733,9 +3733,32 @@ async def bulk_autofill_companies(
 
     # Generic industries Groq produces that are too vague to be useful — block them
     _GENERIC_INDS = {
-        'other', 'n/a', 'unknown', 'various', 'general',
-        'domain registration',
+        'other', 'n/a', 'unknown', 'various', 'general', 'domain registration',
+        'technology', 'software', 'services', 'it', 'information technology',
+        'it services', 'tech', 'computer software', 'internet', 'online services',
+        'business services', 'professional services', 'consulting',
     }
+
+    # Richer industry taxonomy passed to AI — specific subcategories reduce generic answers
+    _INDUSTRY_TAXONOMY = (
+        'Use the MOST SPECIFIC term from this taxonomy:\n'
+        'Healthcare/Life Sciences: "Pharmacovigilance", "Healthcare Analytics", "Clinical Research", '
+        '"Medical Devices", "Digital Health", "Healthtech", "Biotech"\n'
+        'Insurance: "Insurance Technology", "InsurTech", "Claims Processing", "Underwriting Technology"\n'
+        'Finance: "Wealth Management Technology", "Payment Technology", "Banking Technology", '
+        '"RegTech", "LendTech", "FinTech"\n'
+        'AI/Data: "Artificial Intelligence", "Machine Learning", "Data Analytics", '
+        '"Business Intelligence", "Computer Vision", "Natural Language Processing", "MLOps"\n'
+        'Security: "Cybersecurity", "Network Security", "Cloud Security"\n'
+        'Infrastructure: "Cloud Computing", "Edge Computing", "DevOps", "Software Development", '
+        '"Platform Engineering", "ERP Software"\n'
+        'Services: "IT Consulting", "IT Staffing", "Managed Services", "System Integration", '
+        '"Digital Transformation", "Software Outsourcing"\n'
+        'Other: "E-commerce Technology", "Supply Chain Technology", "EdTech", "PropTech", '
+        '"HR Technology", "Marketing Technology"\n'
+        'NEVER return vague terms like "Technology", "Software", "Services", "IT", '
+        '"Information Technology", "Computer Software", "Business Services".'
+    )
 
     # Signals that a page is a parked/for-sale domain — not a real company site
     _DOMAIN_SALE_SIGNALS = [
@@ -4040,6 +4063,28 @@ async def bulk_autofill_companies(
                                     website_data[_hk] = _home_data[_hk]
                             if not website_data.get('nav') and _home_data.get('nav'):
                                 website_data['nav'] = _home_data['nav']
+
+            # If homepage content is sparse, try /about or /about-us — gives richer description
+            _ws_text_len = len((website_data or {}).get("full_text", "") or "")
+            if ws_url and _ws_text_len < 400:
+                try:
+                    _base_url = ws_url.split('?')[0].rstrip('/')
+                    for _abt_path in ('/about', '/about-us', '/company', '/who-we-are'):
+                        _abt_data = fetch_website_content(_base_url + _abt_path, fast=True)
+                        if _abt_data and len(_abt_data.get("full_text", "") or "") > 200:
+                            if not website_data:
+                                website_data = _abt_data
+                            else:
+                                # Enrich existing data: keep longer text / missing fields
+                                for _fk in ('full_text', 'meta_description', 'first_para', 'hero', 'scan_text'):
+                                    _cur = str(website_data.get(_fk) or "")
+                                    _new = str(_abt_data.get(_fk) or "")
+                                    if len(_new) > len(_cur):
+                                        website_data[_fk] = _abt_data[_fk]
+                            print(f"[about_page] {company_name}: enriched from {_abt_path}", flush=True)
+                            break
+                except Exception:
+                    pass
 
             # Reject websites that don't mention the company — prevents wrong matches
             # like "ABOUT Healthcare" → healthcare.gov, "Gamma" → paint company
@@ -4454,10 +4499,13 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
-            # ── Step 6c: Targeted founding-year search ────────────────────────────
-            # ProxyCurl often misses founded_year; Crunchbase/Tracxn/LinkedIn reliably have it
+            # ── Step 6c: Multi-field extraction from business directories ────────
+            # Crunchbase/Tracxn/ZoomInfo snippets carry industry, founded, HQ, size in one shot
             _still_need_founded_6c = not update_data.get("founded") and not company.get("founded")
-            if _still_need_founded_6c:
+            _still_need_ind_6c     = not update_data.get("industry") and not company.get("industry")
+            _still_need_hq_6c      = needs_hq and not update_data.get("headquarters")
+            _still_need_sz_6c      = needs_size and not update_data.get("size")
+            if any([_still_need_founded_6c, _still_need_ind_6c, _still_need_hq_6c, _still_need_sz_6c]):
                 try:
                     _cn6c = _re_mod.sub(
                         r'\s*[\(\[]?(?:P(?:vt)?|Private|Public)\s*[\)\]]?\s*'
@@ -4465,41 +4513,85 @@ async def bulk_autofill_companies(
                         '', company_name, flags=_re_mod.I
                     ).strip() or company_name
                     _fy_queries = [
-                        f'"{_cn6c}" founded year site:crunchbase.com OR site:tracxn.com OR site:zoominfo.com',
-                        f'"{_cn6c}" founded OR established year company history',
+                        f'"{_cn6c}" site:crunchbase.com OR site:tracxn.com OR site:zoominfo.com',
+                        f'"{_cn6c}" founded year company industry employees headquarters',
                     ]
+                    _ws_for_yr = (update_data.get("website") or company.get("website") or ws_url or "").lower()
+                    _min_yr = 2010 if (".ai" in _ws_for_yr or " ai" in company_name.lower()) else 1950
+                    _cn6c_words = [w for w in _re_mod.sub(r'[^a-z]', ' ', _cn6c.lower()).split() if len(w) > 3]
                     for _fy_q in _fy_queries:
-                        if not _still_need_founded_6c:
+                        if not any([_still_need_founded_6c, _still_need_ind_6c, _still_need_hq_6c, _still_need_sz_6c]):
                             break
-                        for _fy_r in _bulk_fc_search(_fy_q, limit=3):
+                        for _fy_r in _bulk_fc_search(_fy_q, limit=4):
                             _fy_body = " ".join(filter(None, [
                                 _fy_r.get("description", ""),
-                                (_fy_r.get("markdown") or "")[:600],
+                                (_fy_r.get("markdown") or "")[:800],
                                 _fy_r.get("title", ""),
                             ]))
-                            _fy_m = _re_mod.search(
-                                r'(?:founded|established|incorporated|since|launched)\s*(?:in\s*)?(\b(?:19|20)\d{2}\b)',
-                                _fy_body, _re_mod.I
-                            )
-                            if not _fy_m:
-                                # Crunchbase pattern: "Founded: 2010" or "Founded 2010"
-                                _fy_m = _re_mod.search(r'[Ff]ounded\D{0,5}(\b(?:19|20)\d{2}\b)', _fy_body)
-                            if _fy_m:
-                                _yr6c = _fy_m.group(1)
-                                # Sanity check: company name words must appear near the year
-                                _yr_ctx = _fy_body[max(0, _fy_m.start()-250):_fy_m.end()+100].lower()
-                                _cn6c_words = [w for w in _re_mod.sub(r'[^a-z]', ' ', _cn6c.lower()).split() if len(w) > 3]
-                                _yr_ctx_ok = not _cn6c_words or any(w in _yr_ctx for w in _cn6c_words[:2])
-                                # Domain sanity: .ai / AI companies rarely pre-date 2010
-                                _ws_for_yr = (update_data.get("website") or company.get("website") or ws_url or "").lower()
-                                _min_yr = 2010 if (".ai" in _ws_for_yr or " ai" in company_name.lower()) else 1950
-                                if _yr_ctx_ok and _min_yr <= int(_yr6c) <= 2025:
-                                    update_data["founded"] = _yr6c
-                                    _still_need_founded_6c = False
-                                    print(f"[founded_search] {company_name}: {_yr6c}", flush=True)
-                                    break
+                            _fy_body_l = _fy_body.lower()
+                            # Only trust results that mention the company name
+                            if _cn6c_words and not any(w in _fy_body_l for w in _cn6c_words[:2]):
+                                continue
+
+                            # Founded year
+                            if _still_need_founded_6c:
+                                _fy_m = _re_mod.search(
+                                    r'(?:founded|established|incorporated|since|launched)\s*(?:in\s*)?(\b(?:19|20)\d{2}\b)',
+                                    _fy_body, _re_mod.I
+                                ) or _re_mod.search(r'[Ff]ounded\D{0,5}(\b(?:19|20)\d{2}\b)', _fy_body)
+                                if _fy_m:
+                                    _yr6c = _fy_m.group(1)
+                                    _yr_ctx = _fy_body[max(0, _fy_m.start()-250):_fy_m.end()+100].lower()
+                                    _yr_ctx_ok = not _cn6c_words or any(w in _yr_ctx for w in _cn6c_words[:2])
+                                    if _yr_ctx_ok and _min_yr <= int(_yr6c) <= 2025:
+                                        update_data["founded"] = _yr6c
+                                        _still_need_founded_6c = False
+                                        print(f"[dir_search] {company_name} founded={_yr6c}", flush=True)
+
+                            # Industry — look for Crunchbase-style "Company · Industry · Founded"
+                            if _still_need_ind_6c:
+                                _ind_m = _re_mod.search(
+                                    r'(?:industry|sector|category)[:\s·•]+([A-Z][a-zA-Z &/\-]{3,40})',
+                                    _fy_body, _re_mod.I
+                                )
+                                if not _ind_m:
+                                    # Crunchbase header pattern: "CompanyName · Industry · ..."
+                                    _ind_m = _re_mod.search(
+                                        r'[·•]\s*([A-Z][a-zA-Z &/\-]{4,35})\s*[·•]',
+                                        _fy_body
+                                    )
+                                if _ind_m:
+                                    _ind_6c = _ind_m.group(1).strip()
+                                    if _ind_6c.lower() not in _GENERIC_INDS and len(_ind_6c) > 3:
+                                        update_data["industry"] = _ind_6c
+                                        _still_need_ind_6c = False
+                                        print(f"[dir_search] {company_name} industry={_ind_6c}", flush=True)
+
+                            # Headquarters
+                            if _still_need_hq_6c:
+                                _hq_m = _re_mod.search(
+                                    r'(?:headquarters?|hq|based in|located in|location)[:\s·•]+([A-Z][a-zA-Z\s,]{4,50}?)(?:[·•\|]|$)',
+                                    _fy_body, _re_mod.I
+                                )
+                                if _hq_m:
+                                    _hq_6c = _hq_m.group(1).strip().rstrip(',')
+                                    if len(_hq_6c) > 3 and len(_hq_6c) < 60:
+                                        update_data["headquarters"] = _hq_6c
+                                        _still_need_hq_6c = False
+                                        print(f"[dir_search] {company_name} hq={_hq_6c}", flush=True)
+
+                            # Size (employee count)
+                            if _still_need_sz_6c:
+                                _sz_m = _re_mod.search(r'(\d[\d,]+)\s+employees?', _fy_body, _re_mod.I)
+                                if _sz_m and '-' not in _sz_m.group(1):
+                                    _sz_6c = _sz_m.group(1).replace(',', '')
+                                    if _sz_6c.isdigit() and 1 <= int(_sz_6c) <= 1000000:
+                                        update_data["size"] = _sz_6c
+                                        _still_need_sz_6c = False
+                                        print(f"[dir_search] {company_name} size={_sz_6c}", flush=True)
+
                 except Exception as _fy_ex:
-                    print(f"[founded_search] {company_name} EXCEPTION: {_fy_ex}", flush=True)
+                    print(f"[dir_search] {company_name} EXCEPTION: {_fy_ex}", flush=True)
 
             # ── Step 7: Gemini gap-fill ───────────────────────────────────────────
             _gemini_key_bulk = os.environ.get("GEMINI_API_KEY", "")
@@ -4538,21 +4630,18 @@ async def bulk_autofill_companies(
                     import json as _json_bulk
                     import time as _time_bulk
                     _bp = (
-                        f'Company: {company_name}\nContext: {_desc_bulk[:400]}\n\n'
-                        'Using the company name and any context provided, infer these fields. '
-                        'Even if context is sparse (just a domain or name), make your best inference.\n'
-                        '- industry: SPECIFIC industry name. Use terms like "Software Development", '
-                        '"Artificial Intelligence", "IT Consulting", "Data Analytics", "Cybersecurity", '
-                        '"E-commerce", "Financial Services", "Healthtech", "EdTech", "Insurance Tech". '
-                        'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
-                        '- founded: 4-digit founding year only (omit if unknown)\n'
-                        '- headquarters: city and country only (e.g. "Bangalore, India") — only if known\n'
-                        '- specialties: 3-5 comma-separated specific capability areas (infer from company name/domain if needed)\n'
-                        '- company_type: exactly one of "Product" (sells software/SaaS/platform), '
-                        '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
-                        'Domain signals → .ai domain: likely Product; "consulting/solutions/services" in name: Service.\n\n'
-                        'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
-                        'Use null only for founded and headquarters if truly unknown. Always provide industry, specialties, company_type.'
+                        f'Company: {company_name}\nContext: {_desc_bulk[:500]}\n\n'
+                        'Infer these fields from the company name and context. '
+                        'Make your best inference even from sparse context.\n\n'
+                        f'- industry: {_INDUSTRY_TAXONOMY}\n'
+                        '- founded: 4-digit year only (null if unknown)\n'
+                        '- headquarters: "City, Country" format (null if unknown)\n'
+                        '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
+                        'what the company actually does (not generic terms like "AI" or "software")\n'
+                        '- company_type: "Product" (sells software/SaaS/platform), '
+                        '"Service" (consulting/outsourcing/staffing), or "Hybrid". '
+                        '.ai domain → Product; "solutions/consulting/services" in name → Service.\n\n'
+                        'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
                     with _GEMINI_SEM:
@@ -4624,21 +4713,18 @@ async def bulk_autofill_companies(
                             "temperature": 0.1,
                             "max_tokens": 200,
                             "messages": [{"role": "user", "content": (
-                                f'Company: {company_name}\nContext: {_desc_bulk[:400]}\n\n'
-                                'Using the company name and any context provided, infer these fields. '
-                                'Even if context is sparse (just a domain or name), make your best inference.\n'
-                                '- industry: SPECIFIC industry name. Use terms like "Software Development", '
-                                '"Artificial Intelligence", "IT Consulting", "Data Analytics", "Cybersecurity", '
-                                '"E-commerce", "Financial Services", "Healthtech", "EdTech", "Insurance Tech". '
-                                'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
-                                '- founded: 4-digit founding year only (omit if unknown)\n'
-                                '- headquarters: city and country only (e.g. "Bangalore, India") — only if known\n'
-                                '- specialties: 3-5 comma-separated specific capability areas (infer from name/domain)\n'
-                                '- company_type: exactly one of "Product" (sells software/SaaS/platform), '
-                                '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
-                                'Domain signals → .ai domain: likely Product; "consulting/solutions/services" in name: Service.\n\n'
-                                'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
-                                'Use null only for founded and headquarters if truly unknown. Always provide industry, specialties, company_type.'
+                                f'Company: {company_name}\nContext: {_desc_bulk[:500]}\n\n'
+                                'Infer these fields from the company name and context. '
+                                'Make your best inference even from sparse context.\n\n'
+                                f'- industry: {_INDUSTRY_TAXONOMY}\n'
+                                '- founded: 4-digit year only (null if unknown)\n'
+                                '- headquarters: "City, Country" format (null if unknown)\n'
+                                '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
+                                'what the company actually does (not generic terms like "AI" or "software")\n'
+                                '- company_type: "Product" (sells software/SaaS/platform), '
+                                '"Service" (consulting/outsourcing/staffing), or "Hybrid". '
+                                '.ai domain → Product; "solutions/consulting/services" in name → Service.\n\n'
+                                'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                             )}],
                         },
                         timeout=20,
@@ -4691,6 +4777,40 @@ async def bulk_autofill_companies(
                     )
                     if m:
                         update_data["headquarters"] = m.group(1).strip()
+
+            # ── Step 8.5: Derived fields — is_saas + HQ normalization ────────────
+            # is_saas: derive from company_type when website classifier didn't produce it
+            _ct_final = update_data.get("company_type") or company.get("company_type")
+            _is_saas_set = update_data.get("is_saas") is not None or company.get("is_saas") is not None
+            if not _is_saas_set and _ct_final:
+                if _ct_final == "Service":
+                    update_data["is_saas"] = False
+                elif _ct_final in ("Product", "Hybrid"):
+                    update_data["is_saas"] = True
+            # Also override is_saas=false for Product companies when website classifier
+            # returned low-confidence (website_data was None so classifier defaulted to false)
+            elif _ct_final == "Product" and not _is_saas_set:
+                update_data["is_saas"] = True
+
+            # HQ normalization: add country when only city is provided for Indian cities
+            _HQ_CITY_NORM = {
+                "bangalore": "Bangalore, India", "bengaluru": "Bengaluru, India",
+                "chennai": "Chennai, India", "hyderabad": "Hyderabad, India",
+                "mumbai": "Mumbai, India", "pune": "Pune, India",
+                "delhi": "Delhi, India", "new delhi": "New Delhi, India",
+                "trivandrum": "Thiruvananthapuram, India",
+                "thiruvananthapuram": "Thiruvananthapuram, India",
+                "kochi": "Kochi, India", "cochin": "Kochi, India",
+                "noida": "Noida, India", "gurugram": "Gurugram, India",
+                "gurgaon": "Gurugram, India", "kolkata": "Kolkata, India",
+                "ahmedabad": "Ahmedabad, India", "coimbatore": "Coimbatore, India",
+                "mysore": "Mysore, India", "mysuru": "Mysuru, India",
+            }
+            _hq_cur = update_data.get("headquarters") or company.get("headquarters") or ""
+            if _hq_cur and "," not in _hq_cur:
+                _hq_norm = _HQ_CITY_NORM.get(_hq_cur.lower().strip())
+                if _hq_norm:
+                    update_data["headquarters"] = _hq_norm
 
             # ── Step 9: Compliance detection ─────────────────────────────────────
             # Run on every enrichment if not already confirmed (re-checks "None detected" too)
