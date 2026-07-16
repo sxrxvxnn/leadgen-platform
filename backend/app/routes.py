@@ -3740,13 +3740,19 @@ async def bulk_autofill_companies(
                     body = " ".join(filter(None, [
                         r.get("body"), r.get("title"), r.get("description"),
                     ]))
+                    # Capture LinkedIn URL from search result URL when it's a company page
+                    if not result.get("linkedin_url"):
+                        _ru = r.get("url", "")
+                        _li_m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', _ru)
+                        if _li_m:
+                            result["linkedin_url"] = f"https://www.linkedin.com/company/{_li_m.group(1)}/"
                     if not result.get("followers"):
                         m = _re_mod.search(
                             r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?',
                             body, _re_mod.I,
                         )
                         if m:
-                            result["followers"] = m.group(1).strip()  # number only, not "X followers"
+                            result["followers"] = m.group(1).strip()
                     if not result.get("employee_count"):
                         m = _re_mod.search(
                             r'(\d[\d,]+)\s+employees?',  # exact integer only — excludes "2-10 employees"
@@ -4015,6 +4021,11 @@ async def bulk_autofill_companies(
                         with _DDGS_SEM:
                             try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
                             except Exception: pass
+            # LinkedIn URL found in snippet search results — use as confirmed URL
+            if _snip.get("linkedin_url") and needs_linkedin and not li_url_confirmed:
+                li_url_confirmed = _snip["linkedin_url"]
+                li_url = li_url_confirmed
+                update_data["linkedin_url"] = li_url_confirmed
             if _snip.get("followers") and needs_followers:
                 _fv = _re_mod.sub(r'\s*followers?\b.*', '', str(_snip["followers"]), flags=_re_mod.I).strip().replace(',', '')
                 if _fv:
