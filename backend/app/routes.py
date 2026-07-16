@@ -3557,7 +3557,6 @@ async def bulk_autofill_companies(
     company_ids = payload.get("company_ids", [])
 
     import threading as _threading
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from .website_analyzer import fetch_website_content, classify_company_type_rules, classify_website_saas
 
@@ -4502,14 +4501,16 @@ async def bulk_autofill_companies(
     result_queue = _queue.Queue()
 
     def _run_pool():
-        with ThreadPoolExecutor(max_workers=25) as executor:
-            futures = {executor.submit(_autofill_one, c): c for c in companies}
-            for future in as_completed(futures):
-                try:
-                    result_queue.put(future.result())
-                except Exception as e:
-                    result_queue.put({"success": False, "filled": [], "update": {}, "message": str(e)})
-        result_queue.put(None)  # sentinel — pool is done
+        # Sequential — fully enrich each company before starting the next.
+        # Parallel processing caused all companies to hit AI rate limits simultaneously;
+        # sequential gives each company a clean shot at Gemini/Groq/ProxyCurl.
+        for c in companies:
+            try:
+                result_queue.put(_autofill_one(c))
+            except Exception as e:
+                result_queue.put({"id": c.get("id"), "name": c.get("name", "?"),
+                                  "success": False, "filled": [], "update": {}, "message": str(e)})
+        result_queue.put(None)  # sentinel — all done
 
     pool_thread = _threading.Thread(target=_run_pool, daemon=True)
     pool_thread.start()
