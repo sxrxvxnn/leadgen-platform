@@ -3880,6 +3880,23 @@ async def bulk_autofill_companies(
                         website_data = fetch_website_content(
                             f"https://www.{_p.netloc}{_p.path}", fast=False
                         )
+                # If URL is a subpage, also scrape the homepage for nav/classification signals.
+                # Subpages (like /about or /aboutus.html) have good descriptions but miss nav.
+                if website_data:
+                    _sp = urlparse(ws_url)
+                    if _sp.path and _sp.path not in ('', '/'):
+                        _home_url = f"https://{_sp.netloc}"
+                        _home_data = fetch_website_content(_home_url, fast=False)
+                        if _home_data:
+                            # Merge: keep subpage description/text, but use homepage nav/header
+                            for _hk in ('nav', 'header', 'hero', 'has_login_detected',
+                                        'has_pricing_detected', 'has_mobile_app',
+                                        'has_app_store_link', 'has_play_store_link',
+                                        'has_web_app_link', 'title'):
+                                if _home_data.get(_hk) and not website_data.get(_hk):
+                                    website_data[_hk] = _home_data[_hk]
+                            if not website_data.get('nav') and _home_data.get('nav'):
+                                website_data['nav'] = _home_data['nav']
 
             # Reject websites that don't mention the company — prevents wrong matches
             # like "ABOUT Healthcare" → healthcare.gov, "Gamma" → paint company
