@@ -515,11 +515,11 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
                 ' [Override: App Store/Play Store link found — company ships its own app.]'
             )
 
-    # Nav has both "Products" + "Services" tabs → must be Hybrid
+    # Nav has both "Products" + "Services/Solutions" tabs → always Hybrid
     nav_lower = (website_data.get('nav', '') or '').lower()
     if ('products' in nav_lower and
-            any(s in nav_lower for s in ['services', 'our services', 'what we do'])):
-        if result.get('company_type') == 'Service':
+            any(s in nav_lower for s in ['services', 'our services', 'what we do', 'solutions'])):
+        if result.get('company_type') != 'Hybrid':
             result['company_type'] = 'Hybrid'
             result['company_type_reason'] = (
                 result.get('company_type_reason', '') +
@@ -800,7 +800,7 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     # Combined with "services" in nav → definitely Hybrid.
     nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
     nav_has_products = 'products' in nav_text_lower
-    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do'])
+    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do', 'solutions'])
     if nav_has_products:
         p_strong_count = p_strong_count  # will be added below after initial count
     # Counter-signals: product_weak hits don't count when these are present
@@ -852,7 +852,7 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     # When combined with "Services" in nav → Hybrid regardless of other signals.
     nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
     nav_has_products = 'products' in nav_text_lower
-    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do'])
+    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do', 'solutions'])
     if nav_has_products:
         p_strong_count += 3  # company lists own software products
 
@@ -1231,16 +1231,22 @@ def classify_website_saas(
         company_type = 'Hybrid'
         classification_reasons.append(f'Non-SaaS product signals also strong ({scores["product"]}) → Hybrid')
 
-    # If nav has both "products" and "services" → Hybrid regardless of score winner
+    # Nav structural overrides — most reliable classification signal
     nav_has_products = website_data and 'products' in (website_data.get('nav', '') or '').lower()
     nav_has_services = website_data and any(
         s in (website_data.get('nav', '') or '').lower()
-        for s in ['services', 'our services', 'what we do']
+        for s in ['services', 'our services', 'what we do', 'solutions']
     )
-    if nav_has_products and nav_has_services and company_type == 'Service':
+    if nav_has_products and nav_has_services:
+        # Always Hybrid when nav explicitly lists both product and service sections
         company_type = 'Hybrid'
         is_saas = True
-        classification_reasons.append('Nav has both "Products" + "Services" tabs → Hybrid')
+        classification_reasons.append('Nav has both "Products" + "Services/Solutions" tabs → Hybrid')
+    elif nav_has_products and scores['service'] >= 1:
+        # Products nav + ANY service signal in text → company does both
+        company_type = 'Hybrid'
+        is_saas = True
+        classification_reasons.append(f'Nav "Products" + service signals (score={scores["service"]}) → Hybrid')
 
     # Build human-readable explanation
     signal_detail = f'Scores — SaaS:{scores["saas"]} Product:{scores["product"]} Service:{scores["service"]}'
