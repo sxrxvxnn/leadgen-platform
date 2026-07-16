@@ -312,12 +312,16 @@ function CompanyLogo({ domain, altDomain, name, size = 52 }) {
   const hue = (name || 'A').charCodeAt(0) % 360
   const [stage, setStage] = useState(0)
 
+  // Strip www. — Clearbit returns better results without it
+  const stripWww = (d) => (d ? d.replace(/^www\./, '') : d)
+  const cleanDomain = stripWww(domain)
+
   // Build ordered list of (src, imgSize) to try
-  const alt = altDomain && altDomain !== domain ? altDomain : null
+  const alt = altDomain && altDomain !== domain ? stripWww(altDomain) : null
   const srcs = [
-    [`https://logo.clearbit.com/${domain}`, Math.round(size * 0.7)],
+    [`https://logo.clearbit.com/${cleanDomain}`, Math.round(size * 0.7)],
     ...(alt ? [[`https://logo.clearbit.com/${alt}`, Math.round(size * 0.7)]] : []),
-    [`https://www.google.com/s2/favicons?domain=${domain}&sz=64`, Math.round(size * 0.55)],
+    [`https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=64`, Math.round(size * 0.55)],
     ...(alt
       ? [[`https://www.google.com/s2/favicons?domain=${alt}&sz=64`, Math.round(size * 0.55)]]
       : []),
@@ -1670,12 +1674,60 @@ function CompanyCard({
           {company.company_type ? (
             <div>
               <p style={card.fieldLabel}>Type</p>
-              <p style={card.fieldValue}>
+              <p style={{ ...card.fieldValue, marginBottom: company.type_confidence ? 4 : 0 }}>
                 {company.company_type}
                 {company.is_saas !== null &&
                   company.is_saas !== undefined &&
                   ` · ${company.is_saas ? 'SaaS' : 'Non-SaaS'}`}
               </p>
+              {company.type_confidence > 0 && (
+                <div title={company.type_reason || ''} style={{ cursor: 'help' }}>
+                  <div
+                    style={{
+                      height: 3,
+                      borderRadius: 2,
+                      background: 'var(--border)',
+                      overflow: 'hidden',
+                      marginBottom: 3,
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${company.type_confidence}%`,
+                        background:
+                          company.type_confidence >= 75
+                            ? '#22c55e'
+                            : company.type_confidence >= 50
+                              ? '#f59e0b'
+                              : '#ef4444',
+                        borderRadius: 2,
+                        transition: 'width 0.4s ease',
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    {company.type_confidence}% confidence
+                  </span>
+                </div>
+              )}
+              {company.type_reason && (
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--text-muted)',
+                    margin: '3px 0 0',
+                    lineHeight: 1.4,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                  title={company.type_reason}
+                >
+                  {company.type_reason}
+                </p>
+              )}
             </div>
           ) : (
             field('Type', null)

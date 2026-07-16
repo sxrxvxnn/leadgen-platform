@@ -456,19 +456,22 @@ Return ONLY this JSON (no markdown, no explanation):
 CLASSIFICATION RULES — follow exactly:
 
 company_type:
-- "Product" = the company has built software (web app, mobile app, SaaS platform) that end-users or businesses USE directly. They own the product. Signals: App Store/Play Store links, web app login, self-serve signup, subscription pricing. The customer pays to access the product.
-- "Service" = the company sells expertise, time, or people. They BUILD things for clients or provide consulting/staffing/outsourcing. No product of their own that customers use. Customers contact them for a quote, not self-serve.
-- "Hybrid" = company BOTH has its own software product AND offers services/consulting. Both must be clearly present.
+- "Product" = the company has built software (web app, mobile app, SaaS platform, open-source tool, geospatial/AI tool) that end-users or businesses USE directly. They own and ship the product. Signals: App Store/Play Store links, web app login, self-serve signup, subscription pricing, named product pages ("Our Products"), open-source repos.
+- "Service" = the company sells expertise, time, or people. They BUILD things for clients or provide consulting/staffing/outsourcing. No product of their own that customers use independently. Customers contact them for a quote, not self-serve.
+- "Hybrid" = company BOTH has its own named software product(s) AND offers services/consulting. Both must be clearly present. KEY SIGNAL: nav has both "Products" AND "Services" tabs → almost always Hybrid.
 - Mobile app detected (App Store or Play Store link) → STRONG Product signal. Use "Product" unless clear evidence they built the app for a client.
 - Web app link detected (/login, /dashboard, app.domain.com) → STRONG Product signal. Same exception for client portals.
-- Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) that say "platform" or "solution" WITHOUT a login link or app link → Service (these are marketing words, not products).
+- "Our Products" / "Products" section listing named software tools → Product or Hybrid signal (NOT just services).
+- Indian IT/software companies (Technopark, Bangalore, Kerala, Kochi) that say "platform" or "solution" WITHOUT a login link or app link → Service (these are marketing words, not products). EXCEPTION: if they also list named products (BrightServe, LabEdge, formsflow.ai etc.) under a Products section → Hybrid or Product.
 
 is_saas:
-- RULE 1: company_type = Service → is_saas MUST be false. Always.
-- RULE 2: If a web login, web app, OR mobile app is confirmed → default is_saas = true UNLESS there is explicit evidence of on-premise / one-time license / downloadable desktop software.
+- RULE 1: company_type = Service (and ONLY Service, no products at all) → is_saas MUST be false.
+- RULE 2: If a web login, web app, OR mobile app is confirmed → is_saas = true UNLESS there is explicit evidence of on-premise / one-time license / downloadable desktop software.
 - RULE 3: Absence of a visible pricing page does NOT mean Non-SaaS. Enterprise SaaS hides pricing ("Contact Sales"). Mobile apps price via App Store. Treat these as SaaS.
-- Non-SaaS signals (only these justify is_saas = false for a Product): "on-premise", "on-prem", "installed locally", "perpetual license", "one-time license", "desktop application", "download and install".
-- In short: web app or mobile app → SaaS. On-premise software → Non-SaaS. No software at all → Non-SaaS.
+- RULE 4: A company that lists its OWN NAMED software products (even open-source) → is_saas = true. Open-source software products are still software products. "Open source" ≠ "not SaaS".
+- RULE 5: Hybrid companies that have their own software products + services → is_saas = true.
+- Non-SaaS signals (only these justify is_saas = false for a Product/Hybrid): "on-premise", "on-prem", "installed locally", "perpetual license", "one-time license", "desktop application", "download and install", hardware/physical device only.
+- In short: has own software products (cloud, open-source, or web app) → SaaS. Pure services with zero own software → Non-SaaS. On-premise-only software → Non-SaaS.
 
 classification:
 - Use "SaaS" only as the classification when the primary product is a generic cloud SaaS platform and no other industry label fits better.
@@ -512,27 +515,36 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
                 ' [Override: App Store/Play Store link found — company ships its own app.]'
             )
 
+    # Nav has both "Products" + "Services" tabs → must be Hybrid
+    nav_lower = (website_data.get('nav', '') or '').lower()
+    if ('products' in nav_lower and
+            any(s in nav_lower for s in ['services', 'our services', 'what we do'])):
+        if result.get('company_type') == 'Service':
+            result['company_type'] = 'Hybrid'
+            result['company_type_reason'] = (
+                result.get('company_type_reason', '') +
+                ' [Override: nav has both Products + Services tabs → Hybrid.]'
+            )
+
     # Normalise "Services" → "Service"
     if result.get('company_type') == 'Services':
         result['company_type'] = 'Service'
 
-    # Hard rule: Service → never SaaS
+    # Hard rule: pure Service with no products at all → never SaaS
     if result.get('company_type') == 'Service':
         result['is_saas'] = False
 
-    # If Product/Hybrid and AI said non-SaaS, check if web/mobile delivery
-    # contradicts that — a web login or mobile app IS SaaS delivery by definition
-    elif result.get('company_type') in ('Product', 'Hybrid') and result.get('is_saas') is False:
-        has_mobile  = website_data.get('has_mobile_app')
-        has_web_app = website_data.get('has_web_app_link')
-        has_login   = website_data.get('has_login_detected')
+    # Product/Hybrid companies → is_saas=true unless explicit non-cloud delivery proof
+    elif result.get('company_type') in ('Product', 'Hybrid'):
         full_lower  = website_data.get('full_text', '').lower()
-        non_saas_override = any(s in full_lower for s in [
+        non_saas_signals = [
             'on-premise', 'on premise', 'on-prem',
             'one-time license', 'perpetual license',
             'desktop app', 'installed locally',
-        ])
-        if (has_mobile or has_web_app or has_login) and not non_saas_override:
+        ]
+        has_non_saas = any(s in full_lower for s in non_saas_signals)
+        if not has_non_saas:
+            # Own software products (including open-source) → SaaS
             result['is_saas'] = True
 
     return result
@@ -761,6 +773,8 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         'per month', 'per year', '/month', '/year', 'billed monthly', 'billed annually',
         'pricing plan', 'choose a plan', 'upgrade plan', 'monthly plan', 'annual plan',
         'subscription plan', 'saas', 'software as a service',
+        # Own named products — any company listing "our products" has own software
+        'our products', 'our software products', 'product portfolio',
         # Mobile app signals — only companies shipping their own app have these
         'download on the app store', 'available on the app store',
         'get it on google play', 'available on google play',
@@ -780,6 +794,15 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         # Nav-level pricing signal — service companies rarely have a Pricing nav item
         'pricing', 'see pricing', 'view pricing',
     ]
+
+    # ── Nav-level product detection (very reliable) ──────────────────────
+    # If "products" appears as a nav tab, the company has own software products.
+    # Combined with "services" in nav → definitely Hybrid.
+    nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
+    nav_has_products = 'products' in nav_text_lower
+    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do'])
+    if nav_has_products:
+        p_strong_count = p_strong_count  # will be added below after initial count
     # Counter-signals: product_weak hits don't count when these are present
     # (service company building a product FOR clients, not selling it as SaaS)
     for_client_signals = [
@@ -824,6 +847,15 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     has_for_client = any(s in text for s in for_client_signals)
     p_weak_count   = 0 if has_for_client else sum(1 for s in product_weak if s in text)
 
+    # ── Nav "Products" tab — very reliable structural signal ─────────────────
+    # A "Products" nav tab means the company has named software products of their own.
+    # When combined with "Services" in nav → Hybrid regardless of other signals.
+    nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
+    nav_has_products = 'products' in nav_text_lower
+    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do'])
+    if nav_has_products:
+        p_strong_count += 3  # company lists own software products
+
     # ── Scoring — HTML-level signals weighted highest ───────────────
     if has_mobile_app:   p_strong_count += 5  # App Store/Play Store link = ships own product
     if has_web_app:      p_strong_count += 3  # /login or app. subdomain = has web product
@@ -835,7 +867,18 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
 
     # ── Decision tree ──────────────────────────────────────────────
 
-    # Tier 0 (ABSOLUTE): Mobile app confirmed = company ships own product.
+    # Tier 0 (ABSOLUTE): Nav has both Products + Services = Hybrid.
+    # This is the most reliable structural signal for Hybrid companies.
+    if nav_has_products and nav_has_services:
+        return "Hybrid", "High"
+
+    # Tier 0a: Products in nav + service signals in text = Hybrid.
+    # Catches companies like AOT Technologies: "Products" nav but no "Services" tab,
+    # yet their page body clearly describes consulting/transformation services.
+    if nav_has_products and s_strong_count >= 1:
+        return "Hybrid", "Medium"
+
+    # Tier 0b: Mobile app confirmed = company ships own product.
     # A company with its own App Store / Play Store app is NEVER a pure Service.
     # Text signals (even from a wrong LinkedIn description) cannot override this.
     # Exception: if there are 3+ strong service keywords AND no other product signals,
@@ -926,6 +969,11 @@ def classify_website_saas(
         'cloud platform': 4, 'cloud-based': 3,
         'integrations': 3, 'workflow automation': 3,
         'onboarding': 2, 'in-app': 2,
+        # Own software products — even without login/pricing, having named products = SaaS
+        'our products': 4, 'our software': 4,
+        'open source': 3,           # open-source software = product company
+        'open-source': 3,
+        'github.com': 2,            # GitHub link → open-source product
         # Management / HR / vertical SaaS patterns
         'management software': 4, 'management platform': 4,
         'hr platform': 4, 'hr software': 4, 'hr system': 3,
@@ -969,7 +1017,8 @@ def classify_website_saas(
     }
 
     # ── Nav tab signals ───────────────────────────────────────────────────────
-    _NAV_SAAS    = ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'status']
+    # 'products' in nav for a software/IT company = they have own software products = SaaS signal
+    _NAV_SAAS    = ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'status', 'products']
     _NAV_PRODUCT = ['shop', 'store', 'cart', 'catalog', 'buy']
     # 'solutions', 'industries', 'case studies' removed — SaaS companies use all of these
     _NAV_SERVICE = ['services', 'clients', 'our work', 'expertise', 'what we do']
@@ -1156,26 +1205,55 @@ def classify_website_saas(
     low_confidence = (win_score - runner_up) <= 3
 
     # Map winner to output fields
+    classification_reasons = []
     if winner == 'saas':
         category, company_type, is_saas = 'SaaS', 'Product', True
+        classification_reasons.append(f'SaaS signals dominate (score={scores["saas"]})')
     elif winner == 'product':
         category, company_type, is_saas = 'Non-SaaS Product', 'Product', False
+        classification_reasons.append(f'Physical/non-cloud product signals (score={scores["product"]})')
     else:
         category, company_type, is_saas = 'Service', 'Service', False
+        classification_reasons.append(f'Service signals dominate (score={scores["service"]})')
 
-    # Hybrid: substantial service AND saas scores together
+    # Hybrid detection: substantial overlap between any two categories
     if winner == 'saas' and scores['service'] >= scores['saas'] * 0.5:
         company_type = 'Hybrid'
-    if winner == 'service' and scores['saas'] >= scores['service'] * 0.5:
-        company_type = 'Hybrid'; is_saas = False
+        classification_reasons.append(f'Service signals also strong ({scores["service"]}) → Hybrid')
+    elif winner == 'service' and scores['saas'] >= scores['service'] * 0.5:
+        company_type = 'Hybrid'
+        is_saas = True   # has own software products even if service-heavy
+        classification_reasons.append(f'Product/SaaS signals also strong ({scores["saas"]}) → Hybrid')
+    elif winner == 'product' and scores['service'] >= scores['product'] * 0.5:
+        company_type = 'Hybrid'
+        classification_reasons.append(f'Service signals also strong ({scores["service"]}) → Hybrid')
+    elif winner == 'service' and scores['product'] >= scores['service'] * 0.5:
+        company_type = 'Hybrid'
+        classification_reasons.append(f'Non-SaaS product signals also strong ({scores["product"]}) → Hybrid')
+
+    # If nav has both "products" and "services" → Hybrid regardless of score winner
+    nav_has_products = website_data and 'products' in (website_data.get('nav', '') or '').lower()
+    nav_has_services = website_data and any(
+        s in (website_data.get('nav', '') or '').lower()
+        for s in ['services', 'our services', 'what we do']
+    )
+    if nav_has_products and nav_has_services and company_type == 'Service':
+        company_type = 'Hybrid'
+        is_saas = True
+        classification_reasons.append('Nav has both "Products" + "Services" tabs → Hybrid')
+
+    # Build human-readable explanation
+    signal_detail = f'Scores — SaaS:{scores["saas"]} Product:{scores["product"]} Service:{scores["service"]}'
+    classification_reason = '; '.join(classification_reasons) + f'. {signal_detail}.'
 
     return {
-        'category':     category,
-        'company_type': company_type,
-        'is_saas':      is_saas,
-        'confidence':   confidence,
-        'scores':       scores,
-        'low_confidence': low_confidence,
+        'category':               category,
+        'company_type':           company_type,
+        'is_saas':                is_saas,
+        'confidence':             confidence,
+        'scores':                 scores,
+        'low_confidence':         low_confidence,
+        'classification_reason':  classification_reason,
     }
 
 
