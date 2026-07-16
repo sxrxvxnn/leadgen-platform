@@ -4237,11 +4237,11 @@ async def bulk_autofill_companies(
             _pc_key = os.environ.get("PROXYCURL_API_KEY", "")
             _li_url_for_pc = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
             _pc_missing = (
+                bool(_li_url_for_pc) or   # always run when URL known — refreshes live follower count
                 (not update_data.get("industry") and not company.get("industry")) or
                 (not update_data.get("founded") and not company.get("founded")) or
                 (not update_data.get("specialties") and not company.get("specialties")) or
                 (needs_size and not update_data.get("size")) or
-                (needs_followers and not update_data.get("followers")) or
                 (needs_hq and not update_data.get("headquarters")) or
                 (needs_desc and not update_data.get("description"))
             )
@@ -4289,10 +4289,13 @@ async def bulk_autofill_companies(
                         if not update_data.get("specialties") and not company.get("specialties") and _pc.get("specialities"):
                             _sp = _pc["specialities"]
                             update_data["specialties"] = ", ".join(str(s) for s in _sp) if isinstance(_sp, list) else str(_sp)
-                        if needs_followers and not update_data.get("followers") and _pc.get("follower_count"):
+                        # Always refresh followers from ProxyCurl — live data, overrides stale snippets
+                        if _pc.get("follower_count"):
                             update_data["followers"] = str(_pc["follower_count"])
-                        if needs_size and not update_data.get("size") and _pc.get("company_size_on_linkedin"):
-                            update_data["size"] = str(_pc["company_size_on_linkedin"])
+                        # Refresh size only when PC returns an exact integer (not a range)
+                        _pc_size = _pc.get("company_size_on_linkedin")
+                        if _pc_size and str(_pc_size).isdigit():
+                            update_data["size"] = str(_pc_size)
                         if needs_desc and not update_data.get("description") and _pc.get("description"):
                             update_data["description"] = _pc["description"]
                         if needs_hq and not update_data.get("headquarters") and _pc.get("hq"):
