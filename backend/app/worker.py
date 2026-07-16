@@ -554,9 +554,31 @@ def run():
 
                     handler = HANDLERS.get(job_type)
                     if handler:
+                        t_start = time.time()
                         handler(job_id, user_id, payload)
                         update_job(job_id, supabase, status='completed')
                         print(f'[worker] Job {job_id} completed', flush=True)
+                        # Email notification for enrichment jobs
+                        if job_type in ('bulk_enrichment', 'bulk_analyze'):
+                            try:
+                                job_row = supabase.table('jobs').select('completed,total').eq('id', job_id).maybe_single().execute()
+                                jd = job_row.data or {}
+                                dur_min = round((time.time() - t_start) / 60)
+                                backend_url = os.getenv('BACKEND_URL', 'https://leadgenengineplatform-api.vercel.app')
+                                import requests as _nr
+                                _nr.post(
+                                    f"{backend_url}/internal/notify-job-complete",
+                                    params={"token": os.getenv("INTERNAL_TOKEN", "")},
+                                    json={
+                                        "user_id":     user_id,
+                                        "count":       jd.get("completed", 0),
+                                        "total":       jd.get("total", 0),
+                                        "duration_min": dur_min,
+                                    },
+                                    timeout=15,
+                                )
+                            except Exception as _ne:
+                                print(f'[worker] Notify email failed: {_ne}', flush=True)
                     else:
                         print(f'[worker] No handler for job type {job_type}', flush=True)
 

@@ -4,11 +4,21 @@ import {
   bulkAutofillCompaniesAsync,
   bulkAnalyzeCompanies,
   bulkMapsEnrich,
+  notifyEnrichmentComplete,
+  getJob,
 } from '../services/api'
 
 const BulkOpsContext = createContext(null)
 
-const INIT = { running: false, msg: '', filledCount: 0, total: 0 }
+const INIT = {
+  running: false,
+  msg: '',
+  filledCount: 0,
+  total: 0,
+  startedAt: null,
+  recentActivity: [],
+  jobId: null,
+}
 
 export function BulkOpsProvider({ children }) {
   const [autofill, setAutofill] = useState(INIT)
@@ -86,11 +96,13 @@ export function BulkOpsProvider({ children }) {
 
   // Sequential enrichment — one company at a time for maximum accuracy.
   // Batches > 10: dispatched to SQS/EC2 worker so it survives page reloads.
-  // Batches ≤ 10: runs in-browser with live progress (immediate feedback).
+  // Batches ≤ 10: runs in-browser with live progress + ETA.
   const ASYNC_ENRICH_THRESHOLD = 10
+
   async function runAutoEnrich(companyIds) {
     if (autofill.running) return
     const total = companyIds.length
+    const startedAt = Date.now()
 
     // ── Large batch: hand off to background worker ──────────────────────────
     if (total > ASYNC_ENRICH_THRESHOLD) {
@@ -99,34 +111,85 @@ export function BulkOpsProvider({ children }) {
         msg: `Queuing ${total} companies for background enrichment…`,
         filledCount: 0,
         total,
+        startedAt,
+        recentActivity: [],
+        jobId: null,
       })
       try {
-        await bulkAutofillCompaniesAsync(companyIds)
-        setAutofill({
-          running: false,
-          msg: `${total} companies queued — enriching in background, reload to see results`,
-          filledCount: 0,
-          total,
-        })
+        const res = await bulkAutofillCompaniesAsync(companyIds)
+        const jobId = res?.data?.job_id || null
+        setAutofill((p) => ({
+          ...p,
+          running: true,
+          msg: `${total} companies queued — enriching in background`,
+          jobId,
+        }))
+        // Poll job status every 8s until done, then notify
+        if (jobId) {
+          const pollInterval = setInterval(async () => {
+            try {
+              const jr = await getJob(jobId)
+              const { status, completed, total: jTotal } = jr.data || {}
+              setAutofill((p) => ({
+                ...p,
+                filledCount: completed || 0,
+                total: jTotal || total,
+                msg:
+                  status === 'completed'
+                    ? `Done — ${completed}/${jTotal || total} companies enriched`
+                    : `Background enrichment: ${completed || 0}/${jTotal || total}…`,
+              }))
+              if (status === 'completed' || status === 'failed') {
+                clearInterval(pollInterval)
+                const durMin = Math.round((Date.now() - startedAt) / 60000)
+                setAutofill((p) => ({ ...p, running: false }))
+                try {
+                  notifyEnrichmentComplete({
+                    count: completed,
+                    total: jTotal || total,
+                    duration_min: durMin,
+                  })
+                } catch {}
+                setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 15000)
+              }
+            } catch {
+              clearInterval(pollInterval)
+              setAutofill((p) => ({
+                ...p,
+                running: false,
+                msg: 'Background enrichment — check results in a few minutes',
+              }))
+              setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 12000)
+            }
+          }, 8000)
+        } else {
+          setAutofill((p) => ({ ...p, running: false }))
+          setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 12000)
+        }
       } catch (e) {
         setAutofill({
           running: false,
           msg: 'Queue failed — ' + e.message,
           filledCount: 0,
           total: 0,
+          startedAt: null,
+          recentActivity: [],
+          jobId: null,
         })
-      } finally {
-        setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 12000)
+        setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 8000)
       }
       return
     }
 
-    // ── Small batch: sequential in-browser with live progress ───────────────
+    // ── Small batch: sequential in-browser with live progress + ETA ─────────
     setAutofill({
       running: true,
       msg: `Auto-enriching ${total} ${total === 1 ? 'company' : 'companies'}…`,
       filledCount: 0,
       total,
+      startedAt,
+      recentActivity: [],
+      jobId: null,
     })
     let filled = 0
     let done = 0
@@ -137,25 +200,44 @@ export function BulkOpsProvider({ children }) {
         await bulkAutofillCompanies([id], (_, __, result) => {
           if (result?.success && result.update && Object.keys(result.update).length) {
             filled++
-            setAutofill((p) => ({ ...p, filledCount: filled }))
+            const name = result.update.name || result.id || ''
+            const fields = Object.keys(result.update)
+              .filter((k) => k !== 'name')
+              .slice(0, 3)
+            setAutofill((p) => ({
+              ...p,
+              filledCount: filled,
+              recentActivity: [{ name, fields, ts: Date.now() }, ...(p.recentActivity || [])].slice(
+                0,
+                5
+              ),
+            }))
             dispatch(result)
           } else if (result?.success === false && result?.message) {
             setAutofill((p) => ({ ...p, msg: `⚠ ${result.message}` }))
           }
         })
       }
-      setAutofill({
+      const durMin = Math.round((Date.now() - startedAt) / 60000)
+      setAutofill((p) => ({
+        ...p,
         running: false,
         msg: `Done — ${filled} of ${total} ${total === 1 ? 'company' : 'companies'} enriched`,
-        filledCount: filled,
-        total,
-      })
+      }))
+      if (filled > 0) {
+        try {
+          notifyEnrichmentComplete({ count: filled, total, duration_min: durMin })
+        } catch {}
+      }
     } catch (e) {
       setAutofill({
         running: false,
         msg: 'Auto-enrich failed — ' + e.message,
         filledCount: 0,
         total: 0,
+        startedAt: null,
+        recentActivity: [],
+        jobId: null,
       })
     } finally {
       setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 8000)
