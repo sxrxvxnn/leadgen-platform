@@ -2923,7 +2923,7 @@ async def autofill_company_from_linkedin(
         if _pcurl_key and missing_structured:
             try:
                 pc_res = requests.get(
-                    "https://nubela.co/proxycurl/api/linkedin/company",
+                    "https://nubela.co/proxycurl/api/v2/linkedin/company",
                     params={"url": linkedin_url, "use_cache": "if-present", "fallback_to_cache": "on-error"},
                     headers={"Authorization": f"Bearer {_pcurl_key}"},
                     timeout=15,
@@ -4124,7 +4124,7 @@ async def bulk_autofill_companies(
                     if _ws_for_resolve:
                         _resolve_params["company_website"] = _ws_for_resolve
                     _resolve_r = requests.get(
-                        "https://nubela.co/proxycurl/api/linkedin/company/resolve",
+                        "https://nubela.co/proxycurl/api/v2/linkedin/company/resolve",
                         params=_resolve_params,
                         headers={"Authorization": f"Bearer {_pc_key}"},
                         timeout=12,
@@ -4142,7 +4142,7 @@ async def bulk_autofill_companies(
             if _pc_key and _li_url_for_pc and _pc_missing:
                 try:
                     _pc_res = requests.get(
-                        "https://nubela.co/proxycurl/api/linkedin/company",
+                        "https://nubela.co/proxycurl/api/v2/linkedin/company",
                         params={"url": _li_url_for_pc, "use_cache": "if-present", "fallback_to_cache": "on-error"},
                         headers={"Authorization": f"Bearer {_pc_key}"},
                         timeout=15,
@@ -4374,6 +4374,73 @@ async def bulk_autofill_companies(
                                 update_data["company_type"] = _xb["company_type"]
                 except Exception:
                     pass
+
+            # ── Step 7b: Groq gap-fill fallback (when Gemini is rate-limited) ─────
+            _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
+            _still_missing_bulk = (
+                (not update_data.get("industry") and not company.get("industry")) or
+                (not update_data.get("specialties") and not company.get("specialties")) or
+                (_missing_type_bulk and not update_data.get("company_type"))
+            )
+            if _groq_key_bulk and len(_desc_bulk) > 20 and _still_missing_bulk:
+                try:
+                    import json as _json_groq
+                    _groq_res = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
+                        json={
+                            "model": "llama-3.3-70b-versatile",
+                            "temperature": 0.1,
+                            "max_tokens": 200,
+                            "messages": [{"role": "user", "content": (
+                                f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
+                                'Extract these fields. Be specific and concise.\n'
+                                '- industry: SPECIFIC industry name. Use terms like "Software Development", '
+                                '"IT Consulting", "Data Analytics", "Cybersecurity", "E-commerce", '
+                                '"Financial Services", "Healthtech", "EdTech". '
+                                'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
+                                '- founded: 4-digit founding year only (omit if not mentioned)\n'
+                                '- headquarters: city and country only (e.g. "Bangalore, India") — only if mentioned\n'
+                                '- specialties: 3-5 comma-separated specific capability areas\n'
+                                '- company_type: exactly one of "Product" (sells software/SaaS product), '
+                                '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
+                                'Signals → Product: subscription, SaaS, platform, free trial; '
+                                'Service: client projects, consulting, outsourcing, staff augmentation.\n\n'
+                                'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
+                                'Use null for fields you cannot determine with confidence.'
+                            )}],
+                        },
+                        timeout=20,
+                    )
+                    print(f"[groq_gapfill] status={_groq_res.status_code} for {company_name}", flush=True)
+                    if _groq_res.status_code == 200:
+                        _groq_text = _groq_res.json()["choices"][0]["message"]["content"].strip()
+                        _groq_match = _re_mod.search(r'\{.*\}', _groq_text, _re_mod.DOTALL)
+                        if _groq_match:
+                            _xg = _json_groq.loads(_groq_match.group(0))
+                            print(f"[groq_gapfill] response={str(_xg)[:150]}", flush=True)
+                            if not update_data.get("industry") and not company.get("industry") and \
+                               _xg.get("industry") and _xg["industry"] not in (None, "null") and \
+                               str(_xg["industry"]).strip().lower() not in _GENERIC_INDS:
+                                update_data["industry"] = str(_xg["industry"])
+                            if not update_data.get("founded") and not company.get("founded") and \
+                               _xg.get("founded") and str(_xg["founded"]) not in ("", "None", "null"):
+                                _yr_g = str(_xg["founded"]).strip()
+                                if _re_mod.match(r'^\d{4}$', _yr_g) and 1800 <= int(_yr_g) <= 2030:
+                                    update_data["founded"] = _yr_g
+                            if not update_data.get("headquarters") and \
+                               _xg.get("headquarters") and str(_xg["headquarters"]).strip() not in ("", "None", "null"):
+                                _hq_g = str(_xg["headquarters"]).strip()
+                                if len(_hq_g) < 60:
+                                    update_data["headquarters"] = _hq_g
+                            if not update_data.get("specialties") and not company.get("specialties") and \
+                               _xg.get("specialties") and _xg["specialties"] not in (None, "null"):
+                                update_data["specialties"] = str(_xg["specialties"])
+                            if _missing_type_bulk and not update_data.get("company_type") and \
+                               _xg.get("company_type") in ("Product", "Service", "Hybrid"):
+                                update_data["company_type"] = _xg["company_type"]
+                except Exception as _groq_ex:
+                    print(f"[groq_gapfill] EXCEPTION: {_groq_ex}", flush=True)
 
             # ── Step 8: mine description for size / HQ ────────────────────────────
             desc_text = update_data.get("description") or company.get("description") or ""
