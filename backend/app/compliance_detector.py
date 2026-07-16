@@ -50,6 +50,18 @@ COMPLIANCE_KB = {
     "CJIS":             ["cjis"],
     "FISMA":            ["fisma"],
     "ITAR":             ["itar"],
+    # India-specific quality & recognition frameworks
+    "ISO 20000":        ["iso 20000", "iso/iec 20000", "iso20000"],
+    "CMMI Level 5":     ["cmmi level 5", "cmmi ml5", "cmmi maturity level 5",
+                         "cmmi dev 5", "cmmi svc 5"],
+    "CMMI Level 3":     ["cmmi level 3", "cmmi ml3", "cmmi maturity level 3",
+                         "cmmi dev 3", "cmmi svc 3"],
+    "NASSCOM":          ["nasscom member", "nasscom certified", "nasscom registered",
+                         "nasscom foundation"],
+    "DPIIT Recognized": ["dpiit", "startup india recognized", "recognized by dpiit",
+                         "dipp recognized", "department for promotion of industry"],
+    "CII Member":       ["cii member", "confederation of indian industry"],
+    "BIS":              ["bis certified", "bis certification", "bureau of indian standards"],
 }
 
 # ── Tier weights ───────────────────────────────────────────────────────────────

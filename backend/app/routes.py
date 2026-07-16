@@ -2222,32 +2222,29 @@ def _run_compliance_scan(website: str, gemini_key: str = "") -> dict:
     credible     = [f for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested")]
 
     if not credible:
-        # Derive root URL for subpage probing
+        # Probe 3 high-signal subpages using fast mode (4s timeout each).
+        # Certs rarely appear on homepages — dedicated pages are far more reliable.
         try:
             _p = _cup(website if website.startswith("http") else f"https://{website}")
             root = f"{_p.scheme}://{_p.netloc}"
         except Exception:
             root = website.rstrip("/")
 
-        for subpath in ("/security", "/compliance", "/trust", "/certifications",
-                        "/legal", "/privacy", "/trust-center", "/security-and-compliance"):
+        for subpath in ("/security", "/compliance", "/trust"):
             try:
-                sub_data = fetch_website_content(root + subpath, fast=False)
+                sub_data = fetch_website_content(root + subpath, fast=True)
                 if not sub_data:
                     continue
                 sub_det  = detect_compliance(sub_data, gemini_key=gemini_key)
                 sub_cred = [f for f in sub_det["frameworks"] if f["tier"] in ("Certified", "Attested")]
                 if sub_cred:
-                    # Merge: promote subpage findings into main detection
                     existing_fw = {f["framework"] for f in detection["frameworks"]}
                     for fw in sub_det["frameworks"]:
                         if fw["framework"] not in existing_fw:
                             detection["frameworks"].append(fw)
-                    # Re-sort by confidence
                     detection["frameworks"].sort(key=lambda x: x["confidence"], reverse=True)
                     detection["source"] = sub_det["source"] + f" (subpage:{subpath})"
-                    credible = [f for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested")]
-                    break  # stop at first subpage with credible certs
+                    break
             except Exception:
                 continue
 
@@ -3468,11 +3465,17 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
         try:
             _de_li = _de_scrape_li(li_url_de, li_cookie=os.getenv("LI_SESSION_COOKIE", ""))
             if _de_li.get("followers") and _de_needs_followers:
-                results["followers"] = _de_li["followers"]
-                _de_needs_followers = False
+                import re as _de_re2
+                _fv_de = _de_re2.sub(r'\s*followers?\b.*', '', str(_de_li["followers"]), flags=_de_re2.I).strip().replace(',', '')
+                if _fv_de:
+                    results["followers"] = _fv_de
+                    _de_needs_followers = False
             if _de_li.get("employee_count") and _de_needs_size:
-                results["size"] = str(_de_li["employee_count"])
-                _de_needs_size = False
+                import re as _de_re3
+                _sv_de = _de_re3.sub(r'\s*employees?\b.*', '', str(_de_li["employee_count"]), flags=_de_re3.I).strip().replace(',', '')
+                if _sv_de and '-' not in _sv_de:
+                    results["size"] = _sv_de
+                    _de_needs_size = False
             if _de_li.get("location") and _de_needs_hq:
                 results["headquarters"] = _de_li["location"]
             if _de_li.get("description") and _de_needs_desc:
@@ -3500,7 +3503,7 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
                     if _de_needs_followers and not results.get("followers"):
                         _fm = _de_re.search(r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?', _db, _de_re.I)
                         if _fm:
-                            results["followers"] = _fm.group(1).strip()
+                            results["followers"] = _fm.group(1).strip().replace(',', '')
                             _de_needs_followers = False
                     if _de_needs_size and not results.get("size"):
                         _em = _de_re.search(r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)\s*employees?', _db, _de_re.I)
