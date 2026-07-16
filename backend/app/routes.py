@@ -2202,6 +2202,58 @@ async def bulk_create_companies(
 
 # ─── COMPLIANCE CHECKER ───────────────────────────────────────
 
+def _run_compliance_scan(website: str, gemini_key: str = "") -> dict:
+    """
+    Full compliance scan for a company website.
+    1. Scrapes the main page.
+    2. If no credible certs found, also tries /security, /compliance, /trust,
+       /certifications, /legal — certs are rarely on the homepage.
+    Returns the detect_compliance() result dict.
+    """
+    from .website_analyzer import fetch_website_content
+    from .compliance_detector import detect_compliance, format_for_db
+    from urllib.parse import urlparse as _cup
+
+    if not website:
+        return detect_compliance(None, gemini_key=gemini_key)
+
+    website_data = fetch_website_content(website)
+    detection    = detect_compliance(website_data, gemini_key=gemini_key)
+    credible     = [f for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested")]
+
+    if not credible:
+        # Derive root URL for subpage probing
+        try:
+            _p = _cup(website if website.startswith("http") else f"https://{website}")
+            root = f"{_p.scheme}://{_p.netloc}"
+        except Exception:
+            root = website.rstrip("/")
+
+        for subpath in ("/security", "/compliance", "/trust", "/certifications",
+                        "/legal", "/privacy", "/trust-center", "/security-and-compliance"):
+            try:
+                sub_data = fetch_website_content(root + subpath, fast=False)
+                if not sub_data:
+                    continue
+                sub_det  = detect_compliance(sub_data, gemini_key=gemini_key)
+                sub_cred = [f for f in sub_det["frameworks"] if f["tier"] in ("Certified", "Attested")]
+                if sub_cred:
+                    # Merge: promote subpage findings into main detection
+                    existing_fw = {f["framework"] for f in detection["frameworks"]}
+                    for fw in sub_det["frameworks"]:
+                        if fw["framework"] not in existing_fw:
+                            detection["frameworks"].append(fw)
+                    # Re-sort by confidence
+                    detection["frameworks"].sort(key=lambda x: x["confidence"], reverse=True)
+                    detection["source"] = sub_det["source"] + f" (subpage:{subpath})"
+                    credible = [f for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested")]
+                    break  # stop at first subpage with credible certs
+            except Exception:
+                continue
+
+    return detection
+
+
 @router.post("/companies/{company_id}/check-compliance")
 async def check_compliance(
     company_id: str,
@@ -2219,23 +2271,18 @@ async def check_compliance(
         gemini_key = payload.get("gemini_key") or os.getenv("GEMINI_API_KEY", "")
         website    = company.get("website", "")
 
-        from .website_analyzer import fetch_website_content
-        from .compliance_detector import detect_compliance, format_for_db
+        from .compliance_detector import format_for_db
 
-        website_data = fetch_website_content(website) if website else None
-        detection    = detect_compliance(website_data, gemini_key=gemini_key)
-
+        detection          = _run_compliance_scan(website, gemini_key=gemini_key)
         compliance_str     = format_for_db(detection)
         frameworks         = detection["frameworks"]
         has_security_team  = detection["has_security_team"]
         confidence         = detection["confidence"]
         source             = detection["source"]
 
-        # Persist if anything credible was found
-        credible = [f for f in frameworks if f["tier"] in ("Certified", "Attested")]
-        if credible:
-            supabase.table("companies").update({"compliance": compliance_str}) \
-                .eq("id", company_id).eq("user_id", user_id).execute()
+        # Always persist (even "None detected") so UI shows checked vs unchecked
+        supabase.table("companies").update({"compliance": compliance_str}) \
+            .eq("id", company_id).eq("user_id", user_id).execute()
 
         posthog.capture(user_id, "company_compliance_checked", {
             "frameworks_found": len(frameworks),
@@ -2256,6 +2303,59 @@ async def check_compliance(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/companies/bulk-check-compliance")
+async def bulk_check_compliance(
+    payload: dict,
+    authorization: str = Header(...)
+):
+    """Run compliance detection for multiple companies sequentially."""
+    user_id    = get_user_id(authorization)
+    company_ids = payload.get("company_ids", [])
+    if not company_ids:
+        raise HTTPException(status_code=400, detail="No company_ids provided")
+
+    from .compliance_detector import format_for_db
+
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    results    = []
+
+    for cid in company_ids:
+        try:
+            validate_uuid(cid, "company_id")
+            co_res = supabase.table("companies") \
+                .select("id,name,website,compliance") \
+                .eq("id", cid).eq("user_id", user_id).maybe_single().execute()
+            if not co_res.data:
+                results.append({"id": cid, "success": False, "message": "not found"})
+                continue
+
+            company = co_res.data
+            website = company.get("website", "")
+
+            detection      = _run_compliance_scan(website, gemini_key=gemini_key)
+            compliance_str = format_for_db(detection)
+            credible_count = sum(1 for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested"))
+
+            supabase.table("companies").update({"compliance": compliance_str}) \
+                .eq("id", cid).eq("user_id", user_id).execute()
+
+            results.append({
+                "id":         cid,
+                "name":       company.get("name", ""),
+                "compliance": compliance_str,
+                "frameworks": credible_count,
+                "success":    True,
+            })
+        except Exception as exc:
+            results.append({"id": cid, "success": False, "message": str(exc)})
+
+    posthog.capture(user_id, "bulk_compliance_checked", {
+        "total": len(company_ids),
+        "found": sum(1 for r in results if r.get("frameworks", 0) > 0),
+    })
+    return {"results": results, "total": len(results)}
     # ─── BULK AUTO-FILL ───────────────────────────────────────────
 
 @router.post("/leads/autofill-bulk")

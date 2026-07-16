@@ -242,6 +242,8 @@ export const analyzeCompany = (id, payload) => api.post(`/companies/${id}/analyz
 export const getCompanyLeads = (id) => api.get(`/companies/${id}/leads`)
 export const checkCompliance = (companyId) =>
   api.post(`/companies/${companyId}/check-compliance`, {})
+export const bulkCheckCompliance = (companyIds) =>
+  api.post('/companies/bulk-check-compliance', { company_ids: companyIds })
 export const autofillCompanyLinkedIn = (id) =>
   api.post(`/companies/${id}/autofill-linkedin`, {
     li_cookie: localStorage.getItem('liCookie') || '',

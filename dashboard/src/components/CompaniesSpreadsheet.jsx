@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { updateCompany, autofillCompanyLinkedIn } from '../services/api'
+import { updateCompany, autofillCompanyLinkedIn, bulkCheckCompliance } from '../services/api'
 
 // ─── ACCURACY ─────────────────────────────────────────────────
 const _ACC_GENERIC = new Set([
@@ -492,6 +492,8 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
   const [accuracyFilter, setAccuracyFilter] = useState('all')
   const [autofilling, setAutofilling] = useState(false)
   const [autofillMsg, setAutofillMsg] = useState('')
+  const [checkingCompliance, setCheckingCompliance] = useState(false)
+  const [complianceMsg, setComplianceMsg] = useState('')
   const [saving, setSaving] = useState(null)
   const colPickerRef = useRef(null)
 
@@ -566,6 +568,32 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
       else next.add(key)
       return next
     })
+  }
+
+  async function handleBulkCompliance() {
+    const targets = selected.length ? local.filter((c) => selected.includes(c.id)) : local
+    const ids = targets.map((c) => c.id)
+    setCheckingCompliance(true)
+    setComplianceMsg(`Checking compliance… 0/${ids.length}`)
+    try {
+      const res = await bulkCheckCompliance(ids)
+      const results = res.data?.results || []
+      let found = 0
+      for (const r of results) {
+        if (r.success) {
+          setLocal((prev) =>
+            prev.map((c) => (c.id === r.id ? { ...c, compliance: r.compliance } : c))
+          )
+          if (r.frameworks > 0) found++
+        }
+      }
+      setComplianceMsg(`Done — ${found} with certs, ${results.length - found} none detected`)
+      onRefresh?.()
+    } catch {
+      setComplianceMsg('Compliance check failed')
+    }
+    setCheckingCompliance(false)
+    setTimeout(() => setComplianceMsg(''), 6000)
   }
 
   async function autofillSelected() {
@@ -797,6 +825,33 @@ export default function CompaniesSpreadsheet({ companies, onClose, onRefresh }) 
               style={{ ...s.btn, opacity: autofilling ? 0.5 : 1 }}
             >
               ↯ Autofill{selected.length ? ` (${selected.length})` : ' All'}
+            </button>
+
+            {complianceMsg && (
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  color: complianceMsg.startsWith('Done') ? '#4a7c59' : 'var(--accent)',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {complianceMsg}
+              </span>
+            )}
+
+            <button
+              onClick={handleBulkCompliance}
+              disabled={checkingCompliance}
+              style={{
+                ...s.toolBtn,
+                opacity: checkingCompliance ? 0.5 : 1,
+                cursor: checkingCompliance ? 'default' : 'pointer',
+              }}
+              title="Scan company websites for compliance certifications (ISO 27001, SOC 2, GDPR, HIPAA…)"
+            >
+              ⬡ Compliance{selected.length ? ` (${selected.length})` : ''}
             </button>
 
             {/* Column picker */}
