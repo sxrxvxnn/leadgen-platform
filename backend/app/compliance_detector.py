@@ -13,55 +13,76 @@ from urllib.parse import urlparse as _up
 
 # ── 34-Framework Knowledge Base ────────────────────────────────────────────────
 COMPLIANCE_KB = {
-    "SOC 2 Type II":    ["soc 2 type ii", "soc2 type ii", "soc 2 type 2", "soc2 type 2"],
+    # SOC — cover press-release phrasing ("achieved", "attained", "earned")
+    "SOC 2 Type II":    ["soc 2 type ii", "soc2 type ii", "soc 2 type 2", "soc2 type 2",
+                         "soc2 type ii", "soc type ii", "soc ii certified"],
     "SOC 2 Type I":     ["soc 2 type i", "soc2 type i", "soc 2 type 1", "soc2 type 1"],
-    "SOC 2":            ["soc 2", "soc2", "aicpa soc"],
-    "SOC 1":            ["soc 1", "soc1", "ssae 18", "ssae 16"],
+    "SOC 2":            ["soc 2", "soc2", "aicpa soc", "service organization control 2",
+                         "achieved soc", "soc certification", "soc compliant"],
+    "SOC 1":            ["soc 1", "soc1", "ssae 18", "ssae 16", "ssae no. 18"],
+    # ISO 27001 — extremely common in Indian tech + global SaaS
     "ISO 27001":        ["iso 27001", "iso/iec 27001", "iso-27001", "iso27001",
-                         "iso/iec 27001:2013", "iso/iec 27001:2022", "iso 27001:2022"],
-    "ISO 27017":        ["iso 27017", "iso/iec 27017"],
-    "ISO 27018":        ["iso 27018", "iso/iec 27018"],
-    "ISO 27701":        ["iso 27701", "iso/iec 27701"],
-    "ISO 9001":         ["iso 9001", "iso9001", "iso 9001:2015"],
-    "ISO 22301":        ["iso 22301"],
+                         "iso/iec 27001:2013", "iso/iec 27001:2022", "iso 27001:2022",
+                         "iso 27001 certified", "iso 27001 compliant",
+                         "iso/iec27001", "27001 certified", "iso27001 certification"],
+    "ISO 27017":        ["iso 27017", "iso/iec 27017", "iso 27017 certified"],
+    "ISO 27018":        ["iso 27018", "iso/iec 27018", "iso 27018 certified"],
+    "ISO 27701":        ["iso 27701", "iso/iec 27701", "iso 27701 certified"],
+    "ISO 9001":         ["iso 9001", "iso9001", "iso 9001:2015", "iso 9001 certified",
+                         "iso9001:2015", "iso 9001 certification"],
+    "ISO 22301":        ["iso 22301", "iso 22301 certified", "business continuity management"],
     "PCI DSS":          ["pci dss", "pci-dss", "pci level 1", "pci level 2",
                          "pci compliant", "pci certified",
-                         "payment card industry data security"],
-    "CSA STAR":         ["csa star", "cloud security alliance star"],
-    "Cyber Essentials": ["cyber essentials"],
-    "TISAX":            ["tisax"],
-    "NIST CSF":         ["nist csf", "nist cybersecurity framework"],
+                         "payment card industry data security", "pci dss compliant",
+                         "pci dss certified"],
+    "CSA STAR":         ["csa star", "cloud security alliance star", "csa star certified"],
+    "Cyber Essentials": ["cyber essentials", "cyber essentials plus", "cyber essentials certified"],
+    "TISAX":            ["tisax", "tisax certified", "tisax assessment"],
+    "NIST CSF":         ["nist csf", "nist cybersecurity framework", "nist csf compliant"],
     "NIST 800-53":      ["nist 800-53", "nist sp 800-53"],
-    "FedRAMP":          ["fedramp", "federal risk and authorization management program"],
-    "StateRAMP":        ["stateramp"],
-    "GDPR":             ["gdpr", "general data protection regulation"],
-    "CCPA":             ["ccpa", "california consumer privacy act"],
+    "FedRAMP":          ["fedramp", "fedramp authorized", "fedramp certified",
+                         "federal risk and authorization management program"],
+    "StateRAMP":        ["stateramp", "stateramp authorized"],
+    # Privacy regulations — web-search results often say "compliant with GDPR"
+    "GDPR":             ["gdpr", "general data protection regulation",
+                         "gdpr compliant", "gdpr certified", "gdpr compliance",
+                         "compliant with gdpr", "gdpr ready"],
+    "CCPA":             ["ccpa", "california consumer privacy act",
+                         "ccpa compliant", "ccpa compliance"],
     "CPRA":             ["cpra", "california privacy rights act"],
-    "HIPAA":            ["hipaa", "health insurance portability and accountability"],
-    "HITECH":           ["hitech"],
-    "FERPA":            ["ferpa"],
-    "COPPA":            ["coppa"],
-    "DPDP":             ["dpdp", "digital personal data protection"],
-    "LGPD":             ["lgpd"],
+    "HIPAA":            ["hipaa", "health insurance portability and accountability",
+                         "hipaa compliant", "hipaa certified", "hipaa compliance",
+                         "compliant with hipaa", "hipaa-compliant"],
+    "HITECH":           ["hitech", "hitech compliant"],
+    "FERPA":            ["ferpa", "ferpa compliant"],
+    "COPPA":            ["coppa", "coppa compliant"],
+    "DPDP":             ["dpdp", "digital personal data protection", "dpdp act"],
+    "LGPD":             ["lgpd", "lei geral de proteção de dados"],
     "PIPEDA":           ["pipeda"],
-    "SOX":              ["sox", "sarbanes-oxley", "sarbanes oxley"],
-    "GLBA":             ["glba", "gramm-leach-bliley"],
-    "PSD2":             ["psd2"],
-    "CJIS":             ["cjis"],
+    "SOX":              ["sox", "sarbanes-oxley", "sarbanes oxley", "sox compliant"],
+    "GLBA":             ["glba", "gramm-leach-bliley", "glba compliant"],
+    "PSD2":             ["psd2", "payment services directive"],
+    "CJIS":             ["cjis", "criminal justice information services"],
     "FISMA":            ["fisma"],
-    "ITAR":             ["itar"],
-    # India-specific quality & recognition frameworks
-    "ISO 20000":        ["iso 20000", "iso/iec 20000", "iso20000"],
+    "ITAR":             ["itar", "itar compliant", "itar registered"],
+    # India-specific — expanded to catch press-release and directory mentions
+    "ISO 20000":        ["iso 20000", "iso/iec 20000", "iso20000", "iso 20000 certified",
+                         "it service management iso"],
     "CMMI Level 5":     ["cmmi level 5", "cmmi ml5", "cmmi maturity level 5",
-                         "cmmi dev 5", "cmmi svc 5"],
+                         "cmmi dev 5", "cmmi svc 5", "cmmi-dev/5", "cmmi dev/5",
+                         "capability maturity model level 5", "cmmi 5"],
     "CMMI Level 3":     ["cmmi level 3", "cmmi ml3", "cmmi maturity level 3",
-                         "cmmi dev 3", "cmmi svc 3"],
+                         "cmmi dev 3", "cmmi svc 3", "cmmi-dev/3",
+                         "capability maturity model level 3", "cmmi 3"],
     "NASSCOM":          ["nasscom member", "nasscom certified", "nasscom registered",
-                         "nasscom foundation"],
+                         "nasscom foundation", "nasscom company", "member of nasscom",
+                         "nasscom emerge 50", "nasscom 10000 startups"],
     "DPIIT Recognized": ["dpiit", "startup india recognized", "recognized by dpiit",
-                         "dipp recognized", "department for promotion of industry"],
-    "CII Member":       ["cii member", "confederation of indian industry"],
-    "BIS":              ["bis certified", "bis certification", "bureau of indian standards"],
+                         "dipp recognized", "department for promotion of industry",
+                         "dpiit registered", "dpiit recognition", "startup india dpiit"],
+    "CII Member":       ["cii member", "confederation of indian industry", "cii affiliated"],
+    "BIS":              ["bis certified", "bis certification", "bureau of indian standards",
+                         "bis hallmark"],
 }
 
 # ── Tier weights ───────────────────────────────────────────────────────────────
@@ -74,13 +95,27 @@ W_MENTIONED = 1
 
 TIER_ORDER = ["Certified", "Attested", "Supports", "Mentioned"]
 
-_CERT_BADGE_PATHS = frozenset(["/trust", "/trust-center", "/certifications", "/audit", "/governance"])
-_TRUSTED_PATHS    = _CERT_BADGE_PATHS | frozenset(["/security", "/compliance", "/privacy", "/legal"])
+_CERT_BADGE_PATHS = frozenset([
+    "/trust", "/trust-center", "/certifications", "/audit", "/governance",
+    "/iso-27001", "/soc2", "/certifications-and-compliance", "/audit-reports",
+])
+_TRUSTED_PATHS = _CERT_BADGE_PATHS | frozenset([
+    "/security", "/compliance", "/privacy", "/legal",
+    "/iso-certifications", "/security-and-compliance",
+])
 
-_CERT_PHRASES    = frozenset(["certified", "certification", "compliant", "compliance certified",
-                               "audited", "attestation report", "audit report", "certificate"])
-_ATTEST_PHRASES  = frozenset(["attested", "attestation", "meets the requirements",
-                               "in compliance with", "aligned with", "adheres to"])
+_CERT_PHRASES    = frozenset([
+    "certified", "certification", "compliant", "compliance certified",
+    "audited", "attestation report", "audit report", "certificate",
+    "achieved", "attained", "earned", "obtained", "awarded", "accredited",
+    "successfully completed", "has been certified", "is certified",
+    "is compliant", "are compliant", "maintains", "holds certification",
+])
+_ATTEST_PHRASES  = frozenset([
+    "attested", "attestation", "meets the requirements",
+    "in compliance with", "aligned with", "adheres to",
+    "complies with", "meets", "conforms to", "accordance with",
+])
 _SUPPORT_PHRASES = frozenset(["we support", "supports", "working towards", "in progress",
                                "planning", "road map", "roadmap", "coming soon",
                                "pursuing", "preparing for"])
