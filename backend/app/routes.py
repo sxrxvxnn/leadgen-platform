@@ -2679,7 +2679,22 @@ async def analyze_company_website(
         result["compliance"]    = merged_compliance
         result["company_type"]  = final_type
 
-        # ── Step 5: save to DB ─────────────────────────────────────
+        # ── Step 5: build classification reason string ──────────────
+        _reason_parts = []
+        if rule_confidence in ("High", "Medium"):
+            _reason_parts.append(f"Rules ({rule_confidence}): classified as {rule_type}")
+        ai_reason = result.get("company_type_reason") or result.get("is_saas_reason") or ""
+        if ai_reason:
+            _reason_parts.append(f"AI: {ai_reason.strip()}")
+        if is_saas_val:
+            _reason_parts.append("SaaS: has own software products" if final_type in ("Product", "Hybrid") else "SaaS: false (pure service)")
+        classification_reason = " | ".join(_reason_parts) if _reason_parts else "Classified by AI analysis"
+        result["type_reason"] = classification_reason
+        result["type_confidence"] = result.get("confidence", 0) or (
+            90 if rule_confidence == "High" else 70 if rule_confidence == "Medium" else 50
+        )
+
+        # ── Step 6: save to DB ─────────────────────────────────────
         update_data = {}
         if final_type:
             update_data["company_type"] = final_type
@@ -2688,6 +2703,8 @@ async def analyze_company_website(
         if result.get("website_summary") and not company.get("description"):
             update_data["description"] = result["website_summary"]
         update_data["is_saas"] = bool(is_saas_val) if is_saas_val is not None else False
+        update_data["type_reason"] = classification_reason
+        update_data["type_confidence"] = result["type_confidence"]
 
         # Save products_or_services to specialties (only if not already set by LinkedIn)
         pos = result.get("products_or_services", [])
@@ -3941,6 +3958,8 @@ async def bulk_autofill_companies(
                     update_data["is_saas"] = _cls["is_saas"]
                     update_data["saas_category"] = _cls["category"]
                     update_data["type_confidence"] = _cls["confidence"]
+                    update_data["type_reason"] = _cls.get("classification_reason", "")
+                    update_data["type_confidence"] = _cls["confidence"]
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
@@ -4551,6 +4570,14 @@ async def bulk_analyze_companies(
                 update_data["is_saas"] = bool(is_saas_val)
             if merged_compliance:
                 update_data["compliance"] = ", ".join(merged_compliance)
+            # Store classification reasoning
+            _bulk_reason_parts = []
+            if ai_result.get("company_type_reason"):
+                _bulk_reason_parts.append(f"AI: {ai_result['company_type_reason'].strip()}")
+            if is_saas_val is not None:
+                _bulk_reason_parts.append("SaaS=true (own products)" if is_saas_val else "SaaS=false (pure service)")
+            if _bulk_reason_parts:
+                update_data["type_reason"] = " | ".join(_bulk_reason_parts)
 
             ws_description = (
                 ai_result.get("website_summary")
