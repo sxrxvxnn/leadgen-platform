@@ -516,14 +516,15 @@ def force_override_with_scraped(result: dict, website_data: dict) -> dict:
             )
 
     # Nav has both "Products" + "Services/Solutions" tabs → always Hybrid
-    nav_lower = (website_data.get('nav', '') or '').lower()
-    if ('products' in nav_lower and
-            any(s in nav_lower for s in ['services', 'our services', 'what we do', 'solutions'])):
+    # Use nav + header combined — many sites nest nav links inside <header>
+    _nav_hdr = ((website_data.get('nav', '') or '') + ' ' + (website_data.get('header', '') or '')[:300]).lower()
+    if ('product' in _nav_hdr and
+            any(s in _nav_hdr for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients'])):
         if result.get('company_type') != 'Hybrid':
             result['company_type'] = 'Hybrid'
             result['company_type_reason'] = (
                 result.get('company_type_reason', '') +
-                ' [Override: nav has both Products + Services tabs → Hybrid.]'
+                ' [Override: nav/header has both Products + Services → Hybrid.]'
             )
 
     # Normalise "Services" → "Service"
@@ -796,11 +797,11 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     ]
 
     # ── Nav-level product detection (very reliable) ──────────────────────
-    # If "products" appears as a nav tab, the company has own software products.
-    # Combined with "services" in nav → definitely Hybrid.
-    nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
-    nav_has_products = 'products' in nav_text_lower
-    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do', 'solutions'])
+    # If "products" appears as a nav/header, the company has own software products.
+    # Combined with "services" in nav/header → definitely Hybrid.
+    nav_text_lower = (((website_data.get("nav", "") or "") + " " + (website_data.get("header", "") or "")[:300]).lower()) if website_data else ""
+    nav_has_products = 'product' in nav_text_lower
+    nav_has_services = any(s in nav_text_lower for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients'])
     if nav_has_products:
         p_strong_count = p_strong_count  # will be added below after initial count
     # Counter-signals: product_weak hits don't count when these are present
@@ -849,10 +850,10 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
 
     # ── Nav "Products" tab — very reliable structural signal ─────────────────
     # A "Products" nav tab means the company has named software products of their own.
-    # When combined with "Services" in nav → Hybrid regardless of other signals.
-    nav_text_lower = (website_data.get("nav", "") or "").lower() if website_data else ""
-    nav_has_products = 'products' in nav_text_lower
-    nav_has_services = any(s in nav_text_lower for s in ['services', 'our services', 'what we do', 'solutions'])
+    # When combined with "Services" in nav/header → Hybrid regardless of other signals.
+    nav_text_lower = (((website_data.get("nav", "") or "") + " " + (website_data.get("header", "") or "")[:300]).lower()) if website_data else ""
+    nav_has_products = 'product' in nav_text_lower
+    nav_has_services = any(s in nav_text_lower for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients'])
     if nav_has_products:
         p_strong_count += 3  # company lists own software products
 
@@ -1232,10 +1233,12 @@ def classify_website_saas(
         classification_reasons.append(f'Non-SaaS product signals also strong ({scores["product"]}) → Hybrid')
 
     # Nav structural overrides — most reliable classification signal
-    nav_has_products = website_data and 'products' in (website_data.get('nav', '') or '').lower()
-    nav_has_services = website_data and any(
-        s in (website_data.get('nav', '') or '').lower()
-        for s in ['services', 'our services', 'what we do', 'solutions']
+    # Use both <nav> and <header> text — many sites put nav links inside <header> not <nav>
+    _nav_text = ((website_data.get('nav', '') or '') + ' ' + (website_data.get('header', '') or '')[:300]).lower() if website_data else ''
+    nav_has_products = bool(_nav_text) and 'product' in _nav_text
+    nav_has_services = bool(_nav_text) and any(
+        s in _nav_text
+        for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients']
     )
     if nav_has_products and nav_has_services:
         # Always Hybrid when nav explicitly lists both product and service sections
