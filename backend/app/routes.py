@@ -3954,6 +3954,11 @@ async def bulk_autofill_companies(
         except Exception:
             pass
 
+    # Mutable session flags shared across all companies in this bulk run.
+    # ProxyCurl v2 returns 410 API_SUNSET — skip remaining calls once detected.
+    # Gemini quota exhausts quickly — skip all further attempts once first 429 seen.
+    _sess = {"pc_sunset": False, "gemini_exhausted": False}
+
     def _autofill_one(company: dict) -> dict:
         import datetime as _dt
         company_name = company.get("name", "").strip()
@@ -4278,7 +4283,7 @@ async def bulk_autofill_companies(
                 (needs_desc and not update_data.get("description"))
             )
             # If no LinkedIn URL, resolve it via ProxyCurl company resolver (2 credits)
-            if _pc_key and not _li_url_for_pc and _pc_missing:
+            if _pc_key and not _li_url_for_pc and _pc_missing and not _sess["pc_sunset"]:
                 try:
                     _ws_for_resolve = update_data.get("website") or company.get("website") or ws_url or ""
                     _resolve_params: dict = {"company_name": company_name}
@@ -4298,9 +4303,12 @@ async def bulk_autofill_companies(
                             if not update_data.get("linkedin_url") and not company.get("linkedin_url"):
                                 update_data["linkedin_url"] = _resolved_url
                             print(f"[proxycurl_resolve] Resolved {company_name} → {_resolved_url}", flush=True)
+                    elif _resolve_r.status_code == 410:
+                        _sess["pc_sunset"] = True
+                        print(f"[proxycurl_bulk] API_SUNSET — skipping ProxyCurl for all remaining companies", flush=True)
                 except Exception:
                     pass
-            if _pc_key and _li_url_for_pc and _pc_missing:
+            if _pc_key and _li_url_for_pc and _pc_missing and not _sess["pc_sunset"]:
                 try:
                     _pc_res = requests.get(
                         "https://nubela.co/proxycurl/api/v2/linkedin/company",
@@ -4336,6 +4344,9 @@ async def bulk_autofill_companies(
                             _hq_str = ", ".join(p for p in _hq_parts if p)
                             if _hq_str:
                                 update_data["headquarters"] = _hq_str
+                    elif _pc_res.status_code == 410:
+                        _sess["pc_sunset"] = True
+                        print(f"[proxycurl_bulk] API_SUNSET — skipping ProxyCurl for all remaining companies", flush=True)
                     else:
                         print(f"[proxycurl_bulk] {company_name} FAILED: {_pc_res.text[:100]}", flush=True)
                 except Exception as _pc_ex:
@@ -4475,7 +4486,14 @@ async def bulk_autofill_companies(
                                 _fy_m = _re_mod.search(r'[Ff]ounded\D{0,5}(\b(?:19|20)\d{2}\b)', _fy_body)
                             if _fy_m:
                                 _yr6c = _fy_m.group(1)
-                                if 1950 <= int(_yr6c) <= 2025:
+                                # Sanity check: company name words must appear near the year
+                                _yr_ctx = _fy_body[max(0, _fy_m.start()-250):_fy_m.end()+100].lower()
+                                _cn6c_words = [w for w in _re_mod.sub(r'[^a-z]', ' ', _cn6c.lower()).split() if len(w) > 3]
+                                _yr_ctx_ok = not _cn6c_words or any(w in _yr_ctx for w in _cn6c_words[:2])
+                                # Domain sanity: .ai / AI companies rarely pre-date 2010
+                                _ws_for_yr = (update_data.get("website") or company.get("website") or ws_url or "").lower()
+                                _min_yr = 2010 if (".ai" in _ws_for_yr or " ai" in company_name.lower()) else 1950
+                                if _yr_ctx_ok and _min_yr <= int(_yr6c) <= 2025:
                                     update_data["founded"] = _yr6c
                                     _still_need_founded_6c = False
                                     print(f"[founded_search] {company_name}: {_yr6c}", flush=True)
@@ -4515,7 +4533,7 @@ async def bulk_autofill_companies(
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
-            if _gemini_key_bulk and len(_desc_bulk) > 5 and _missing_bulk:
+            if _gemini_key_bulk and len(_desc_bulk) > 5 and _missing_bulk and not _sess["gemini_exhausted"]:
                 try:
                     import json as _json_bulk
                     import time as _time_bulk
@@ -4537,30 +4555,26 @@ async def bulk_autofill_companies(
                         'Use null only for founded and headquarters if truly unknown. Always provide industry, specialties, company_type.'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
-                    import random as _rand_bulk
-                    _rand_bulk.seed()
-                    _time_bulk.sleep(_rand_bulk.uniform(1, 6))  # jitter to stagger concurrent invocations
                     with _GEMINI_SEM:
                         _gr = None
-                        # Try gemini-1.5-flash first (separate quota pool), fall back to 2.0-flash
+                        _g_model = "gemini-2.0-flash"
+                        # Try gemini-1.5-flash first (separate quota pool), then 2.0-flash
                         for _g_model in ("gemini-1.5-flash", "gemini-2.0-flash"):
-                            for _g_attempt in range(2):
-                                _gr = requests.post(
-                                    f"https://generativelanguage.googleapis.com/v1beta/models/{_g_model}:generateContent?key={_gemini_key_bulk}",
-                                    headers={"Content-Type": "application/json"},
-                                    json={"contents": [{"parts": [{"text": _bp}]}],
-                                          "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
-                                    timeout=20,
-                                )
-                                if _gr.status_code == 200:
-                                    break
-                                if _gr.status_code == 429:
-                                    print(f"[gemini_bulk] 429 body={_gr.text[:150]}", flush=True)
-                                    _time_bulk.sleep(5 * (_g_attempt + 1))
-                                else:
-                                    break
-                            if _gr and _gr.status_code == 200:
+                            _gr = requests.post(
+                                f"https://generativelanguage.googleapis.com/v1beta/models/{_g_model}:generateContent?key={_gemini_key_bulk}",
+                                headers={"Content-Type": "application/json"},
+                                json={"contents": [{"parts": [{"text": _bp}]}],
+                                      "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
+                                timeout=20,
+                            )
+                            if _gr.status_code == 200:
                                 break
+                            if _gr.status_code == 429:
+                                # Quota exhausted — mark session so all remaining companies skip Gemini
+                                _sess["gemini_exhausted"] = True
+                                print(f"[gemini_bulk] 429 on {_g_model} — quota exhausted, switching to Groq for session", flush=True)
+                                break
+                            # Other error (400, 503 etc) — try next model
                     print(f"[gemini_bulk] status={_gr.status_code} model={_g_model} for {company_name}", flush=True)
                     if _gr.status_code == 200:
                         _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
