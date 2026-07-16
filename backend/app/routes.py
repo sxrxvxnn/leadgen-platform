@@ -3749,11 +3749,10 @@ async def bulk_autofill_companies(
                             result["followers"] = m.group(1).strip()  # number only, not "X followers"
                     if not result.get("employee_count"):
                         m = _re_mod.search(
-                            r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
-                            r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
+                            r'(\d[\d,]+)\s+employees?',  # exact integer only — excludes "2-10 employees"
                             body, _re_mod.I,
                         )
-                        if m:
+                        if m and '-' not in m.group(1):
                             result["employee_count"] = m.group(1).replace(",", "")
                     if not result.get("headquarters"):
                         m = _re_mod.search(
@@ -4022,7 +4021,7 @@ async def bulk_autofill_companies(
                     update_data["followers"] = _fv
             if _snip.get("employee_count") and needs_size:
                 _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
-                if _sv:
+                if _sv and '-' not in _sv and not _sv.endswith('+'):  # exact number only
                     update_data["size"] = _sv
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
                 update_data["headquarters"] = _snip["headquarters"]
@@ -4069,7 +4068,7 @@ async def bulk_autofill_companies(
                                 update_data["followers"] = _fv2
                         if li_res.get("employee_count") and needs_size and not update_data.get("size"):
                             _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
-                            if _sv2:
+                            if _sv2 and '-' not in _sv2 and not _sv2.endswith('+'):  # exact number only
                                 update_data["size"] = _sv2
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = li_res["location"]
@@ -4266,10 +4265,10 @@ async def bulk_autofill_companies(
                         # Employees / size
                         if _still_need_size and not update_data.get("size"):
                             _em6b = _re_mod.search(
-                                r'(\d[\d,]*(?:\s*[-–]\s*\d[\d,]+)?(?:\+)?)\s*employees?',
+                                r'(\d[\d,]+)\s+employees?',  # exact integer only, no ranges
                                 _body6b, _re_mod.I
                             )
-                            if _em6b:
+                            if _em6b and '-' not in _em6b.group(1):
                                 update_data["size"] = _em6b.group(1).replace(",", "").strip()
                                 _still_need_size = False
                         # HQ — broad pattern + LinkedIn knowledge-panel pattern (· City, Country ·)
@@ -4463,11 +4462,10 @@ async def bulk_autofill_companies(
             if desc_text:
                 if needs_size and not update_data.get("size"):
                     m = _re_mod.search(
-                        r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)'
-                        r'(?:\s*[&+]\s*(?:above|more|plus|and above))?\s*employees?',
+                        r'(\d[\d,]+)\s+employees?',  # exact integer only, no ranges
                         desc_text, _re_mod.I,
                     )
-                    if m:
+                    if m and '-' not in m.group(1):
                         update_data["size"] = m.group(1).replace(",", "")
                 if needs_hq and not update_data.get("headquarters"):
                     m = _re_mod.search(
