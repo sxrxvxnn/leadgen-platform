@@ -3785,24 +3785,33 @@ async def bulk_autofill_companies(
 
         Prevents saving/using a DDGS-discovered website that actually belongs to a
         different company (e.g. 'Cinch Business Solutions' → greencirclelife.com).
-        Requires at least one non-generic name word to appear on the page.
+        Checks title/meta/hero first (fast), then falls back to full text.
+        For multi-word names, requires ≥2 words to match.
         """
         if not website_data:
             return False
-        page_text = " ".join(filter(None, [
+        # Headline fields first — most specific
+        headline_text = " ".join(filter(None, [
             website_data.get("title", ""),
             website_data.get("meta_description", ""),
             website_data.get("hero", ""),
             website_data.get("first_para", ""),
         ])).lower()
         # Reject domain-for-sale pages outright
-        if any(s in page_text for s in _DOMAIN_SALE_SIGNALS):
+        if any(s in headline_text for s in _DOMAIN_SALE_SIGNALS):
             return False
         clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
         words = [w for w in clean.split() if len(w) > 2 and w not in _SITE_GENERIC]
         if not words:
             return True  # Name is entirely generic — cannot validate, accept
-        return any(w in page_text for w in words[:4])
+        matches_in_headline = sum(1 for w in words[:4] if w in headline_text)
+        # Multi-word names: require 2+ words to match in headline, OR 1+ in full text
+        need = 2 if len(words) >= 3 else 1
+        if matches_in_headline >= need:
+            return True
+        # Fallback: check full page text (title+nav+hero+full_text) for at least 1 word
+        full_text = headline_text + " " + (website_data.get("full_text", "") or "")[:3000].lower()
+        return sum(1 for w in words[:4] if w in full_text) >= need
 
     def _linkedin_slug_matches(company_name: str, linkedin_url: str) -> bool:
         """Validate that a LinkedIn URL slug plausibly belongs to this company.
@@ -3829,26 +3838,48 @@ async def bulk_autofill_companies(
         linkedin.com/company/slug frequently contain "X followers" and "Y employees"
         from knowledge panels — no login required. Uses Brave Search (if key set)
         with DDGS as fallback.
+
+        Guards: company name words must appear in the snippet body before followers/
+        employees are trusted. LinkedIn URL is only captured from slug-targeted queries
+        to avoid scooping up unrelated LinkedIn pages from mixed-result queries.
         """
         from .company_prefill import _web_search as _ws
         result = {}
+
+        # Build a minimal set of name words for body-text validation
+        _cn_clean = _re_mod.sub(r'[^a-z0-9 ]', ' ', clean_name_for_search(company_name).lower())
+        _cn_words  = [w for w in _cn_clean.split()
+                      if len(w) > 2 and w not in {'inc','llc','ltd','pvt','corp','co',
+                                                   'the','and','of','by','group','private',
+                                                   'limited','company','technologies',
+                                                   'solutions','services','systems'}]
+
+        def _body_is_about_company(body: str) -> bool:
+            bl = body.lower()
+            return not _cn_words or any(w in bl for w in _cn_words[:3])
+
         queries = []
         if li_slug:
-            queries.append(f"site:linkedin.com/company/{li_slug}")
-        queries.append(f'"{company_name}" site:linkedin.com employees followers')
-        queries.append(f'"{company_name}" linkedin company employees followers')
-        for q in queries:
+            queries.append((f"site:linkedin.com/company/{li_slug}", True))   # slug-targeted: trust URL
+        queries.append((f'"{company_name}" site:linkedin.com employees followers', False))
+        queries.append((f'"{company_name}" linkedin company employees followers', False))
+
+        for q, trust_url in queries:
             try:
                 for r in _ws(q, count=5):
                     body = " ".join(filter(None, [
                         r.get("body"), r.get("title"), r.get("description"),
                     ]))
-                    # Capture LinkedIn URL from search result URL when it's a company page
-                    if not result.get("linkedin_url"):
+                    # Only capture LinkedIn URL from slug-targeted queries — mixed queries
+                    # return unrelated company pages that happen to mention the name.
+                    if trust_url and not result.get("linkedin_url"):
                         _ru = r.get("url", "")
                         _li_m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', _ru)
                         if _li_m:
                             result["linkedin_url"] = f"https://www.linkedin.com/company/{_li_m.group(1)}/"
+                    # Only trust follower/employee counts when body is about this company
+                    if not _body_is_about_company(body):
+                        continue
                     if not result.get("followers"):
                         m = _re_mod.search(
                             r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?',
@@ -3858,7 +3889,7 @@ async def bulk_autofill_companies(
                             result["followers"] = m.group(1).strip()
                     if not result.get("employee_count"):
                         m = _re_mod.search(
-                            r'(\d[\d,]+)\s+employees?',  # exact integer only — excludes "2-10 employees"
+                            r'(\d[\d,]+)\s+employees?',
                             body, _re_mod.I,
                         )
                         if m and '-' not in m.group(1):
@@ -4124,11 +4155,12 @@ async def bulk_autofill_companies(
                         with _DDGS_SEM:
                             try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
                             except Exception: pass
-            # LinkedIn URL found in snippet search results — use as confirmed URL
+            # LinkedIn URL found in snippet search results — validate slug matches company name
             if _snip.get("linkedin_url") and needs_linkedin and not li_url_confirmed:
-                li_url_confirmed = _snip["linkedin_url"]
-                li_url = li_url_confirmed
-                update_data["linkedin_url"] = li_url_confirmed
+                if _linkedin_slug_matches(company_name, _snip["linkedin_url"]):
+                    li_url_confirmed = _snip["linkedin_url"]
+                    li_url = li_url_confirmed
+                    update_data["linkedin_url"] = li_url_confirmed
             if _snip.get("followers") and needs_followers:
                 _fv = _re_mod.sub(r'\s*followers?\b.*', '', str(_snip["followers"]), flags=_re_mod.I).strip().replace(',', '')
                 if _fv:
