@@ -308,6 +308,7 @@ export const deletePersona = (id) => api.delete(`/personas/${id}`)
 // ─── ASYNC JOBS (SQS-backed) ──────────────────────────────────────────────────
 export const getJob = (jobId) => api.get(`/jobs/${jobId}`)
 export const listJobs = () => api.get('/jobs')
+export const notifyEnrichmentComplete = (data) => api.post('/notify/enrichment-complete', data)
 
 export const bulkAutofillCompaniesAsync = (companyIds, liCookie = '') =>
   api.post('/companies/bulk-autofill/async', {
