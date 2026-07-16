@@ -3824,7 +3824,7 @@ async def bulk_autofill_companies(
 
         needs_desc      = True   # always re-fetch: previous run may have had wrong website data
         needs_hq        = not bool(company.get("headquarters"))
-        needs_type      = True   # always re-classify: classifier was fixed this session
+        needs_type      = not bool(company.get("company_type"))  # skip if already set (preserves manual corrections)
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
