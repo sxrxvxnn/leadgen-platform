@@ -4443,15 +4443,68 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
+            # ── Step 6c: Targeted founding-year search ────────────────────────────
+            # ProxyCurl often misses founded_year; Crunchbase/Tracxn/LinkedIn reliably have it
+            _still_need_founded_6c = not update_data.get("founded") and not company.get("founded")
+            if _still_need_founded_6c:
+                try:
+                    _cn6c = _re_mod.sub(
+                        r'\s*[\(\[]?(?:P(?:vt)?|Private|Public)\s*[\)\]]?\s*'
+                        r'(?:Ltd|Limited|Inc|Corp|Corporation|LLP|LLC|Pty|PLC)\.?\b',
+                        '', company_name, flags=_re_mod.I
+                    ).strip() or company_name
+                    _fy_queries = [
+                        f'"{_cn6c}" founded year site:crunchbase.com OR site:tracxn.com OR site:zoominfo.com',
+                        f'"{_cn6c}" founded OR established year company history',
+                    ]
+                    for _fy_q in _fy_queries:
+                        if not _still_need_founded_6c:
+                            break
+                        for _fy_r in _bulk_fc_search(_fy_q, limit=3):
+                            _fy_body = " ".join(filter(None, [
+                                _fy_r.get("description", ""),
+                                (_fy_r.get("markdown") or "")[:600],
+                                _fy_r.get("title", ""),
+                            ]))
+                            _fy_m = _re_mod.search(
+                                r'(?:founded|established|incorporated|since|launched)\s*(?:in\s*)?(\b(?:19|20)\d{2}\b)',
+                                _fy_body, _re_mod.I
+                            )
+                            if not _fy_m:
+                                # Crunchbase pattern: "Founded: 2010" or "Founded 2010"
+                                _fy_m = _re_mod.search(r'[Ff]ounded\D{0,5}(\b(?:19|20)\d{2}\b)', _fy_body)
+                            if _fy_m:
+                                _yr6c = _fy_m.group(1)
+                                if 1950 <= int(_yr6c) <= 2025:
+                                    update_data["founded"] = _yr6c
+                                    _still_need_founded_6c = False
+                                    print(f"[founded_search] {company_name}: {_yr6c}", flush=True)
+                                    break
+                except Exception as _fy_ex:
+                    print(f"[founded_search] {company_name} EXCEPTION: {_fy_ex}", flush=True)
+
             # ── Step 7: Gemini gap-fill ───────────────────────────────────────────
             _gemini_key_bulk = os.environ.get("GEMINI_API_KEY", "")
-            # Build context: description → tagline → specialties as fallbacks
-            # so Gemini runs even when only a tagline or specialties are known
+            # Build rich context from ALL available signals so AI runs even with no description
             _desc_bulk = update_data.get("description") or company.get("description") or ""
-            if len(_desc_bulk) < 40:
+            if len(_desc_bulk) < 60:
                 _tgl = update_data.get("tagline") or company.get("tagline") or ""
                 _spc = update_data.get("specialties") or company.get("specialties") or ""
-                _extra = " | ".join(filter(None, [_tgl, _spc]))
+                _ind_hint = update_data.get("industry") or company.get("industry") or ""
+                _ws_hint = update_data.get("website") or company.get("website") or ws_url or ""
+                _signals = [s for s in [_tgl, _spc, _ind_hint] if s]
+                # When truly no text signals, use company name + domain as last-resort context
+                if not _signals:
+                    _signals.append(f"Company name: {company_name}")
+                    if _ws_hint:
+                        try:
+                            from urllib.parse import urlparse as _up_ai
+                            _dom_ai = _up_ai(_ws_hint if _ws_hint.startswith("http") else f"https://{_ws_hint}").netloc.replace("www.", "")
+                            if _dom_ai:
+                                _signals.append(f"Website domain: {_dom_ai}")
+                        except Exception:
+                            pass
+                _extra = " | ".join(_signals)
                 if _extra:
                     _desc_bulk = (_desc_bulk + " " + _extra).strip() if _desc_bulk else _extra
             # needs_type=True means we always want to re-classify; only skip AI
@@ -4462,26 +4515,26 @@ async def bulk_autofill_companies(
                             (not update_data.get("specialties") and not company.get("specialties")) or \
                             (needs_hq and not update_data.get("headquarters")) or \
                             _missing_type_bulk
-            if _gemini_key_bulk and len(_desc_bulk) > 20 and _missing_bulk:
+            if _gemini_key_bulk and len(_desc_bulk) > 5 and _missing_bulk:
                 try:
                     import json as _json_bulk
                     import time as _time_bulk
                     _bp = (
-                        f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
-                        'Extract these fields. Be specific and concise.\n'
+                        f'Company: {company_name}\nContext: {_desc_bulk[:400]}\n\n'
+                        'Using the company name and any context provided, infer these fields. '
+                        'Even if context is sparse (just a domain or name), make your best inference.\n'
                         '- industry: SPECIFIC industry name. Use terms like "Software Development", '
-                        '"IT Consulting", "Data Analytics", "Cybersecurity", "E-commerce", '
-                        '"Financial Services", "Healthtech", "EdTech". '
+                        '"Artificial Intelligence", "IT Consulting", "Data Analytics", "Cybersecurity", '
+                        '"E-commerce", "Financial Services", "Healthtech", "EdTech", "Insurance Tech". '
                         'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
-                        '- founded: 4-digit founding year only (omit if not mentioned)\n'
-                        '- headquarters: city and country only (e.g. "Bangalore, India") — only if mentioned\n'
-                        '- specialties: 3-5 comma-separated specific capability areas\n'
-                        '- company_type: exactly one of "Product" (sells software/SaaS product), '
+                        '- founded: 4-digit founding year only (omit if unknown)\n'
+                        '- headquarters: city and country only (e.g. "Bangalore, India") — only if known\n'
+                        '- specialties: 3-5 comma-separated specific capability areas (infer from company name/domain if needed)\n'
+                        '- company_type: exactly one of "Product" (sells software/SaaS/platform), '
                         '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
-                        'Signals → Product: subscription, SaaS, platform, free trial; '
-                        'Service: client projects, consulting, outsourcing, staff augmentation.\n\n'
+                        'Domain signals → .ai domain: likely Product; "consulting/solutions/services" in name: Service.\n\n'
                         'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
-                        'Use null for fields you cannot determine with confidence.'
+                        'Use null only for founded and headquarters if truly unknown. Always provide industry, specialties, company_type.'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
                     import random as _rand_bulk
@@ -4546,7 +4599,7 @@ async def bulk_autofill_companies(
                 (not update_data.get("specialties") and not company.get("specialties")) or
                 (_missing_type_bulk and not update_data.get("company_type"))
             )
-            if _groq_key_bulk and len(_desc_bulk) > 20 and _still_missing_bulk:
+            if _groq_key_bulk and len(_desc_bulk) > 5 and _still_missing_bulk:
                 try:
                     import json as _json_groq
                     _groq_res = requests.post(
@@ -4557,21 +4610,21 @@ async def bulk_autofill_companies(
                             "temperature": 0.1,
                             "max_tokens": 200,
                             "messages": [{"role": "user", "content": (
-                                f'Company: {company_name}\nDescription: {_desc_bulk[:400]}\n\n'
-                                'Extract these fields. Be specific and concise.\n'
+                                f'Company: {company_name}\nContext: {_desc_bulk[:400]}\n\n'
+                                'Using the company name and any context provided, infer these fields. '
+                                'Even if context is sparse (just a domain or name), make your best inference.\n'
                                 '- industry: SPECIFIC industry name. Use terms like "Software Development", '
-                                '"IT Consulting", "Data Analytics", "Cybersecurity", "E-commerce", '
-                                '"Financial Services", "Healthtech", "EdTech". '
+                                '"Artificial Intelligence", "IT Consulting", "Data Analytics", "Cybersecurity", '
+                                '"E-commerce", "Financial Services", "Healthtech", "EdTech", "Insurance Tech". '
                                 'NEVER return vague terms like "Technology", "Software", "Services", "IT".\n'
-                                '- founded: 4-digit founding year only (omit if not mentioned)\n'
-                                '- headquarters: city and country only (e.g. "Bangalore, India") — only if mentioned\n'
-                                '- specialties: 3-5 comma-separated specific capability areas\n'
-                                '- company_type: exactly one of "Product" (sells software/SaaS product), '
+                                '- founded: 4-digit founding year only (omit if unknown)\n'
+                                '- headquarters: city and country only (e.g. "Bangalore, India") — only if known\n'
+                                '- specialties: 3-5 comma-separated specific capability areas (infer from name/domain)\n'
+                                '- company_type: exactly one of "Product" (sells software/SaaS/platform), '
                                 '"Service" (consulting/outsourcing/agency/staffing), or "Hybrid" (both). '
-                                'Signals → Product: subscription, SaaS, platform, free trial; '
-                                'Service: client projects, consulting, outsourcing, staff augmentation.\n\n'
+                                'Domain signals → .ai domain: likely Product; "consulting/solutions/services" in name: Service.\n\n'
                                 'Respond ONLY as JSON: {"industry":"...","founded":"...","headquarters":"...","specialties":"...","company_type":"..."}\n'
-                                'Use null for fields you cannot determine with confidence.'
+                                'Use null only for founded and headquarters if truly unknown. Always provide industry, specialties, company_type.'
                             )}],
                         },
                         timeout=20,
@@ -4624,6 +4677,23 @@ async def bulk_autofill_companies(
                     )
                     if m:
                         update_data["headquarters"] = m.group(1).strip()
+
+            # ── Step 9: Compliance detection ─────────────────────────────────────
+            # Run on every enrichment if not already confirmed (re-checks "None detected" too)
+            _comp_ws_url = update_data.get("website") or company.get("website") or ws_url or ""
+            _existing_comp = company.get("compliance") or ""
+            _needs_comp_scan = _comp_ws_url and (
+                not _existing_comp or _existing_comp == "None detected"
+            )
+            if _needs_comp_scan:
+                try:
+                    _comp_detection = _run_compliance_scan(_comp_ws_url, gemini_key=_gemini_key_bulk)
+                    from .compliance_detector import format_for_db as _fmt_comp
+                    _comp_db_val = _fmt_comp(_comp_detection)
+                    update_data["compliance"] = _comp_db_val
+                    print(f"[compliance] {company_name}: {_comp_db_val[:80]}", flush=True)
+                except Exception as _comp_ex:
+                    print(f"[compliance] {company_name} EXCEPTION: {_comp_ex}", flush=True)
 
             # Always stamp enriched_at so the export shows when data was gathered
             update_data["enriched_at"] = _dt.datetime.utcnow().isoformat()
