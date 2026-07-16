@@ -799,11 +799,6 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     # ── Nav-level product detection (very reliable) ──────────────────────
     # If "products" appears as a nav/header, the company has own software products.
     # Combined with "services" in nav/header → definitely Hybrid.
-    nav_text_lower = (((website_data.get("nav", "") or "") + " " + (website_data.get("header", "") or "")[:300]).lower()) if website_data else ""
-    nav_has_products = 'product' in nav_text_lower
-    nav_has_services = any(s in nav_text_lower for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients'])
-    if nav_has_products:
-        p_strong_count = p_strong_count  # will be added below after initial count
     # Counter-signals: product_weak hits don't count when these are present
     # (service company building a product FOR clients, not selling it as SaaS)
     for_client_signals = [
