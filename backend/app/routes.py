@@ -2202,51 +2202,95 @@ async def bulk_create_companies(
 
 # ─── COMPLIANCE CHECKER ───────────────────────────────────────
 
-def _run_compliance_scan(website: str, gemini_key: str = "") -> dict:
+def _run_compliance_scan(website: str, gemini_key: str = "", company_name: str = "") -> dict:
     """
-    Full compliance scan for a company website.
-    1. Scrapes the main page.
-    2. If no credible certs found, also tries /security, /compliance, /trust,
-       /certifications, /legal — certs are rarely on the homepage.
+    Full compliance scan: homepage → expanded subpages → web search fallback.
     Returns the detect_compliance() result dict.
     """
     from .website_analyzer import fetch_website_content
-    from .compliance_detector import detect_compliance, format_for_db
+    from .compliance_detector import detect_compliance
     from urllib.parse import urlparse as _cup
+    import re as _re_c
 
+    def _merge(base: dict, extra: dict) -> dict:
+        """Add frameworks from extra into base (no duplicates)."""
+        existing = {f["framework"] for f in base["frameworks"]}
+        for fw in extra["frameworks"]:
+            if fw["framework"] not in existing:
+                base["frameworks"].append(fw)
+        base["frameworks"].sort(key=lambda x: x["confidence"], reverse=True)
+        return base
+
+    # ── 1. Homepage scan ──────────────────────────────────────────────────────
     if not website:
         return detect_compliance(None, gemini_key=gemini_key)
 
     website_data = fetch_website_content(website)
     detection    = detect_compliance(website_data, gemini_key=gemini_key)
-    credible     = [f for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested")]
+    credible     = lambda d: [f for f in d["frameworks"] if f["tier"] in ("Certified", "Attested")]
 
-    if not credible:
-        # Probe 3 high-signal subpages using fast mode (4s timeout each).
-        # Certs rarely appear on homepages — dedicated pages are far more reliable.
+    # ── 2. Expanded subpage probe ─────────────────────────────────────────────
+    if not credible(detection):
         try:
-            _p = _cup(website if website.startswith("http") else f"https://{website}")
+            _p   = _cup(website if website.startswith("http") else f"https://{website}")
             root = f"{_p.scheme}://{_p.netloc}"
         except Exception:
             root = website.rstrip("/")
 
-        for subpath in ("/security", "/compliance", "/trust"):
+        _subpages = [
+            "/security", "/compliance", "/trust", "/trust-center",
+            "/certifications", "/legal", "/privacy", "/iso-27001",
+            "/soc2", "/audit", "/certifications-and-compliance",
+        ]
+        for subpath in _subpages:
+            if credible(detection):
+                break
             try:
                 sub_data = fetch_website_content(root + subpath, fast=True)
                 if not sub_data:
                     continue
-                sub_det  = detect_compliance(sub_data, gemini_key=gemini_key)
-                sub_cred = [f for f in sub_det["frameworks"] if f["tier"] in ("Certified", "Attested")]
-                if sub_cred:
-                    existing_fw = {f["framework"] for f in detection["frameworks"]}
-                    for fw in sub_det["frameworks"]:
-                        if fw["framework"] not in existing_fw:
-                            detection["frameworks"].append(fw)
-                    detection["frameworks"].sort(key=lambda x: x["confidence"], reverse=True)
-                    detection["source"] = sub_det["source"] + f" (subpage:{subpath})"
-                    break
+                sub_det = detect_compliance(sub_data, gemini_key=gemini_key)
+                if credible(sub_det):
+                    detection = _merge(detection, sub_det)
+                    detection["source"] = f"rule-based (subpage:{subpath})"
             except Exception:
                 continue
+
+    # ── 3. Web search fallback — finds external press releases and attestations ─
+    if not credible(detection) and company_name:
+        try:
+            from .company_prefill import _web_search as _ws_c
+            _cn_q = company_name.strip()
+            _search_queries = [
+                f'"{_cn_q}" "SOC 2" OR "ISO 27001" OR "HIPAA" OR "GDPR" certified compliant',
+                f'"{_cn_q}" certification compliance security audit',
+                f'"{_cn_q}" NASSCOM OR CMMI OR "ISO 9001" OR DPIIT certified',
+            ]
+            _ws_hits: list = []
+            for _q in _search_queries:
+                if credible(detection):
+                    break
+                try:
+                    for _r in _ws_c(_q, count=5):
+                        _body = " ".join(filter(None, [
+                            _r.get("title", ""), _r.get("body", ""),
+                            _r.get("description", ""),
+                        ]))
+                        if not _body:
+                            continue
+                        # Only trust results that mention the company name
+                        _cn_words = [w for w in _re_c.sub(r'[^a-z]', ' ', _cn_q.lower()).split() if len(w) > 3]
+                        if _cn_words and not any(w in _body.lower() for w in _cn_words[:2]):
+                            continue
+                        _ws_det = detect_compliance({"full_text": _body, "url": _r.get("href", ""), "scan_text": _body})
+                        if credible(_ws_det):
+                            detection = _merge(detection, _ws_det)
+                            detection["source"] = f"rule-based (web-search)"
+                            break
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
     return detection
 
@@ -2270,7 +2314,7 @@ async def check_compliance(
 
         from .compliance_detector import format_for_db
 
-        detection          = _run_compliance_scan(website, gemini_key=gemini_key)
+        detection          = _run_compliance_scan(website, gemini_key=gemini_key, company_name=company.get("name", ""))
         compliance_str     = format_for_db(detection)
         frameworks         = detection["frameworks"]
         has_security_team  = detection["has_security_team"]
@@ -2331,7 +2375,7 @@ async def bulk_check_compliance(
             company = co_res.data
             website = company.get("website", "")
 
-            detection      = _run_compliance_scan(website, gemini_key=gemini_key)
+            detection      = _run_compliance_scan(website, gemini_key=gemini_key, company_name=company.get("name", ""))
             compliance_str = format_for_db(detection)
             credible_count = sum(1 for f in detection["frameworks"] if f["tier"] in ("Certified", "Attested"))
 
@@ -4821,7 +4865,7 @@ async def bulk_autofill_companies(
             )
             if _needs_comp_scan:
                 try:
-                    _comp_detection = _run_compliance_scan(_comp_ws_url, gemini_key=_gemini_key_bulk)
+                    _comp_detection = _run_compliance_scan(_comp_ws_url, gemini_key=_gemini_key_bulk, company_name=company_name)
                     from .compliance_detector import format_for_db as _fmt_comp
                     _comp_db_val = _fmt_comp(_comp_detection)
                     update_data["compliance"] = _comp_db_val
