@@ -4354,19 +4354,24 @@ async def bulk_autofill_companies(
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
                 update_data["headquarters"] = _snip["headquarters"]
 
-            # ── Step 6: Jina LinkedIn (semaphore-gated fallback) ─────────────────
-            # Jina renders LinkedIn pages but is rate-limited; cap to 5 concurrent.
-            # Only run when core fields are still missing.
+            # ── Step 6: LinkedIn page scrape — Firecrawl primary, Jina fallback ───
+            # Firecrawl renders full JS/LinkedIn page accurately.
+            # Jina is rate-limited fallback when Firecrawl credits are exhausted.
             _jina_needed = (
                 (needs_size and not update_data.get("size")) or
                 (needs_hq and not update_data.get("headquarters")) or
                 (needs_desc and not update_data.get("description")) or
+                (not update_data.get("followers") and needs_followers) or
                 (not update_data.get("industry") and not company.get("industry"))
             )
             if li_url and _jina_needed:
                 try:
-                    with _JINA_SEM:
-                        li_md = _jina_fetch_linkedin_md(li_url) or ""
+                    from .enrichment import _fc_scrape as _fc_li_scrape
+                    li_md = _fc_li_scrape(li_url, wait_ms=6000) or ""
+                    if not li_md or len(li_md) < 200:
+                        # Firecrawl failed or exhausted — fall back to Jina
+                        with _JINA_SEM:
+                            li_md = _jina_fetch_linkedin_md(li_url) or ""
                     if li_md:
                         li_res = {}
                         _parse_jina_linkedin_md(li_md, li_res)
