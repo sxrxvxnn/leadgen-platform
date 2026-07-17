@@ -31,19 +31,18 @@ POLL_WAIT          = 10    # SQS long-poll window (max 20 s)
 # ─── Job handlers ─────────────────────────────────────────────────────────────
 
 def _handle_bulk_enrichment(job_id: str, user_id: str, payload: dict):
-    """LinkedIn + website autofill for a batch of companies."""
-    from .company_prefill import (
-        scrape_linkedin_data,
-        search_linkedin_url_by_domain,
-        search_linkedin_url_direct,
-        search_company_website,
-        clean_name_for_search,
-    )
-    from .website_analyzer import fetch_website_content, classify_company_type_rules
+    """LinkedIn + website autofill for a batch of companies.
 
-    company_ids   = payload.get('company_ids', [])
-    openrouter_key = payload.get('openrouter_key', '')
-    li_cookie     = payload.get('li_cookie', '')
+    Calls the same /companies/bulk-autofill endpoint used by the in-browser path
+    so every company goes through the full _autofill_one pipeline (Jina, DDGS,
+    ProxyCurl, Gemini/Groq, classify_website_saas, etc.) instead of the old
+    lightweight scrape-only path that skipped ~70% of companies.
+    """
+    import requests as _req
+    import re as _re
+
+    company_ids = payload.get('company_ids', [])
+    li_cookie   = payload.get('li_cookie', '')
 
     if company_ids:
         co_res = supabase.table('companies').select('*').in_('id', company_ids).eq('user_id', user_id).execute()
@@ -54,51 +53,45 @@ def _handle_bulk_enrichment(job_id: str, user_id: str, payload: dict):
     completed = 0
     errors    = 0
 
-    def _enrich_one(company):
-        nonlocal completed, errors
-        cid  = company['id']
-        name = company.get('name', '')
-        update: dict = {}
+    import json as _json
 
+    _svc_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+    _api_url = os.environ.get('INTERNAL_API_URL', 'https://leadgenengineplatform-api.vercel.app')
+
+    # Use service-key bypass: the backend accepts Bearer <SERVICE_KEY> + _user_id
+    # in the body as an internal worker shortcut (no user JWT needed).
+    _auth_header = f'Bearer {_svc_key}'
+
+    # Process one company at a time — avoids rate-limit spikes from parallel scraping.
+    for company in companies:
+        if not company.get('id'):
+            continue
         try:
-            # LinkedIn URL discovery
-            li_url = company.get('linkedin_url') or ''
-            if not li_url:
-                domain = company.get('website', '').replace('https://', '').replace('http://', '').split('/')[0]
-                li_url = (
-                    search_linkedin_url_by_domain(domain, name) if domain
-                    else search_linkedin_url_direct(name)
-                )
-                if li_url:
-                    update['linkedin_url'] = li_url
-
-            # LinkedIn data scrape
-            if li_url:
-                li_data = scrape_linkedin_data(li_url, fast=True, li_cookie=li_cookie)
-                for field in ('followers', 'tagline', 'location', 'employee_count',
-                              'description', 'industry', 'website', 'phone', 'founded', 'specialties'):
-                    if li_data.get(field) and not company.get(field):
-                        update[field] = li_data[field]
-
-            # Website classification
-            website = update.get('website') or company.get('website', '')
-            if website and not company.get('company_type'):
-                html = fetch_website_content(website)
-                if html:
-                    ct = classify_company_type_rules(html, name)
-                    if ct:
-                        update['company_type'] = ct
-
-            if update:
-                supabase.table('companies').update(update).eq('id', cid).eq('user_id', user_id).execute()
-            completed += 1
-        except Exception:
+            resp = _req.post(
+                f'{_api_url}/companies/bulk-autofill',
+                json={'company_ids': [company['id']], '_user_id': user_id},
+                headers={'Authorization': _auth_header, 'Content-Type': 'application/json'},
+                stream=True,
+                timeout=180,
+            )
+            if resp.status_code == 200:
+                for line in resp.iter_lines():
+                    if line:
+                        try:
+                            _res = _json.loads(line)
+                            if _res.get('success'):
+                                completed += 1
+                            else:
+                                errors += 1
+                        except Exception:
+                            pass
+            else:
+                print(f'[worker] HTTP {resp.status_code} for {company.get("name")}: {resp.text[:200]}', flush=True)
+                errors += 1
+        except Exception as _ex:
+            print(f'[worker] Error enriching {company.get("name")}: {_ex}', flush=True)
             errors += 1
-
         update_job(job_id, supabase, completed=completed, errors=errors, status='running')
-
-    with ThreadPoolExecutor(max_workers=10) as pool:
-        list(pool.map(_enrich_one, companies))
 
 
 def _handle_bulk_maps_enrich(job_id: str, user_id: str, payload: dict):
