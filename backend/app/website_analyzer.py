@@ -58,14 +58,48 @@ def check_app_store_presence(company_name: str, domain: str = '') -> dict:
     return result
 
 
+def _fc_website_data(url: str, wait_ms: int = 4000) -> dict | None:
+    """Try Firecrawl scrape and wrap result into the website_data dict format.
+    Returns None when Firecrawl returns no usable content or has no keys left.
+    """
+    try:
+        from .enrichment import _fc_scrape as _fc_scrape_wd
+        fc_md = _fc_scrape_wd(url, wait_ms=wait_ms)
+        if fc_md and len(fc_md) > 300:
+            return {
+                "url": url,
+                "full_text": fc_md,
+                "scan_text": fc_md,
+                "compliance_detected": [],
+                "has_mobile_app": False,
+                "social_profiles": {},
+                "title": "",
+                "meta_description": "",
+                "review_presence": None,
+                "app_store_presence": None,
+            }
+    except Exception:
+        pass
+    return None
+
+
 def fetch_website_content(url: str, fast: bool = False) -> dict:
     """Scrape and parse website content.
-    fast=True: 4s timeout, only meta/footer extracted — for bulk autofill where speed matters.
+    Firecrawl is tried first (handles JS-heavy/bot-protected sites accurately).
+    Falls back to direct HTTP for speed when Firecrawl credits are exhausted.
+    fast=True: skip Firecrawl (4s HTTP timeout) — used only inside bulk autofill inner loops.
     """
     if not url:
         return None
     if not url.startswith('http'):
         url = 'https://' + url
+
+    # ── Firecrawl primary (not fast mode) ─────────────────────────────────────
+    if not fast:
+        fc_data = _fc_website_data(url, wait_ms=5000)
+        if fc_data:
+            return fc_data
+
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'

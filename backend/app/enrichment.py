@@ -383,7 +383,7 @@ def enrich_lead(name: str, company: str, website: str = None) -> dict:
 import os as _os
 import threading as _fc_thread
 
-# Collect up to 6 keys: legacy FIRECRAWL_API_KEY plus FIRECRAWL_API_KEY_1..6
+# Collect up to 10 keys: legacy FIRECRAWL_API_KEY plus FIRECRAWL_API_KEY_1..10
 _FIRECRAWL_KEYS = list(dict.fromkeys(
     k for k in [
         _os.environ.get("FIRECRAWL_API_KEY", ""),
@@ -393,6 +393,10 @@ _FIRECRAWL_KEYS = list(dict.fromkeys(
         _os.environ.get("FIRECRAWL_API_KEY_4", ""),
         _os.environ.get("FIRECRAWL_API_KEY_5", ""),
         _os.environ.get("FIRECRAWL_API_KEY_6", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_7", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_8", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_9", ""),
+        _os.environ.get("FIRECRAWL_API_KEY_10", ""),
     ] if k
 ))
 FIRECRAWL_KEY  = _FIRECRAWL_KEYS[0] if _FIRECRAWL_KEYS else ""  # legacy compat
