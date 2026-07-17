@@ -3783,6 +3783,66 @@ async def bulk_autofill_companies(
         'business services', 'professional services', 'consulting',
     }
 
+    # UI/nav text that gets scraped from login-walled or minimal websites
+    _UI_TEXT_GARBAGE = {
+        'log in', 'login', 'sign in', 'sign up', 'sign out', 'get started',
+        'learn more', 'read more', 'view more', 'see more', 'load more',
+        'click here', 'contact us', 'about us', 'our services', 'home',
+        'menu', 'navigation', 'privacy policy', 'terms of service',
+        'cookie policy', 'all rights reserved', 'copyright',
+        'schedule a call', 'book a demo', 'request a demo', 'free trial',
+        'get a quote', 'try for free', 'start free', 'watch demo',
+        'and description', 'to catch up', 'our team', 'meet the team',
+        'our story', 'our mission', 'who we are', 'what we do',
+    }
+
+    # Suffixes that indicate a company name was mistakenly stored as industry
+    _COMPANY_SUFFIXES = (
+        ' private limited', ' pvt ltd', ' pvt. ltd', ' pvt. ltd.',
+        ' limited', ' inc.', ' inc', ' llc', ' ltd', ' ltd.',
+        ' corporation', ' corp.', ' gmbh', ' s.a.', ' b.v.',
+        ' solutions', ' technologies', ' technology', ' infotech',
+    )
+
+    def _is_valid_industry(val: str) -> bool:
+        """Return True only if val looks like a real industry name, not scraped garbage."""
+        if not val or not val.strip():
+            return False
+        v = val.strip()
+        vl = v.lower()
+        # Too long — probably a sentence scraped from a description
+        if len(v) > 55:
+            return False
+        # In generic list
+        if vl in _GENERIC_INDS:
+            return False
+        # In known UI garbage list
+        if vl in _UI_TEXT_GARBAGE:
+            return False
+        # Partial match against UI garbage phrases
+        for phrase in _UI_TEXT_GARBAGE:
+            if phrase in vl:
+                return False
+        # Looks like a company name (contains legal suffixes)
+        for suffix in _COMPANY_SUFFIXES:
+            if vl.endswith(suffix):
+                return False
+        # Contains conjunction words mid-string suggesting sentence fragment
+        # e.g. "and description", "to catch up" — but allow "AI and Data"
+        words = vl.split()
+        if len(words) >= 3:
+            # 3+ word phrase where 2nd word is a preposition/conjunction = likely garbage
+            if words[1] in ('and', 'or', 'to', 'in', 'the', 'a', 'an', 'is', 'are', 'for', 'with', 'by', 'from'):
+                # Allow known multi-word valid industries: "Machine Learning", "Cloud Computing", etc.
+                _valid_multi = {'machine learning', 'cloud computing', 'natural language processing',
+                                'artificial intelligence', 'business intelligence', 'data analytics',
+                                'software development', 'software outsourcing', 'internet of things',
+                                'supply chain technology', 'supply chain management',
+                                'e-commerce technology', 'human resources technology'}
+                if vl not in _valid_multi:
+                    return False
+        return True
+
     # Richer industry taxonomy passed to AI — specific subcategories reduce generic answers
     _INDUSTRY_TAXONOMY = (
         'Use the MOST SPECIFIC term from this taxonomy:\n'
@@ -4322,7 +4382,7 @@ async def bulk_autofill_companies(
                         if li_res.get("tagline"):
                             update_data["tagline"] = li_res["tagline"]
                         if li_res.get("industry") and li_res["industry"].strip().lower() not in _BAD_IND \
-                                and li_res["industry"].strip().lower() not in _GENERIC_INDS:
+                                and _is_valid_industry(li_res["industry"]):
                             update_data["industry"] = li_res["industry"]
                             _ind = li_res["industry"].lower()
                             _mapped = next((v for k, v in _LI_MAP.items() if k in _ind), None)
@@ -4606,7 +4666,7 @@ async def bulk_autofill_companies(
                                     )
                                 if _ind_m:
                                     _ind_6c = _ind_m.group(1).strip()
-                                    if _ind_6c.lower() not in _GENERIC_INDS and len(_ind_6c) > 3:
+                                    if _is_valid_industry(_ind_6c):
                                         update_data["industry"] = _ind_6c
                                         _still_need_ind_6c = False
                                         print(f"[dir_search] {company_name} industry={_ind_6c}", flush=True)
@@ -4718,7 +4778,7 @@ async def bulk_autofill_companies(
                             _gr_ind = _xb.get("industry")
                             if not update_data.get("industry") and not company.get("industry") and \
                                _gr_ind and _gr_ind not in (None, "null") and \
-                               str(_gr_ind).strip().lower() not in _GENERIC_INDS:
+                               _is_valid_industry(str(_gr_ind)):
                                 update_data["industry"] = str(_gr_ind)
                             if not update_data.get("founded") and not company.get("founded") and \
                                _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
@@ -4782,7 +4842,7 @@ async def bulk_autofill_companies(
                             print(f"[groq_gapfill] response={str(_xg)[:150]}", flush=True)
                             if not update_data.get("industry") and not company.get("industry") and \
                                _xg.get("industry") and _xg["industry"] not in (None, "null") and \
-                               str(_xg["industry"]).strip().lower() not in _GENERIC_INDS:
+                               _is_valid_industry(str(_xg["industry"])):
                                 update_data["industry"] = str(_xg["industry"])
                             if not update_data.get("founded") and not company.get("founded") and \
                                _xg.get("founded") and str(_xg["founded"]) not in ("", "None", "null"):
@@ -4823,18 +4883,22 @@ async def bulk_autofill_companies(
                         update_data["headquarters"] = m.group(1).strip()
 
             # ── Step 8.5: Derived fields — is_saas + HQ normalization ────────────
-            # is_saas: derive from company_type when website classifier didn't produce it
+            # is_saas MUST be consistent with company_type — always re-derive.
+            # Rule: Product → True, Hybrid → True, Service → False.
+            # We override whatever was stored if company_type was set this run OR if
+            # the stored values contradict each other (e.g. Hybrid + is_saas=False).
             _ct_final = update_data.get("company_type") or company.get("company_type")
-            _is_saas_set = update_data.get("is_saas") is not None or company.get("is_saas") is not None
-            if not _is_saas_set and _ct_final:
+            _ct_changed = "company_type" in update_data  # classifier ran this session
+            _is_saas_stored = company.get("is_saas")
+            _contradicts = (
+                (_ct_final == "Service" and _is_saas_stored is True)
+                or (_ct_final in ("Product", "Hybrid") and _is_saas_stored is False)
+            )
+            if _ct_final and (_ct_changed or _contradicts or _is_saas_stored is None):
                 if _ct_final == "Service":
                     update_data["is_saas"] = False
                 elif _ct_final in ("Product", "Hybrid"):
                     update_data["is_saas"] = True
-            # Also override is_saas=false for Product companies when website classifier
-            # returned low-confidence (website_data was None so classifier defaulted to false)
-            elif _ct_final == "Product" and not _is_saas_set:
-                update_data["is_saas"] = True
 
             # HQ normalization: add country when only city is provided for Indian cities
             _HQ_CITY_NORM = {
