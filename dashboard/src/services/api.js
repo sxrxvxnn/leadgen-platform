@@ -106,13 +106,14 @@ async function ensureFreshToken() {
 }
 
 // Shared helper for streaming NDJSON fetch calls
-async function _streamingFetch(url, body, onProgress) {
+async function _streamingFetch(url, body, onProgress, signal) {
   await ensureFreshToken()
   const token = localStorage.getItem('token')
   const response = await fetch(`${BASE_URL}${url}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
+    signal,
   })
   if (response.status === 401) {
     localStorage.removeItem('token')
@@ -285,8 +286,8 @@ export const bulkMapsEnrich = (companyIds = [], onProgress) =>
 export const bulkAnalyzeCompanies = (companyIds = [], onProgress) =>
   _streamingFetch('/companies/bulk-analyze', { company_ids: companyIds }, onProgress)
 
-export const bulkAutofillCompanies = (companyIds = [], onProgress) =>
-  _streamingFetch('/companies/bulk-autofill', { company_ids: companyIds }, onProgress)
+export const bulkAutofillCompanies = (companyIds = [], onProgress, signal) =>
+  _streamingFetch('/companies/bulk-autofill', { company_ids: companyIds }, onProgress, signal)
 
 // ─── ICP ──────────────────────────────────────────────────────
 export const getICPs = () => api.get('/icp')

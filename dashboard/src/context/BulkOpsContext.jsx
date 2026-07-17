@@ -26,9 +26,13 @@ export function BulkOpsProvider({ children }) {
   const [maps, setMaps] = useState(INIT)
 
   // Companies.jsx registers this while mounted so live results flow straight in.
-  // When it's null (tab switched away) updates are buffered in pendingUpdates.
   const liveUpdate = useRef(null)
-  const pending = useRef({}) // { [companyId]: mergedFields }
+  const pending = useRef({})
+
+  // Cancel refs — shared across async loops
+  const cancelRef = useRef(false) // checked at each loop iteration
+  const abortRef = useRef(null) // AbortController for in-flight fetch
+  const pollRef = useRef(null) // interval id for background job polling
 
   function dispatch(result) {
     if (!result?.id || !result?.update || !Object.keys(result.update).length) return
@@ -39,22 +43,40 @@ export function BulkOpsProvider({ children }) {
     }
   }
 
-  // Companies.jsx calls this on mount/unmount
   function registerLive(cb) {
     liveUpdate.current = cb
   }
 
-  // Returns buffered updates accumulated while Companies was unmounted, then clears buffer
   function drainPending() {
     const snap = { ...pending.current }
     pending.current = {}
     return snap
   }
 
+  function cancelAutofill() {
+    cancelRef.current = true
+    if (abortRef.current) {
+      try {
+        abortRef.current.abort()
+      } catch {}
+    }
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    setAutofill((p) => ({
+      ...p,
+      running: false,
+      msg: `Cancelled — ${p.filledCount} of ${p.total} companies processed`,
+    }))
+    setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 6000)
+  }
+
   async function runAutofill(companyIds) {
     if (autofill.running) return
     const CHUNK = 40
     const total = companyIds.length
+    cancelRef.current = false
     setAutofill({
       running: true,
       msg: `Starting autofill for ${total} companies…`,
@@ -65,24 +87,35 @@ export function BulkOpsProvider({ children }) {
     let globalCompleted = 0
     try {
       for (let i = 0; i < companyIds.length; i += CHUNK) {
+        if (cancelRef.current) break
         const chunk = companyIds.slice(i, i + CHUNK)
-        await bulkAutofillCompanies(chunk, (_, __, result) => {
-          globalCompleted++
-          setAutofill((p) => ({ ...p, msg: `Filling… ${globalCompleted}/${total}` }))
-          if (result?.success && result.update && Object.keys(result.update).length) {
-            filled++
-            setAutofill((p) => ({ ...p, filledCount: filled }))
-            dispatch(result)
-          }
+        const controller = new AbortController()
+        abortRef.current = controller
+        await bulkAutofillCompanies(
+          chunk,
+          (_, __, result) => {
+            if (cancelRef.current) return
+            globalCompleted++
+            setAutofill((p) => ({ ...p, msg: `Filling… ${globalCompleted}/${total}` }))
+            if (result?.success && result.update && Object.keys(result.update).length) {
+              filled++
+              setAutofill((p) => ({ ...p, filledCount: filled }))
+              dispatch(result)
+            }
+          },
+          controller.signal
+        )
+      }
+      if (!cancelRef.current) {
+        setAutofill({
+          running: false,
+          msg: `Done — ${filled} of ${total} companies updated`,
+          filledCount: filled,
+          total,
         })
       }
-      setAutofill({
-        running: false,
-        msg: `Done — ${filled} of ${total} companies updated`,
-        filledCount: filled,
-        total,
-      })
     } catch (e) {
+      if (cancelRef.current || e.name === 'AbortError') return
       setAutofill({
         running: false,
         msg: 'Autofill failed — ' + e.message,
@@ -94,15 +127,13 @@ export function BulkOpsProvider({ children }) {
     }
   }
 
-  // Sequential enrichment — one company at a time for maximum accuracy.
-  // Batches > 10: dispatched to SQS/EC2 worker so it survives page reloads.
-  // Batches ≤ 10: runs in-browser with live progress + ETA.
   const ASYNC_ENRICH_THRESHOLD = 10
 
   async function runAutoEnrich(companyIds) {
     if (autofill.running) return
     const total = companyIds.length
     const startedAt = Date.now()
+    cancelRef.current = false
 
     // ── Large batch: hand off to background worker ──────────────────────────
     if (total > ASYNC_ENRICH_THRESHOLD) {
@@ -124,9 +155,13 @@ export function BulkOpsProvider({ children }) {
           msg: `${total} companies queued — enriching in background`,
           jobId,
         }))
-        // Poll job status every 8s until done, then notify
         if (jobId) {
-          const pollInterval = setInterval(async () => {
+          pollRef.current = setInterval(async () => {
+            if (cancelRef.current) {
+              clearInterval(pollRef.current)
+              pollRef.current = null
+              return
+            }
             try {
               const jr = await getJob(jobId)
               const { status, completed, total: jTotal } = jr.data || {}
@@ -140,7 +175,8 @@ export function BulkOpsProvider({ children }) {
                     : `Background enrichment: ${completed || 0}/${jTotal || total}…`,
               }))
               if (status === 'completed' || status === 'failed') {
-                clearInterval(pollInterval)
+                clearInterval(pollRef.current)
+                pollRef.current = null
                 const durMin = Math.round((Date.now() - startedAt) / 60000)
                 setAutofill((p) => ({ ...p, running: false }))
                 try {
@@ -153,7 +189,8 @@ export function BulkOpsProvider({ children }) {
                 setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 15000)
               }
             } catch {
-              clearInterval(pollInterval)
+              clearInterval(pollRef.current)
+              pollRef.current = null
               setAutofill((p) => ({
                 ...p,
                 running: false,
@@ -195,41 +232,52 @@ export function BulkOpsProvider({ children }) {
     let done = 0
     try {
       for (const id of companyIds) {
+        if (cancelRef.current) break
         done++
         if (total > 1) setAutofill((p) => ({ ...p, msg: `Enriching ${done}/${total}…` }))
-        await bulkAutofillCompanies([id], (_, __, result) => {
-          if (result?.success && result.update && Object.keys(result.update).length) {
-            filled++
-            const name = result.update.name || result.id || ''
-            const fields = Object.keys(result.update)
-              .filter((k) => k !== 'name')
-              .slice(0, 3)
-            setAutofill((p) => ({
-              ...p,
-              filledCount: filled,
-              recentActivity: [{ name, fields, ts: Date.now() }, ...(p.recentActivity || [])].slice(
-                0,
-                5
-              ),
-            }))
-            dispatch(result)
-          } else if (result?.success === false && result?.message) {
-            setAutofill((p) => ({ ...p, msg: `⚠ ${result.message}` }))
-          }
-        })
+        const controller = new AbortController()
+        abortRef.current = controller
+        await bulkAutofillCompanies(
+          [id],
+          (_, __, result) => {
+            if (cancelRef.current) return
+            if (result?.success && result.update && Object.keys(result.update).length) {
+              filled++
+              const name = result.update.name || result.id || ''
+              const fields = Object.keys(result.update)
+                .filter((k) => k !== 'name')
+                .slice(0, 3)
+              setAutofill((p) => ({
+                ...p,
+                filledCount: filled,
+                recentActivity: [
+                  { name, fields, ts: Date.now() },
+                  ...(p.recentActivity || []),
+                ].slice(0, 5),
+              }))
+              dispatch(result)
+            } else if (result?.success === false && result?.message) {
+              setAutofill((p) => ({ ...p, msg: `⚠ ${result.message}` }))
+            }
+          },
+          controller.signal
+        )
       }
-      const durMin = Math.round((Date.now() - startedAt) / 60000)
-      setAutofill((p) => ({
-        ...p,
-        running: false,
-        msg: `Done — ${filled} of ${total} ${total === 1 ? 'company' : 'companies'} enriched`,
-      }))
-      if (filled > 0) {
-        try {
-          notifyEnrichmentComplete({ count: filled, total, duration_min: durMin })
-        } catch {}
+      if (!cancelRef.current) {
+        const durMin = Math.round((Date.now() - startedAt) / 60000)
+        setAutofill((p) => ({
+          ...p,
+          running: false,
+          msg: `Done — ${filled} of ${total} ${total === 1 ? 'company' : 'companies'} enriched`,
+        }))
+        if (filled > 0) {
+          try {
+            notifyEnrichmentComplete({ count: filled, total, duration_min: durMin })
+          } catch {}
+        }
       }
     } catch (e) {
+      if (cancelRef.current || e.name === 'AbortError') return
       setAutofill({
         running: false,
         msg: 'Auto-enrich failed — ' + e.message,
@@ -330,6 +378,7 @@ export function BulkOpsProvider({ children }) {
         runAutoEnrich,
         runAnalyze,
         runMapsEnrich,
+        cancelAutofill,
         registerLive,
         drainPending,
       }}

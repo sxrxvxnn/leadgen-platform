@@ -13,7 +13,7 @@ function fmtEta(startedAt, filledCount, total) {
 }
 
 export default function EnrichmentProgressModal() {
-  const { autofill } = useBulkOps()
+  const { autofill, cancelAutofill } = useBulkOps()
   const [dismissed, setDismissed] = useState(false)
   const [minimized, setMinimized] = useState(false)
 
@@ -87,7 +87,28 @@ export default function EnrichmentProgressModal() {
           )}
           {done ? 'Enrichment complete' : 'Enriching companies'}
         </span>
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {autofill.running && (
+            <button
+              onClick={cancelAutofill}
+              style={{
+                background: 'rgba(231,0,11,0.08)',
+                border: '1px solid rgba(231,0,11,0.25)',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: 'var(--accent)',
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '2px 8px',
+                lineHeight: 1.6,
+                letterSpacing: '0.04em',
+                fontFamily: 'var(--font-sans)',
+              }}
+              title="Stop enrichment"
+            >
+              Cancel
+            </button>
+          )}
           <button
             onClick={() => setMinimized((v) => !v)}
             style={{
