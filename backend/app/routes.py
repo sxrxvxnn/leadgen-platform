@@ -3049,8 +3049,11 @@ async def autofill_company_from_linkedin(
                 for sr in _web_search(f'"{company_name}" linkedin followers employees', count=5):
                     body = sr.get("body", "")
                     if not li.get("followers"):
-                        m = _re2.search(r'([\d,]+)\s*followers', body, _re2.I)
-                        if m: li["followers"] = m.group(1).strip().replace(',', '')
+                        m = _re2.search(r'([\d,]+(?:\.\d+)?[KkMm]?)\s*followers', body, _re2.I)
+                        if m:
+                            _raw = m.group(1).strip().replace(',', '')
+                            _km2 = _re2.match(r'^([\d.]+)([KkMm])$', _raw)
+                            li["followers"] = str(int(float(_km2.group(1)) * (1_000_000 if _km2.group(2).upper()=='M' else 1_000))) if _km2 else _raw
                     if not li.get("description") and len(body) > 40:
                         li["description"] = body[:280]
                     if li.get("followers") and li.get("description"): break
@@ -3241,7 +3244,9 @@ async def autofill_company_from_linkedin(
             import re as _re_li
             _fv0 = _re_li.sub(r'\s*followers?\b.*', '', str(li["followers"]), flags=_re_li.I).strip().replace(',', '')
             if _fv0:
-                update_data["followers"] = _fv0
+                # Expand K/M suffix: "7K" → "7000", "1.2M" → "1200000"
+                _km0 = _re_li.match(r'^([\d.]+)\s*([KkMm])$', _fv0)
+                update_data["followers"] = str(int(float(_km0.group(1)) * (1_000_000 if _km0.group(2).upper()=='M' else 1_000))) if _km0 else _fv0
         if li.get("employee_count"):
             import re as _re_li
             _sv0 = _re_li.sub(r'\s*employees?\b.*', '', str(li["employee_count"]), flags=_re_li.I).strip().replace(',', '')
@@ -3512,12 +3517,13 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
                 import re as _de_re2
                 _fv_de = _de_re2.sub(r'\s*followers?\b.*', '', str(_de_li["followers"]), flags=_de_re2.I).strip().replace(',', '')
                 if _fv_de:
-                    results["followers"] = _fv_de
+                    _km_de = _de_re2.match(r'^([\d.]+)([KkMm])$', _fv_de)
+                    results["followers"] = str(int(float(_km_de.group(1)) * (1_000_000 if _km_de.group(2).upper()=='M' else 1_000))) if _km_de else _fv_de
                     _de_needs_followers = False
             if _de_li.get("employee_count") and _de_needs_size:
                 import re as _de_re3
-                _sv_de = _de_re3.sub(r'\s*employees?\b.*', '', str(_de_li["employee_count"]), flags=_de_re3.I).strip().replace(',', '')
-                if _sv_de and '-' not in _sv_de:
+                _sv_de = _de_re3.sub(r'\s*employees?\b.*', '', str(_de_li["employee_count"]), flags=_de_re3.I).strip().replace(',', '').replace(' ', '')
+                if _sv_de and _de_re3.match(r'^\d+(?:[-–]\d+|\+)?$', _sv_de):
                     results["size"] = _sv_de
                     _de_needs_size = False
             if _de_li.get("location") and _de_needs_hq:
@@ -3547,7 +3553,9 @@ async def deep_enrich_company(company_id: str, authorization: str = Header(...))
                     if _de_needs_followers and not results.get("followers"):
                         _fm = _de_re.search(r'([\d,]+(?:\.\d+)?[KMk]?)\s*followers?', _db, _de_re.I)
                         if _fm:
-                            results["followers"] = _fm.group(1).strip().replace(',', '')
+                            _raw_f = _fm.group(1).strip().replace(',', '')
+                            _km_f = _de_re.match(r'^([\d.]+)([KkMm])$', _raw_f)
+                            results["followers"] = str(int(float(_km_f.group(1)) * (1_000_000 if _km_f.group(2).upper()=='M' else 1_000))) if _km_f else _raw_f
                             _de_needs_followers = False
                     if _de_needs_size and not results.get("size"):
                         _em = _de_re.search(r'(\d[\d,]*(?:-[\d,]+)?(?:\+)?)\s*employees?', _db, _de_re.I)
@@ -4086,6 +4094,17 @@ async def bulk_autofill_companies(
     # Gemini quota exhausts quickly — skip all further attempts once first 429 seen.
     _sess = {"pc_sunset": False, "gemini_exhausted": False}
 
+    def _expand_km(s: str) -> str:
+        """Expand K/M suffix in count strings: '7K'→'7000', '1.2M'→'1200000'."""
+        import re as _r
+        s = str(s).strip().replace(',', '')
+        m = _r.match(r'^([\d.]+)\s*([KkMm])$', s)
+        if not m:
+            return s
+        n = float(m.group(1))
+        mult = 1_000_000 if m.group(2).upper() == 'M' else 1_000
+        return str(int(n * mult))
+
     def _autofill_one(company: dict) -> dict:
         import datetime as _dt
         company_name = company.get("name", "").strip()
@@ -4320,7 +4339,7 @@ async def bulk_autofill_companies(
             if _snip.get("followers") and needs_followers:
                 _fv = _re_mod.sub(r'\s*followers?\b.*', '', str(_snip["followers"]), flags=_re_mod.I).strip().replace(',', '')
                 if _fv:
-                    update_data["followers"] = _fv
+                    update_data["followers"] = _expand_km(_fv)
             if _snip.get("employee_count") and needs_size:
                 _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
                 # Accept exact integers, LinkedIn ranges (51-200), or plus suffix (10001+)
@@ -4369,7 +4388,7 @@ async def bulk_autofill_companies(
                         if li_res.get("followers") and not update_data.get("followers"):
                             _fv2 = _re_mod.sub(r'\s*followers?\b.*', '', str(li_res["followers"]), flags=_re_mod.I).strip().replace(',', '')
                             if _fv2:
-                                update_data["followers"] = _fv2
+                                update_data["followers"] = _expand_km(_fv2)
                         if li_res.get("employee_count") and not update_data.get("size"):
                             _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
                             if _sv2 and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv2):
@@ -4484,7 +4503,7 @@ async def bulk_autofill_companies(
                             update_data["specialties"] = ", ".join(str(s) for s in _sp) if isinstance(_sp, list) else str(_sp)
                         # Always refresh followers from ProxyCurl — live data, overrides stale snippets
                         if _pc.get("follower_count"):
-                            update_data["followers"] = str(_pc["follower_count"])
+                            update_data["followers"] = _expand_km(str(_pc["follower_count"]))
                         # Refresh size from ProxyCurl — accept integer, range (51-200), or + suffix
                         _pc_size = _pc.get("company_size_on_linkedin")
                         if _pc_size:

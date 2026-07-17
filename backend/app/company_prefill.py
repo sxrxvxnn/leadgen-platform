@@ -445,9 +445,11 @@ def _jina_fetch_linkedin_md(url: str) -> str:
 def _parse_jina_linkedin_md(md: str, result: dict) -> None:
     """Parse Jina markdown of a LinkedIn company page, filling missing fields in result."""
     if not result.get('followers'):
-        m = re.search(r'([\d,]+)\s*followers', md, re.I)
+        m = re.search(r'([\d,]+(?:\.\d+)?[KkMm]?)\s*followers', md, re.I)
         if m:
-            result['followers'] = m.group(1).strip().replace(',', '')
+            raw = m.group(1).strip().replace(',', '')
+            km = re.match(r'^([\d.]+)([KkMm])$', raw)
+            result['followers'] = str(int(float(km.group(1)) * (1_000_000 if km.group(2).upper()=='M' else 1_000))) if km else raw
 
     if not result.get('industry'):
         # Same-line: "Industry: Software Development"
