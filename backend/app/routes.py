@@ -3707,8 +3707,14 @@ async def bulk_autofill_companies(
     authorization: str = Header(...)
 ):
     """Autofill data for multiple companies in parallel (20 workers)."""
-    user_id = get_user_id(authorization)
-    _check_user_rate_limit(user_id, "bulk-autofill", limit=500, window_minutes=60)
+    # Internal worker bypass: service key + _user_id in body skips user JWT auth.
+    _token = authorization.replace("Bearer ", "").strip()
+    _svc   = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if _token and _svc and _token == _svc and payload.get("_user_id"):
+        user_id = payload["_user_id"]
+    else:
+        user_id = get_user_id(authorization)
+        _check_user_rate_limit(user_id, "bulk-autofill", limit=500, window_minutes=60)
     company_ids = payload.get("company_ids", [])
 
     import threading as _threading
