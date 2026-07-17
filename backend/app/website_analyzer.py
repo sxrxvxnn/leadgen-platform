@@ -953,9 +953,9 @@ def classify_website_saas(
     # ── Keyword signal tables (term → weight) ────────────────────────────────
     _SAAS = {
         'free trial': 5, 'start free trial': 5, 'try for free': 5,
-        'dashboard': 5,
-        'pricing': 4, 'pricing plan': 4, 'view pricing': 4,
-        'log in': 4, 'login': 4, 'sign in': 4,
+        'dashboard': 2,        # reduced: service client portals also have dashboards
+        'pricing': 4, 'pricing plan': 5, 'view pricing': 4,
+        'log in': 2, 'login': 2, 'sign in': 2,   # reduced: client portals also have login
         'subscription': 4, 'subscribe': 3,
         ' api ': 4, 'api access': 4, 'rest api': 4, 'graphql': 3,
         'per user': 2, 'per seat': 2, 'per month': 3, 'per year': 3,
@@ -1010,6 +1010,14 @@ def classify_website_saas(
         'managed services': 4, 'managed service provider': 4,
         'custom development': 4, 'bespoke': 4,
         'implementation services': 3,
+        # Client portal / admin login signals — service companies with portals look
+        # like SaaS because of login/dashboard text; these cancel that out
+        'client portal': 4, 'client login': 4, 'employee portal': 3,
+        'staff login': 3, 'project portal': 3, 'vendor portal': 3,
+        'partner portal': 2, 'admin portal': 2,
+        # Build-for-clients language — definitively services, not products
+        'we build for': 4, 'built for your': 3, 'tailored for your': 3,
+        'for your clients': 3, 'for our clients': 3,
     }
 
     # ── Nav tab signals ───────────────────────────────────────────────────────

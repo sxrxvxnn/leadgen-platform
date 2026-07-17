@@ -4015,12 +4015,12 @@ async def bulk_autofill_companies(
                         if m:
                             result["followers"] = m.group(1).strip()
                     if not result.get("employee_count"):
-                        m = _re_mod.search(
-                            r'(\d[\d,]+)\s+employees?',
-                            body, _re_mod.I,
-                        )
-                        if m and '-' not in m.group(1):
-                            result["employee_count"] = m.group(1).replace(",", "")
+                        # Try range first (51-200 employees), then exact count
+                        m = _re_mod.search(r'(\d+\s*[-–]\s*\d+)\s*\+?\s*employees?', body, _re_mod.I)
+                        if not m:
+                            m = _re_mod.search(r'(\d[\d,]+\+?)\s*employees?', body, _re_mod.I)
+                        if m:
+                            result["employee_count"] = m.group(1).strip().replace(',', '').replace(' ', '')
                     if not result.get("headquarters"):
                         m = _re_mod.search(
                             r'[·•]\s*([A-Z][^·•|<]{4,50}(?:India|US|UAE|UK|Singapore|Malaysia|Canada|Australia))\s*[·•|]',
@@ -4095,7 +4095,7 @@ async def bulk_autofill_companies(
 
         needs_desc      = True   # always re-fetch: previous run may have had wrong website data
         needs_hq        = not bool(company.get("headquarters"))
-        needs_type      = not bool(company.get("company_type"))  # skip if already set (preserves manual corrections)
+        needs_type      = True   # always re-classify; higher threshold protects confident existing values
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
@@ -4262,13 +4262,15 @@ async def bulk_autofill_companies(
             if needs_type:
                 _desc_for_type = update_data.get("description") or company.get("description") or ""
                 _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
-                if _cls["confidence"] >= 20:
+                # When overwriting an existing classification, require higher confidence (45)
+                # to protect against misclassifying a correctly-set value.
+                _type_threshold = 45 if company.get("company_type") else 20
+                if _cls["confidence"] >= _type_threshold:
                     update_data["company_type"] = _cls["company_type"]
                     update_data["is_saas"] = _cls["is_saas"]
                     update_data["saas_category"] = _cls["category"]
                     update_data["type_confidence"] = _cls["confidence"]
                     update_data["type_reason"] = _cls.get("classification_reason", "")
-                    update_data["type_confidence"] = _cls["confidence"]
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
@@ -4320,8 +4322,9 @@ async def bulk_autofill_companies(
                 if _fv:
                     update_data["followers"] = _fv
             if _snip.get("employee_count") and needs_size:
-                _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
-                if _sv and '-' not in _sv and not _sv.endswith('+'):  # exact number only
+                _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
+                # Accept exact integers, LinkedIn ranges (51-200), or plus suffix (10001+)
+                if _sv and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv):
                     update_data["size"] = _sv
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
                 update_data["headquarters"] = _snip["headquarters"]
@@ -4362,13 +4365,14 @@ async def bulk_autofill_companies(
                             'security':'Cybersecurity','cybersecurity':'Cybersecurity',
                             'manufacturing':'Manufacturing','e-commerce':'E-commerce',
                         }
-                        if li_res.get("followers") and needs_followers and not update_data.get("followers"):
+                        # Jina fetches the live LinkedIn page — always refresh followers + size
+                        if li_res.get("followers") and not update_data.get("followers"):
                             _fv2 = _re_mod.sub(r'\s*followers?\b.*', '', str(li_res["followers"]), flags=_re_mod.I).strip().replace(',', '')
                             if _fv2:
                                 update_data["followers"] = _fv2
-                        if li_res.get("employee_count") and needs_size and not update_data.get("size"):
-                            _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '')
-                            if _sv2 and '-' not in _sv2 and not _sv2.endswith('+'):  # exact number only
+                        if li_res.get("employee_count") and not update_data.get("size"):
+                            _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
+                            if _sv2 and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv2):
                                 update_data["size"] = _sv2
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = li_res["location"]
@@ -4481,10 +4485,12 @@ async def bulk_autofill_companies(
                         # Always refresh followers from ProxyCurl — live data, overrides stale snippets
                         if _pc.get("follower_count"):
                             update_data["followers"] = str(_pc["follower_count"])
-                        # Refresh size only when PC returns an exact integer (not a range)
+                        # Refresh size from ProxyCurl — accept integer, range (51-200), or + suffix
                         _pc_size = _pc.get("company_size_on_linkedin")
-                        if _pc_size and str(_pc_size).isdigit():
-                            update_data["size"] = str(_pc_size)
+                        if _pc_size:
+                            _pc_size_str = str(_pc_size).strip().replace(',', '').replace(' ', '')
+                            if _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _pc_size_str):
+                                update_data["size"] = _pc_size_str
                         if needs_desc and not update_data.get("description") and _pc.get("description"):
                             update_data["description"] = _pc["description"]
                         if needs_hq and not update_data.get("headquarters") and _pc.get("hq"):
@@ -4742,9 +4748,12 @@ async def bulk_autofill_companies(
                         '- headquarters: "City, Country" format (null if unknown)\n'
                         '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
                         'what the company actually does (not generic terms like "AI" or "software")\n'
-                        '- company_type: "Product" (sells software/SaaS/platform), '
-                        '"Service" (consulting/outsourcing/staffing), or "Hybrid". '
-                        '.ai domain → Product; "solutions/consulting/services" in name → Service.\n\n'
+                        '- company_type: "Product" (owns software/SaaS that customers subscribe to/license — '
+                        'has login portal, pricing page, subscription plans), '
+                        '"Service" (does IT services, consulting, custom dev, staffing — builds software FOR clients, not sells it), '
+                        '"Hybrid" (has both own software product AND a services arm). '
+                        'Key test: does this company SELL a product to end-users, or BUILD for hire? '
+                        'Having a client portal or login does NOT make it a Product company.\n\n'
                         'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
@@ -4825,9 +4834,12 @@ async def bulk_autofill_companies(
                                 '- headquarters: "City, Country" format (null if unknown)\n'
                                 '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
                                 'what the company actually does (not generic terms like "AI" or "software")\n'
-                                '- company_type: "Product" (sells software/SaaS/platform), '
-                                '"Service" (consulting/outsourcing/staffing), or "Hybrid". '
-                                '.ai domain → Product; "solutions/consulting/services" in name → Service.\n\n'
+                                '- company_type: "Product" (owns software/SaaS that customers subscribe to/license — '
+                                'has pricing tiers, subscription plans, own platform), '
+                                '"Service" (does IT services, consulting, custom dev, staffing — builds software FOR clients, not sells it), '
+                                '"Hybrid" (has both own software product AND a services arm). '
+                                'Key test: does this company SELL a product to end-users, or BUILD for hire? '
+                                'Having a client portal or login does NOT make it a Product company.\n\n'
                                 'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                             )}],
                         },
