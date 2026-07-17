@@ -342,7 +342,7 @@ export default function People() {
           flexShrink: 0,
           height: '100%',
           overflowY: 'auto',
-          background: 'var(--sidebar-bg)',
+          background: 'var(--surface)',
           borderRight: '1px solid var(--border)',
         }}
       >
