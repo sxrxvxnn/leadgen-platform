@@ -11209,3 +11209,124 @@ async def classify_website_endpoint(request: Request):
             results[r.get("url", futures[f])] = r
 
     return JSONResponse({"results": results, "total": len(results)})
+
+
+# ── People (contacts) endpoints ────────────────────────────────────────────────
+
+@router.get("/people")
+async def list_people(
+    request: Request,
+    page: int = 1,
+    per_page: int = 50,
+    q: str = "",
+    departments: str = "",
+    seniority: str = "",
+    authorization: Optional[str] = Header(None),
+):
+    """Return leads/contacts belonging to the authenticated user."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_resp = supabase_auth.get_user(token)
+    if not user_resp or not user_resp.user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user_resp.user.id
+
+    offset = (page - 1) * per_page
+
+    query = (
+        supabase.table("leads")
+        .select("id,name,title,company,email,phone,profile_url,status,icp_score,email_status,starred,location", count="exact")
+        .eq("user_id", user_id)
+    )
+    if q:
+        query = query.or_(f"name.ilike.%{q}%,title.ilike.%{q}%,email.ilike.%{q}%,company.ilike.%{q}%")
+
+    try:
+        res = query.order("created_at", desc=True).range(offset, offset + per_page - 1).execute()
+        contacts = res.data or []
+        total = res.count or 0
+        # Normalize field names for frontend
+        for c in contacts:
+            c["company_name"] = c.pop("company", "") or ""
+            c["linkedin_url"]  = c.pop("profile_url", "") or ""
+        return JSONResponse({"contacts": contacts, "total": total, "page": page, "per_page": per_page})
+    except Exception as e:
+        return JSONResponse({"contacts": [], "total": 0, "error": str(e)})
+
+
+# ── Lists endpoints ────────────────────────────────────────────────────────────
+
+@router.get("/lists")
+async def list_lists(authorization: Optional[str] = Header(None)):
+    """Return saved lists for the authenticated user."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_resp = supabase_auth.get_user(token)
+    if not user_resp or not user_resp.user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user_resp.user.id
+
+    try:
+        res = supabase.table("prospect_lists").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        lists = res.data or []
+        # Attach counts
+        for lst in lists:
+            try:
+                tbl = "prospect_list_people" if lst.get("type") == "people" else "prospect_list_companies"
+                cnt = supabase.table(tbl).select("id", count="exact").eq("list_id", lst["id"]).execute()
+                lst["count"] = cnt.count or 0
+            except Exception:
+                lst["count"] = 0
+        return JSONResponse({"lists": lists})
+    except Exception as e:
+        return JSONResponse({"lists": [], "error": str(e)})
+
+
+@router.post("/lists")
+async def create_list(request: Request, authorization: Optional[str] = Header(None)):
+    """Create a new prospect list."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_resp = supabase_auth.get_user(token)
+    if not user_resp or not user_resp.user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user_resp.user.id
+
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name required")
+
+    try:
+        res = supabase.table("prospect_lists").insert({
+            "user_id": user_id,
+            "name": name,
+            "type": body.get("type", "companies"),
+            "description": body.get("description", ""),
+        }).execute()
+        new_list = res.data[0] if res.data else {}
+        new_list["count"] = 0
+        return JSONResponse(new_list, status_code=201)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/lists/{list_id}")
+async def delete_list(list_id: str, authorization: Optional[str] = Header(None)):
+    """Delete a prospect list (owner only)."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_resp = supabase_auth.get_user(token)
+    if not user_resp or not user_resp.user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = user_resp.user.id
+
+    try:
+        supabase.table("prospect_lists").delete().eq("id", list_id).eq("user_id", user_id).execute()
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
