@@ -38,6 +38,8 @@ const Privacy = lazy(() => import('./pages/Privacy'))
 const Terms = lazy(() => import('./pages/Terms'))
 const BookingPage = lazy(() => import('./pages/BookingPage'))
 const Notifications = lazy(() => import('./pages/Notifications'))
+const People = lazy(() => import('./pages/People'))
+const Lists = lazy(() => import('./pages/Lists'))
 
 class ChunkErrorBoundary extends Component {
   constructor(props) {
@@ -156,6 +158,8 @@ export default function App() {
                       {/* App pages — sidebar layout */}
                       <Route element={<AuthLayout />}>
                         <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/people" element={<People />} />
+                        <Route path="/lists" element={<Lists />} />
                         <Route
                           path="/leads"
                           element={

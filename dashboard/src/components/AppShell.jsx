@@ -121,11 +121,116 @@ export default function AppShell() {
           overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          // On mobile, content starts below the fixed header
           paddingTop: isMobile ? 52 : 0,
         }}
       >
         {isMobile && <MobileHeader />}
+
+        {/* Apollo-style top bar */}
+        {!isMobile && (
+          <div
+            style={{
+              height: 44,
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '0 16px',
+              gap: 10,
+              flexShrink: 0,
+              background: 'var(--sidebar-bg)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 50,
+            }}
+          >
+            <div style={{ position: 'relative', flex: 1, maxWidth: 480 }}>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--text-muted)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                placeholder="Search companies, people, sequences…"
+                style={{
+                  width: '100%',
+                  paddingLeft: 30,
+                  paddingRight: 12,
+                  height: 30,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  color: 'var(--text)',
+                  fontFamily: "'Host Grotesk', sans-serif",
+                  fontSize: 12,
+                  outline: 'none',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+                onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: 9,
+                  color: 'var(--text-muted)',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 3,
+                  padding: '1px 5px',
+                }}
+              >
+                /
+              </span>
+            </div>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={() => navigate('/prospect')}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 5,
+                border: 'none',
+                background: 'var(--accent)',
+                color: '#fff',
+                fontFamily: "'Host Grotesk', sans-serif",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              New Contact
+            </button>
+          </div>
+        )}
 
         {banners.map((ann) => {
           const s = KIND_STYLE[ann.kind] || KIND_STYLE.info
