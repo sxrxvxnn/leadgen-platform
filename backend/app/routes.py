@@ -1267,7 +1267,8 @@ async def discover_company_people(company_id: str, authorization: str = Header(.
             "linkedin_url": p.get("linkedin_url") or "",
             "confidence": p.get("confidence", 50),
             "source": p.get("source", "website"),
-            "source_url": p.get("source_url") or "",
+            "source_url": (p.get("source_urls") or [p.get("source_url") or ""])[0],
+            "source_urls": p.get("source_urls") or ([p.get("source_url")] if p.get("source_url") else []),
             "is_decision_maker": p.get("is_decision_maker", True),
         }
         for p in people
