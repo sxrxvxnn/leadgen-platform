@@ -4888,12 +4888,32 @@ async def bulk_autofill_companies(
                 "description":   _desc_bulk,
             }
             _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
-            from .field_workers import run_gap_fill as _run_gap_fill
+            from .field_workers import run_gap_fill as _run_gap_fill, run_second_pass as _run_second_pass, finalize_meta as _finalize_meta
             _worker_meta = _run_gap_fill(
                 company_name, _fw_evidence, update_data, company,
                 _gemini_key_bulk, _groq_key_bulk,
             )
             _meta.update(_worker_meta)
+
+            # ── Gap 2: Collector coverage report ──────────────────────────────
+            _meta["_coverage"] = {
+                "website":   bool(website_data),
+                "ddgs":      bool((_snip_res[0] if _snip_res else {}) or {}),
+                "linkedin":  bool(_fw_li_res),
+                "proxycurl": bool(_fw_pc_data),
+            }
+
+            # ── Gap 3: Second-pass resolver ────────────────────────────────────
+            # Retries still-missing fields with targeted DDGS searches + AI
+            _second_meta = _run_second_pass(
+                company_name, _fw_evidence, update_data, company,
+                _gemini_key_bulk, _groq_key_bulk,
+            )
+            _meta.update(_second_meta)
+
+            # ── Gap 1: Terminal state — stamp every core field ─────────────────
+            # Ensures every field ends in verified / inferred / pre_existing / not_public
+            _finalize_meta(_meta, update_data, company)
 
             # needs_type is only True when company has no existing type yet.
             # _missing_type_bulk = True means the rule classifier also didn't set it

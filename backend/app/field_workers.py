@@ -378,8 +378,8 @@ def run_gap_fill(
     groq_key: str,
 ) -> dict:
     """
-    Main entry for field workers. Called after all evidence is gathered.
-    Only fills fields that are still missing. Returns enrichment_meta dict.
+    First-pass field workers. Only fills fields that are still missing.
+    Returns enrichment_meta dict.
     """
     meta = {}
 
@@ -416,4 +416,149 @@ def run_gap_fill(
             "status": result["status"],
         }
 
+    return meta
+
+
+# ── Second-pass resolver ──────────────────────────────────────────────────────
+
+def _ddgs_snippets(query: str, max_results: int = 3) -> str:
+    """Run DDGS text search, return combined snippet text (max 600 chars)."""
+    try:
+        from duckduckgo_search import DDGS
+        results = DDGS().text(query, max_results=max_results)
+        if not results:
+            return ""
+        return " ".join(r["body"] for r in results if r.get("body"))[:600]
+    except Exception:
+        return ""
+
+
+def run_second_pass(
+    company_name: str,
+    ev: dict,
+    update_data: dict,
+    company: dict,
+    gemini_key: str,
+    groq_key: str,
+) -> dict:
+    """
+    Second-pass resolver: for fields still null after first-pass workers, run
+    targeted DDGS searches per missing field then batch-extract with AI.
+    Only fires when at least one core field remains unfilled.
+    """
+    meta = {}
+
+    def _still_missing(field):
+        return not update_data.get(field) and not company.get(field)
+
+    missing = [f for f in ["industry", "headquarters", "size", "founded", "specialties"]
+               if _still_missing(f)]
+    if not missing:
+        return meta
+
+    desc = update_data.get("description") or company.get("description") or ev.get("description") or ""
+
+    # Targeted DDGS query per missing field
+    _QUERIES = {
+        "industry":     f'"{company_name}" industry sector what they do',
+        "headquarters": f'"{company_name}" headquarters office location city country',
+        "size":         f'"{company_name}" number of employees team size headcount',
+        "founded":      f'"{company_name}" founded year established history',
+        "specialties":  f'"{company_name}" products services core capabilities',
+    }
+    snippets = {}
+    for field in missing:
+        snip = _ddgs_snippets(_QUERIES[field])
+        if snip:
+            snippets[field] = snip
+            print(f"[second_pass] {company_name} snip for {field}: {snip[:80]}", flush=True)
+
+    if not snippets and len(desc) < 20:
+        return meta
+
+    # Build context for AI batch call
+    ctx_parts = []
+    if desc:
+        ctx_parts.append(f"Description: {desc[:400]}")
+    for field, snip in snippets.items():
+        ctx_parts.append(f"Search ({field}): {snip}")
+    context = "\n".join(ctx_parts)
+
+    fields_spec = []
+    if _still_missing("industry"):
+        fields_spec.append('- industry: specific label e.g. "HR Tech", "Cybersecurity", "E-commerce"')
+    if _still_missing("headquarters"):
+        fields_spec.append('- headquarters: "City, Country" format')
+    if _still_missing("size"):
+        fields_spec.append('- employees: headcount range like "51-200" or integer')
+    if _still_missing("founded"):
+        fields_spec.append('- founded: 4-digit year')
+    if _still_missing("specialties"):
+        fields_spec.append('- specialties: 3-5 comma-separated capability areas (no generic terms)')
+
+    prompt = (
+        f"Company: {company_name}\n{context}\n\n"
+        "Extract these fields strictly from the evidence above. Do not fabricate.\n"
+        + "\n".join(fields_spec)
+        + '\n\nJSON only, null for unknown:\n'
+          '{"industry":null,"headquarters":null,"employees":null,"founded":null,"specialties":null}'
+    )
+
+    result, model = _ai_infer(prompt, gemini_key, groq_key)
+    if not result:
+        return meta
+
+    _FIELD_MAP = {
+        "industry":    ("industry",    _valid_industry),
+        "headquarters": ("headquarters", _valid_hq),
+        "employees":   ("size",        _valid_size),
+        "founded":     ("founded",     _valid_year),
+        "specialties": ("specialties", lambda v: str(v) if v and len(str(v)) > 5 else None),
+    }
+    for res_key, (db_field, validator) in _FIELD_MAP.items():
+        if not _still_missing(db_field):
+            continue
+        raw = result.get(res_key)
+        if raw is None or str(raw).lower() in ("null", "none", ""):
+            continue
+        val = validator(str(raw))
+        if val:
+            update_data[db_field] = val
+            meta[db_field] = {
+                "confidence": CONF["ai_inference"],
+                "source": f"second_pass_{model}",
+                "status": "inferred",
+            }
+            print(f"[second_pass] {company_name} {db_field}={val} via {model}", flush=True)
+
+    return meta
+
+
+# ── Terminal state finaliser ──────────────────────────────────────────────────
+
+_CORE_FIELDS = ["industry", "headquarters", "size", "founded", "description",
+                "specialties", "company_type"]
+
+
+def finalize_meta(meta: dict, update_data: dict, company: dict) -> dict:
+    """
+    Stamp every core field with a terminal state in enrichment_meta.
+
+    After both passes, every field must be one of:
+      verified / inferred   — value found this session (already in meta from _track or workers)
+      pre_existing          — value came from a prior enrichment run, not re-verified
+      not_public            — all collectors exhausted, field genuinely unavailable
+
+    This ensures the UI can distinguish "blank because we tried" from
+    "blank because we never looked".
+    """
+    for field in _CORE_FIELDS:
+        if field in meta:
+            continue  # already tracked this session
+        has_value = bool(update_data.get(field) or company.get(field))
+        meta[field] = {
+            "confidence": 0,
+            "source": "pre_existing" if has_value else "exhausted",
+            "status": "verified" if has_value else "not_public",
+        }
     return meta
