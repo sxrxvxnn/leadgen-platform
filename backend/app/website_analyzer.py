@@ -1198,12 +1198,16 @@ def classify_website_saas(
 
     # ── Business model ────────────────────────────────────────────────────────
     top_bucket = max(scores, key=scores.get)
-    top_score  = scores[top_bucket]
 
-    if top_bucket == 'marketplace' or scores['marketplace'] >= scores['subscription']:
-        fin_terms = ['lending', 'loan', 'credit', 'financing', 'fintech', 'financial',
-                     'advance', 'capital', 'crowdfund', 'factoring']
-        if any(t in page_text for t in fin_terms):
+    _fin_terms = ['lending', 'loan', 'credit', 'financing', 'fintech', 'financial',
+                  'advance', 'capital', 'crowdfund', 'factoring']
+
+    if top_bucket == 'service':
+        # Service bucket wins — go to service/agency/foundation checks below
+        business_model = None  # resolved in service block
+    elif scores['marketplace'] > 0 and scores['marketplace'] >= scores['subscription']:
+        # Marketplace or FinTech beats subscription
+        if any(t in page_text for t in _fin_terms):
             business_model = 'FinTech Platform'
         else:
             business_model = 'Marketplace'
@@ -1218,17 +1222,24 @@ def classify_website_saas(
             business_model = 'SaaS'
     elif top_bucket == 'hardware':
         business_model = 'E-commerce' if any(t in page_text for t in ['add to cart', 'shop now', 'shopify']) else 'Hardware'
-    elif top_bucket == 'service':
+    else:
+        business_model = 'Other'
+
+    # Service / agency / foundation override (runs after top_bucket check)
+    if top_bucket == 'service' or business_model is None:
         if any(t in page_text for t in ['agency', 'digital agency', 'creative agency', 'marketing agency']):
             business_model = 'Agency'
         elif any(t in page_text for t in ['charitable foundation', 'philanthropic', 'grant-making']):
             business_model = 'Other'
+        elif any(t in page_text for t in _fin_terms) and scores['marketplace'] > 0:
+            business_model = 'FinTech Platform'
         else:
             business_model = 'Consulting'
-    elif any(t in page_text for t in ['media', 'news', 'publisher', 'publication']) and scores['subscription'] < 8:
-        business_model = 'Media'
-    else:
+    if business_model is None:
         business_model = 'Other'
+    # Media override
+    if any(t in page_text for t in ['media', 'news', 'publisher', 'publication']) and scores['subscription'] < 8 and business_model == 'Other':
+        business_model = 'Media'
 
     # ── Company type ─────────────────────────────────────────────────────────
     if top_bucket == 'service' and scores['service'] > scores['subscription'] and scores['service'] > scores['marketplace']:
@@ -1239,7 +1250,7 @@ def classify_website_saas(
         company_type = 'Product'
 
     # ── Revenue model ─────────────────────────────────────────────────────────
-    if scores['marketplace'] >= scores['subscription']:
+    if scores['marketplace'] > 0 and scores['marketplace'] >= scores['subscription']:
         if any(t in page_text for t in ['transaction fee', 'per transaction', 'takes a fee']):
             revenue_model = 'Transaction Fee'
         else:
