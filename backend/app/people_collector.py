@@ -1,8 +1,12 @@
 """
-People Intelligence Engine — discovers decision makers from company websites.
+People Intelligence Engine v2 — search-first candidate discovery + verification.
 
-Tier 1: Firecrawl scrapes leadership/team pages → Gemini extracts people
-Tier 2: DDG web search fallback if Tier 1 finds < 2 people
+Architecture:
+  Path A (Search Discovery): DDG queries → Gemini extracts candidates + source URLs
+  Path B (Official Pages):   Firecrawl scrapes team/leadership pages → Gemini extracts people
+
+Cross-reference: when a name appears in BOTH paths, confidence gets a +20 multi-source boost
+and both source URLs are stored. Official page is treated as verification of the search candidate.
 """
 
 import re
@@ -14,6 +18,18 @@ _LEADERSHIP_PATHS = [
     "/management", "/founders", "/executive-team", "/board",
     "/about", "/about-us", "/who-we-are",
 ]
+
+_SEARCH_QUERIES = [
+    '"{name}" CEO OR CTO OR CFO OR founder OR "head of" OR president',
+    '"{name}" leadership team executives',
+    'site:{domain} team OR leadership OR founders OR management',
+]
+
+# Confidence weights (additive)
+_CONF_OFFICIAL_PAGE = 40    # found on company's own leadership/team/about page
+_CONF_PRESS_RELEASE = 25    # found in press release / newsroom (future)
+_CONF_MULTI_SOURCE  = 20    # name appears in BOTH search results AND official page
+_CONF_SEARCH_ONLY   = 15    # found only in search snippets
 
 _DEPT_MAP = {
     "ceo": "Executive", "chief executive": "Executive", "president": "Executive",
@@ -37,8 +53,8 @@ _DEPT_MAP = {
     "director of engineering": "Engineering", "director of product": "Product",
     "director of sales": "Sales", "director of marketing": "Marketing",
     "co-founder": "Executive", "cofounder": "Executive", "founder": "Executive",
-    "managing director": "Executive", "md": "Executive",
-    "partner": "Executive", "general partner": "Executive",
+    "managing director": "Executive", "general partner": "Executive",
+    "partner": "Executive",
     "engineer": "Engineering", "developer": "Engineering", "architect": "Engineering",
     "product manager": "Product", "product lead": "Product",
     "sales": "Sales", "account executive": "Sales", "business development": "Sales",
@@ -73,7 +89,7 @@ def _is_decision_maker(title: str) -> bool:
         "chief", "president", "founder", "co-founder", "cofounder",
         "vp ", "v.p.", "vice president",
         "director", "head of", "managing director", "general partner", "partner",
-        "principal", "lead",
+        "principal",
     ]
     return any(kw in t for kw in dm_keywords)
 
@@ -82,30 +98,8 @@ def _normalize_name(name: str) -> str:
     return re.sub(r'\s+', ' ', name.strip().lower())
 
 
-def _deduplicate(people: list) -> list:
-    seen: dict = {}
-    result = []
-    for p in people:
-        key = _normalize_name(p.get("name", ""))
-        if not key or key in seen:
-            continue
-        seen[key] = True
-        result.append(p)
-    return result
-
-
-def _extract_people_gemini(page_text: str, company_name: str, gemini_key: str, source_url: str) -> list:
-    if not gemini_key or not page_text:
-        return []
-    prompt = (
-        f"Company: {company_name}\n"
-        f"Page text (first 3000 chars):\n{page_text[:3000]}\n\n"
-        "Extract all named people with their job titles from this company page.\n"
-        "Only include people who work AT this company (not customers, advisors unless Board).\n"
-        'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title"}, ...]\n'
-        "If no people found, return [].\n"
-        "Maximum 20 people. No markdown, no explanation."
-    )
+def _gemini_extract(prompt: str, gemini_key: str) -> list:
+    """Call Gemini and parse a JSON array from the response."""
     try:
         resp = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
@@ -123,94 +117,80 @@ def _extract_people_gemini(page_text: str, company_name: str, gemini_key: str, s
         if not m:
             return []
         items = json.loads(m.group(0))
-        people = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            name = (item.get("name") or "").strip()
-            title = (item.get("title") or "").strip()
-            if not name or len(name) < 3:
-                continue
-            dept = _classify_department(title)
-            is_dm = _is_decision_maker(title)
-            people.append({
-                "name": name,
-                "title": title,
-                "department": dept,
-                "email": "",
-                "linkedin_url": "",
-                "confidence": 80 if is_dm else 60,
-                "source": "website",
-                "source_url": source_url,
-                "is_decision_maker": is_dm,
-            })
-        return people
+        return items if isinstance(items, list) else []
     except Exception:
         return []
 
 
-def _try_ddg_people(company_name: str, domain: str) -> list:
-    """DDG search for leadership pages as Tier 2 fallback."""
+def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
+    """
+    Path A: run DDG leadership queries, feed all snippets to Gemini in one call,
+    extract candidates with their source URLs.
+    Returns list of {name, title, source_url, confidence=base_search_conf}.
+    """
     try:
         from .company_prefill import _web_search
-        results = _web_search(
-            f'"{company_name}" CEO OR founder OR "head of" site:{domain}',
-            count=5,
-        )
-        people = []
-        for r in results:
-            title_text = r.get("title", "")
-            snippet = r.get("body", "")
-            # Try to extract name+title from search snippets
-            combined = f"{title_text} {snippet}"
-            # Look for patterns like "Name, Title at Company"
-            matches = re.findall(
-                r'([A-Z][a-z]+ [A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s+((?:CEO|CTO|CFO|COO|CPO|VP|Director|Head of|Founder|Co-Founder|President|Partner)[^,.\n]{0,60})',
-                combined,
-            )
-            for name, title in matches:
-                dept = _classify_department(title)
-                people.append({
-                    "name": name.strip(),
-                    "title": title.strip(),
-                    "department": dept,
-                    "email": "",
-                    "linkedin_url": "",
-                    "confidence": 55,
-                    "source": "web_search",
-                    "source_url": r.get("href", ""),
-                    "is_decision_maker": _is_decision_maker(title),
-                })
-        return people
     except Exception:
         return []
 
+    snippets = []
+    for q_template in _SEARCH_QUERIES:
+        q = q_template.format(name=company_name, domain=domain)
+        try:
+            for r in _web_search(q, count=5):
+                url = r.get("href", "")
+                title = r.get("title", "")
+                body = (r.get("body") or "")[:200]
+                if url and (title or body):
+                    snippets.append(f"[{url}] {title} — {body}")
+        except Exception:
+            continue
 
-def discover_people(company: dict, gemini_key: str) -> list:
+    if not snippets:
+        return []
+
+    combined = "\n".join(snippets[:20])
+    prompt = (
+        f"Company: {company_name} (domain: {domain})\n"
+        f"Web search snippets:\n{combined}\n\n"
+        "From these search results, extract all named people mentioned as working AT this company "
+        "with their job titles. Note the URL where each person was found.\n"
+        "Only include people confirmed to work at this specific company (not analysts, customers, "
+        "or people merely mentioning the company).\n"
+        'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title","url":"source_url"}, ...]\n'
+        "Max 15 people. No markdown, no explanation."
+    )
+    items = _gemini_extract(prompt, gemini_key)
+    candidates = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = (item.get("name") or "").strip()
+        title = (item.get("title") or "").strip()
+        url = (item.get("url") or "").strip()
+        if not name or len(name) < 3:
+            continue
+        candidates.append({
+            "name": name,
+            "title": title,
+            "department": _classify_department(title),
+            "email": "",
+            "linkedin_url": "",
+            "is_decision_maker": _is_decision_maker(title),
+            "source_urls": [url] if url else [],
+            "_search_confirmed": True,
+        })
+    return candidates
+
+
+def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> list:
     """
-    Main entry: scrape leadership pages with Firecrawl, extract people with Gemini.
-    Falls back to DDG search if < 2 people found.
-    Returns up to 15 people sorted by is_decision_maker desc.
+    Path B: Firecrawl scrapes official team/leadership pages, Gemini extracts people.
+    Returns list of {name, title, source_url (page URL), confidence=official_conf}.
     """
     from .enrichment import _fc_scrape
 
-    website = company.get("website") or ""
-    name = company.get("name") or ""
-
-    if not website:
-        return []
-
-    # Normalize domain
-    if not website.startswith("http"):
-        website = "https://" + website
-    try:
-        from urllib.parse import urlparse
-        netloc = urlparse(website).netloc.replace("www.", "")
-        base = f"https://{urlparse(website).netloc}"
-    except Exception:
-        return []
-
-    all_people: list = []
+    all_people = []
     pages_tried = 0
 
     for path in _LEADERSHIP_PATHS:
@@ -224,20 +204,138 @@ def discover_people(company: dict, gemini_key: str) -> list:
         if not md or len(md) < 100:
             continue
         pages_tried += 1
-        found = _extract_people_gemini(md, name, gemini_key, url)
-        all_people.extend(found)
-        if len(_deduplicate(all_people)) >= 8:
+
+        prompt = (
+            f"Company: {company_name}\n"
+            f"Page text (first 3000 chars):\n{md[:3000]}\n\n"
+            "Extract all named people with their job titles from this company page.\n"
+            "Only include people who work AT this company (not customers, advisors unless Board).\n"
+            'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title"}, ...]\n'
+            "If no people found, return []. Max 20 people. No markdown."
+        )
+        items = _gemini_extract(prompt, gemini_key)
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            name = (item.get("name") or "").strip()
+            title = (item.get("title") or "").strip()
+            if not name or len(name) < 3:
+                continue
+            all_people.append({
+                "name": name,
+                "title": title,
+                "department": _classify_department(title),
+                "email": "",
+                "linkedin_url": "",
+                "is_decision_maker": _is_decision_maker(title),
+                "source_urls": [url],
+                "_official_confirmed": True,
+            })
+
+        # Stop early if we already have enough from official pages
+        unique_so_far = len({_normalize_name(p["name"]) for p in all_people})
+        if unique_so_far >= 8:
             break
 
-    people = _deduplicate(all_people)
+    return all_people
 
-    # Tier 2: DDG fallback if too few found
-    if len(people) < 2 and netloc:
-        ddg = _try_ddg_people(name, netloc)
-        people.extend(ddg)
-        people = _deduplicate(people)
 
-    # Sort: decision makers first, then by confidence desc
+def _merge_paths(search: list, official: list) -> list:
+    """
+    Cross-reference both discovery paths by normalized name.
+
+    Confidence scoring:
+      - Official page only:        _CONF_OFFICIAL_PAGE (40) + role base (DM=40, other=20)
+      - Search + official match:   official base + _CONF_MULTI_SOURCE (+20)
+      - Search only:               role base (DM=30, other=15) + _CONF_SEARCH_ONLY (15)
+
+    All source_urls from both paths are stored on the merged record.
+    """
+    # Index official people by normalized name
+    official_index: dict = {}
+    for p in official:
+        key = _normalize_name(p["name"])
+        if key not in official_index:
+            official_index[key] = p
+        else:
+            # Same name on multiple pages — accumulate source_urls
+            official_index[key]["source_urls"].extend(p["source_urls"])
+
+    merged: dict = {}
+
+    # Start from official people (authoritative)
+    for key, p in official_index.items():
+        is_dm = p["is_decision_maker"]
+        conf = _CONF_OFFICIAL_PAGE + (40 if is_dm else 20)
+        merged[key] = {
+            **p,
+            "confidence": min(conf, 95),
+            "source": "website",
+            "source_urls": list(dict.fromkeys(p["source_urls"])),
+        }
+
+    # Add / cross-reference search candidates
+    for p in search:
+        key = _normalize_name(p["name"])
+        if key in merged:
+            # Cross-reference confirmed — boost confidence and add source_urls
+            existing = merged[key]
+            existing["confidence"] = min(existing["confidence"] + _CONF_MULTI_SOURCE, 98)
+            for url in p["source_urls"]:
+                if url and url not in existing["source_urls"]:
+                    existing["source_urls"].append(url)
+            # Prefer official title but fill in if missing
+            if not existing["title"] and p.get("title"):
+                existing["title"] = p["title"]
+                existing["department"] = p["department"]
+                existing["is_decision_maker"] = p["is_decision_maker"]
+        else:
+            # Search-only candidate — lower confidence
+            is_dm = p["is_decision_maker"]
+            conf = (30 if is_dm else 15) + _CONF_SEARCH_ONLY
+            merged[key] = {
+                **p,
+                "confidence": min(conf, 95),
+                "source": "web_search",
+                "source_urls": [u for u in p["source_urls"] if u],
+            }
+
+    return list(merged.values())
+
+
+def discover_people(company: dict, gemini_key: str) -> list:
+    """
+    Main entry point.
+
+    Runs search discovery and official-page scraping, cross-references results,
+    applies multi-source confidence boost, deduplicates, and returns up to 15
+    people sorted by decision-maker flag and confidence.
+    """
+    website = company.get("website") or ""
+    name = company.get("name") or ""
+
+    if not website or not name:
+        return []
+
+    if not website.startswith("http"):
+        website = "https://" + website
+
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(website)
+        netloc = parsed.netloc
+        domain = netloc.replace("www.", "")
+        base = f"https://{netloc}"
+    except Exception:
+        return []
+
+    # Run both paths (sequential — Firecrawl scrapes are I/O bound but we keep it simple)
+    search_candidates = _search_candidates(name, domain, gemini_key)
+    official_people = _scrape_official_pages(base, name, gemini_key)
+
+    people = _merge_paths(search_candidates, official_people)
+
+    # Sort: decision makers first, then confidence desc
     people.sort(key=lambda p: (0 if p.get("is_decision_maker") else 1, -p.get("confidence", 0)))
 
     return people[:15]

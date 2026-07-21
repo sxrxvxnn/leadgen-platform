@@ -3220,11 +3220,33 @@ function CompanyCard({
                         DM
                       </span>
                     )}
+                    {p.source_urls?.length > 1 && (
+                      <span
+                        title={`Found in ${p.source_urls.length} sources:\n${p.source_urls.join('\n')}`}
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          padding: '2px 6px',
+                          background: 'rgba(5,150,105,0.12)',
+                          color: '#059669',
+                          borderRadius: 3,
+                          letterSpacing: '0.06em',
+                          cursor: 'help',
+                        }}
+                      >
+                        {p.source_urls.length} sources
+                      </span>
+                    )}
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: 9,
-                        color: 'var(--text-muted)',
+                        color:
+                          p.confidence >= 80
+                            ? '#4a7c59'
+                            : p.confidence >= 60
+                              ? '#d97706'
+                              : 'var(--text-muted)',
                       }}
                     >
                       {p.confidence}%
