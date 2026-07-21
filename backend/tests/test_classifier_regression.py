@@ -313,6 +313,42 @@ CASES = [
         True, "Product", "API Platform",
     ),
 
+    # ── 7. IT consulting false-positive prevention (spec: BEYONGEN-type) ──────
+    # Companies that use cloud/cyber/platform terms because they BUILD software
+    # for clients — not because they sell SaaS subscriptions.
+
+    (
+        "IT Consulting Cyber Cloud",
+        "Cloud engineering and cybersecurity consulting services. Digital transformation services for enterprise clients. IT service management solutions.",
+        _page(
+            nav="services about industries contact",
+            full_text=(
+                "cloud engineering cybersecurity consulting digital transformation services "
+                "it service management professional services case studies industries served "
+                "our clients enterprise solutions technology consulting"
+            ),
+            title="Cloud Engineering & Cybersecurity Consulting | IT Services",
+        ),
+        "https://itconsulting.example.com",
+        "",
+        False, "Service", "Consulting",
+    ),
+    (
+        "Managed Services Provider",
+        "Managed services and outsourcing company. Staff augmentation and dedicated development teams for enterprises. Custom development and system integration.",
+        _page(
+            nav="services clients expertise",
+            full_text=(
+                "managed services outsourcing staff augmentation dedicated team "
+                "custom development system integration client projects case studies"
+            ),
+            title="Managed IT Services | Staff Augmentation",
+        ),
+        "https://msp.example.com",
+        "",
+        False, "Service", "Consulting",
+    ),
+
 ]
 
 
