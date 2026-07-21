@@ -4076,13 +4076,16 @@ async def bulk_autofill_companies(
                     body = " ".join(filter(None, [
                         r.get("body"), r.get("title"), r.get("description"),
                     ]))
-                    # Only capture LinkedIn URL from slug-targeted queries — mixed queries
-                    # return unrelated company pages that happen to mention the name.
-                    if trust_url and not result.get("linkedin_url"):
-                        _ru = r.get("url", "")
-                        _li_m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', _ru)
-                        if _li_m:
-                            result["linkedin_url"] = f"https://www.linkedin.com/company/{_li_m.group(1)}/"
+                    _ru = r.get("url", "") or ""
+                    _li_m = _re_mod.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', _ru)
+                    if _li_m:
+                        _captured = f"https://www.linkedin.com/company/{_li_m.group(1)}/"
+                        if trust_url and not result.get("linkedin_url"):
+                            # Slug-targeted query — trust the URL directly
+                            result["linkedin_url"] = _captured
+                        elif not trust_url and not result.get("linkedin_url_candidate") and _body_is_about_company(body):
+                            # General query — capture as candidate; caller validates with _linkedin_slug_matches
+                            result["linkedin_url_candidate"] = _captured
                     # Only trust follower/employee counts when body is about this company
                     if not _body_is_about_company(body):
                         continue
@@ -4094,12 +4097,15 @@ async def bulk_autofill_companies(
                         if m:
                             result["followers"] = m.group(1).strip()
                     if not result.get("employee_count"):
-                        # Try range first (51-200 employees), then exact count
+                        # Try range first (51-200), then exact count
                         m = _re_mod.search(r'(\d+\s*[-–]\s*\d+)\s*\+?\s*employees?', body, _re_mod.I)
                         if not m:
                             m = _re_mod.search(r'(\d[\d,]+\+?)\s*employees?', body, _re_mod.I)
                         if m:
-                            result["employee_count"] = m.group(1).strip().replace(',', '').replace(' ', '')
+                            _ec = m.group(1).strip().replace(',', '').replace(' ', '')
+                            # Reject bare 4-digit year-like values (1900-2099 with no range)
+                            if not (_ec.isdigit() and len(_ec) == 4 and 1900 <= int(_ec) <= 2099):
+                                result["employee_count"] = _ec
                     if not result.get("headquarters"):
                         m = _re_mod.search(
                             r'[·•]\s*([A-Z][^·•|<]{4,50}(?:India|US|UAE|UK|Singapore|Malaysia|Canada|Australia))\s*[·•|]',
@@ -4473,20 +4479,30 @@ async def bulk_autofill_companies(
                         with _DDGS_SEM:
                             try: _snip = _ddgs_linkedin_snippet(company_name, _real_slug)
                             except Exception: pass
-            # LinkedIn URL found in snippet search results — validate slug matches company name
+            # LinkedIn URL from slug-targeted query (exact match)
             if _snip.get("linkedin_url") and needs_linkedin and not li_url_confirmed:
                 if _linkedin_slug_matches(company_name, _snip["linkedin_url"]):
                     li_url_confirmed = _snip["linkedin_url"]
                     li_url = li_url_confirmed
                     update_data["linkedin_url"] = li_url_confirmed
+            # LinkedIn URL candidate from general query — validate before trusting
+            if _snip.get("linkedin_url_candidate") and needs_linkedin and not li_url_confirmed:
+                _cand = _snip["linkedin_url_candidate"]
+                if _linkedin_slug_matches(company_name, _cand):
+                    li_url_confirmed = _cand
+                    li_url = li_url_confirmed
+                    update_data["linkedin_url"] = li_url_confirmed
+                    print(f"[linkedin_candidate] {company_name}: accepted {_cand}", flush=True)
             if _snip.get("followers") and needs_followers:
                 _fv = _re_mod.sub(r'\s*followers?\b.*', '', str(_snip["followers"]), flags=_re_mod.I).strip().replace(',', '')
                 if _fv:
                     update_data["followers"] = _expand_km(_fv)
             if _snip.get("employee_count") and needs_size:
                 _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
+                # Reject bare year-like values (1900-2099); Accept ranges (51-200), plus (10001+)
+                _sv_is_year = _sv.isdigit() and len(_sv) == 4 and 1900 <= int(_sv) <= 2099
                 # Accept exact integers, LinkedIn ranges (51-200), or plus suffix (10001+)
-                if _sv and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv):
+                if _sv and not _sv_is_year and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv):
                     update_data["size"] = _track("size", _sv, "search_snippet")
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
                 update_data["headquarters"] = _track("headquarters", _snip["headquarters"], "search_snippet")

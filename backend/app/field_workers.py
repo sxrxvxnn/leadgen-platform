@@ -240,8 +240,11 @@ def fill_employees(company_name: str, ev: dict) -> dict:
     desc = ev.get("description") or ""
     m = re.search(r'(\d[\d,]+)\s+employees?', desc, re.I)
     if m and '-' not in m.group(1):
-        return {"value": m.group(1).replace(",", ""), "confidence": CONF["desc_mining"],
-                "source": "desc_mining", "status": "inferred"}
+        _val = m.group(1).replace(",", "")
+        # Reject bare year-like values (e.g. "in 2016 employees")
+        if not (_val.isdigit() and len(_val) == 4 and 1900 <= int(_val) <= 2099):
+            return {"value": _val, "confidence": CONF["desc_mining"],
+                    "source": "desc_mining", "status": "inferred"}
 
     return _NOT_FOUND
 
