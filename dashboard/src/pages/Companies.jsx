@@ -1260,6 +1260,25 @@ function CompanyCard({
                   ⊘ mismatch
                 </span>
               )}
+              {company.redirect_detected && (
+                <span
+                  title={`This domain redirects to ${company.redirect_detected}. Enriched data may reflect a different company (e.g. an acquirer). Verify manually.`}
+                  style={{
+                    fontSize: 9,
+                    fontFamily: 'monospace',
+                    fontWeight: 600,
+                    color: '#b45309',
+                    background: 'rgba(180,83,9,0.1)',
+                    border: '1px solid rgba(180,83,9,0.3)',
+                    borderRadius: 4,
+                    padding: '2px 6px',
+                    letterSpacing: '0.04em',
+                    cursor: 'help',
+                  }}
+                >
+                  ⚠ redirects → {company.redirect_detected}
+                </span>
+              )}
               {icpScore !== null && isEnabled('icp_scoring') && (
                 <span
                   title="Fit score based on enrichment data — tech stack, size, reviews, hiring activity"
