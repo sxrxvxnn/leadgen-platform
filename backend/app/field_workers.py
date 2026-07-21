@@ -22,45 +22,75 @@ import requests
 
 # ── Description normalizer ────────────────────────────────────────────────────
 
-# Patterns that signal the text is LinkedIn sidebar metadata, not a real description
+# Patterns where the entire text is junk and should be rejected
 _DESC_SIDEBAR_START = re.compile(
     r'^\s*(?:'
-    r'\d[\d,]*\s*[-–]\s*[\d,]+\s*employees?|'  # "11-50 employees", "1,001-5,000 employees"
-    r'-\s*\d[\d,]*\+?\s*employees?|'             # "-200 employees" (leading minus from bad parse)
-    r'\d[\d,]*\+\s*employees?|'                  # "1000+ employees"
-    r'Headquarters\s*(?:[\n:]|\s+[A-Z])|'         # "Headquarters: ...", "Headquarters\n...", "Headquarters City"
-    r'Founded\s+in[.\s]+\d{4}\s*\('              # "Founded in. 2002 (24 yrs old)" aggregator fmt
+    r'\d[\d,]*\s*[-–]\s*[\d,]+\s*employees?|'        # "11-50 employees"
+    r'-\s*\d[\d,]*\+?\s*employees?|'                  # "-200 employees" (bad parse)
+    r'\d[\d,]*\+\s*employees?|'                       # "1000+ employees"
+    r'Headquarters\s*(?:[\n:]|\s+[A-Z])|'             # "Headquarters: ..." / "Headquarters City"
+    r'Founded\s+in[.\s]+\d{4}\s*\(|'                 # "Founded in. 2002 (24 yrs old)"
+    r'Address\s*[.:\n]|'                              # "Address. SBC Module 11..." (registry)
+    r'\w+\.\s+Primary\.|'                             # "Education. Primary." (LinkedIn sidebar)
+    r'[A-Z][a-z]+\s+[A-Z][a-z]+\s*:\s*(?:ex-|former\s+)?(?:executive|chairman|ceo|cto|coo|cfo|director|founder|president)'
+    # "Larry Ellison: ex-executive chairman" (Wikipedia infobox / biography snippet)
     r')',
     re.I,
 )
 
-# Inline metadata segments to strip from descriptions that are mostly real text
-# Only strip explicit sidebar key:value formats, not natural sentence mentions
+# Inline segments to strip — cut the text at the first match and discard the rest
+_DESC_CUT_AT = [
+    re.compile(r'\s*[;,]?\s*Key\s+Individuals?\b.*$',              re.I | re.S),
+    re.compile(r'\s*[;,]?\s*Key\s+Personnel\b.*$',                 re.I | re.S),
+    re.compile(r'\s*[;]\s*(?:Phone|Email|Contact)\b.*$',           re.I | re.S),
+    re.compile(r'\s*\bPhone\s*(?:Number)?\s*[:\-]?\s*\+?[\d\s\-\.]{7,}.*$', re.I | re.S),
+    re.compile(r'\s*\bEmail\s*[:\-]?\s*[\w.+-]+@.*$',              re.I | re.S),
+    re.compile(r'\s+Employees\s+at\s+[A-Z][\w\s]+[.,].*$',        re.I | re.S),
+    re.compile(r'\s*[,\s]+Co-[Ff]ounder(?:\s*&[^.]+)?\s+at\s+[A-Z].*$', re.I | re.S),
+    re.compile(r'[…\.]{1,3}\s*\w{1,20}\s*$',                       re.S),  # "… hodo" trailing fragment
+    # Comma + person title at end: ", Dr. Shani L. Ganga CEO & Managing Director of X"
+    # Allow middle initials (L.) by using [A-Z][a-zA-Z.]+ instead of [A-Z][a-z]+
+    re.compile(r',\s+(?:Dr\.|Mr\.|Ms\.|Mrs\.|Prof\.)?\s*[A-Z][a-zA-Z.]+(?:\s+[A-Z][a-zA-Z.]+)+\s+(?:CEO|CTO|CFO|COO|Managing\s+Director|Director|Founder|Chairman|President|Partner)[^.]{0,120}$', re.I | re.S),
+]
+
+# Inline metadata segments to strip (may appear mid-text)
 _DESC_META_STRIP = [
     re.compile(r'\s*\d[\d,]*\s*[-–]\s*[\d,]+\+?\s*employees?\b[^.;]{0,80}', re.I),
-    re.compile(r'\s*\bCompany\s+size\s*[:\s]+[^\n;]{0,80}', re.I),
+    re.compile(r'\s*\bCompany\s+size\s*[:\s]+[^\n;]{0,80}',       re.I),
     re.compile(r'\s*\b(?:Global|India)\s+Employee\s+Count[.:\s]+[^\n;]{0,80}', re.I),
-    re.compile(r'\s*\bHeadquarters?\s*:\s*[A-Za-z][^.;\n]{2,80}', re.I),  # colon-form only
+    re.compile(r'\s*\bHeadquarters?\s*:\s*[A-Za-z][^.;\n]{2,80}', re.I),
     re.compile(r'\s*\bType\s*:\s*(?:Privately|Publicly)\s+Held[^.;\n]{0,60}', re.I),
-    re.compile(r'\s*\bFounded\s*:\s*\d{4}[^.;\n]{0,60}', re.I),           # colon-form only
+    re.compile(r'\s*\bFounded\s*:\s*\d{4}[^.;\n]{0,60}',          re.I),
     re.compile(r'\s*\bSpecialties?\s*[:\s]+[A-Za-z][^.;\n]{5,120}', re.I),
     re.compile(r'\s*\bLocations?\s*(?:Primary\s*)?:\s*[A-Za-z][^.;\n]{0,80}', re.I),
-    re.compile(r'\s*\b(?:Global|India)\s+Employee\s+Count[.:\s]+[^\n;]{0,80}', re.I),
 ]
 
 
 def _clean_description(text: str) -> str:
-    """Strip LinkedIn sidebar boilerplate from description text before saving."""
+    """
+    Normalize description text by removing LinkedIn sidebar boilerplate, company
+    directory junk (Key Individuals, phone, email, address), and person-name fragments.
+    Returns empty string when the entire text is metadata with no real description.
+    """
     if not text:
         return text
     t = text.strip()
-    # Reject entirely if it opens with sidebar metadata (not a description at all)
+    # Reject entirely if it opens with sidebar / directory metadata
     if _DESC_SIDEBAR_START.match(t):
         return ""
-    # Strip embedded metadata segments from otherwise real descriptions
+    # Reject short category-label strings: comma-separated nouns with no sentence verb
+    # e.g. "Appliances, Electrical, and Electronics Manufacturing" (industry label, not description)
+    if len(t) < 100 and not re.search(r'\b(?:is|are|was|were|provides|provide|offers|offer|helps|help|builds|build|develops|develop|makes|make|enables|enable|focuses|focus)\b', t, re.I) and not re.search(r'\.\s', t):
+        word_count = len(t.split())
+        if word_count <= 10:  # Very short multi-word phrase with no verb → category label
+            return ""
+    # Cut the text at the first junk anchor (Key Individuals, Phone, Co-Founder at, etc.)
+    for pat in _DESC_CUT_AT:
+        t = pat.sub('', t)
+    # Strip inline metadata key:value pairs
     for pat in _DESC_META_STRIP:
         t = pat.sub('', t)
-    t = re.sub(r'\s{2,}', ' ', t).strip().strip('.,; ')
+    t = re.sub(r'\s{2,}', ' ', t).strip().strip('.,;… ')
     return t
 
 # ── Confidence constants ──────────────────────────────────────────────────────
@@ -439,7 +469,7 @@ def _slug_matches(company_name: str, linkedin_url: str) -> bool:
 
 def fill_linkedin_url(company_name: str, ev: dict) -> dict:
     """
-    Retry chain: website_data → ddgs_snippet (confirmed or candidate) → targeted DDGS search
+    Retry chain: website_data → ddgs_snippet (confirmed or candidate) → linkedin_worker discovery
     """
     # Source 1: LinkedIn URL found in company website HTML (highest confidence)
     ws = ev.get("website_data") or {}
@@ -456,19 +486,14 @@ def fill_linkedin_url(company_name: str, ev: dict) -> dict:
                 return {"value": li_from_snip, "confidence": CONF["search_snippet"],
                         "source": "search_snippet", "status": "verified"}
 
-    # Source 3: Targeted DDGS search
+    # Source 3: linkedin_worker multi-query discovery (uses cleaned company name)
     try:
-        from duckduckgo_search import DDGS
-        q = f'site:linkedin.com/company "{company_name}"'
-        results = list(DDGS().text(q, max_results=5))
-        for r in results:
-            url = r.get("href", "") or ""
-            lm = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', url)
-            if lm:
-                cand = f"https://www.linkedin.com/company/{lm.group(1)}/"
-                if _slug_matches(company_name, cand):
-                    return {"value": cand, "confidence": CONF["search_snippet"],
-                            "source": "search_snippet", "status": "verified"}
+        from .linkedin_worker import discover_linkedin_url
+        website = (ws.get("_base_url") or ws.get("url") or "")
+        found_url = discover_linkedin_url(company_name, website)
+        if found_url:
+            return {"value": found_url, "confidence": CONF["search_snippet"],
+                    "source": "search_snippet", "status": "verified"}
     except Exception:
         pass
 
