@@ -1229,6 +1229,62 @@ async def search_company_people(payload: dict, authorization: str = Header(...))
     return {"people": people, "total": len(people)}
 
 
+# ─── PEOPLE INTELLIGENCE ENGINE ────────────────────────────────────────────────
+
+@router.post("/companies/{company_id}/discover-people")
+async def discover_company_people(company_id: str, authorization: str = Header(...)):
+    """Discover decision makers from company website — Firecrawl + Gemini."""
+    user_id = get_user_id(authorization)
+
+    # Fetch company
+    res = supabase.table("companies").select("id,name,website").eq("id", company_id).eq("user_id", user_id).limit(1).execute()
+    rows = res.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Company not found")
+    company = rows[0]
+
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if not gemini_key:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+
+    from .people_collector import discover_people
+    people = discover_people(company, gemini_key)
+
+    if not people:
+        return {"inserted": 0, "people": []}
+
+    # Delete previous records for this company+user before re-inserting
+    supabase.table("decision_makers").delete().eq("company_id", company_id).eq("user_id", user_id).execute()
+
+    rows_to_insert = [
+        {
+            "company_id": company_id,
+            "user_id": user_id,
+            "name": p["name"],
+            "title": p.get("title") or "",
+            "department": p.get("department") or "Other",
+            "email": p.get("email") or "",
+            "linkedin_url": p.get("linkedin_url") or "",
+            "confidence": p.get("confidence", 50),
+            "source": p.get("source", "website"),
+            "source_url": p.get("source_url") or "",
+            "is_decision_maker": p.get("is_decision_maker", True),
+        }
+        for p in people
+    ]
+    supabase.table("decision_makers").insert(rows_to_insert).execute()
+
+    return {"inserted": len(rows_to_insert), "people": people}
+
+
+@router.get("/companies/{company_id}/people")
+async def get_company_people(company_id: str, authorization: str = Header(...)):
+    """Return stored decision makers for a company."""
+    user_id = get_user_id(authorization)
+    res = supabase.table("decision_makers").select("*").eq("company_id", company_id).eq("user_id", user_id).order("is_decision_maker", desc=True).order("confidence", desc=True).execute()
+    return {"people": res.data or []}
+
+
 # ─── UPDATE COMPANY SIZE BY NAME (called by extension after people page scrape) ──
 
 @router.patch("/companies/size-by-name")

@@ -31,6 +31,8 @@ import {
   invalidateCache,
   listJobs,
   getJob,
+  discoverCompanyPeople,
+  getCompanyPeople,
 } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
@@ -671,6 +673,9 @@ function CompanyCard({
   const [checkingCompliance, setCheckingCompliance] = useState(false)
   const [complianceFrameworks, setComplianceFrameworks] = useState(null)
   const actionsMenuRef = useRef(null)
+  const [showPeople, setShowPeople] = useState(false)
+  const [people, setPeople] = useState(null)
+  const [discoveringPeople, setDiscoveringPeople] = useState(false)
 
   useEffect(() => {
     getCompanySignals(company.id)
@@ -1650,6 +1655,32 @@ function CompanyCard({
             </div>
             <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>
               Leads →
+            </button>
+            <button
+              style={{
+                ...card.primaryBtn,
+                background: showPeople ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)',
+                color: '#3b82f6',
+                border: '1px solid rgba(59,130,246,0.3)',
+              }}
+              onClick={async () => {
+                if (showPeople) {
+                  setShowPeople(false)
+                  return
+                }
+                setShowPeople(true)
+                if (people === null) {
+                  try {
+                    const r = await getCompanyPeople(company.id)
+                    setPeople(r.data?.people || [])
+                  } catch {
+                    setPeople([])
+                  }
+                }
+              }}
+              title="View discovered people"
+            >
+              People {people && people.length > 0 ? `(${people.length})` : ''}
             </button>
             <button style={card.editCardBtn} onClick={openEdit} title="Edit">
               ✎
@@ -3017,6 +3048,219 @@ function CompanyCard({
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── People Intelligence Panel ── */}
+      {showPeople && (
+        <div
+          style={{
+            background: 'var(--bg)',
+            border: '1px solid rgba(59,130,246,0.25)',
+            borderLeft: '4px solid #3b82f6',
+            borderRadius: 8,
+            padding: '14px 18px',
+            marginTop: 8,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 10,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 14,
+                fontWeight: 700,
+                color: 'var(--text)',
+              }}
+            >
+              Decision Makers · {company.name}
+            </span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                disabled={discoveringPeople}
+                onClick={async () => {
+                  setDiscoveringPeople(true)
+                  try {
+                    const r = await discoverCompanyPeople(company.id)
+                    setPeople(r.data?.people || [])
+                  } catch {
+                    alert('Discovery failed. Check that the company has a website.')
+                  } finally {
+                    setDiscoveringPeople(false)
+                  }
+                }}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  padding: '4px 10px',
+                  background: discoveringPeople ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.12)',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  borderRadius: 5,
+                  color: '#3b82f6',
+                  cursor: discoveringPeople ? 'not-allowed' : 'pointer',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {discoveringPeople ? 'Discovering…' : '⟳ Discover'}
+              </button>
+              <button
+                onClick={() => setShowPeople(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  fontSize: 14,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {people === null ? (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+              Loading…
+            </p>
+          ) : people.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '18px 0' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  color: 'var(--text-muted)',
+                  marginBottom: 8,
+                }}
+              >
+                No people discovered yet.
+              </p>
+              <p
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}
+              >
+                Click "Discover" to scrape the company website for decision makers.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {people.map((p, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 10px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '50%',
+                      background: 'rgba(59,130,246,0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 13,
+                      color: '#3b82f6',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {(p.name || '?')[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 13,
+                        color: 'var(--text)',
+                        margin: 0,
+                        fontWeight: p.is_decision_maker ? 600 : 400,
+                      }}
+                    >
+                      {p.name}
+                    </p>
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        color: 'var(--text-muted)',
+                        margin: 0,
+                      }}
+                    >
+                      {p.title || 'Unknown title'}{' '}
+                      {p.department && p.department !== 'Other' ? `· ${p.department}` : ''}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {p.is_decision_maker && (
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          padding: '2px 6px',
+                          background: 'rgba(59,130,246,0.12)',
+                          color: '#3b82f6',
+                          borderRadius: 3,
+                          letterSpacing: '0.06em',
+                        }}
+                      >
+                        DM
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      {p.confidence}%
+                    </span>
+                    {p.email && (
+                      <a
+                        href={`mailto:${p.email}`}
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: 'var(--accent)',
+                          textDecoration: 'none',
+                        }}
+                        title={p.email}
+                      >
+                        ✉
+                      </a>
+                    )}
+                    {p.linkedin_url && (
+                      <a
+                        href={p.linkedin_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: '#0a66c2',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        in
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
