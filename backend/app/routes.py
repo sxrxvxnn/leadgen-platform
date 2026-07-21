@@ -1286,6 +1286,14 @@ async def get_company_people(company_id: str, authorization: str = Header(...)):
     return {"people": res.data or []}
 
 
+@router.get("/decision-makers")
+async def list_all_decision_makers(authorization: str = Header(...)):
+    """Return all decision makers for the authenticated user (all companies)."""
+    user_id = get_user_id(authorization)
+    res = supabase.table("decision_makers").select("*").eq("user_id", user_id).order("is_decision_maker", desc=True).order("confidence", desc=True).execute()
+    return {"people": res.data or []}
+
+
 # ─── UPDATE COMPANY SIZE BY NAME (called by extension after people page scrape) ──
 
 @router.patch("/companies/size-by-name")
@@ -4952,6 +4960,36 @@ async def bulk_autofill_companies(
             update_data["enriched_at"] = _dt.datetime.utcnow().isoformat()
 
             supabase.table("companies").update(update_data).eq("id", company["id"]).eq("user_id", user_id).execute()
+
+            # ── Auto-discover decision makers ──────────────────────────────────────
+            _dm_ws = update_data.get("website") or company.get("website") or ""
+            if _dm_ws and _gemini_key_bulk:
+                try:
+                    from .people_collector import discover_people as _discover_people
+                    _dm_co = {"id": company["id"], "name": company_name, "website": _dm_ws}
+                    _dm_people = _discover_people(_dm_co, _gemini_key_bulk)
+                    if _dm_people:
+                        supabase.table("decision_makers").delete().eq("company_id", company["id"]).eq("user_id", user_id).execute()
+                        supabase.table("decision_makers").insert([
+                            {
+                                "company_id": company["id"],
+                                "user_id": user_id,
+                                "name": p["name"],
+                                "title": p.get("title") or "",
+                                "department": p.get("department") or "Other",
+                                "email": p.get("email") or "",
+                                "linkedin_url": p.get("linkedin_url") or "",
+                                "confidence": p.get("confidence", 50),
+                                "source": p.get("source", "website"),
+                                "source_url": (p.get("source_urls") or [p.get("source_url") or ""])[0],
+                                "source_urls": p.get("source_urls") or ([p.get("source_url")] if p.get("source_url") else []),
+                                "is_decision_maker": p.get("is_decision_maker", True),
+                            }
+                            for p in _dm_people
+                        ]).execute()
+                        print(f"[auto_people] {company_name}: {len(_dm_people)} people inserted", flush=True)
+                except Exception as _dm_ex:
+                    print(f"[auto_people] {company_name} EXCEPTION: {_dm_ex}", flush=True)
 
             return {"id": company["id"], "name": company_name, "success": True,
                     "filled": list(update_data.keys()), "update": update_data}
