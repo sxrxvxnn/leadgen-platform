@@ -3920,6 +3920,13 @@ async def bulk_autofill_companies(
                                 'e-commerce technology', 'human resources technology'}
                 if vl not in _valid_multi:
                     return False
+        # Truncated fragment: ends with preposition/article → search snippet cut off mid-title
+        # e.g. "IT Consultants in the", "IT Services and"
+        if words and words[-1] in ('in', 'the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'at', 'with', 'by', 'from'):
+            return False
+        # Contains " in the " mid-string (e.g. "IT Consultants in the UK") — too verbose for an industry label
+        if ' in the ' in vl or ' in a ' in vl:
+            return False
         return True
 
     # Richer industry taxonomy passed to AI — specific subcategories reduce generic answers
@@ -4907,10 +4914,34 @@ async def bulk_autofill_companies(
             _fw_wd_with_base = dict(website_data) if website_data else {}
             if _fw_ws_base and "_base_url" not in _fw_wd_with_base:
                 _fw_wd_with_base["_base_url"] = _fw_ws_base
+
+            # ── LinkedIn Worker: structured enrichment per spec ───────────────
+            # Run dedicated linkedin_worker when no LinkedIn data was collected yet.
+            # It discovers the URL (if missing) and extracts structured fields.
+            _existing_li_url = update_data.get("linkedin_url") or company.get("linkedin_url") or ""
+            _li_worker_result = {}
+            if not _fw_li_res or not any(_fw_li_res.get(f) for f in ("industry", "employee_count", "description", "followers")):
+                try:
+                    from .linkedin_worker import run_linkedin_worker as _run_li_worker
+                    _li_worker_result = _run_li_worker(
+                        company_name, _fw_ws_base, _existing_li_url
+                    )
+                    if _li_worker_result.get("linkedin_url") and not _existing_li_url:
+                        update_data["linkedin_url"] = _li_worker_result["linkedin_url"]
+                    # Merge worker fields into update_data if not already set
+                    for _lf, _lv in (_li_worker_result.get("fields") or {}).items():
+                        if _lf.startswith("_"):
+                            continue  # internal normalized keys
+                        if not update_data.get(_lf) and not company.get(_lf):
+                            update_data[_lf] = _lv["value"]
+                            _meta[_lf] = {"confidence": _lv["confidence"], "source": "linkedin_worker", "status": "verified"}
+                except Exception as _liw_ex:
+                    print(f"[linkedin_worker] {company_name} EXCEPTION: {_liw_ex}", flush=True)
+
             _fw_evidence = {
                 "website_data":  _fw_wd_with_base,
                 "ddgs_snippet":  _snip_res[0] or {},
-                "linkedin":      _fw_li_res,
+                "linkedin":      _fw_li_res or _li_worker_result.get("raw") or {},
                 "proxycurl":     _fw_pc_data,
                 "description":   _desc_bulk,
             }
