@@ -70,7 +70,7 @@ def discover_linkedin_url(company_name: str, website: str = "") -> str:
     Returns validated linkedin.com/company/... URL or empty string.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
     except ImportError:
         return ""
 

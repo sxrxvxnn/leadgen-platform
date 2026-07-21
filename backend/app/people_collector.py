@@ -108,27 +108,37 @@ def _normalize_name(name: str) -> str:
 
 
 def _gemini_extract(prompt: str, gemini_key: str) -> list:
-    """Call Gemini and parse a JSON array from the response."""
-    try:
-        resp = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}",
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.0, "maxOutputTokens": 1024},
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
+    """Call Gemini and parse a JSON array from the response. Retries once on 429."""
+    import time as _time
+    for attempt in range(2):
+        try:
+            resp = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.0, "maxOutputTokens": 1024},
+                },
+                timeout=20,
+            )
+            if resp.status_code == 429:
+                if attempt == 0:
+                    _time.sleep(5)
+                    continue
+                return []
+            if resp.status_code != 200:
+                print(f"[gemini_extract] HTTP {resp.status_code}: {resp.text[:200]}", flush=True)
+                return []
+            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            m = re.search(r'\[.*\]', raw, re.DOTALL)
+            if not m:
+                return []
+            items = json.loads(m.group(0))
+            return items if isinstance(items, list) else []
+        except Exception as e:
+            print(f"[gemini_extract] exception: {e}", flush=True)
             return []
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-        m = re.search(r'\[.*\]', raw, re.DOTALL)
-        if not m:
-            return []
-        items = json.loads(m.group(0))
-        return items if isinstance(items, list) else []
-    except Exception:
-        return []
+    return []
 
 
 def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
@@ -384,6 +394,8 @@ def discover_people(company: dict, gemini_key: str) -> list:
     # Run both paths (sequential — Firecrawl scrapes are I/O bound but we keep it simple)
     search_candidates = _search_candidates(name, domain, gemini_key)
     official_people = _scrape_official_pages(base, name, gemini_key)
+
+    print(f"[discover_people] {name}: search={len(search_candidates)} official={len(official_people)}", flush=True)
 
     people = _merge_paths(search_candidates, official_people)
 
