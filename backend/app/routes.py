@@ -4199,6 +4199,7 @@ async def bulk_autofill_companies(
 
         update_data = {}
         _meta: dict = {}  # per-field enrichment tracking
+        from .field_workers import _clean_description as _fw_clean_desc
 
         def _track(field: str, value, source: str, status: str = "verified"):
             """Record confidence + source for a field being written to update_data."""
@@ -4375,6 +4376,8 @@ async def bulk_autofill_companies(
                     _d = (website_data.get("meta_description") or
                           website_data.get("first_para") or
                           (website_data.get("hero", "")[:300].strip() or None))
+                    if _d:
+                        _d = _fw_clean_desc(str(_d))
                     if _d and _desc_is_valid(str(_d)):
                         update_data["description"] = _track("description", _d, "website")
                 if needs_hq and not update_data.get("headquarters"):
@@ -4559,9 +4562,10 @@ async def bulk_autofill_companies(
                                 update_data["size"] = _track("size", _sv2, "linkedin_page")
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = _track("headquarters", li_res["location"], "linkedin_page")
-                        if li_res.get("description") and needs_desc and not update_data.get("description") \
-                                and _desc_is_valid(li_res["description"]):
-                            update_data["description"] = _track("description", li_res["description"], "linkedin_page")
+                        if li_res.get("description") and needs_desc and not update_data.get("description"):
+                            _li_desc_clean = _fw_clean_desc(li_res["description"])
+                            if _li_desc_clean and _desc_is_valid(_li_desc_clean):
+                                update_data["description"] = _track("description", _li_desc_clean, "linkedin_page")
                         if li_res.get("founded") and not company.get("founded"):
                             update_data["founded"] = _track("founded", li_res["founded"], "linkedin_page")
                         if li_res.get("specialties") and not update_data.get("specialties"):
@@ -4745,8 +4749,9 @@ async def bulk_autofill_companies(
                                 pass
                         # Description extraction
                         if _still_need_desc and len(_s6b_desc) > 40:
-                            if not any(bad in _s6b_desc.lower() for bad in _BAD_SNIPPETS):
-                                update_data["description"] = _s6b_desc[:500]
+                            _s6b_desc_clean = _fw_clean_desc(_s6b_desc[:500])
+                            if _s6b_desc_clean and not any(bad in _s6b_desc_clean.lower() for bad in _BAD_SNIPPETS):
+                                update_data["description"] = _s6b_desc_clean
                                 _still_need_desc = False
                         # Founded year
                         if _still_need_founded and not update_data.get("founded"):
@@ -4896,8 +4901,12 @@ async def bulk_autofill_companies(
             # Build evidence dict from all gathered sources for field workers
             _fw_li_res   = locals().get("li_res") or {}
             _fw_pc_data  = locals().get("_pc") or {}
+            _fw_ws_base = update_data.get("website") or company.get("website") or ws_url or ""
+            _fw_wd_with_base = dict(website_data) if website_data else {}
+            if _fw_ws_base and "_base_url" not in _fw_wd_with_base:
+                _fw_wd_with_base["_base_url"] = _fw_ws_base
             _fw_evidence = {
-                "website_data":  website_data,
+                "website_data":  _fw_wd_with_base,
                 "ddgs_snippet":  _snip_res[0] or {},
                 "linkedin":      _fw_li_res,
                 "proxycurl":     _fw_pc_data,

@@ -22,8 +22,13 @@ _LEADERSHIP_PATHS = [
 _SEARCH_QUERIES = [
     # LinkedIn-specific: result HREFs are profile URLs → direct linkedin_url extraction
     'site:linkedin.com/in "{name}" CEO OR founder OR CTO OR director OR president',
+    # General leadership searches
     '"{name}" CEO OR CTO OR CFO OR founder OR "head of" OR president',
     '"{name}" leadership team executives',
+    # Site-specific: about/team/leadership pages
+    'site:{domain} executives OR leadership OR "our team" OR "meet the team"',
+    # Press releases and news mentioning executives
+    '"{name}" "press release" OR "appoints" OR "announces" executive director founder',
 ]
 
 # Regex to pull linkedin.com/in/ profile URLs from markdown / snippets
