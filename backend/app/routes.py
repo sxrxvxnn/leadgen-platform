@@ -536,7 +536,7 @@ async def get_companies(authorization: str = Header(...)):
         offset = 0
         while True:
             resp = supabase.table("companies")\
-                .select("*,is_saas,industry,specialties,business_model,revenue_model,delivery_model")\
+                .select("*,is_saas,industry,specialties,business_model,revenue_model,delivery_model,redirect_detected")\
                 .eq("user_id", user_id)\
                 .order("created_at", desc=True)\
                 .range(offset, offset + PAGE - 1)\
@@ -4271,6 +4271,26 @@ async def bulk_autofill_companies(
                             break
                 except Exception:
                     pass
+
+            # ── Step 2b: Domain redirect detection ───────────────────────────────
+            # If the scraped resolved_url has a different domain than the stored website,
+            # the domain likely redirects to an acquirer or unrelated company.
+            # Flag it so the user can see the mismatch without having to check manually.
+            if ws_url and website_data:
+                _redir_resolved = (website_data.get("resolved_url") or "").strip()
+                if _redir_resolved:
+                    _redir_input_domain  = urlparse(ws_url).netloc.lower().replace("www.", "")
+                    _redir_final_domain  = urlparse(_redir_resolved).netloc.lower().replace("www.", "")
+                    # Treat subdomains as same (app.company.com == company.com)
+                    def _root_dom(d):
+                        parts = d.split(".")
+                        return ".".join(parts[-2:]) if len(parts) >= 2 else d
+                    if _root_dom(_redir_input_domain) != _root_dom(_redir_final_domain) and _redir_final_domain:
+                        update_data["redirect_detected"] = _redir_final_domain
+                        print(f"[redirect] {company_name}: {_redir_input_domain} → {_redir_final_domain}", flush=True)
+                    else:
+                        # Clear any previously stored redirect flag if it no longer applies
+                        update_data["redirect_detected"] = None
 
             # ── Step 2c: Multi-page collection for classification ────────────────
             # Per v3 spec: pricing page is the highest-value evidence source (+20).

@@ -104,6 +104,7 @@ function _computeAccuracy(company) {
   }
 }
 function _accLabel(c) {
+  if (c.redirect_detected) return `⚠ → ${c.redirect_detected}`
   const { confidence, issues } = _computeAccuracy(c)
   if (confidence === 'high') return '✓ accurate'
   if (issues.includes('linkedin-website-mismatch')) return '⊘ LI≠website'
@@ -112,6 +113,7 @@ function _accLabel(c) {
   return '—'
 }
 function _accColor(l) {
+  if (l.startsWith('⚠')) return '#b45309'
   if (l.startsWith('✓')) return '#4a7c59'
   if (l.startsWith('⊘')) return '#92400e'
   return 'var(--text-muted)'
@@ -273,12 +275,18 @@ function EditableCell({ company, col, onSave, isEditing, onStartEdit, onStopEdit
   if (col.type === 'computed') {
     if (col.key === '_accuracy') {
       const label = getCellValue(company, col.key)
+      const isRedirect = label.startsWith('⚠')
+      const tooltip = isRedirect
+        ? `Domain redirects to ${company.redirect_detected}. Enriched data may reflect a different company. Verify manually.`
+        : undefined
       return (
         <div
+          title={tooltip}
           style={{
             ...cell.readonly,
             color: _accColor(label),
-            fontWeight: label.startsWith('⊘') ? 600 : 400,
+            fontWeight: label.startsWith('⊘') || isRedirect ? 600 : 400,
+            cursor: isRedirect ? 'help' : 'default',
           }}
         >
           {label}
