@@ -4184,6 +4184,14 @@ async def bulk_autofill_companies(
         needs_followers = not bool(company.get("followers"))
 
         update_data = {}
+        _meta: dict = {}  # per-field enrichment tracking
+
+        def _track(field: str, value, source: str, status: str = "verified"):
+            """Record confidence + source for a field being written to update_data."""
+            from .field_workers import CONF
+            if value is not None:
+                _meta[field] = {"confidence": CONF.get(source, 50), "source": source, "status": status}
+            return value
 
         try:
             # ── Steps 1+5 in parallel: website discovery + DDGS LinkedIn snippet ──
@@ -4354,10 +4362,10 @@ async def bulk_autofill_companies(
                           website_data.get("first_para") or
                           (website_data.get("hero", "")[:300].strip() or None))
                     if _d and _desc_is_valid(str(_d)):
-                        update_data["description"] = _d
+                        update_data["description"] = _track("description", _d, "website")
                 if needs_hq and not update_data.get("headquarters"):
                     if website_data.get("location"):
-                        update_data["headquarters"] = website_data["location"]
+                        update_data["headquarters"] = _track("headquarters", website_data["location"], "website")
                 # Use 34-framework detector; only write if company has no compliance yet
                 if not company.get("compliance"):
                     try:
@@ -4471,9 +4479,9 @@ async def bulk_autofill_companies(
                 _sv = _re_mod.sub(r'\s*employees?\b.*', '', str(_snip["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
                 # Accept exact integers, LinkedIn ranges (51-200), or plus suffix (10001+)
                 if _sv and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv):
-                    update_data["size"] = _sv
+                    update_data["size"] = _track("size", _sv, "search_snippet")
             if _snip.get("headquarters") and needs_hq and not update_data.get("headquarters"):
-                update_data["headquarters"] = _snip["headquarters"]
+                update_data["headquarters"] = _track("headquarters", _snip["headquarters"], "search_snippet")
 
             # ── Step 6: LinkedIn page scrape — Firecrawl primary, Jina fallback ───
             # Firecrawl renders full JS/LinkedIn page accurately.
@@ -4524,21 +4532,21 @@ async def bulk_autofill_companies(
                         if li_res.get("employee_count") and not update_data.get("size"):
                             _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
                             if _sv2 and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv2):
-                                update_data["size"] = _sv2
+                                update_data["size"] = _track("size", _sv2, "linkedin_page")
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
-                            update_data["headquarters"] = li_res["location"]
+                            update_data["headquarters"] = _track("headquarters", li_res["location"], "linkedin_page")
                         if li_res.get("description") and needs_desc and not update_data.get("description") \
                                 and _desc_is_valid(li_res["description"]):
-                            update_data["description"] = li_res["description"]
+                            update_data["description"] = _track("description", li_res["description"], "linkedin_page")
                         if li_res.get("founded") and not company.get("founded"):
-                            update_data["founded"] = li_res["founded"]
+                            update_data["founded"] = _track("founded", li_res["founded"], "linkedin_page")
                         if li_res.get("specialties") and not update_data.get("specialties"):
-                            update_data["specialties"] = li_res["specialties"]
+                            update_data["specialties"] = _track("specialties", li_res["specialties"], "linkedin_page")
                         if li_res.get("tagline"):
                             update_data["tagline"] = li_res["tagline"]
                         if li_res.get("industry") and li_res["industry"].strip().lower() not in _BAD_IND \
                                 and _is_valid_industry(li_res["industry"]):
-                            update_data["industry"] = li_res["industry"]
+                            update_data["industry"] = _track("industry", li_res["industry"], "linkedin_page")
                             _ind = li_res["industry"].lower()
                             _mapped = next((v for k, v in _LI_MAP.items() if k in _ind), None)
                             if _mapped and (not company.get("classification") or
@@ -4627,12 +4635,13 @@ async def bulk_autofill_companies(
                               f"founded={_pc.get('founded_year')} "
                               f"specialties={str(_pc.get('specialities',''))[:80]}", flush=True)
                         if not update_data.get("industry") and not company.get("industry") and _pc.get("industry"):
-                            update_data["industry"] = _pc["industry"]
+                            update_data["industry"] = _track("industry", _pc["industry"], "proxycurl")
                         if not update_data.get("founded") and not company.get("founded") and _pc.get("founded_year"):
-                            update_data["founded"] = str(_pc["founded_year"])
+                            update_data["founded"] = _track("founded", str(_pc["founded_year"]), "proxycurl")
                         if not update_data.get("specialties") and not company.get("specialties") and _pc.get("specialities"):
                             _sp = _pc["specialities"]
-                            update_data["specialties"] = ", ".join(str(s) for s in _sp) if isinstance(_sp, list) else str(_sp)
+                            _sp_str = ", ".join(str(s) for s in _sp) if isinstance(_sp, list) else str(_sp)
+                            update_data["specialties"] = _track("specialties", _sp_str, "proxycurl")
                         # Always refresh followers from ProxyCurl — live data, overrides stale snippets
                         if _pc.get("follower_count"):
                             update_data["followers"] = _expand_km(str(_pc["follower_count"]))
@@ -4641,15 +4650,15 @@ async def bulk_autofill_companies(
                         if _pc_size:
                             _pc_size_str = str(_pc_size).strip().replace(',', '').replace(' ', '')
                             if _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _pc_size_str):
-                                update_data["size"] = _pc_size_str
+                                update_data["size"] = _track("size", _pc_size_str, "proxycurl")
                         if needs_desc and not update_data.get("description") and _pc.get("description"):
-                            update_data["description"] = _pc["description"]
+                            update_data["description"] = _track("description", _pc["description"], "proxycurl")
                         if needs_hq and not update_data.get("headquarters") and _pc.get("hq"):
                             _hq_pc = _pc["hq"]
                             _hq_parts = [_hq_pc.get("city"), _hq_pc.get("state"), _hq_pc.get("country")]
                             _hq_str = ", ".join(p for p in _hq_parts if p)
                             if _hq_str:
-                                update_data["headquarters"] = _hq_str
+                                update_data["headquarters"] = _track("headquarters", _hq_str, "proxycurl")
                     elif _pc_res.status_code == 410:
                         _sess["pc_sunset"] = True
                         print(f"[proxycurl_bulk] API_SUNSET — skipping ProxyCurl for all remaining companies", flush=True)
@@ -4854,198 +4863,33 @@ async def bulk_autofill_companies(
                 except Exception as _fy_ex:
                     print(f"[dir_search] {company_name} EXCEPTION: {_fy_ex}", flush=True)
 
-            # ── Step 7: Gemini gap-fill ───────────────────────────────────────────
+            # ── Steps 7 + 7b + 8: Field workers gap-fill ────────────────────────
+            # Each field worker has its own retry chain (website → linkedin → proxycurl →
+            # search → AI inference) and returns a confidence-scored result.
+            # Replaces the old monolithic Gemini + Groq gap-fill blocks.
             _gemini_key_bulk = os.environ.get("GEMINI_API_KEY", "")
-            # Build rich context from ALL available signals so AI runs even with no description
             _desc_bulk = update_data.get("description") or company.get("description") or ""
-            if len(_desc_bulk) < 60:
-                _tgl = update_data.get("tagline") or company.get("tagline") or ""
-                _spc = update_data.get("specialties") or company.get("specialties") or ""
-                _ind_hint = update_data.get("industry") or company.get("industry") or ""
-                _ws_hint = update_data.get("website") or company.get("website") or ws_url or ""
-                _signals = [s for s in [_tgl, _spc, _ind_hint] if s]
-                # When truly no text signals, use company name + domain as last-resort context
-                if not _signals:
-                    _signals.append(f"Company name: {company_name}")
-                    if _ws_hint:
-                        try:
-                            from urllib.parse import urlparse as _up_ai
-                            _dom_ai = _up_ai(_ws_hint if _ws_hint.startswith("http") else f"https://{_ws_hint}").netloc.replace("www.", "")
-                            if _dom_ai:
-                                _signals.append(f"Website domain: {_dom_ai}")
-                        except Exception:
-                            pass
-                _extra = " | ".join(_signals)
-                if _extra:
-                    _desc_bulk = (_desc_bulk + " " + _extra).strip() if _desc_bulk else _extra
+            # Build evidence dict from all gathered sources for field workers
+            _fw_li_res   = locals().get("li_res") or {}
+            _fw_pc_data  = locals().get("_pc") or {}
+            _fw_evidence = {
+                "website_data":  website_data,
+                "ddgs_snippet":  _snip_res[0] or {},
+                "linkedin":      _fw_li_res,
+                "proxycurl":     _fw_pc_data,
+                "description":   _desc_bulk,
+            }
+            _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
+            from .field_workers import run_gap_fill as _run_gap_fill
+            _worker_meta = _run_gap_fill(
+                company_name, _fw_evidence, update_data, company,
+                _gemini_key_bulk, _groq_key_bulk,
+            )
+            _meta.update(_worker_meta)
+
             # needs_type is only True when company has no existing type yet.
             # _missing_type_bulk = True means the rule classifier also didn't set it
-            # and we fall back to AI to fill company_type.
-            _missing_type_bulk = needs_type and not update_data.get("company_type")
-            _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
-                            (not update_data.get("founded") and not company.get("founded")) or \
-                            (not update_data.get("specialties") and not company.get("specialties")) or \
-                            (needs_hq and not update_data.get("headquarters")) or \
-                            _missing_type_bulk
-            if _gemini_key_bulk and len(_desc_bulk) > 5 and _missing_bulk and not _sess["gemini_exhausted"]:
-                try:
-                    import json as _json_bulk
-                    import time as _time_bulk
-                    _bp = (
-                        f'Company: {company_name}\nContext: {_desc_bulk[:500]}\n\n'
-                        'Infer these fields from the company name and context. '
-                        'Make your best inference even from sparse context.\n\n'
-                        f'- industry: {_INDUSTRY_TAXONOMY}\n'
-                        '- founded: 4-digit year only (null if unknown)\n'
-                        '- headquarters: "City, Country" format (null if unknown)\n'
-                        '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
-                        'what the company actually does (not generic terms like "AI" or "software")\n'
-                        '- company_type: "Product" (owns software with subscription pricing, '
-                        'or runs a marketplace/platform with transaction fees) OR '
-                        '"Service" (consulting, agency, staffing, non-profit, lending/capital provider — '
-                        'does NOT sell a subscription software product). '
-                        'IMPORTANT: login/dashboard/sign-up do NOT make it Product. '
-                        'A lending platform, crowdfunding site, or foundation is Service.\n\n'
-                        'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
-                    )
-                    print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
-                    with _GEMINI_SEM:
-                        _gr = None
-                        _g_model = "gemini-2.0-flash"
-                        # Try gemini-1.5-flash first (separate quota pool), then 2.0-flash
-                        for _g_model in ("gemini-1.5-flash", "gemini-2.0-flash"):
-                            _gr = requests.post(
-                                f"https://generativelanguage.googleapis.com/v1beta/models/{_g_model}:generateContent?key={_gemini_key_bulk}",
-                                headers={"Content-Type": "application/json"},
-                                json={"contents": [{"parts": [{"text": _bp}]}],
-                                      "generationConfig": {"temperature": 0.1, "maxOutputTokens": 200}},
-                                timeout=20,
-                            )
-                            if _gr.status_code == 200:
-                                break
-                            if _gr.status_code == 429:
-                                # Quota exhausted — mark session so all remaining companies skip Gemini
-                                _sess["gemini_exhausted"] = True
-                                print(f"[gemini_bulk] 429 on {_g_model} — quota exhausted, switching to Groq for session", flush=True)
-                                break
-                            # Other error (400, 503 etc) — try next model
-                    print(f"[gemini_bulk] status={_gr.status_code} model={_g_model} for {company_name}", flush=True)
-                    if _gr.status_code == 200:
-                        _rb = _gr.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        print(f"[gemini_bulk] response={_rb[:200]}", flush=True)
-                        _mb = _re_mod.search(r'\{.*\}', _rb, _re_mod.DOTALL)
-                        if _mb:
-                            _xb = _json_bulk.loads(_mb.group(0))
-                            _gr_ind = _xb.get("industry")
-                            if not update_data.get("industry") and not company.get("industry") and \
-                               _gr_ind and _gr_ind not in (None, "null") and \
-                               _is_valid_industry(str(_gr_ind)):
-                                update_data["industry"] = str(_gr_ind)
-                            if not update_data.get("founded") and not company.get("founded") and \
-                               _xb.get("founded") and str(_xb["founded"]) not in ("", "None", "null"):
-                                _yr_b = str(_xb["founded"]).strip()
-                                if _re_mod.match(r'^\d{4}$', _yr_b) and 1800 <= int(_yr_b) <= 2030:
-                                    update_data["founded"] = _yr_b
-                            if needs_hq and not update_data.get("headquarters") and \
-                               _xb.get("headquarters") and str(_xb["headquarters"]).strip() not in ("", "None", "null"):
-                                _hq_v = str(_xb["headquarters"]).strip()
-                                if len(_hq_v) < 60:
-                                    update_data["headquarters"] = _hq_v
-                            if not update_data.get("specialties") and not company.get("specialties") and \
-                               _xb.get("specialties") and _xb["specialties"] not in (None, "null"):
-                                update_data["specialties"] = str(_xb["specialties"])
-                            if _missing_type_bulk and _xb.get("company_type") and \
-                               _xb["company_type"] in ("Product", "Service", "Hybrid"):
-                                update_data["company_type"] = _xb["company_type"]
-                except Exception:
-                    pass
-
-            # ── Step 7b: Groq gap-fill fallback (when Gemini is rate-limited) ─────
-            _groq_key_bulk = os.environ.get("GROQ_API_KEY", "")
-            _still_missing_bulk = (
-                (not update_data.get("industry") and not company.get("industry")) or
-                (not update_data.get("specialties") and not company.get("specialties")) or
-                (_missing_type_bulk and not update_data.get("company_type"))
-            )
-            if _groq_key_bulk and len(_desc_bulk) > 5 and _still_missing_bulk:
-                try:
-                    import json as _json_groq
-                    _groq_res = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {_groq_key_bulk}", "Content-Type": "application/json"},
-                        json={
-                            "model": "llama-3.3-70b-versatile",
-                            "temperature": 0.1,
-                            "max_tokens": 200,
-                            "messages": [{"role": "user", "content": (
-                                f'Company: {company_name}\nContext: {_desc_bulk[:500]}\n\n'
-                                'Infer these fields from the company name and context. '
-                                'Make your best inference even from sparse context.\n\n'
-                                f'- industry: {_INDUSTRY_TAXONOMY}\n'
-                                '- founded: 4-digit year only (null if unknown)\n'
-                                '- headquarters: "City, Country" format (null if unknown)\n'
-                                '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
-                                'what the company actually does (not generic terms like "AI" or "software")\n'
-                                '- company_type: "Product" (owns software with subscription pricing, '
-                                'or runs a marketplace/platform with transaction fees) OR '
-                                '"Service" (consulting, agency, staffing, non-profit, lending/capital provider — '
-                                'does NOT sell a subscription software product). '
-                                'IMPORTANT: login/dashboard/sign-up do NOT make it Product. '
-                                'A lending platform, crowdfunding site, or foundation is Service.\n\n'
-                                'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
-                            )}],
-                        },
-                        timeout=20,
-                    )
-                    print(f"[groq_gapfill] status={_groq_res.status_code} for {company_name}", flush=True)
-                    if _groq_res.status_code == 200:
-                        _groq_text = _groq_res.json()["choices"][0]["message"]["content"].strip()
-                        _groq_match = _re_mod.search(r'\{.*\}', _groq_text, _re_mod.DOTALL)
-                        if _groq_match:
-                            _xg = _json_groq.loads(_groq_match.group(0))
-                            print(f"[groq_gapfill] response={str(_xg)[:150]}", flush=True)
-                            if not update_data.get("industry") and not company.get("industry") and \
-                               _xg.get("industry") and _xg["industry"] not in (None, "null") and \
-                               _is_valid_industry(str(_xg["industry"])):
-                                update_data["industry"] = str(_xg["industry"])
-                            if not update_data.get("founded") and not company.get("founded") and \
-                               _xg.get("founded") and str(_xg["founded"]) not in ("", "None", "null"):
-                                _yr_g = str(_xg["founded"]).strip()
-                                if _re_mod.match(r'^\d{4}$', _yr_g) and 1800 <= int(_yr_g) <= 2030:
-                                    update_data["founded"] = _yr_g
-                            if not update_data.get("headquarters") and \
-                               _xg.get("headquarters") and str(_xg["headquarters"]).strip() not in ("", "None", "null"):
-                                _hq_g = str(_xg["headquarters"]).strip()
-                                if len(_hq_g) < 60:
-                                    update_data["headquarters"] = _hq_g
-                            if not update_data.get("specialties") and not company.get("specialties") and \
-                               _xg.get("specialties") and _xg["specialties"] not in (None, "null"):
-                                update_data["specialties"] = str(_xg["specialties"])
-                            if _missing_type_bulk and not update_data.get("company_type") and \
-                               _xg.get("company_type") in ("Product", "Service", "Hybrid"):
-                                update_data["company_type"] = _xg["company_type"]
-                except Exception as _groq_ex:
-                    print(f"[groq_gapfill] EXCEPTION: {_groq_ex}", flush=True)
-
-            # ── Step 8: mine description for size / HQ ────────────────────────────
-            desc_text = update_data.get("description") or company.get("description") or ""
-            if desc_text:
-                if needs_size and not update_data.get("size"):
-                    m = _re_mod.search(
-                        r'(\d[\d,]+)\s+employees?',  # exact integer only, no ranges
-                        desc_text, _re_mod.I,
-                    )
-                    if m and '-' not in m.group(1):
-                        update_data["size"] = m.group(1).replace(",", "")
-                if needs_hq and not update_data.get("headquarters"):
-                    m = _re_mod.search(
-                        r'(?:based in|headquartered? in|located in|offices? in)'
-                        r'\s*([A-Z][a-zA-Z\s]{3,40}?)(?:[,.]|\s+and\s|\s+with\s|$)',
-                        desc_text, _re_mod.I,
-                    )
-                    if m:
-                        update_data["headquarters"] = m.group(1).strip()
-
+            # and we fall back to AI to fill company_type (handled by fill_company_type_ai worker).
             # ── Step 8.5: Derived fields — is_saas + HQ normalization ────────────
             # If the AI (Gemini/Groq) set company_type but didn't set is_saas,
             # derive is_saas from the rule classifier result or default to False.
@@ -5099,6 +4943,10 @@ async def bulk_autofill_companies(
                     print(f"[compliance] {company_name}: {_comp_db_val[:80]}", flush=True)
                 except Exception as _comp_ex:
                     print(f"[compliance] {company_name} EXCEPTION: {_comp_ex}", flush=True)
+
+            # Persist per-field confidence metadata
+            if _meta:
+                update_data["enrichment_meta"] = _meta
 
             # Always stamp enriched_at so the export shows when data was gathered
             update_data["enriched_at"] = _dt.datetime.utcnow().isoformat()
