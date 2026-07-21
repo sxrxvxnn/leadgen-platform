@@ -971,334 +971,360 @@ def classify_website_saas(
     description: str = "",
     ddgs_snippets: str = "",
 ) -> dict:
-    """Weighted scoring classifier per the SonarLeads Classification Engine spec.
+    """Classification Engine v2 — evidence-driven, multi-dimensional.
+
+    Key principle: do NOT classify SaaS because a login or dashboard exists.
+    SaaS requires explicit subscription evidence AND subscription_score > marketplace_score.
+    Marketplace / FinTech / P2P-lending companies are Product but NOT SaaS.
 
     Returns:
         {
-            "category":       "SaaS" | "Non-SaaS Product" | "Service",
-            "company_type":   "Product" | "Service" | "Hybrid",
-            "is_saas":        bool,
-            "confidence":     int (0-100),
-            "scores":         {"saas": int, "product": int, "service": int},
-            "low_confidence": bool,   # True when top-two within 3 points
+            "company_type":          "Product" | "Service",
+            "business_model":        "SaaS" | "Marketplace" | "FinTech Platform" | ...
+            "revenue_model":         "Subscription" | "Commission" | "Transaction Fee" | ...
+            "delivery_model":        "Web Platform" | "Mobile App" | "API" | ...
+            "is_saas":               bool,
+            "category":              "SaaS" | "Non-SaaS Product" | "Service",  # compat
+            "confidence":            int (0-100),
+            "scores":                dict,
+            "low_confidence":        bool,
+            "classification_reason": str,
         }
     """
 
-    # ── Keyword signal tables (term → weight) ────────────────────────────────
-    _SAAS = {
-        'free trial': 5, 'start free trial': 5, 'try for free': 5,
-        'dashboard': 2,        # reduced: service client portals also have dashboards
-        'pricing': 4, 'pricing plan': 5, 'view pricing': 4,
-        'log in': 2, 'login': 2, 'sign in': 2,   # reduced: client portals also have login
-        'subscription': 4, 'subscribe': 3,
-        ' api ': 4, 'api access': 4, 'rest api': 4, 'graphql': 3,
-        'per user': 2, 'per seat': 2, 'per month': 3, 'per year': 3,
-        'sign up': 2, 'create account': 2, 'get started free': 3,
-        'billing': 3, 'upgrade plan': 3, 'cancel anytime': 3,
-        'saas': 5, 'software as a service': 5,
-        'cloud platform': 4, 'cloud-based': 3,
-        'integrations': 3, 'workflow automation': 3,
-        'onboarding': 2, 'in-app': 2,
-        # Own software products — even without login/pricing, having named products = SaaS
-        'our products': 4, 'our software': 4,
-        'open source': 3,           # open-source software = product company
-        'open-source': 3,
-        'github.com': 2,            # GitHub link → open-source product
-        # Management / HR / vertical SaaS patterns
-        'management software': 4, 'management platform': 4,
-        'hr platform': 4, 'hr software': 4, 'hr system': 3,
-        'performance management': 3, 'talent management': 3,
-        'performance review': 3, 'employee engagement': 3,
-        'project management': 3, 'crm software': 4, 'erp software': 4,
-        'accounting software': 4, 'payroll software': 4,
-        'built for teams': 2, 'built for hr': 2,
-    }
-    _PRODUCT = {
-        'hardware': 5, 'device': 4, 'equipment': 3,
-        'buy now': 4, 'add to cart': 4, 'shop now': 3,
-        'one-time purchase': 3, 'one time payment': 3,
-        'cart': 3, 'checkout': 3,
-        'download': 3, 'install': 2,
-        'warranty': 3, 'specifications': 2,
-        'license key': 3, 'perpetual license': 3,
-        'on-premise': 4, 'on premise': 4, 'on-prem': 4,
-        'desktop app': 3, 'desktop application': 3,
-        'physical product': 3, 'ships to': 2, 'shipping': 2,
-    }
-    # Service signals — STRICT: only terms exclusive to service/agency companies.
-    # REMOVED intentionally:
-    #   'consulting' / 'it consulting' — appears in customer review industry labels on SaaS sites
-    #     (e.g. G2 reviewers say "Jason J. | IT Consulting" — this is the reviewer's industry)
-    #   'project delivery' / 'client projects' — generic; appear in HR SaaS AI demo content
-    #   'professional services' / 'development services' — SaaS companies have PS teams
-    #   'it services' — too broad
-    _SERVICE = {
-        'consultancy': 5,
-        'consulting firm': 5, 'consulting company': 5,
-        'digital agency': 5, 'creative agency': 5, 'marketing agency': 5,
-        'advertising agency': 5, 'design agency': 5, 'we are an agency': 5,
-        'request a quote': 5, 'request quote': 5, 'get a quote': 5, 'request a proposal': 5,
-        'staff augmentation': 5, 'outsourcing': 5,
-        'dedicated team': 4, 'hire developers': 4, 'hire our': 4,
-        'offshore development': 4, 'nearshore development': 4,
-        'managed services': 4, 'managed service provider': 4,
-        'custom development': 4, 'bespoke': 4,
-        'implementation services': 3,
-        # Client portal / admin login signals — service companies with portals look
-        # like SaaS because of login/dashboard text; these cancel that out
-        'client portal': 4, 'client login': 4, 'employee portal': 3,
-        'staff login': 3, 'project portal': 3, 'vendor portal': 3,
-        'partner portal': 2, 'admin portal': 2,
-        # Build-for-clients language — definitively services, not products
-        'we build for': 4, 'built for your': 3, 'tailored for your': 3,
-        'for your clients': 3, 'for our clients': 3,
-    }
-
-    # ── Nav tab signals ───────────────────────────────────────────────────────
-    # 'products' in nav for a software/IT company = they have own software products = SaaS signal
-    _NAV_SAAS    = ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'status', 'products']
-    _NAV_PRODUCT = ['shop', 'store', 'cart', 'catalog', 'buy']
-    # 'solutions', 'industries', 'case studies' removed — SaaS companies use all of these
-    _NAV_SERVICE = ['services', 'clients', 'our work', 'expertise', 'what we do']
-
-    # ── CTA button patterns ───────────────────────────────────────────────────
-    _CTA_SAAS    = ['start free trial', 'get started free', 'try for free', 'start for free',
-                    'sign up free', 'create free account', 'get started']
-    _CTA_PRODUCT = ['buy now', 'add to cart', 'shop now', 'order now', 'purchase']
-    # 'contact us', 'get in touch', 'book a demo', 'schedule a call' removed —
-    # enterprise SaaS companies use all of these as primary CTAs
-    _CTA_SERVICE = ['request a quote', 'request quote', 'get a quote', 'request a proposal',
-                    'get a proposal']
-
-    # ── URL / subdomain signals ───────────────────────────────────────────────
-    _URL_SAAS    = [r'app\.', r'dashboard\.', r'api\.', r'/pricing', r'/signup', r'/login', r'/docs']
-    _URL_PRODUCT = [r'/shop', r'/store', r'/cart', r'/products', r'/catalog', r'store\.']
-    _URL_SERVICE = [r'/services', r'/consulting', r'/agency', r'/portfolio']
-
-    # ── Tech stack fingerprints (in raw HTML/JS) ─────────────────────────────
-    _TECH_SAAS = [
-        ('js.stripe.com', 4), ('stripe.com/v3', 4),
-        ('auth0.com', 4), ('okta.com', 3),
-        ('widget.intercom.io', 3), ('app.intercom.io', 3),
-        ('chargebee.com', 4), ('recurly.com', 4), ('paddle.com', 3),
-        ('segment.com', 2), ('cdn.segment.com', 2),
-        ('mixpanel.com', 2), ('amplitude.com', 2),
-        ('launchdarkly.com', 3),
-        ('pendo.io', 2), ('heap.io', 2),
-        ('app.getbeamer.com', 2),
-        ('appcues.com', 2), ('userpilot.com', 2),
-    ]
-    _TECH_PRODUCT = [
-        ('cdn.shopify.com', 5), ('shopify.com', 4),
-        ('woocommerce', 4), ('wc-api', 3),
-        ('bigcommerce.com', 4), ('bigcommerce', 3),
-        ('magento', 3), ('mage', 2),
-        ('snipcart.com', 3), ('ecwid.com', 3),
-        ('squarespace.com/commerce', 2),
-    ]
-
-    # ─────────────────────────────────────────────────────────────────────────
-    scores = {'saas': 0, 'product': 0, 'service': 0}
-
-    if not website_data and not description and not ddgs_snippets:
-        return {
-            'category': 'Service', 'company_type': 'Service',
-            'is_saas': False, 'confidence': 0,
-            'scores': scores, 'low_confidence': True,
-        }
-
-    # Build text corpus from page content (weight: 1.0×)
-    # Title is explicitly included so "Performance Management Platform" in <title> scores SaaS
+    # ── Build text corpora ────────────────────────────────────────────────────
     page_text = ' '.join(filter(None, [
-        website_data.get('title', '') if website_data else '',
-        website_data.get('header', '') if website_data else '',
-        website_data.get('nav', '') if website_data else '',
-        website_data.get('hero', '') if website_data else '',
-        website_data.get('pricing', '') if website_data else '',
+        website_data.get('title', '')          if website_data else '',
+        website_data.get('header', '')         if website_data else '',
+        website_data.get('nav', '')            if website_data else '',
+        website_data.get('hero', '')           if website_data else '',
+        website_data.get('pricing', '')        if website_data else '',
         website_data.get('full_text', '')[:3000] if website_data else '',
         website_data.get('meta_description', '') if website_data else '',
         description,
+        ddgs_snippets,
     ])).lower()
 
-    # Meta corpus — title + meta_description only (company's own words, not page body)
     meta_corpus = ' '.join(filter(None, [
-        website_data.get('title', '') if website_data else '',
+        website_data.get('title', '')          if website_data else '',
         website_data.get('meta_description', '') if website_data else '',
         description,
     ])).lower()
 
-    nav_text  = (website_data.get('nav', '') if website_data else '').lower()
-    full_text = (website_data.get('full_text', '') if website_data else '').lower()
+    nav_text  = (website_data.get('nav', '')       if website_data else '').lower()
     scan_text = (website_data.get('scan_text', '') if website_data else '').lower()
 
-    # 1. Keyword scoring (1.0× weight) ────────────────────────────────────────
-    for term, weight in _SAAS.items():
+    if not page_text.strip():
+        return {
+            'category': 'Service', 'company_type': 'Service',
+            'business_model': 'Other', 'revenue_model': 'Hybrid',
+            'delivery_model': 'Web Platform',
+            'is_saas': False, 'confidence': 0,
+            'scores': {}, 'low_confidence': True,
+            'classification_reason': 'No evidence available',
+        }
+
+    # ── Score buckets ─────────────────────────────────────────────────────────
+    # subscription  = explicit SaaS/recurring-billing evidence
+    # marketplace   = P2P / commission / capital-provision / exchange evidence
+    # service       = consulting / agency / implementation evidence
+    # hardware      = physical product / e-commerce evidence
+    scores = {'subscription': 0, 'marketplace': 0, 'service': 0, 'hardware': 0}
+
+    # ── 1. Subscription signals (true SaaS evidence) ─────────────────────────
+    # CRITICAL: login, dashboard, sign-up are NOT here.
+    # Those exist on any lending portal, client portal, or admin panel.
+    _SUBSCRIPTION = {
+        'free trial': 8, 'start free trial': 8, 'try for free': 8, 'try it free': 8,
+        'pricing plan': 6, 'subscription plan': 6, 'monthly plan': 6, 'annual plan': 6,
+        'per user per month': 9, 'per seat per month': 9, 'per seat': 7, 'per user': 5,
+        '/month': 4, '/year': 4, 'per month': 4, 'per year': 4,
+        'cancel anytime': 7, 'upgrade plan': 5, 'downgrade': 4,
+        'subscription': 5, 'subscribe': 4, 'recurring': 4,
+        'billing cycle': 5, 'billing': 3,
+        'saas': 8, 'software as a service': 8,
+        'management software': 5, 'management platform': 5,
+        'hr platform': 5, 'hr software': 5, 'crm software': 6, 'erp software': 6,
+        'accounting software': 5, 'payroll software': 5,
+        'cloud platform': 5, 'cloud-based': 4, 'cloud service': 4,
+        'workflow automation': 4, 'integrations': 3,
+        ' api ': 4, 'api access': 4, 'rest api': 4, 'graphql': 3,
+        'open source': 4, 'open-source': 4,
+        'our products': 5, 'our software': 5,
+        'project management': 4, 'performance management': 4,
+        'talent management': 4, 'employee engagement': 4,
+        'built for teams': 3,
+    }
+
+    # ── 2. Marketplace signals (P2P / commission / FinTech lending) ──────────
+    # These companies are Product but NOT SaaS — they earn via transactions.
+    # Guide: "Marketplace, investors, borrowers, buyers, sellers, merchants,
+    #  peer-to-peer, lending, loans, commission, transaction fee, brokerage"
+    _MARKETPLACE = {
+        # Platform / exchange patterns
+        'marketplace': 7, 'peer-to-peer': 8, 'p2p': 5,
+        'borrowers': 8, 'lenders': 7, 'investors and': 6,
+        'buyers and sellers': 7, 'buyers & sellers': 7,
+        'merchants': 5, 'brokerage': 6, 'exchange': 4,
+        'commission': 6, 'transaction fee': 7, 'listing fee': 6,
+        # FinTech capital provision (beatBread, Clearco, Kavod, Capital On Tap…)
+        'revenue advance': 9, 'revenue-based financing': 9, 'revenue share financing': 8,
+        'merchant cash advance': 9, 'working capital loan': 9, 'business loan': 7,
+        'business loans': 7, 'invoice financing': 9, 'invoice factoring': 9,
+        'accounts receivable': 7, 'credit facility': 7, 'line of credit': 6,
+        'equity-free funding': 8, 'equity-free capital': 8,
+        'blended finance': 8, 'development finance': 7,
+        'we lend': 9, 'we provide funding': 8, 'we provide capital': 8,
+        'advance on future': 8, 'advance against future': 8,
+        'community lending': 9, 'peer lending': 9, 'crowdlending': 8,
+        'crowdfunding': 7, 'crowdinvesting': 8,
+        # Crypto / NFT
+        'nft marketplace': 8, 'token marketplace': 7,
+        # Real estate marketplace
+        'property listings': 6, 'real estate marketplace': 7,
+        # Revenue-share / royalty advance (music, content)
+        'royalty advance': 8, 'music advance': 8, 'advance against royalties': 9,
+    }
+
+    # ── 3. Service signals (consulting / agency) ─────────────────────────────
+    _SERVICE = {
+        'consultancy': 6, 'consulting firm': 6, 'consulting company': 6,
+        'digital agency': 7, 'creative agency': 7, 'marketing agency': 7,
+        'advertising agency': 7, 'design agency': 7,
+        'request a quote': 6, 'request quote': 6, 'get a quote': 6,
+        'request a proposal': 6,
+        'staff augmentation': 7, 'outsourcing': 6,
+        'dedicated team': 5, 'hire developers': 6, 'hire our': 5,
+        'offshore development': 6, 'nearshore development': 6,
+        'managed services': 5, 'managed service provider': 6,
+        'custom development': 5, 'bespoke': 5,
+        'implementation services': 5,
+        'client portal': 4, 'client login': 4,
+        'we build for': 5, 'built for your': 4,
+        # Non-profits / foundations
+        'charitable foundation': 9, 'philanthropic foundation': 9,
+        'grant-making': 9, 'grant making': 9, 'philanthropic': 8,
+        # Property management (not marketplace)
+        'property management company': 8, 'real estate management': 7,
+    }
+
+    # ── 4. Hardware / e-commerce signals ─────────────────────────────────────
+    _HARDWARE = {
+        'hardware': 6, 'device': 5, 'equipment': 4,
+        'add to cart': 6, 'shop now': 5, 'buy now': 5,
+        'one-time purchase': 5, 'one time payment': 5,
+        'warranty': 5, 'ships to': 4, 'shipping': 3,
+        'on-premise': 5, 'on-prem': 5, 'on premise': 5,
+        'desktop application': 4, 'desktop app': 4,
+        'license key': 5, 'perpetual license': 5,
+        'cdn.shopify.com': 5, 'woocommerce': 5,
+    }
+
+    # Keyword scoring
+    for term, weight in _SUBSCRIPTION.items():
         if term in page_text:
-            scores['saas'] += weight
-    for term, weight in _PRODUCT.items():
+            scores['subscription'] += weight
+    for term, weight in _MARKETPLACE.items():
         if term in page_text:
-            scores['product'] += weight
+            scores['marketplace'] += weight
     for term, weight in _SERVICE.items():
         if term in page_text:
             scores['service'] += weight
+    for term, weight in _HARDWARE.items():
+        if term in page_text:
+            scores['hardware'] += weight
 
-    # 2. Nav tab scoring (1.0× weight) ────────────────────────────────────────
-    for tab in _NAV_SAAS:
-        if tab in nav_text:
-            scores['saas'] += 3
-    for tab in _NAV_PRODUCT:
-        if tab in nav_text:
-            scores['product'] += 3
-    for tab in _NAV_SERVICE:
-        if tab in nav_text:
-            scores['service'] += 2
+    # ── 2. Nav signals ────────────────────────────────────────────────────────
+    for tab in ['pricing', 'api', 'integrations', 'documentation', 'docs', 'changelog', 'products']:
+        if tab in nav_text: scores['subscription'] += 3
+    for tab in ['marketplace', 'investors', 'borrowers', 'lenders', 'sellers', 'borrow', 'invest']:
+        if tab in nav_text: scores['marketplace'] += 4
+    for tab in ['services', 'clients', 'our work', 'expertise', 'what we do']:
+        if tab in nav_text: scores['service'] += 2
+    for tab in ['shop', 'store', 'cart', 'catalog']:
+        if tab in nav_text: scores['hardware'] += 3
 
-    # 3. CTA button scoring (1.0× weight) ─────────────────────────────────────
-    for cta in _CTA_SAAS:
-        if cta in page_text:
-            scores['saas'] += 4
-    for cta in _CTA_PRODUCT:
-        if cta in page_text:
-            scores['product'] += 4
-    for cta in _CTA_SERVICE:
-        if cta in page_text:
-            scores['service'] += 3
+    # ── 3. CTA signals ────────────────────────────────────────────────────────
+    for cta in ['start free trial', 'get started free', 'try for free', 'start for free',
+                'sign up free', 'create free account']:
+        if cta in page_text: scores['subscription'] += 5
+    for cta in ['request a quote', 'request quote', 'get a quote', 'request a proposal']:
+        if cta in page_text: scores['service'] += 4
+    for cta in ['buy now', 'add to cart', 'shop now', 'order now']:
+        if cta in page_text: scores['hardware'] += 4
 
-    # 4. URL / subdomain patterns (1.0× weight) ────────────────────────────────
-    url_l = url.lower()
-    for pat in _URL_SAAS:
-        if re.search(pat, url_l):
-            scores['saas'] += 3
-    for pat in _URL_PRODUCT:
-        if re.search(pat, url_l):
-            scores['product'] += 3
-    for pat in _URL_SERVICE:
-        if re.search(pat, url_l):
-            scores['service'] += 2
-
-    # 5. HTML structural signals (1.0× weight) ────────────────────────────────
+    # ── 4. HTML structural signals ────────────────────────────────────────────
     if website_data:
-        if website_data.get('has_login_detected'):    scores['saas'] += 4
-        if website_data.get('has_web_app_link'):      scores['saas'] += 3
-        if website_data.get('has_pricing_detected'):  scores['saas'] += 4
-        if website_data.get('has_mobile_app'):        scores['saas'] += 3
-        if website_data.get('has_app_store_link'):    scores['saas'] += 3
-        if website_data.get('has_play_store_link'):   scores['saas'] += 3
+        if website_data.get('has_pricing_detected'):  scores['subscription'] += 6
+        if website_data.get('has_web_app_link'):      scores['subscription'] += 3
+        if website_data.get('has_mobile_app'):        scores['subscription'] += 2
+        if website_data.get('has_app_store_link'):    scores['subscription'] += 3
+        if website_data.get('has_play_store_link'):   scores['subscription'] += 3
+        # login/dashboard do NOT add subscription points (client portals have these too)
 
-    # 6. Tech stack fingerprints (0.7× weight) ────────────────────────────────
+    # ── 5. Tech stack fingerprints ────────────────────────────────────────────
     if scan_text:
-        for fingerprint, weight in _TECH_SAAS:
-            if fingerprint in scan_text:
-                scores['saas'] += int(weight * 0.7)
-        for fingerprint, weight in _TECH_PRODUCT:
-            if fingerprint in scan_text:
-                scores['product'] += int(weight * 0.7)
+        for fp, w in [('chargebee.com', 5), ('recurly.com', 5), ('paddle.com', 4),
+                      ('auth0.com', 3), ('launchdarkly.com', 3), ('pendo.io', 2),
+                      ('segment.com', 2), ('mixpanel.com', 2), ('amplitude.com', 2)]:
+            if fp in scan_text: scores['subscription'] += int(w * 0.7)
+        for fp, w in [('cdn.shopify.com', 6), ('shopify.com', 5), ('woocommerce', 5),
+                      ('bigcommerce.com', 5), ('magento', 4)]:
+            if fp in scan_text: scores['hardware'] += int(w * 0.7)
 
-    # 7. Meta tag scoring (0.9× weight) — title + meta_description only ─────────
-    # These are the company's own words, so signal quality is high but weight is
-    # slightly reduced vs body text to avoid over-indexing short descriptions.
-    _META_SAAS    = ['software', 'platform', 'saas', 'crm', 'erp', 'tool', 'app',
-                     'suite', 'solution', 'management system', 'cloud service']
-    _META_SERVICE = ['consulting', 'consultancy', 'agency', 'advisory',
-                     'outsourcing', 'managed services']
-    if meta_corpus:
-        for term in _META_SAAS:
-            if term in meta_corpus:
-                scores['saas'] += int(2 * 0.9)  # +1 (floored) per meta SaaS term
-        for term in _META_SERVICE:
-            if term in meta_corpus:
-                scores['service'] += int(2 * 0.9)
+    # ── 6. Meta-tag scoring ───────────────────────────────────────────────────
+    for term in ['software', 'platform', 'saas', 'crm', 'erp', 'tool', 'app',
+                 'suite', 'solution', 'management system', 'cloud service']:
+        if term in meta_corpus: scores['subscription'] += 2
+    for term in ['consulting', 'consultancy', 'agency', 'advisory', 'outsourcing']:
+        if term in meta_corpus: scores['service'] += 2
+    for term in ['marketplace', 'exchange', 'lending platform', 'crowdfunding', 'fintech platform']:
+        if term in meta_corpus: scores['marketplace'] += 3
 
-    # 8. DDG/G2/Capterra/LinkedIn snippets (0.8× weight) ─────────────────────
+    # ── 7. G2/Capterra presence = software product (strong subscription signal) ─
     if ddgs_snippets:
         snip_l = ddgs_snippets.lower()
-        for term, weight in _SAAS.items():
-            if term in snip_l:
-                scores['saas'] += int(weight * 0.8)
-        for term, weight in _SERVICE.items():
-            if term in snip_l:
-                scores['service'] += int(weight * 0.8)
-        for term, weight in _PRODUCT.items():
-            if term in snip_l:
-                scores['product'] += int(weight * 0.8)
-        # G2/Capterra presence is a very strong SaaS signal
         if 'g2.com' in snip_l or 'capterra.com' in snip_l or 'getapp.com' in snip_l:
-            scores['saas'] += int(8 * 0.9)
+            scores['subscription'] += 7
 
-    # ── Decision ─────────────────────────────────────────────────────────────
-    total = scores['saas'] + scores['product'] + scores['service']
-    if total == 0:
-        return {
-            'category': 'Service', 'company_type': 'Service',
-            'is_saas': False, 'confidence': 0,
-            'scores': scores, 'low_confidence': True,
-        }
-
-    winner = max(scores, key=scores.get)
-    win_score = scores[winner]
-    sorted_scores = sorted(scores.values(), reverse=True)
-    runner_up = sorted_scores[1] if len(sorted_scores) > 1 else 0
-
-    confidence = int(win_score / total * 100)
-    low_confidence = (win_score - runner_up) <= 3
-
-    # Map winner to output fields
-    classification_reasons = []
-    if winner == 'saas':
-        category, company_type, is_saas = 'SaaS', 'Product', True
-        classification_reasons.append(f'SaaS signals dominate (score={scores["saas"]})')
-    elif winner == 'product':
-        category, company_type, is_saas = 'Non-SaaS Product', 'Product', False
-        classification_reasons.append(f'Physical/non-cloud product signals (score={scores["product"]})')
-    else:
-        category, company_type, is_saas = 'Service', 'Service', False
-        classification_reasons.append(f'Service signals dominate (score={scores["service"]})')
-
-    # Hybrid detection: substantial overlap between any two categories
-    if winner == 'saas' and scores['service'] >= scores['saas'] * 0.5:
-        company_type = 'Hybrid'
-        classification_reasons.append(f'Service signals also strong ({scores["service"]}) → Hybrid')
-    elif winner == 'service' and scores['saas'] >= scores['service'] * 0.5:
-        company_type = 'Hybrid'
-        is_saas = True   # has own software products even if service-heavy
-        classification_reasons.append(f'Product/SaaS signals also strong ({scores["saas"]}) → Hybrid')
-    elif winner == 'product' and scores['service'] >= scores['product'] * 0.5:
-        company_type = 'Hybrid'
-        classification_reasons.append(f'Service signals also strong ({scores["service"]}) → Hybrid')
-    elif winner == 'service' and scores['product'] >= scores['service'] * 0.5:
-        company_type = 'Hybrid'
-        classification_reasons.append(f'Non-SaaS product signals also strong ({scores["product"]}) → Hybrid')
-
-    # Nav structural overrides — most reliable classification signal
-    # Use both <nav> and <header> text — many sites put nav links inside <header> not <nav>
-    _nav_text = ((website_data.get('nav', '') or '') + ' ' + (website_data.get('header', '') or '')[:300]).lower() if website_data else ''
-    nav_has_products = bool(_nav_text) and 'product' in _nav_text
-    nav_has_services = bool(_nav_text) and any(
-        s in _nav_text
-        for s in ['service', 'solutions', 'our work', 'what we do', 'expertise', 'clients']
+    # ── SaaS determination (v2 core rule from guide) ─────────────────────────
+    # "Do not classify SaaS because a login or dashboard exists."
+    # SaaS requires: explicit subscription evidence AND subscription > marketplace.
+    _SUBSCRIPTION_THRESHOLD = 10
+    is_saas = (
+        scores['subscription'] >= _SUBSCRIPTION_THRESHOLD
+        and scores['subscription'] > scores['marketplace']
     )
-    if nav_has_products and nav_has_services:
-        # Always Hybrid when nav explicitly lists both product and service sections
-        company_type = 'Hybrid'
-        is_saas = True
-        classification_reasons.append('Nav has both "Products" + "Services/Solutions" tabs → Hybrid')
-    elif nav_has_products and scores['service'] >= 1:
-        # Products nav + ANY service signal in text → company does both
-        company_type = 'Hybrid'
-        is_saas = True
-        classification_reasons.append(f'Nav "Products" + service signals (score={scores["service"]}) → Hybrid')
 
-    # Build human-readable explanation
-    signal_detail = f'Scores — SaaS:{scores["saas"]} Product:{scores["product"]} Service:{scores["service"]}'
-    classification_reason = '; '.join(classification_reasons) + f'. {signal_detail}.'
+    # ── Business model ────────────────────────────────────────────────────────
+    top_bucket = max(scores, key=scores.get)
+    top_score  = scores[top_bucket]
+
+    if top_bucket == 'marketplace' or scores['marketplace'] >= scores['subscription']:
+        fin_terms = ['lending', 'loan', 'credit', 'financing', 'fintech', 'financial',
+                     'advance', 'capital', 'crowdfund', 'factoring']
+        if any(t in page_text for t in fin_terms):
+            business_model = 'FinTech Platform'
+        else:
+            business_model = 'Marketplace'
+    elif is_saas:
+        if any(t in page_text for t in ['healthcare', 'health platform', 'clinical', 'medical']):
+            business_model = 'Healthcare Platform'
+        elif any(t in page_text for t in ['learning management', 'e-learning', 'edtech', 'lms', 'education platform']):
+            business_model = 'Education Platform'
+        elif scores['subscription'] > 15 and any(t in page_text for t in ['api platform', 'developer platform', 'api-first']):
+            business_model = 'API Platform'
+        else:
+            business_model = 'SaaS'
+    elif top_bucket == 'hardware':
+        business_model = 'E-commerce' if any(t in page_text for t in ['add to cart', 'shop now', 'shopify']) else 'Hardware'
+    elif top_bucket == 'service':
+        if any(t in page_text for t in ['agency', 'digital agency', 'creative agency', 'marketing agency']):
+            business_model = 'Agency'
+        elif any(t in page_text for t in ['charitable foundation', 'philanthropic', 'grant-making']):
+            business_model = 'Other'
+        else:
+            business_model = 'Consulting'
+    elif any(t in page_text for t in ['media', 'news', 'publisher', 'publication']) and scores['subscription'] < 8:
+        business_model = 'Media'
+    else:
+        business_model = 'Other'
+
+    # ── Company type ─────────────────────────────────────────────────────────
+    if top_bucket == 'service' and scores['service'] > scores['subscription'] and scores['service'] > scores['marketplace']:
+        company_type = 'Service'
+    elif scores['service'] > max(scores['subscription'], scores['marketplace']) * 0.8 and scores['service'] > 12:
+        company_type = 'Service'
+    else:
+        company_type = 'Product'
+
+    # ── Revenue model ─────────────────────────────────────────────────────────
+    if scores['marketplace'] >= scores['subscription']:
+        if any(t in page_text for t in ['transaction fee', 'per transaction', 'takes a fee']):
+            revenue_model = 'Transaction Fee'
+        else:
+            revenue_model = 'Commission'
+    elif is_saas:
+        if any(t in page_text for t in ['free plan', 'free forever', 'freemium']):
+            revenue_model = 'Freemium'
+        elif any(t in page_text for t in ['usage', 'api calls', 'per call', 'per request', 'pay as you go']):
+            revenue_model = 'Usage Based'
+        else:
+            revenue_model = 'Subscription'
+    elif company_type == 'Service':
+        revenue_model = 'Consulting Fee'
+    elif scores['hardware'] > 8:
+        if any(t in page_text for t in ['license key', 'perpetual', 'one-time']):
+            revenue_model = 'Licensing'
+        else:
+            revenue_model = 'One-Time Purchase'
+    elif any(t in page_text for t in ['advertising', 'ad revenue', 'sponsored']):
+        revenue_model = 'Advertising'
+    else:
+        revenue_model = 'Hybrid'
+
+    # ── Delivery model ────────────────────────────────────────────────────────
+    has_mobile  = bool(website_data and website_data.get('has_mobile_app'))
+    has_desktop = any(t in page_text for t in ['desktop app', 'desktop application', 'windows app', 'mac app', 'on-premise', 'on-prem'])
+    has_api_prim = 'api platform' in page_text or ('api-first' in page_text)
+
+    if scores['hardware'] > 10 and not has_mobile and not is_saas:
+        delivery_model = 'Hardware'
+    elif has_desktop and not is_saas:
+        delivery_model = 'Desktop Software'
+    elif has_api_prim:
+        delivery_model = 'API'
+    elif has_mobile and (is_saas or scores['marketplace'] > 5):
+        delivery_model = 'Hybrid'
+    else:
+        delivery_model = 'Web Platform'
+
+    # ── Confidence (evidence-weighted per guide) ──────────────────────────────
+    conf = 0
+    if website_data:
+        conf += 10  # homepage scraped
+        if website_data.get('has_pricing_detected'): conf += 20
+        if description:                              conf += 15
+        if len(website_data.get('full_text', '')) > 1000: conf += 10
+    elif description:
+        conf += 15
+    winner_score = max(scores.values()) if scores else 0
+    if winner_score > 25:  conf += 20
+    elif winner_score > 12: conf += 10
+    # Contradiction penalty
+    sv = sorted(scores.values(), reverse=True)
+    if len(sv) >= 2 and sv[0] > 0:
+        gap = sv[0] - sv[1]
+        if gap < 5:  conf -= 15
+        elif gap < 10: conf -= 5
+    conf = max(0, min(100, conf))
+
+    # ── Backward-compat category field ───────────────────────────────────────
+    if is_saas:
+        category = 'SaaS'
+    elif company_type == 'Product':
+        category = 'Non-SaaS Product'
+    else:
+        category = 'Service'
+
+    classification_reason = (
+        f'Business model: {business_model}. '
+        f'Subscription: {scores["subscription"]}, Marketplace: {scores["marketplace"]}, '
+        f'Service: {scores["service"]}, Hardware: {scores["hardware"]}. '
+        f'is_saas={is_saas} (sub>={_SUBSCRIPTION_THRESHOLD} AND sub>marketplace). '
+        f'Confidence: {conf}.'
+    )
 
     return {
         'category':               category,
         'company_type':           company_type,
+        'business_model':         business_model,
+        'revenue_model':          revenue_model,
+        'delivery_model':         delivery_model,
         'is_saas':                is_saas,
-        'confidence':             confidence,
+        'confidence':             conf,
         'scores':                 scores,
-        'low_confidence':         low_confidence,
+        'low_confidence':         conf < 50,
         'classification_reason':  classification_reason,
     }
 

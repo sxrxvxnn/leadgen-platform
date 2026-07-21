@@ -28,6 +28,8 @@ export function BulkOpsProvider({ children }) {
   // Companies.jsx registers this while mounted so live results flow straight in.
   const liveUpdate = useRef(null)
   const pending = useRef({})
+  // Companies.jsx registers this to be called when a background job finishes.
+  const jobComplete = useRef(null)
 
   // Cancel refs — shared across async loops
   const cancelRef = useRef(false) // checked at each loop iteration
@@ -45,6 +47,10 @@ export function BulkOpsProvider({ children }) {
 
   function registerLive(cb) {
     liveUpdate.current = cb
+  }
+
+  function registerJobComplete(cb) {
+    jobComplete.current = cb
   }
 
   function drainPending() {
@@ -185,6 +191,10 @@ export function BulkOpsProvider({ children }) {
                     total: jTotal || total,
                     duration_min: durMin,
                   })
+                } catch {}
+                // Refresh company list so the UI shows freshly enriched data
+                try {
+                  if (jobComplete.current) jobComplete.current()
                 } catch {}
                 setTimeout(() => setAutofill((p) => (p.running ? p : INIT)), 15000)
               }
@@ -380,6 +390,7 @@ export function BulkOpsProvider({ children }) {
         runMapsEnrich,
         cancelAutofill,
         registerLive,
+        registerJobComplete,
         drainPending,
       }}
     >
