@@ -857,6 +857,10 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
         'digital transformation services', 'digital transformation company',
         'erp implementation', 'crm implementation', 'system integration',
         'software delivery', 'agile delivery', 'project delivery',
+        # Spec additions — IT consulting firms that use cloud/AI keywords
+        'technology consulting', 'cybersecurity consulting', 'it service management',
+        'professional services', 'professional services firm', 'cloud engineering',
+        'digital engineering services', 'case studies', 'industries served',
     ]
     # Weak: pattern common in service companies, less definitive
     # NOTE: 'talent' removed — HR SaaS products use "talent management" heavily
@@ -1043,10 +1047,10 @@ def classify_website_saas(
         'subscription': 5, 'subscribe': 4, 'recurring': 4,
         'billing cycle': 5, 'billing': 3,
         'saas': 8, 'software as a service': 8,
-        'management software': 5, 'management platform': 5,
+        'management software': 3, 'management platform': 3,  # consulting firms say "we build management platforms"
         'hr platform': 5, 'hr software': 5, 'crm software': 6, 'erp software': 6,
         'accounting software': 5, 'payroll software': 5,
-        'cloud platform': 5, 'cloud-based': 4, 'cloud service': 4,
+        'cloud platform': 2, 'cloud-based': 2, 'cloud service': 2,  # generic; consulting firms use these too
         'workflow automation': 4, 'integrations': 3,
         ' api ': 4, 'api access': 4, 'rest api': 4, 'graphql': 3,
         'open source': 4, 'open-source': 4,
@@ -1101,6 +1105,18 @@ def classify_website_saas(
         'implementation services': 5,
         'client portal': 4, 'client login': 4,
         'we build for': 5, 'built for your': 4,
+        # IT consulting / digital engineering (spec Stage 1 service signals)
+        'technology consulting': 7, 'cybersecurity consulting': 7,
+        'it service management': 6, 'it consulting': 7,
+        'digital engineering': 5, 'cloud engineering': 4,
+        'digital transformation services': 7, 'digital transformation company': 6,
+        'professional services': 6, 'professional services firm': 7,
+        'software development services': 6, 'software development company': 5,
+        'system integration': 6, 'erp implementation': 6, 'crm implementation': 6,
+        # Client evidence signals — only service companies have these
+        'case studies': 4, 'case study': 4,
+        'industries served': 5, 'industries we serve': 5,
+        'client success': 4, 'client projects': 4,
         # Non-profits / foundations
         'charitable foundation': 9, 'philanthropic foundation': 9,
         'grant-making': 9, 'grant making': 9, 'philanthropic': 8,
@@ -1187,6 +1203,41 @@ def classify_website_saas(
         if 'g2.com' in snip_l or 'capterra.com' in snip_l or 'getapp.com' in snip_l:
             scores['subscription'] += 7
 
+    # ── 8. Page URL weighting (spec: /services → Service; /pricing → SaaS) ──────
+    # Check nav and scan text for URL patterns indicating business model
+    if scan_text:
+        _service_paths = ['/services', '/consulting', '/case-studies', '/case-studies',
+                          '/clients', '/industries', '/our-work', '/portfolio']
+        _saas_paths = ['/pricing', '/plans', '/signup', '/sign-up', '/register', '/demo']
+        for p in _service_paths:
+            if f'href="{p}"' in scan_text or f"href='{p}'" in scan_text:
+                scores['service'] += 3
+                break
+        for p in _saas_paths:
+            if f'href="{p}"' in scan_text or f"href='{p}'" in scan_text:
+                scores['subscription'] += 3
+                break
+
+    # ── 9. Consulting penalty — IT service companies must not score as SaaS ─────
+    # If 2+ consulting markers present AND no subscription anchors (trial/pricing/per-month),
+    # the company is almost certainly an IT services firm, not a SaaS product.
+    _CONSULTING_MARKERS = [
+        'consulting', 'consultancy', 'technology consulting', 'it consulting',
+        'professional services', 'managed services', 'cybersecurity consulting',
+        'it service management', 'digital transformation services', 'staff augmentation',
+        'outsourcing', 'case studies', 'industries served',
+    ]
+    _SUB_ANCHORS = [
+        'free trial', 'start free trial', 'per month', 'per user', 'subscription plan',
+        'billing', 'saas', 'pricing plan', 'cancel anytime',
+    ]
+    _consulting_hit_count = sum(1 for m in _CONSULTING_MARKERS if m in page_text)
+    _has_sub_anchor = any(a in page_text for a in _SUB_ANCHORS)
+    _has_pricing_struct = bool(website_data and website_data.get('has_pricing_detected'))
+    if _consulting_hit_count >= 2 and not _has_sub_anchor and not _has_pricing_struct:
+        scores['subscription'] = max(0, scores['subscription'] - 12)
+        scores['service'] += 6
+
     # ── SaaS determination (v2 core rule from guide) ─────────────────────────
     # "Do not classify SaaS because a login or dashboard exists."
     # SaaS requires: explicit subscription evidence AND subscription > marketplace.
@@ -1248,6 +1299,37 @@ def classify_website_saas(
         company_type = 'Service'
     else:
         company_type = 'Product'
+
+    # ── Stage 2: Service subtype (spec requirement) ───────────────────────────
+    company_subtype = None
+    if company_type == 'Service':
+        if any(t in page_text for t in ['staff augmentation', 'outsourcing', 'nearshore', 'offshore', 'body shopping']):
+            company_subtype = 'Staff Augmentation'
+        elif any(t in page_text for t in ['managed services', 'managed service provider']):
+            company_subtype = 'Managed Services'
+        elif any(t in page_text for t in ['system integration', 'erp implementation', 'crm implementation']):
+            company_subtype = 'System Integration'
+        elif any(t in page_text for t in ['digital agency', 'creative agency', 'marketing agency', 'advertising agency']):
+            company_subtype = 'Digital Agency'
+        elif any(t in page_text for t in ['cybersecurity consulting', 'technology consulting', 'it consulting', 'it service management']):
+            company_subtype = 'IT Consulting'
+        elif any(t in page_text for t in ['software development services', 'custom development', 'custom software', 'bespoke']):
+            company_subtype = 'Software Development Services'
+        elif any(t in page_text for t in ['digital transformation services', 'digital transformation company', 'digital transformation']):
+            company_subtype = 'Digital Transformation'
+        else:
+            company_subtype = 'Consulting'
+    elif is_saas:
+        if any(t in page_text for t in ['api platform', 'developer platform', 'api-first']):
+            company_subtype = 'API Platform'
+        elif any(t in page_text for t in ['hr platform', 'hr software', 'talent management']):
+            company_subtype = 'HR Platform'
+        elif any(t in page_text for t in ['crm software', 'crm platform', 'sales platform']):
+            company_subtype = 'CRM'
+        else:
+            company_subtype = 'SaaS'
+    elif company_type == 'Product':
+        company_subtype = business_model
 
     # ── Revenue model ─────────────────────────────────────────────────────────
     if scores['marketplace'] > 0 and scores['marketplace'] >= scores['subscription']:
@@ -1318,6 +1400,25 @@ def classify_website_saas(
     else:
         category = 'Service'
 
+    # ── Build evidence list (spec structured output) ─────────────────────────
+    evidence = []
+    if website_data and website_data.get('has_pricing_detected'):
+        evidence.append('Pricing page detected.')
+    if website_data and website_data.get('has_login_detected'):
+        evidence.append('Login page detected.')
+    if website_data and website_data.get('has_mobile_app'):
+        evidence.append('Mobile app (App Store / Play Store) detected.')
+    if scores['subscription'] > 0:
+        evidence.append(f'Subscription signals score: {scores["subscription"]}.')
+    if scores['service'] > 0:
+        evidence.append(f'Service signals score: {scores["service"]}.')
+    if scores['marketplace'] > 0:
+        evidence.append(f'Marketplace signals score: {scores["marketplace"]}.')
+    if _consulting_hit_count >= 2 and not _has_sub_anchor and not _has_pricing_struct:
+        evidence.append(f'Consulting penalty applied ({_consulting_hit_count} markers, no subscription anchor).')
+    if not evidence:
+        evidence.append('No strong evidence available.')
+
     classification_reason = (
         f'Business model: {business_model}. '
         f'Subscription: {scores["subscription"]}, Marketplace: {scores["marketplace"]}, '
@@ -1329,6 +1430,7 @@ def classify_website_saas(
     return {
         'category':               category,
         'company_type':           company_type,
+        'company_subtype':        company_subtype,
         'business_model':         business_model,
         'revenue_model':          revenue_model,
         'delivery_model':         delivery_model,
@@ -1337,6 +1439,7 @@ def classify_website_saas(
         'scores':                 scores,
         'low_confidence':         conf < 50,
         'classification_reason':  classification_reason,
+        'evidence':               evidence,
     }
 
 

@@ -4430,7 +4430,9 @@ async def bulk_autofill_companies(
             # classify_website_saas handles website_data=None gracefully using
             # description alone. This ensures old wrong types get overwritten.
             if needs_type:
-                _desc_for_type = update_data.get("description") or company.get("description") or ""
+                _desc_for_type = _fw_clean_desc(
+                    update_data.get("description") or company.get("description") or ""
+                )
                 _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
                 _type_threshold = 20  # only runs when company has no type yet
                 if _cls["confidence"] >= _type_threshold:
