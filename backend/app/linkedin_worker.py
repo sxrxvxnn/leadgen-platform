@@ -59,58 +59,76 @@ def _slug_matches(company_name: str, linkedin_url: str) -> bool:
 
 # ── URL discovery ─────────────────────────────────────────────────────────────
 
-def discover_linkedin_url(company_name: str, website: str = "") -> str:
-    """
-    Multi-strategy LinkedIn company URL discovery.
-
-    Strategy 1: site:linkedin.com/company search with cleaned name (most reliable)
-    Strategy 2: general "{name}" linkedin.com search
-    Strategy 3: domain-based search if website provided
-
-    Returns validated linkedin.com/company/... URL or empty string.
-    """
+def _search_web(query: str, count: int = 5) -> list:
+    """Search via Brave (if BRAVE_API_KEY set) then DDGS — same as company_prefill._web_search."""
+    try:
+        from .company_prefill import _web_search
+        return _web_search(query, count)
+    except Exception:
+        pass
     try:
         from ddgs import DDGS
-    except ImportError:
-        return ""
+        return list(DDGS().text(query, max_results=count))
+    except Exception:
+        return []
 
+
+def _extract_li_company_url(results: list, company_name: str) -> str:
+    """Scan href and body fields in search results for a validated linkedin.com/company/ URL."""
+    for r in results:
+        for text in (r.get("href", "") or "", (r.get("body") or "")[:400]):
+            m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', text)
+            if m:
+                candidate = f"https://www.linkedin.com/company/{m.group(1)}/"
+                if _slug_matches(company_name, candidate):
+                    return candidate
+    return ""
+
+
+def discover_linkedin_url(company_name: str, website: str = "") -> str:
+    """
+    5-strategy LinkedIn company URL discovery per spec.
+
+    Strategy 1: site:linkedin.com/company "Cleaned Name"
+    Strategy 2: "Cleaned Name" linkedin company
+    Strategy 3: domain-based search (when website provided)
+    Strategy 4: Alternate form — name without quotes + linkedin
+    Strategy 5: Evidence cache — LinkedIn URL from website HTML (caller responsibility;
+                this function logs its own strategies and defers caching to caller)
+
+    Returns validated linkedin.com/company/... URL or empty string on all failures.
+    """
     clean_name = _clean_name_for_linkedin(company_name)
 
-    queries = [
-        f'site:linkedin.com/company "{clean_name}"',
-        f'"{clean_name}" site:linkedin.com/company',
-        f'{clean_name} linkedin company profile',
+    strategies = [
+        (f'site:linkedin.com/company "{clean_name}"',          "S1:site_quote"),
+        (f'"{clean_name}" linkedin company',                    "S2:quote_linkedin"),
+        (f'{clean_name} linkedin company profile',              "S4:name_profile"),
     ]
+
+    # Strategy 3: domain-based (inserted early, high signal)
     if website:
         try:
             from urllib.parse import urlparse
             domain = urlparse(website).netloc.replace("www.", "")
             if domain:
-                queries.insert(1, f'site:linkedin.com/company "{domain}"')
+                strategies.insert(1, (f'site:linkedin.com/company "{domain}"', "S3:site_domain"))
         except Exception:
             pass
 
-    for query in queries:
+    for query, label in strategies:
         try:
-            results = list(DDGS().text(query, max_results=5))
-            for r in results:
-                url = r.get("href", "") or ""
-                m = re.search(r'(linkedin\.com/company/([a-zA-Z0-9_-]+))', url)
-                if m:
-                    candidate = f"https://www.{m.group(1)}/"
-                    if _slug_matches(company_name, candidate):
-                        print(f"[linkedin_worker] {company_name}: found {candidate} via query: {query[:60]}", flush=True)
-                        return candidate
-                # Also check result body for LinkedIn company URLs
-                body = (r.get("body") or "")[:300]
-                bm = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', body)
-                if bm:
-                    candidate = f"https://www.linkedin.com/company/{bm.group(1)}/"
-                    if _slug_matches(company_name, candidate):
-                        return candidate
-        except Exception:
+            results = _search_web(query, count=5)
+            found = _extract_li_company_url(results, company_name)
+            if found:
+                print(f"[linkedin_discovery] {company_name}: {label} → {found}", flush=True)
+                return found
+            print(f"[linkedin_discovery] {company_name}: {label} → no match ({len(results)} results)", flush=True)
+        except Exception as e:
+            print(f"[linkedin_discovery] {company_name}: {label} → error: {e}", flush=True)
             continue
 
+    print(f"[linkedin_discovery] {company_name}: all strategies failed", flush=True)
     return ""
 
 

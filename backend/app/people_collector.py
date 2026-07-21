@@ -20,15 +20,23 @@ _LEADERSHIP_PATHS = [
 ]
 
 _SEARCH_QUERIES = [
-    # LinkedIn-specific: result HREFs are profile URLs → direct linkedin_url extraction
-    'site:linkedin.com/in "{name}" CEO OR founder OR CTO OR director OR president',
-    # General leadership searches
-    '"{name}" CEO OR CTO OR CFO OR founder OR "head of" OR president',
-    '"{name}" leadership team executives',
-    # Site-specific: about/team/leadership pages
-    'site:{domain} executives OR leadership OR "our team" OR "meet the team"',
-    # Press releases and news mentioning executives
-    '"{name}" "press release" OR "appoints" OR "announces" executive director founder',
+    # Per-role title queries (highest signal — specific title)
+    ('"{name}" CEO',                                                    "q_ceo"),
+    ('"{name}" founder',                                                "q_founder"),
+    ('"{name}" leadership',                                             "q_leadership"),
+    ('"{name}" "executive team"',                                       "q_exec_team"),
+    ('"{name}" management',                                             "q_management"),
+    # Site-specific: official company pages
+    ('site:{domain} leadership',                                        "q_site_leadership"),
+    ('site:{domain} executives',                                        "q_site_executives"),
+    ('site:{domain} team',                                              "q_site_team"),
+    ('site:{domain} about',                                             "q_site_about"),
+    # LinkedIn company page (may surface employee profiles)
+    ('site:linkedin.com/company "{name}"',                             "q_li_company"),
+    # LinkedIn individual profiles
+    ('site:linkedin.com/in "{name}" CEO OR founder OR CTO OR director', "q_li_people"),
+    # Press releases and news
+    ('"{name}" "press release" OR "appoints" OR "announces" executive director founder', "q_press"),
 ]
 
 # Regex to pull linkedin.com/in/ profile URLs from markdown / snippets
@@ -143,8 +151,9 @@ def _gemini_extract(prompt: str, gemini_key: str) -> list:
 
 def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
     """
-    Path A: run DDG leadership queries, feed all snippets to Gemini in one call.
-    LinkedIn-specific query produces HREFs that ARE profile URLs — captured directly.
+    Path A: run multi-query leadership searches, feed all snippets to Gemini in one call.
+    Runs all queries in _SEARCH_QUERIES; logs per-query result counts.
+    LinkedIn profile HREFs are captured directly as linkedin_url evidence.
     Returns list of {name, title, linkedin_url, source_urls, ...}.
     """
     try:
@@ -153,44 +162,53 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
         return []
 
     snippets = []
-    # Map href → linkedin_url when the result itself is a linkedin.com/in page
     href_linkedin_map: dict = {}
+    total_results = 0
 
-    for q_template in _SEARCH_QUERIES:
+    for q_template, label in _SEARCH_QUERIES:
         q = q_template.format(name=company_name, domain=domain)
         try:
-            for r in _web_search(q, count=5):
+            results = _web_search(q, count=5)
+            hit_count = 0
+            for r in results:
                 url = r.get("href", "")
                 title = r.get("title", "")
                 body = (r.get("body") or "")[:200]
                 if url and (title or body):
                     snippets.append(f"[{url}] {title} — {body}")
-                # When the result href is a LinkedIn profile, cache it
+                    hit_count += 1
+                # Capture LinkedIn profile HREFs directly
                 if url and "linkedin.com/in/" in url:
                     href_linkedin_map[url] = url
-                # Also scan body for embedded LinkedIn profile URLs
                 if body:
                     for li_url in _LI_PROFILE_RE.findall(body):
                         full = f"https://www.linkedin.com/in/{li_url}/"
                         href_linkedin_map[full] = full
-        except Exception:
+            total_results += hit_count
+            print(f"[people_search] {company_name} {label}: {hit_count} results", flush=True)
+        except Exception as e:
+            print(f"[people_search] {company_name} {label}: error {e}", flush=True)
             continue
+
+    print(f"[people_search] {company_name}: total snippets={len(snippets)} li_profiles={len(href_linkedin_map)}", flush=True)
 
     if not snippets:
         return []
 
-    combined = "\n".join(snippets[:20])
+    combined = "\n".join(snippets[:25])
     prompt = (
         f"Company: {company_name} (domain: {domain})\n"
         f"Web search snippets:\n{combined}\n\n"
         "From these search results, extract all named people mentioned as working AT this company "
         "with their job titles. Note the source URL where each person was found.\n"
         "If the source URL is a linkedin.com/in/ profile, include it as linkedin_url.\n"
-        "Only include people confirmed to work at this specific company.\n"
+        "Only include people confirmed to work at this specific company. Exclude customers, partners, advisors.\n"
         'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title","url":"source_url","linkedin_url":"https://linkedin.com/in/...or empty"}, ...]\n'
         "Max 15 people. No markdown, no explanation."
     )
     items = _gemini_extract(prompt, gemini_key)
+    print(f"[people_search] {company_name}: Gemini returned {len(items)} candidates", flush=True)
+
     candidates = []
     for item in items:
         if not isinstance(item, dict):
@@ -203,12 +221,19 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
         if not name or len(name) < 3:
             continue
 
-        # Resolve LinkedIn URL: use Gemini's answer, or check if source URL is a profile
+        # Resolve LinkedIn URL from Gemini answer or direct profile href
         if not li_url and url and "linkedin.com/in/" in url:
             li_url = url
-        # Clean up the LinkedIn URL
         if li_url and "linkedin.com/in/" not in li_url:
             li_url = ""
+        # Also check href_linkedin_map by name slug
+        if not li_url and href_linkedin_map:
+            name_slug = re.sub(r'[^a-z0-9]', '', name.lower())
+            for href in href_linkedin_map:
+                slug = href.rstrip('/').split('/')[-1].lower().replace('-', '').replace('_', '')
+                if name_slug and (name_slug in slug or slug in name_slug):
+                    li_url = href
+                    break
 
         candidates.append({
             "name": name,
@@ -239,11 +264,13 @@ def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> lis
             break
         url = base + path
         try:
-            md = _fc_scrape(url, wait_ms=1500)  # reduced from 2500ms
+            md = _fc_scrape(url, wait_ms=1500)
         except Exception:
             md = ""
         if not md or len(md) < 100:
+            print(f"[people_official] {company_name}: {path} → empty/404", flush=True)
             continue
+        print(f"[people_official] {company_name}: {path} → {len(md)} chars scraped", flush=True)
         pages_tried += 1
 
         # Pre-extract all LinkedIn profile URLs present in the markdown
@@ -261,6 +288,7 @@ def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> lis
             "If no people found, return []. Max 20 people. No markdown."
         )
         items = _gemini_extract(prompt, gemini_key)
+        print(f"[people_official] {company_name}: {path} → Gemini found {len(items)} people", flush=True)
         for item in items:
             if not isinstance(item, dict):
                 continue
