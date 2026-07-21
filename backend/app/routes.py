@@ -4215,6 +4215,49 @@ async def bulk_autofill_companies(
                 except Exception:
                     pass
 
+            # ── Step 2c: Multi-page collection for classification ────────────────
+            # Per v3 spec: pricing page is the highest-value evidence source (+20).
+            # About page gives the richest description (+15).
+            # Only runs when company has no type yet (saves Firecrawl credits).
+            if needs_type and ws_url and website_data:
+                _mp_netloc = urlparse(ws_url).netloc
+                _mp_base   = f"https://{_mp_netloc}"
+                _mp_text   = website_data.get('full_text', '') or ''
+                _mp_tried  = 0
+                # Try pricing first (strongest SaaS signal), then about
+                _MP_PAGES  = [
+                    ('/pricing',   'pricing'),
+                    ('/plans',     'pricing'),
+                    ('/about',     'about'),
+                    ('/about-us',  'about'),
+                    ('/products',  'products'),
+                ]
+                _mp_seen_types: set = set()
+                for _mp_path, _mp_type in _MP_PAGES:
+                    if _mp_tried >= 2:  # max 2 extra scrapes per company
+                        break
+                    if _mp_type in _mp_seen_types:
+                        continue  # already got a pricing/about page
+                    _mp_url = _mp_base + _mp_path
+                    if _mp_url.rstrip('/') == ws_url.rstrip('/'):
+                        continue  # don't re-scrape the homepage
+                    try:
+                        from .enrichment import _fc_scrape as _fc_mp
+                        _mp_md = _fc_mp(_mp_url, wait_ms=3000) or ""
+                        if _mp_md and len(_mp_md) > 200:
+                            _mp_text = _mp_text + f'\n\n--- {_mp_path} page ---\n' + _mp_md[:3000]
+                            _mp_tried += 1
+                            _mp_seen_types.add(_mp_type)
+                            if _mp_type == 'pricing':
+                                website_data['has_pricing_detected'] = True
+                                if not website_data.get('pricing'):
+                                    website_data['pricing'] = _mp_md[:1000]
+                            print(f"[multipage] {company_name}: {_mp_path} ({len(_mp_md)}ch)", flush=True)
+                    except Exception:
+                        pass
+                if _mp_tried > 0:
+                    website_data['full_text'] = _mp_text
+
             # Reject websites that don't mention the company — prevents wrong matches
             # like "ABOUT Healthcare" → healthcare.gov, "Gamma" → paint company
             # Run for ALL companies, not just ones that needed site discovery
