@@ -536,7 +536,7 @@ async def get_companies(authorization: str = Header(...)):
         offset = 0
         while True:
             resp = supabase.table("companies")\
-                .select("*,is_saas,industry,specialties")\
+                .select("*,is_saas,industry,specialties,business_model,revenue_model,delivery_model")\
                 .eq("user_id", user_id)\
                 .order("created_at", desc=True)\
                 .range(offset, offset + PAGE - 1)\
@@ -4120,7 +4120,7 @@ async def bulk_autofill_companies(
 
         needs_desc      = True   # always re-fetch: previous run may have had wrong website data
         needs_hq        = not bool(company.get("headquarters"))
-        needs_type      = True   # always re-classify; higher threshold protects confident existing values
+        needs_type      = not bool(company.get("company_type"))  # skip re-classify if type already set
         needs_site      = not company.get("website")
         needs_linkedin  = not company.get("linkedin_url")
         needs_size      = not company.get("size")
@@ -4287,15 +4287,16 @@ async def bulk_autofill_companies(
             if needs_type:
                 _desc_for_type = update_data.get("description") or company.get("description") or ""
                 _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
-                # When overwriting an existing classification, require higher confidence (45)
-                # to protect against misclassifying a correctly-set value.
-                _type_threshold = 45 if company.get("company_type") else 20
+                _type_threshold = 20  # only runs when company has no type yet
                 if _cls["confidence"] >= _type_threshold:
-                    update_data["company_type"] = _cls["company_type"]
-                    update_data["is_saas"] = _cls["is_saas"]
-                    update_data["saas_category"] = _cls["category"]
+                    update_data["company_type"]    = _cls["company_type"]
+                    update_data["is_saas"]         = _cls["is_saas"]
+                    update_data["saas_category"]   = _cls["category"]
                     update_data["type_confidence"] = _cls["confidence"]
-                    update_data["type_reason"] = _cls.get("classification_reason", "")
+                    update_data["type_reason"]     = _cls.get("classification_reason", "")
+                    update_data["business_model"]  = _cls.get("business_model", "")
+                    update_data["revenue_model"]   = _cls.get("revenue_model", "")
+                    update_data["delivery_model"]  = _cls.get("delivery_model", "")
 
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
@@ -4757,8 +4758,9 @@ async def bulk_autofill_companies(
                 _extra = " | ".join(_signals)
                 if _extra:
                     _desc_bulk = (_desc_bulk + " " + _extra).strip() if _desc_bulk else _extra
-            # needs_type=True means we always want to re-classify; only skip AI
-            # if the weighted classifier already wrote a type into update_data
+            # needs_type is only True when company has no existing type yet.
+            # _missing_type_bulk = True means the rule classifier also didn't set it
+            # and we fall back to AI to fill company_type.
             _missing_type_bulk = needs_type and not update_data.get("company_type")
             _missing_bulk = (not update_data.get("industry") and not company.get("industry")) or \
                             (not update_data.get("founded") and not company.get("founded")) or \
@@ -4778,12 +4780,12 @@ async def bulk_autofill_companies(
                         '- headquarters: "City, Country" format (null if unknown)\n'
                         '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
                         'what the company actually does (not generic terms like "AI" or "software")\n'
-                        '- company_type: "Product" (owns software/SaaS that customers subscribe to/license — '
-                        'has login portal, pricing page, subscription plans), '
-                        '"Service" (does IT services, consulting, custom dev, staffing — builds software FOR clients, not sells it), '
-                        '"Hybrid" (has both own software product AND a services arm). '
-                        'Key test: does this company SELL a product to end-users, or BUILD for hire? '
-                        'Having a client portal or login does NOT make it a Product company.\n\n'
+                        '- company_type: "Product" (owns software with subscription pricing, '
+                        'or runs a marketplace/platform with transaction fees) OR '
+                        '"Service" (consulting, agency, staffing, non-profit, lending/capital provider — '
+                        'does NOT sell a subscription software product). '
+                        'IMPORTANT: login/dashboard/sign-up do NOT make it Product. '
+                        'A lending platform, crowdfunding site, or foundation is Service.\n\n'
                         'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                     )
                     print(f"[gemini_bulk] Running for {company_name}, desc_len={len(_desc_bulk)}", flush=True)
@@ -4864,12 +4866,12 @@ async def bulk_autofill_companies(
                                 '- headquarters: "City, Country" format (null if unknown)\n'
                                 '- specialties: 3-5 comma-separated SPECIFIC capability areas reflecting '
                                 'what the company actually does (not generic terms like "AI" or "software")\n'
-                                '- company_type: "Product" (owns software/SaaS that customers subscribe to/license — '
-                                'has pricing tiers, subscription plans, own platform), '
-                                '"Service" (does IT services, consulting, custom dev, staffing — builds software FOR clients, not sells it), '
-                                '"Hybrid" (has both own software product AND a services arm). '
-                                'Key test: does this company SELL a product to end-users, or BUILD for hire? '
-                                'Having a client portal or login does NOT make it a Product company.\n\n'
+                                '- company_type: "Product" (owns software with subscription pricing, '
+                                'or runs a marketplace/platform with transaction fees) OR '
+                                '"Service" (consulting, agency, staffing, non-profit, lending/capital provider — '
+                                'does NOT sell a subscription software product). '
+                                'IMPORTANT: login/dashboard/sign-up do NOT make it Product. '
+                                'A lending platform, crowdfunding site, or foundation is Service.\n\n'
                                 'JSON only: {"industry":"...","founded":null,"headquarters":null,"specialties":"...","company_type":"..."}'
                             )}],
                         },
@@ -4925,22 +4927,21 @@ async def bulk_autofill_companies(
                         update_data["headquarters"] = m.group(1).strip()
 
             # ── Step 8.5: Derived fields — is_saas + HQ normalization ────────────
-            # is_saas MUST be consistent with company_type — always re-derive.
-            # Rule: Product → True, Hybrid → True, Service → False.
-            # We override whatever was stored if company_type was set this run OR if
-            # the stored values contradict each other (e.g. Hybrid + is_saas=False).
-            _ct_final = update_data.get("company_type") or company.get("company_type")
-            _ct_changed = "company_type" in update_data  # classifier ran this session
+            # If the AI (Gemini/Groq) set company_type but didn't set is_saas,
+            # derive is_saas from the rule classifier result or default to False.
+            # v2: "Product" doesn't automatically mean is_saas=True (could be Marketplace).
+            # Only force is_saas when the v2 rule classifier explicitly set it.
+            _ct_final   = update_data.get("company_type") or company.get("company_type")
+            _ct_changed = "company_type" in update_data
+            _is_saas_in_update = "is_saas" in update_data
+            # If AI set company_type but is_saas wasn't set by rule classifier:
+            if _ct_changed and not _is_saas_in_update:
+                # Conservative: Service → False, Product → False unless we have strong signals
+                update_data["is_saas"] = False  # AI-set type without subscription signals = not SaaS
+            # Fix contradictions in stored values
             _is_saas_stored = company.get("is_saas")
-            _contradicts = (
-                (_ct_final == "Service" and _is_saas_stored is True)
-                or (_ct_final in ("Product", "Hybrid") and _is_saas_stored is False)
-            )
-            if _ct_final and (_ct_changed or _contradicts or _is_saas_stored is None):
-                if _ct_final == "Service":
-                    update_data["is_saas"] = False
-                elif _ct_final in ("Product", "Hybrid"):
-                    update_data["is_saas"] = True
+            if _ct_final == "Service" and _is_saas_stored is True and not _is_saas_in_update:
+                update_data["is_saas"] = False
 
             # HQ normalization: add country when only city is provided for Indian cities
             _HQ_CITY_NORM = {

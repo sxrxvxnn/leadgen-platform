@@ -3443,6 +3443,7 @@ export default function Companies() {
     runAnalyze,
     runMapsEnrich,
     registerLive,
+    registerJobComplete,
     drainPending,
   } = useBulkOps()
   const { isEnabled } = useFeatureFlags()
@@ -3532,6 +3533,12 @@ export default function Companies() {
       })
     })
     return () => registerLive(null)
+  }, [])
+
+  // When a background EC2 job finishes, re-fetch so the page shows fresh data.
+  useEffect(() => {
+    registerJobComplete(() => fetchCompanies())
+    return () => registerJobComplete(null)
   }, [])
 
   useEffect(() => {
