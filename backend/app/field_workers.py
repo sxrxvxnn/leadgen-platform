@@ -594,7 +594,7 @@ def run_gap_fill(
 def _ddgs_snippets(query: str, max_results: int = 3) -> str:
     """Run DDGS text search, return combined snippet text (max 600 chars)."""
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
         results = DDGS().text(query, max_results=max_results)
         if not results:
             return ""

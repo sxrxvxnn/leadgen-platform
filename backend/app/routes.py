@@ -11369,7 +11369,7 @@ async def classify_website_endpoint(request: Request):
             # Fallback: if low-confidence or no website data, try DDG snippets
             if (not wd or result["low_confidence"]) and result["confidence"] < 50:
                 try:
-                    from duckduckgo_search import DDGS as _DDGS2
+                    from ddgs import DDGS as _DDGS2
                     domain = url.split("//")[-1].split("/")[0]
                     snippets = []
                     with _DDGS_SEM:
