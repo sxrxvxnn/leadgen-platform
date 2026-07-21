@@ -20,10 +20,14 @@ _LEADERSHIP_PATHS = [
 ]
 
 _SEARCH_QUERIES = [
+    # LinkedIn-specific: result HREFs are profile URLs → direct linkedin_url extraction
+    'site:linkedin.com/in "{name}" CEO OR founder OR CTO OR director OR president',
     '"{name}" CEO OR CTO OR CFO OR founder OR "head of" OR president',
     '"{name}" leadership team executives',
-    'site:{domain} team OR leadership OR founders OR management',
 ]
+
+# Regex to pull linkedin.com/in/ profile URLs from markdown / snippets
+_LI_PROFILE_RE = re.compile(r'https?://(?:www\.)?linkedin\.com/in/([a-zA-Z0-9_%-]+)/?')
 
 # Confidence weights (additive)
 _CONF_OFFICIAL_PAGE = 40    # found on company's own leadership/team/about page
@@ -124,9 +128,9 @@ def _gemini_extract(prompt: str, gemini_key: str) -> list:
 
 def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
     """
-    Path A: run DDG leadership queries, feed all snippets to Gemini in one call,
-    extract candidates with their source URLs.
-    Returns list of {name, title, source_url, confidence=base_search_conf}.
+    Path A: run DDG leadership queries, feed all snippets to Gemini in one call.
+    LinkedIn-specific query produces HREFs that ARE profile URLs — captured directly.
+    Returns list of {name, title, linkedin_url, source_urls, ...}.
     """
     try:
         from .company_prefill import _web_search
@@ -134,6 +138,9 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
         return []
 
     snippets = []
+    # Map href → linkedin_url when the result itself is a linkedin.com/in page
+    href_linkedin_map: dict = {}
+
     for q_template in _SEARCH_QUERIES:
         q = q_template.format(name=company_name, domain=domain)
         try:
@@ -143,6 +150,14 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
                 body = (r.get("body") or "")[:200]
                 if url and (title or body):
                     snippets.append(f"[{url}] {title} — {body}")
+                # When the result href is a LinkedIn profile, cache it
+                if url and "linkedin.com/in/" in url:
+                    href_linkedin_map[url] = url
+                # Also scan body for embedded LinkedIn profile URLs
+                if body:
+                    for li_url in _LI_PROFILE_RE.findall(body):
+                        full = f"https://www.linkedin.com/in/{li_url}/"
+                        href_linkedin_map[full] = full
         except Exception:
             continue
 
@@ -154,10 +169,10 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
         f"Company: {company_name} (domain: {domain})\n"
         f"Web search snippets:\n{combined}\n\n"
         "From these search results, extract all named people mentioned as working AT this company "
-        "with their job titles. Note the URL where each person was found.\n"
-        "Only include people confirmed to work at this specific company (not analysts, customers, "
-        "or people merely mentioning the company).\n"
-        'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title","url":"source_url"}, ...]\n'
+        "with their job titles. Note the source URL where each person was found.\n"
+        "If the source URL is a linkedin.com/in/ profile, include it as linkedin_url.\n"
+        "Only include people confirmed to work at this specific company.\n"
+        'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title","url":"source_url","linkedin_url":"https://linkedin.com/in/...or empty"}, ...]\n'
         "Max 15 people. No markdown, no explanation."
     )
     items = _gemini_extract(prompt, gemini_key)
@@ -168,14 +183,24 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
         name = (item.get("name") or "").strip()
         title = (item.get("title") or "").strip()
         url = (item.get("url") or "").strip()
+        li_url = (item.get("linkedin_url") or "").strip()
+
         if not name or len(name) < 3:
             continue
+
+        # Resolve LinkedIn URL: use Gemini's answer, or check if source URL is a profile
+        if not li_url and url and "linkedin.com/in/" in url:
+            li_url = url
+        # Clean up the LinkedIn URL
+        if li_url and "linkedin.com/in/" not in li_url:
+            li_url = ""
+
         candidates.append({
             "name": name,
             "title": title,
             "department": _classify_department(title),
             "email": "",
-            "linkedin_url": "",
+            "linkedin_url": li_url,
             "is_decision_maker": _is_decision_maker(title),
             "source_urls": [url] if url else [],
             "_search_confirmed": True,
@@ -186,7 +211,8 @@ def _search_candidates(company_name: str, domain: str, gemini_key: str) -> list:
 def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> list:
     """
     Path B: Firecrawl scrapes official team/leadership pages, Gemini extracts people.
-    Returns list of {name, title, source_url (page URL), confidence=official_conf}.
+    Also extracts linkedin.com/in/ URLs directly from page markdown (Firecrawl preserves links).
+    Hard-capped at 2 pages to keep enrichment fast.
     """
     from .enrichment import _fc_scrape
 
@@ -194,23 +220,29 @@ def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> lis
     pages_tried = 0
 
     for path in _LEADERSHIP_PATHS:
-        if pages_tried >= 3:
+        if pages_tried >= 2:  # max 2 pages — keeps auto-discover under ~30s total
             break
         url = base + path
         try:
-            md = _fc_scrape(url, wait_ms=2500)
+            md = _fc_scrape(url, wait_ms=1500)  # reduced from 2500ms
         except Exception:
             md = ""
         if not md or len(md) < 100:
             continue
         pages_tried += 1
 
+        # Pre-extract all LinkedIn profile URLs present in the markdown
+        page_li_urls: dict = {}  # slug → full url
+        for slug in _LI_PROFILE_RE.findall(md):
+            page_li_urls[slug.lower()] = f"https://www.linkedin.com/in/{slug}/"
+
         prompt = (
             f"Company: {company_name}\n"
             f"Page text (first 3000 chars):\n{md[:3000]}\n\n"
             "Extract all named people with their job titles from this company page.\n"
-            "Only include people who work AT this company (not customers, advisors unless Board).\n"
-            'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title"}, ...]\n'
+            "If a linkedin.com/in/ URL appears near a person's name, include it as linkedin_url.\n"
+            "Only include people who work AT this company (not customers or advisors unless Board).\n"
+            'Return ONLY a JSON array: [{"name":"Full Name","title":"Job Title","linkedin_url":"url or empty"}, ...]\n'
             "If no people found, return []. Max 20 people. No markdown."
         )
         items = _gemini_extract(prompt, gemini_key)
@@ -219,20 +251,32 @@ def _scrape_official_pages(base: str, company_name: str, gemini_key: str) -> lis
                 continue
             name = (item.get("name") or "").strip()
             title = (item.get("title") or "").strip()
+            li_url = (item.get("linkedin_url") or "").strip()
             if not name or len(name) < 3:
                 continue
+
+            # Validate / clean linkedin_url
+            if li_url and "linkedin.com/in/" not in li_url:
+                li_url = ""
+            # Fallback: try to match name slug against pre-extracted LI URLs
+            if not li_url and page_li_urls:
+                name_slug = re.sub(r'[^a-z0-9]', '', name.lower())
+                for slug, full in page_li_urls.items():
+                    if name_slug and (name_slug in slug or slug in name_slug):
+                        li_url = full
+                        break
+
             all_people.append({
                 "name": name,
                 "title": title,
                 "department": _classify_department(title),
                 "email": "",
-                "linkedin_url": "",
+                "linkedin_url": li_url,
                 "is_decision_maker": _is_decision_maker(title),
                 "source_urls": [url],
                 "_official_confirmed": True,
             })
 
-        # Stop early if we already have enough from official pages
         unique_so_far = len({_normalize_name(p["name"]) for p in all_people})
         if unique_so_far >= 8:
             break
@@ -289,6 +333,9 @@ def _merge_paths(search: list, official: list) -> list:
                 existing["title"] = p["title"]
                 existing["department"] = p["department"]
                 existing["is_decision_maker"] = p["is_decision_maker"]
+            # Propagate LinkedIn URL if official page didn't have it
+            if not existing.get("linkedin_url") and p.get("linkedin_url"):
+                existing["linkedin_url"] = p["linkedin_url"]
         else:
             # Search-only candidate — lower confidence
             is_dm = p["is_decision_maker"]
