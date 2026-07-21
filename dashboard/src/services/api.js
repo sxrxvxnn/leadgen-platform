@@ -449,5 +449,8 @@ export const getWorkerHealth = () => api.get('/worker/health')
 export const getCronStatus = () => api.get('/cron/status')
 export const exportCompaniesCsv = () => api.get('/companies/export-csv', { responseType: 'blob' })
 export const runDmScan = (companyId) => api.post(`/companies/${companyId}/run-dm-scan/async`)
+export const discoverCompanyPeople = (companyId) =>
+  api.post(`/companies/${companyId}/discover-people`)
+export const getCompanyPeople = (companyId) => api.get(`/companies/${companyId}/people`)
 
 export default api
