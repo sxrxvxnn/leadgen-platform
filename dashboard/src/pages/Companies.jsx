@@ -33,6 +33,7 @@ import {
   getJob,
   discoverCompanyPeople,
   getCompanyPeople,
+  getAllDecisionMakers,
 } from '../services/api'
 import CompanySignals from '../components/CompanySignals'
 import { useBulkOps } from '../context/BulkOpsContext'
@@ -673,8 +674,7 @@ function CompanyCard({
   const [checkingCompliance, setCheckingCompliance] = useState(false)
   const [complianceFrameworks, setComplianceFrameworks] = useState(null)
   const actionsMenuRef = useRef(null)
-  const [showPeople, setShowPeople] = useState(false)
-  const [people, setPeople] = useState(null)
+  const [people, setPeople] = useState(company._decision_makers || [])
   const [discoveringPeople, setDiscoveringPeople] = useState(false)
 
   useEffect(() => {
@@ -1674,32 +1674,6 @@ function CompanyCard({
             </div>
             <button style={card.primaryBtn} onClick={() => onViewLeads(company)}>
               Leads →
-            </button>
-            <button
-              style={{
-                ...card.primaryBtn,
-                background: showPeople ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)',
-                color: '#3b82f6',
-                border: '1px solid rgba(59,130,246,0.3)',
-              }}
-              onClick={async () => {
-                if (showPeople) {
-                  setShowPeople(false)
-                  return
-                }
-                setShowPeople(true)
-                if (people === null) {
-                  try {
-                    const r = await getCompanyPeople(company.id)
-                    setPeople(r.data?.people || [])
-                  } catch {
-                    setPeople([])
-                  }
-                }
-              }}
-              title="View discovered people"
-            >
-              People {people && people.length > 0 ? `(${people.length})` : ''}
             </button>
             <button style={card.editCardBtn} onClick={openEdit} title="Edit">
               ✎
@@ -3072,240 +3046,215 @@ function CompanyCard({
         </div>
       )}
 
-      {/* ── People Intelligence Panel ── */}
-      {showPeople && (
+      {/* ── Decision Makers ── always visible ── */}
+      <div
+        style={{
+          borderTop: '1px solid var(--border)',
+          padding: '12px 18px 14px',
+        }}
+      >
         <div
           style={{
-            background: 'var(--bg)',
-            border: '1px solid rgba(59,130,246,0.25)',
-            borderLeft: '4px solid #3b82f6',
-            borderRadius: 8,
-            padding: '14px 18px',
-            marginTop: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: people.length > 0 ? 10 : 0,
           }}
         >
-          <div
+          <span
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 10,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
             }}
           >
-            <span
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 14,
-                fontWeight: 700,
-                color: 'var(--text)',
-              }}
-            >
-              Decision Makers · {company.name}
-            </span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button
-                disabled={discoveringPeople}
-                onClick={async () => {
-                  setDiscoveringPeople(true)
-                  try {
-                    const r = await discoverCompanyPeople(company.id)
-                    setPeople(r.data?.people || [])
-                  } catch {
-                    alert('Discovery failed. Check that the company has a website.')
-                  } finally {
-                    setDiscoveringPeople(false)
-                  }
-                }}
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  padding: '4px 10px',
-                  background: discoveringPeople ? 'rgba(59,130,246,0.08)' : 'rgba(59,130,246,0.12)',
-                  border: '1px solid rgba(59,130,246,0.3)',
-                  borderRadius: 5,
-                  color: '#3b82f6',
-                  cursor: discoveringPeople ? 'not-allowed' : 'pointer',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                {discoveringPeople ? 'Discovering…' : '⟳ Discover'}
-              </button>
-              <button
-                onClick={() => setShowPeople(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  fontSize: 14,
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+            Decision Makers{people.length > 0 ? ` (${people.length})` : ''}
+          </span>
+          <button
+            disabled={discoveringPeople}
+            onClick={async () => {
+              setDiscoveringPeople(true)
+              try {
+                const r = await discoverCompanyPeople(company.id)
+                setPeople(r.data?.people || [])
+              } catch {
+                alert('Discovery failed. Check that the company has a website.')
+              } finally {
+                setDiscoveringPeople(false)
+              }
+            }}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              padding: '3px 9px',
+              background: discoveringPeople ? 'rgba(59,130,246,0.06)' : 'rgba(59,130,246,0.1)',
+              border: '1px solid rgba(59,130,246,0.25)',
+              borderRadius: 4,
+              color: '#3b82f6',
+              cursor: discoveringPeople ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.04em',
+            }}
+          >
+            {discoveringPeople ? 'Discovering…' : people.length > 0 ? '⟳ Refresh' : '⟳ Discover'}
+          </button>
+        </div>
 
-          {people === null ? (
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
-              Loading…
-            </p>
-          ) : people.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '18px 0' }}>
-              <p
+        {people.length === 0 ? (
+          <p
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-muted)',
+              margin: '6px 0 0',
+            }}
+          >
+            {discoveringPeople
+              ? 'Discovering decision makers…'
+              : 'No decision makers found yet. Click Discover to scan the website.'}
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {people.map((p, i) => (
+              <div
+                key={i}
                 style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  color: 'var(--text-muted)',
-                  marginBottom: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  padding: '7px 9px',
+                  background: p.is_decision_maker
+                    ? 'rgba(59,130,246,0.04)'
+                    : 'rgba(255,255,255,0.02)',
+                  borderRadius: 6,
+                  border: p.is_decision_maker
+                    ? '1px solid rgba(59,130,246,0.18)'
+                    : '1px solid var(--border)',
                 }}
               >
-                No people discovered yet.
-              </p>
-              <p
-                style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}
-              >
-                Click "Discover" to scrape the company website for decision makers.
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {people.map((p, i) => (
+                {/* Avatar */}
                 <div
-                  key={i}
                   style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: p.is_decision_maker
+                      ? 'rgba(59,130,246,0.18)'
+                      : 'rgba(100,100,120,0.15)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 10px',
-                    background: 'rgba(255,255,255,0.03)',
-                    borderRadius: 6,
-                    border: '1px solid var(--border)',
+                    justifyContent: 'center',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: p.is_decision_maker ? '#3b82f6' : 'var(--text-muted)',
+                    flexShrink: 0,
                   }}
                 >
-                  <div
+                  {(p.name || '?')[0].toUpperCase()}
+                </div>
+
+                {/* Name + title */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: 'rgba(59,130,246,0.15)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
                       fontFamily: 'var(--font-display)',
-                      fontSize: 13,
-                      color: '#3b82f6',
-                      flexShrink: 0,
+                      fontSize: 12,
+                      color: 'var(--text)',
+                      margin: 0,
+                      fontWeight: p.is_decision_maker ? 600 : 400,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     }}
                   >
-                    {(p.name || '?')[0].toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 13,
-                        color: 'var(--text)',
-                        margin: 0,
-                        fontWeight: p.is_decision_maker ? 600 : 400,
-                      }}
-                    >
-                      {p.name}
-                    </p>
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 10,
-                        color: 'var(--text-muted)',
-                        margin: 0,
-                      }}
-                    >
-                      {p.title || 'Unknown title'}{' '}
-                      {p.department && p.department !== 'Other' ? `· ${p.department}` : ''}
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    {p.is_decision_maker && (
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 9,
-                          padding: '2px 6px',
-                          background: 'rgba(59,130,246,0.12)',
-                          color: '#3b82f6',
-                          borderRadius: 3,
-                          letterSpacing: '0.06em',
-                        }}
-                      >
-                        DM
-                      </span>
-                    )}
-                    {p.source_urls?.length > 1 && (
-                      <span
-                        title={`Found in ${p.source_urls.length} sources:\n${p.source_urls.join('\n')}`}
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 9,
-                          padding: '2px 6px',
-                          background: 'rgba(5,150,105,0.12)',
-                          color: '#059669',
-                          borderRadius: 3,
-                          letterSpacing: '0.06em',
-                          cursor: 'help',
-                        }}
-                      >
-                        {p.source_urls.length} sources
-                      </span>
-                    )}
+                    {p.name}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--text-muted)',
+                      margin: 0,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {p.title || 'Unknown title'}
+                    {p.department && p.department !== 'Other' ? ` · ${p.department}` : ''}
+                  </p>
+                </div>
+
+                {/* Badges + links */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                  {p.is_decision_maker && (
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
                         fontSize: 9,
-                        color:
-                          p.confidence >= 80
-                            ? '#4a7c59'
-                            : p.confidence >= 60
-                              ? '#d97706'
-                              : 'var(--text-muted)',
+                        padding: '2px 5px',
+                        background: 'rgba(59,130,246,0.12)',
+                        color: '#3b82f6',
+                        borderRadius: 3,
+                        letterSpacing: '0.06em',
                       }}
                     >
-                      {p.confidence}%
+                      DM
                     </span>
-                    {p.email && (
-                      <a
-                        href={`mailto:${p.email}`}
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--accent)',
-                          textDecoration: 'none',
-                        }}
-                        title={p.email}
-                      >
-                        ✉
-                      </a>
-                    )}
-                    {p.linkedin_url && (
-                      <a
-                        href={p.linkedin_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: '#0a66c2',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        in
-                      </a>
-                    )}
-                  </div>
+                  )}
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      color:
+                        p.confidence >= 80
+                          ? '#4a7c59'
+                          : p.confidence >= 60
+                            ? '#d97706'
+                            : 'var(--text-muted)',
+                    }}
+                    title={`Confidence: ${p.confidence}%${p.source_urls?.length > 1 ? ` · ${p.source_urls.length} sources` : ''}`}
+                  >
+                    {p.confidence}%
+                  </span>
+                  {p.email && (
+                    <a
+                      href={`mailto:${p.email}`}
+                      title={p.email}
+                      style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}
+                    >
+                      ✉
+                    </a>
+                  )}
+                  {p.linkedin_url && (
+                    <a
+                      href={p.linkedin_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`LinkedIn: ${p.linkedin_url}`}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: '#0a66c2',
+                        textDecoration: 'none',
+                        background: 'rgba(10,102,194,0.1)',
+                        padding: '1px 5px',
+                        borderRadius: 3,
+                      }}
+                    >
+                      in
+                    </a>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </>
   )
 }
@@ -3848,14 +3797,22 @@ export default function Companies() {
   async function fetchCompanies() {
     try {
       invalidateCache('/companies')
-      const res = await getCompanies()
-      const fresh = res.data?.companies || []
+      const [compRes, dmRes] = await Promise.allSettled([getCompanies(), getAllDecisionMakers()])
+      const fresh = compRes.status === 'fulfilled' ? compRes.value.data?.companies || [] : []
+      const allDMs = dmRes.status === 'fulfilled' ? dmRes.value.data?.people || [] : []
+      const dmMap = {}
+      for (const dm of allDMs) {
+        if (!dmMap[dm.company_id]) dmMap[dm.company_id] = []
+        dmMap[dm.company_id].push(dm)
+      }
       const missed = drainPending()
-      const merged = Object.keys(missed).length
-        ? fresh.map((c) => (missed[c.id] ? { ...c, ...missed[c.id] } : c))
-        : fresh
-      setCompanies(merged)
-      syncToDirectory(merged)
+      const withDMs = fresh.map((c) => ({
+        ...c,
+        ...(missed[c.id] || {}),
+        _decision_makers: dmMap[c.id] || [],
+      }))
+      setCompanies(withDMs)
+      syncToDirectory(withDMs)
     } catch (e) {
       console.error(e)
       setCompanies([])

@@ -164,6 +164,13 @@ const ALL_COLUMNS = [
   { key: 'tagline', label: 'Tagline', width: 180, type: 'text' },
   { key: 'phone', label: 'Phone', width: 140, type: 'text' },
   { key: 'notes', label: 'Notes', width: 220, type: 'text' },
+  {
+    key: '_decision_makers',
+    label: 'Decision Makers',
+    width: 260,
+    type: 'computed',
+    noExport: true,
+  },
 ]
 
 const DEFAULT_VISIBLE = new Set([
@@ -183,6 +190,7 @@ const DEFAULT_VISIBLE = new Set([
   'description',
   'compliance',
   'notes',
+  '_decision_makers',
 ])
 
 function getProspectColor(s) {
@@ -304,6 +312,92 @@ function EditableCell({ company, col, onSave, isEditing, onStartEdit, onStopEdit
               ? 'var(--text-secondary)'
               : 'var(--text-muted)'
       return <div style={{ ...cell.text, color }}>{label || '—'}</div>
+    }
+    if (col.key === '_decision_makers') {
+      const dms = company._decision_makers || []
+      if (dms.length === 0)
+        return <div style={{ ...cell.readonly, color: 'var(--text-muted)' }}>—</div>
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 0' }}>
+          {dms.slice(0, 3).map((p, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 11,
+                  color: 'var(--text)',
+                  fontWeight: p.is_decision_maker ? 600 : 400,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 130,
+                }}
+                title={`${p.name} · ${p.title || ''}`}
+              >
+                {p.name}
+              </span>
+              {p.is_decision_maker && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 8,
+                    padding: '1px 4px',
+                    background: 'rgba(59,130,246,0.12)',
+                    color: '#3b82f6',
+                    borderRadius: 3,
+                  }}
+                >
+                  DM
+                </span>
+              )}
+              {p.linkedin_url && (
+                <a
+                  href={p.linkedin_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={p.linkedin_url}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: '#0a66c2',
+                    textDecoration: 'none',
+                    background: 'rgba(10,102,194,0.1)',
+                    padding: '1px 4px',
+                    borderRadius: 3,
+                    flexShrink: 0,
+                  }}
+                >
+                  in
+                </a>
+              )}
+              {p.email && (
+                <a
+                  href={`mailto:${p.email}`}
+                  onClick={(e) => e.stopPropagation()}
+                  title={p.email}
+                  style={{
+                    fontSize: 10,
+                    color: 'var(--accent)',
+                    textDecoration: 'none',
+                    flexShrink: 0,
+                  }}
+                >
+                  ✉
+                </a>
+              )}
+            </div>
+          ))}
+          {dms.length > 3 && (
+            <span
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}
+            >
+              +{dms.length - 3} more
+            </span>
+          )}
+        </div>
+      )
     }
     const v = getCellValue(company, col.key)
     return (

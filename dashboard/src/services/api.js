@@ -452,5 +452,6 @@ export const runDmScan = (companyId) => api.post(`/companies/${companyId}/run-dm
 export const discoverCompanyPeople = (companyId) =>
   api.post(`/companies/${companyId}/discover-people`)
 export const getCompanyPeople = (companyId) => api.get(`/companies/${companyId}/people`)
+export const getAllDecisionMakers = () => api.get('/decision-makers')
 
 export default api
