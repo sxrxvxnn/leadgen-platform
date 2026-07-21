@@ -20,6 +20,49 @@ import re
 import json
 import requests
 
+# ── Description normalizer ────────────────────────────────────────────────────
+
+# Patterns that signal the text is LinkedIn sidebar metadata, not a real description
+_DESC_SIDEBAR_START = re.compile(
+    r'^\s*(?:'
+    r'\d[\d,]*\s*[-–]\s*[\d,]+\s*employees?|'  # "11-50 employees", "1,001-5,000 employees"
+    r'-\s*\d[\d,]*\+?\s*employees?|'             # "-200 employees" (leading minus from bad parse)
+    r'\d[\d,]*\+\s*employees?|'                  # "1000+ employees"
+    r'Headquarters\s*(?:[\n:]|\s+[A-Z])|'         # "Headquarters: ...", "Headquarters\n...", "Headquarters City"
+    r'Founded\s+in[.\s]+\d{4}\s*\('              # "Founded in. 2002 (24 yrs old)" aggregator fmt
+    r')',
+    re.I,
+)
+
+# Inline metadata segments to strip from descriptions that are mostly real text
+# Only strip explicit sidebar key:value formats, not natural sentence mentions
+_DESC_META_STRIP = [
+    re.compile(r'\s*\d[\d,]*\s*[-–]\s*[\d,]+\+?\s*employees?\b[^.;]{0,80}', re.I),
+    re.compile(r'\s*\bCompany\s+size\s*[:\s]+[^\n;]{0,80}', re.I),
+    re.compile(r'\s*\b(?:Global|India)\s+Employee\s+Count[.:\s]+[^\n;]{0,80}', re.I),
+    re.compile(r'\s*\bHeadquarters?\s*:\s*[A-Za-z][^.;\n]{2,80}', re.I),  # colon-form only
+    re.compile(r'\s*\bType\s*:\s*(?:Privately|Publicly)\s+Held[^.;\n]{0,60}', re.I),
+    re.compile(r'\s*\bFounded\s*:\s*\d{4}[^.;\n]{0,60}', re.I),           # colon-form only
+    re.compile(r'\s*\bSpecialties?\s*[:\s]+[A-Za-z][^.;\n]{5,120}', re.I),
+    re.compile(r'\s*\bLocations?\s*(?:Primary\s*)?:\s*[A-Za-z][^.;\n]{0,80}', re.I),
+    re.compile(r'\s*\b(?:Global|India)\s+Employee\s+Count[.:\s]+[^\n;]{0,80}', re.I),
+]
+
+
+def _clean_description(text: str) -> str:
+    """Strip LinkedIn sidebar boilerplate from description text before saving."""
+    if not text:
+        return text
+    t = text.strip()
+    # Reject entirely if it opens with sidebar metadata (not a description at all)
+    if _DESC_SIDEBAR_START.match(t):
+        return ""
+    # Strip embedded metadata segments from otherwise real descriptions
+    for pat in _DESC_META_STRIP:
+        t = pat.sub('', t)
+    t = re.sub(r'\s{2,}', ' ', t).strip().strip('.,; ')
+    return t
+
 # ── Confidence constants ──────────────────────────────────────────────────────
 CONF = {
     "website":        100,
@@ -296,17 +339,19 @@ def fill_description(company_name: str, ev: dict) -> dict:
 
     ws = ev.get("website_data") or {}
     for key in ("meta_description", "first_para", "hero"):
-        d = str(ws.get(key) or "")[:400].strip()
+        d = _clean_description(str(ws.get(key) or "")[:400].strip())
         if _desc_ok(d):
             return _result(d, "website")
 
     li = ev.get("linkedin") or {}
-    if _desc_ok(li.get("description") or ""):
-        return _result(li["description"], "linkedin_page")
+    li_desc = _clean_description(li.get("description") or "")
+    if _desc_ok(li_desc):
+        return _result(li_desc, "linkedin_page")
 
     pc = ev.get("proxycurl") or {}
-    if _desc_ok(pc.get("description") or ""):
-        return _result(pc["description"], "proxycurl")
+    pc_desc = _clean_description(pc.get("description") or "")
+    if _desc_ok(pc_desc):
+        return _result(pc_desc, "proxycurl")
 
     return _NOT_FOUND
 
@@ -372,6 +417,102 @@ def fill_company_type_ai(company_name: str, ev: dict, gemini_key: str = "", groq
     return _NOT_FOUND
 
 
+# ── LinkedIn URL worker ───────────────────────────────────────────────────────
+
+_SLUG_GENERIC = {'pvt', 'ltd', 'private', 'limited', 'technologies', 'tech',
+                 'solutions', 'india', 'innovations', 'consultancy', 'services',
+                 'inc', 'corp', 'llc', 'the', 'and', 'for', 'group', 'company'}
+
+
+def _slug_matches(company_name: str, linkedin_url: str) -> bool:
+    """True if the LinkedIn URL slug plausibly belongs to this company."""
+    m = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', linkedin_url)
+    if not m:
+        return False
+    slug = m.group(1).lower().replace('-', ' ').replace('_', ' ')
+    clean = re.sub(r'[^a-z0-9 ]', ' ', company_name.lower())
+    words = [w for w in clean.split() if len(w) > 2 and w not in _SLUG_GENERIC]
+    if not words:
+        return True  # generic name — accept anything
+    return any(w in slug for w in words[:4])
+
+
+def fill_linkedin_url(company_name: str, ev: dict) -> dict:
+    """
+    Retry chain: website_data → ddgs_snippet (confirmed or candidate) → targeted DDGS search
+    """
+    # Source 1: LinkedIn URL found in company website HTML (highest confidence)
+    ws = ev.get("website_data") or {}
+    li_from_site = str(ws.get("linkedin_url") or "")
+    if li_from_site and "linkedin.com/company/" in li_from_site:
+        return {"value": li_from_site, "confidence": CONF["website"], "source": "website", "status": "verified"}
+
+    # Source 2: LinkedIn URL or candidate from DDGS snippet
+    snip = ev.get("ddgs_snippet") or {}
+    for key in ("linkedin_url", "linkedin_url_candidate"):
+        li_from_snip = str(snip.get(key) or "")
+        if li_from_snip and "linkedin.com/company/" in li_from_snip:
+            if _slug_matches(company_name, li_from_snip):
+                return {"value": li_from_snip, "confidence": CONF["search_snippet"],
+                        "source": "search_snippet", "status": "verified"}
+
+    # Source 3: Targeted DDGS search
+    try:
+        from duckduckgo_search import DDGS
+        q = f'site:linkedin.com/company "{company_name}"'
+        results = list(DDGS().text(q, max_results=5))
+        for r in results:
+            url = r.get("href", "") or ""
+            lm = re.search(r'linkedin\.com/company/([a-zA-Z0-9_-]+)', url)
+            if lm:
+                cand = f"https://www.linkedin.com/company/{lm.group(1)}/"
+                if _slug_matches(company_name, cand):
+                    return {"value": cand, "confidence": CONF["search_snippet"],
+                            "source": "search_snippet", "status": "verified"}
+    except Exception:
+        pass
+
+    return _NOT_FOUND
+
+
+# ── About/Careers subpage helper ──────────────────────────────────────────────
+
+def _fetch_page_text(url: str) -> str:
+    """Lightweight HTML fetch → plain text (strips scripts/nav/footer). Max 3000 chars."""
+    try:
+        from html.parser import HTMLParser
+
+        class _Stripper(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.parts = []
+                self._skip = False
+
+            def handle_starttag(self, tag, attrs):
+                if tag in ('script', 'style', 'nav', 'footer', 'header'):
+                    self._skip = True
+
+            def handle_endtag(self, tag):
+                if tag in ('script', 'style', 'nav', 'footer', 'header'):
+                    self._skip = False
+
+            def handle_data(self, data):
+                if not self._skip:
+                    d = data.strip()
+                    if d:
+                        self.parts.append(d)
+
+        resp = requests.get(url, timeout=8, allow_redirects=True,
+                            headers={"User-Agent": "Mozilla/5.0 (compatible; SonarBot/1.0)"})
+        if resp.status_code != 200:
+            return ""
+        parser = _Stripper()
+        parser.feed(resp.text)
+        return ' '.join(parser.parts)[:3000]
+    except Exception:
+        return ""
+
+
 def run_gap_fill(
     company_name: str,
     ev: dict,
@@ -406,6 +547,7 @@ def run_gap_fill(
     _apply("founded",      fill_founded,        company_name, ev, gemini_key, groq_key)
     _apply("description",  fill_description,    company_name, ev)
     _apply("specialties",  fill_specialties,    company_name, ev, gemini_key, groq_key)
+    _apply("linkedin_url", fill_linkedin_url,   company_name, ev)
 
     # company_type: only AI fallback — rule classifier already ran
     if not update_data.get("company_type") and not company.get("company_type"):
@@ -461,6 +603,34 @@ def run_second_pass(
 
     desc = update_data.get("description") or company.get("description") or ev.get("description") or ""
 
+    # ── About/Careers subpage collection ─────────────────────────────────────
+    # Fetch /about and /careers pages for additional HQ/founded/employee evidence
+    _website = (ev.get("website_data") or {}).get("_base_url") or company.get("website") or ""
+    if _website:
+        if not _website.startswith("http"):
+            _website = "https://" + _website
+        _base = _website.rstrip("/")
+        _about_text = ""
+        _careers_text = ""
+        for _path in ("/about", "/about-us", "/company/about"):
+            _t = _fetch_page_text(_base + _path)
+            if len(_t) > 200:
+                _about_text = _t
+                break
+        if any(_still_missing(f) for f in ["size"]):
+            for _path in ("/careers", "/jobs", "/join-us", "/work-with-us"):
+                _t = _fetch_page_text(_base + _path)
+                if len(_t) > 200:
+                    _careers_text = _t
+                    break
+        if _about_text:
+            print(f"[second_pass] {company_name} about page: {len(_about_text)} chars", flush=True)
+        if _careers_text:
+            print(f"[second_pass] {company_name} careers page: {len(_careers_text)} chars", flush=True)
+    else:
+        _about_text = ""
+        _careers_text = ""
+
     # Targeted DDGS query per missing field
     _QUERIES = {
         "industry":     f'"{company_name}" industry sector what they do',
@@ -476,7 +646,7 @@ def run_second_pass(
             snippets[field] = snip
             print(f"[second_pass] {company_name} snip for {field}: {snip[:80]}", flush=True)
 
-    if not snippets and len(desc) < 20:
+    if not snippets and len(desc) < 20 and not _about_text and not _careers_text:
         return meta
 
     # Build context for AI batch call
@@ -485,6 +655,10 @@ def run_second_pass(
         ctx_parts.append(f"Description: {desc[:400]}")
     for field, snip in snippets.items():
         ctx_parts.append(f"Search ({field}): {snip}")
+    if _about_text:
+        ctx_parts.append(f"About page: {_about_text[:600]}")
+    if _careers_text:
+        ctx_parts.append(f"Careers page: {_careers_text[:400]}")
     context = "\n".join(ctx_parts)
 
     fields_spec = []
@@ -540,7 +714,7 @@ def run_second_pass(
 # ── Terminal state finaliser ──────────────────────────────────────────────────
 
 _CORE_FIELDS = ["industry", "headquarters", "size", "founded", "description",
-                "specialties", "company_type"]
+                "specialties", "company_type", "linkedin_url"]
 
 
 def finalize_meta(meta: dict, update_data: dict, company: dict) -> dict:
