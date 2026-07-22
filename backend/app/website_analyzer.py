@@ -1105,6 +1105,133 @@ def classify_industry_from_evidence(
     return None
 
 
+# Industries that are almost always delivered as products, never pure services.
+# When website evidence puts a company in one of these verticals but AI/LinkedIn
+# said "Service", trust the website evidence and correct to Product.
+_PRODUCT_INDUSTRIES = {
+    "Financial Technology (FinTech)",
+    "Cybersecurity",
+    "Healthcare Technology",
+    "Education Technology",
+    "E-commerce",
+    "Logistics & Supply Chain",
+    "Real Estate Technology",
+    "Marketing Technology",
+    "Human Resources Technology",
+}
+
+# Business models whose revenue mechanism is incompatible with SaaS subscriptions.
+_NON_SAAS_MODELS = {
+    "Marketplace", "FinTech Platform", "Consulting", "Agency",
+    "Hardware", "Media", "Other",
+}
+
+
+def validate_classification_coherence(
+    company_type: str | None,
+    is_saas: bool | None,
+    business_model: str | None,
+    industry: str | None,
+    industry_source: str = "",
+) -> dict:
+    """Cross-validate that company_type, is_saas, business_model, and industry
+    are mutually consistent.  Called once with the fully-merged values just
+    before writing to the database so that no incoherent combination is persisted.
+
+    Returns:
+        corrections (dict)  — field → corrected value, apply to update_data
+        flags       (list)  — human-readable explanation of each correction
+        confidence_penalty (int) — how much to subtract from type_confidence
+                                   when an incoherence was found
+    """
+    corrections: dict = {}
+    flags: list[str] = []
+    penalty = 0
+
+    ct = (company_type or "").strip()
+    bm = (business_model or "").strip()
+    ind = (industry or "").strip()
+    saas = is_saas  # bool | None
+
+    # ── Rule A: Service companies are never SaaS ──────────────────────────────
+    if ct == "Service" and saas is True:
+        corrections["is_saas"] = False
+        flags.append("A: Service company cannot be SaaS → is_saas corrected to False")
+        saas = False
+        penalty += 10
+
+    # ── Rule B: business_model drives is_saas consistency ────────────────────
+    if bm in _NON_SAAS_MODELS and saas is True:
+        corrections["is_saas"] = False
+        flags.append(
+            f"B: business_model={bm!r} is incompatible with is_saas=True "
+            f"→ is_saas corrected to False"
+        )
+        saas = False
+        penalty += 15
+
+    if bm == "SaaS" and saas is False:
+        corrections["is_saas"] = True
+        flags.append("C: business_model=SaaS but is_saas=False → is_saas corrected to True")
+        saas = True
+        penalty += 5
+
+    # ── Rule D: SaaS label requires Product company type ─────────────────────
+    if bm == "SaaS" and ct == "Service":
+        corrections["company_type"] = "Product"
+        flags.append("D: business_model=SaaS requires company_type=Product → corrected")
+        ct = "Product"
+        penalty += 10
+
+    # ── Rule E: Consulting/Agency label conflicts with Product company type ───
+    if bm in {"Consulting", "Agency"} and ct == "Product":
+        # Flag but don't auto-correct — could be a product company that also
+        # provides implementation services (Hybrid is correct here).
+        flags.append(
+            f"E: business_model={bm!r} conflicts with company_type=Product — "
+            f"consider Hybrid or Service"
+        )
+        penalty += 5
+
+    # ── Rule F: Product-industry + Service type → trust website evidence ──────
+    # When the industry came from website evidence (highest-priority source) and
+    # it is one of the product-native verticals, a Service classification is almost
+    # certainly wrong.  Override to Product and default to SaaS unless a non-SaaS
+    # business model was already detected.
+    if (
+        ind in _PRODUCT_INDUSTRIES
+        and ct == "Service"
+        and industry_source == "website_evidence"
+    ):
+        corrections["company_type"] = "Product"
+        flags.append(
+            f"F: industry={ind!r} (website evidence) is a product vertical — "
+            f"company_type corrected Service→Product"
+        )
+        ct = "Product"
+        penalty += 10
+        # Also flip is_saas unless a contradicting business model is present
+        if bm not in _NON_SAAS_MODELS and saas is not True:
+            corrections["is_saas"] = True
+            flags.append("F: product-vertical company with no non-SaaS signals → is_saas=True")
+            saas = True
+
+    # ── Rule G: FinTech + Consulting/Agency business model — flag as unusual ──
+    if ind == "Financial Technology (FinTech)" and bm in {"Consulting", "Agency"}:
+        flags.append(
+            "G: industry=FinTech with business_model=Consulting/Agency is unusual — "
+            "verify manually"
+        )
+        penalty += 5
+
+    return {
+        "corrections": corrections,
+        "flags": flags,
+        "confidence_penalty": penalty,
+        "is_coherent": len(corrections) == 0 and all("verify manually" not in f for f in flags),
+    }
+
+
 def classify_website_saas(
     website_data: dict | None,
     url: str = "",

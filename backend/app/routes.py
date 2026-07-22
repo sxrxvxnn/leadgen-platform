@@ -2966,6 +2966,30 @@ async def analyze_company_website(
         if result.get("website_summary") and not company.get("description"):
             update_data["description"] = result["website_summary"]
         update_data["is_saas"] = bool(is_saas_val) if is_saas_val is not None else False
+
+        # ── Consistency validator ─────────────────────────────────────────────
+        try:
+            from .website_analyzer import validate_classification_coherence as _vcc
+            _ind_source = "website_evidence" if update_data.get("industry") else ""
+            _vcc_result = _vcc(
+                company_type=update_data.get("company_type") or final_type,
+                is_saas=update_data.get("is_saas"),
+                business_model=result.get("business_model"),
+                industry=update_data.get("industry") or company.get("industry"),
+                industry_source=_ind_source,
+            )
+            for _field, _val in _vcc_result["corrections"].items():
+                update_data[_field] = _val
+                if _field == "company_type":
+                    result["company_type"] = _val
+                    final_type = _val
+            if _vcc_result["flags"]:
+                _existing_reason = classification_reason or ""
+                _flag_note = " | coherence: " + "; ".join(_vcc_result["flags"])
+                classification_reason = (_existing_reason + _flag_note).strip(" | ")
+        except Exception:
+            pass
+
         update_data["type_reason"] = classification_reason
         update_data["type_confidence"] = result["type_confidence"]
 
@@ -5163,6 +5187,26 @@ async def bulk_autofill_companies(
             _is_saas_stored = company.get("is_saas")
             if _ct_final == "Service" and _is_saas_stored is True and not _is_saas_in_update:
                 update_data["is_saas"] = False
+
+            # ── Consistency validator ─────────────────────────────────────────
+            try:
+                from .website_analyzer import validate_classification_coherence as _vcc_bulk
+                _bulk_ind = update_data.get("industry") or company.get("industry")
+                _bulk_ind_source = "website_evidence" if "industry" in update_data else ""
+                _vcc_bulk_res = _vcc_bulk(
+                    company_type=_ct_final,
+                    is_saas=update_data.get("is_saas", company.get("is_saas")),
+                    business_model=update_data.get("business_model") or company.get("business_model"),
+                    industry=_bulk_ind,
+                    industry_source=_bulk_ind_source,
+                )
+                for _fld, _v in _vcc_bulk_res["corrections"].items():
+                    update_data[_fld] = _v
+                if _vcc_bulk_res["flags"]:
+                    _existing_br = " | ".join(_bulk_reason_parts)
+                    _bulk_reason_parts.append("coherence: " + "; ".join(_vcc_bulk_res["flags"]))
+            except Exception:
+                pass
 
             # HQ normalization: add country when only city is provided for Indian cities
             _HQ_CITY_NORM = {
