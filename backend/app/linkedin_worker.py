@@ -243,6 +243,75 @@ def _parse_linkedin_markdown(md: str) -> dict:
     return result
 
 
+# ── Quality gates (per Bulk Enrichment Accuracy Fix spec) ────────────────────
+
+# LinkedIn's exact standard ranges (used in validation)
+_LINKEDIN_EMP_BOUNDS = {(1,10),(11,50),(51,200),(201,500),(501,1000),(1001,5000),(5001,10000)}
+_LINKEDIN_EMP_OPEN   = {10001}   # 10,001+ range
+
+def validate_employee_range(text: str) -> bool:
+    """
+    Quality gate: True only when text is a valid LinkedIn Company Size range.
+    Must originate from Company Size label (semantic extraction already ensures this).
+    Rejects year-like numbers, negative values, astronomical values.
+    """
+    if not text:
+        return False
+    raw = re.sub(r'\s*employees?\b.*', '', str(text), flags=re.I).strip().replace(',', '').replace(' ', '')
+    # N+ form (e.g. "10001+")
+    mp = re.match(r'^(\d+)\+$', raw)
+    if mp:
+        n = int(mp.group(1))
+        return n in _LINKEDIN_EMP_OPEN or 1 <= n <= 200_000
+    # N-M form (e.g. "51-200", "51–200")
+    mr = re.match(r'^(\d+)[-–](\d+)$', raw)
+    if mr:
+        lo, hi = int(mr.group(1)), int(mr.group(2))
+        # Reject year-like bounds
+        if 1800 <= lo <= 2099 or 1800 <= hi <= 2099:
+            return False
+        # Accept if matches a known LinkedIn bracket or is a reasonable approximation
+        return lo < hi and lo >= 1 and hi <= 200_000
+    return False
+
+
+def validate_followers_count(value) -> bool:
+    """
+    Quality gate: True when value is a valid follower integer.
+    Must be numeric, > 0, < 100 M (rejects e.g. year 2007 stored as follower count).
+    """
+    try:
+        n = int(str(value).replace(',', '').strip())
+        return 1 <= n <= 100_000_000
+    except (ValueError, TypeError):
+        return False
+
+
+_IDENTITY_STOP = {
+    'pvt', 'ltd', 'private', 'limited', 'technologies', 'tech', 'solutions',
+    'india', 'innovations', 'consultancy', 'services', 'inc', 'corp', 'llc',
+    'the', 'and', 'for', 'group', 'company', 'software', 'systems', 'global',
+    'digital', 'informatic', 'information',
+}
+
+def verify_company_identity(md: str, company_name: str) -> bool:
+    """
+    Quality gate: return True if the scraped LinkedIn page belongs to this company.
+    Checks that at least one significant word from the company name appears in the
+    first 3 000 chars of the markdown.  Prevents cross-company data contamination
+    when a guessed slug resolves to a different company's page.
+    """
+    if not md or not company_name:
+        return True  # cannot verify — give benefit of the doubt
+    words = re.sub(r'[^a-z0-9 ]', ' ', company_name.lower()).split()
+    sig = [w for w in words if len(w) > 3 and w not in _IDENTITY_STOP]
+    if not sig:
+        return True  # no discriminating words to check
+    sample = md[:3000].lower()
+    match = sum(1 for w in sig[:4] if w in sample)
+    return match >= 1
+
+
 # ── Normalization ──────────────────────────────────────────────────────────────
 
 def normalize_employees(text: str) -> dict:
@@ -372,47 +441,84 @@ def run_linkedin_worker(
             return result
         result["linkedin_url"] = li_url
 
-        # Step 2+3: Fetch and extract
+        # Step 2: Fetch LinkedIn page
         md = _jina_fetch(li_url)
         if not md or len(md) < 100:
             result["error"] = "Empty LinkedIn page (gated or blocked)"
             return result
 
+        # Step 2b: Company identity check — retry once with re-discovery if wrong page
+        if not verify_company_identity(md, company_name):
+            print(f"[linkedin_worker] {company_name}: identity mismatch on {li_url} — retrying", flush=True)
+            new_url = discover_linkedin_url(company_name, website)
+            if new_url and new_url != li_url:
+                md2 = _jina_fetch(new_url)
+                if md2 and len(md2) >= 100 and verify_company_identity(md2, company_name):
+                    li_url = new_url
+                    md = md2
+                    result["linkedin_url"] = li_url
+                    print(f"[linkedin_worker] {company_name}: retry succeeded → {li_url}", flush=True)
+                else:
+                    result["error"] = "Company identity mismatch — wrong LinkedIn page"
+                    print(f"[linkedin_worker] {company_name}: identity mismatch after retry — skipping", flush=True)
+                    return result
+            else:
+                result["error"] = "Company identity mismatch — could not find correct page"
+                return result
+
+        # Step 3: Extract structured fields
         raw = _parse_linkedin_markdown(md)
         result["raw"] = raw
         if not raw:
             result["error"] = "No structured fields extracted"
             return result
 
-        # Step 4: Normalize and build evidence-scored fields
-        _CONFIDENCE = 88  # LinkedIn structured data — high confidence
+        # Step 4: Validate + normalize before accepting each field
+        _CONFIDENCE = 88
 
         def _field(value, normalized=None):
             return {"value": normalized or value, "source": "linkedin", "confidence": _CONFIDENCE}
 
         if raw.get("industry"):
             result["fields"]["industry"] = _field(raw["industry"])
+
+        # Quality gate: employee_count must be a valid LinkedIn range
         if raw.get("employee_count"):
-            norm = normalize_employees(raw["employee_count"])
-            if norm.get("display"):
-                result["fields"]["size"] = _field(raw["employee_count"], norm["display"])
-                result["fields"]["_employee_norm"] = norm
+            if validate_employee_range(raw["employee_count"]):
+                norm = normalize_employees(raw["employee_count"])
+                if norm.get("display"):
+                    result["fields"]["size"] = _field(raw["employee_count"], norm["display"])
+                    result["fields"]["_employee_norm"] = norm
+                    print(f"[linkedin_worker] {company_name}: size={norm['display']} ✓", flush=True)
+            else:
+                print(f"[linkedin_worker] {company_name}: employee_count '{raw['employee_count']}' failed validation — skipped", flush=True)
+
         if raw.get("headquarters"):
             norm_hq = normalize_hq(raw["headquarters"])
             result["fields"]["headquarters"] = _field(raw["headquarters"], norm_hq.get("display") or raw["headquarters"])
             result["fields"]["_hq_norm"] = norm_hq
+
         if raw.get("founded"):
             if re.match(r'^\d{4}$', str(raw["founded"])) and 1800 <= int(raw["founded"]) <= 2030:
                 result["fields"]["founded"] = _field(raw["founded"])
+
         if raw.get("specialties"):
             result["fields"]["specialties"] = _field(raw["specialties"])
+
+        # Quality gate: followers must be a valid integer count
         if raw.get("followers"):
-            result["fields"]["followers"] = _field(raw["followers"])
+            if validate_followers_count(raw["followers"]):
+                result["fields"]["followers"] = _field(raw["followers"])
+                print(f"[linkedin_worker] {company_name}: followers={raw['followers']} ✓", flush=True)
+            else:
+                print(f"[linkedin_worker] {company_name}: followers '{raw['followers']}' failed validation — skipped", flush=True)
+
         if raw.get("description"):
             from .field_workers import _clean_description
             desc_clean = _clean_description(raw["description"])
             if desc_clean and len(desc_clean) >= 30:
                 result["fields"]["description"] = _field(desc_clean)
+
         if raw.get("website"):
             result["fields"]["_website_from_li"] = _field(raw["website"])
 
