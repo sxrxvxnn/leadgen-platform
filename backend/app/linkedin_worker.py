@@ -164,12 +164,24 @@ def _parse_linkedin_markdown(md: str) -> dict:
                 return m.group(1).strip().rstrip('*').strip()
         return None
 
-    # Followers
-    fm = re.search(r'([\d,]+(?:\.\d+)?[KkMm]?)\s*followers', md, re.I)
-    if fm:
-        raw = fm.group(1).replace(',', '')
+    # Followers — must be adjacent to "followers" label; capture only label-bound value
+    # Prefer "Followers\n4,372 followers" or "**4,372** followers" over bare numbers
+    _fol_m = re.search(
+        r'(?:^|\n)\s*\*{0,2}Followers?\*{0,2}\s*[:\n]\s*\*{0,2}([\d,]+(?:\.\d+)?[KkMm]?)\*{0,2}\s*followers?',
+        md, re.I | re.M
+    )
+    if not _fol_m:
+        # Fallback: number immediately followed by "followers" (still label-adjacent)
+        _fol_m = re.search(r'\*{0,2}([\d,]+(?:\.\d+)?[KkMm]?)\*{0,2}\s*followers?', md, re.I)
+    if _fol_m:
+        raw = _fol_m.group(1).replace(',', '')
         km = re.match(r'^([\d.]+)([KkMm])$', raw)
         result['followers'] = str(int(float(km.group(1)) * (1_000_000 if km.group(2).upper() == 'M' else 1_000))) if km else raw
+
+    # LinkedIn members (associated members — stored separately, never used as employee count)
+    _mem_m = re.search(r'([\d,]+)\s+associated\s+members?', md, re.I)
+    if _mem_m:
+        result['linkedin_members'] = _mem_m.group(1).replace(',', '')
 
     # Industry
     result['industry'] = _match([
@@ -178,12 +190,11 @@ def _parse_linkedin_markdown(md: str) -> dict:
         r'\*{1,2}Industry\*{1,2}\s*:?\s*\n?\s*([A-Z][^\n*]{2,80}?)(?:\n|$)',
     ], md)
 
-    # Company size (employee range)
+    # Company size — ONLY from "Company size" label; never from loose employee mentions
     result['employee_count'] = _match([
         r'Company\s*size\s*[:\|]\s*([\d,\s\-–]+\+?\s*employees)',
         r'Company\s*size\s*\n\s*([\d,\s\-–]+\+?\s*employees)',
-        r'([\d,]+\s*[-–]\s*[\d,]+\s*employees)',
-        r'([\d,]+\+?\s*employees)',
+        r'\*{1,2}Company\s*size\*{1,2}\s*:?\s*\n?\s*([\d,\s\-–]+\+?\s*employees)',
     ], md)
 
     # Headquarters
@@ -199,8 +210,11 @@ def _parse_linkedin_markdown(md: str) -> dict:
                 result['headquarters'] = val
                 break
 
-    # Founded
-    ft = _match([r'Founded\s*[:\|]?\s*(\d{4})'], md)
+    # Founded — handles "Founded: 2007", "Founded\n2007", "**Founded**\n2007"
+    ft = _match([
+        r'Founded\s*[:\|]\s*(\d{4})',
+        r'Founded\*{0,2}\s*\n\s*\*{0,2}(\d{4})',
+    ], md)
     if ft:
         result['founded'] = ft
 

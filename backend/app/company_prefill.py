@@ -445,11 +445,22 @@ def _jina_fetch_linkedin_md(url: str) -> str:
 def _parse_jina_linkedin_md(md: str, result: dict) -> None:
     """Parse Jina markdown of a LinkedIn company page, filling missing fields in result."""
     if not result.get('followers'):
-        m = re.search(r'([\d,]+(?:\.\d+)?[KkMm]?)\s*followers', md, re.I)
+        # Prefer label-anchored: "Followers\n4,372 followers" or "**4,372** followers"
+        m = re.search(
+            r'(?:^|\n)\s*\*{0,2}Followers?\*{0,2}\s*[:\n]\s*\*{0,2}([\d,]+(?:\.\d+)?[KkMm]?)\*{0,2}\s*followers?',
+            md, re.I | re.M
+        )
+        if not m:
+            m = re.search(r'\*{0,2}([\d,]+(?:\.\d+)?[KkMm]?)\*{0,2}\s*followers?', md, re.I)
         if m:
             raw = m.group(1).strip().replace(',', '')
             km = re.match(r'^([\d.]+)([KkMm])$', raw)
             result['followers'] = str(int(float(km.group(1)) * (1_000_000 if km.group(2).upper()=='M' else 1_000))) if km else raw
+
+    if not result.get('linkedin_members'):
+        mm = re.search(r'([\d,]+)\s+associated\s+members?', md, re.I)
+        if mm:
+            result['linkedin_members'] = mm.group(1).replace(',', '')
 
     if not result.get('industry'):
         # Same-line: "Industry: Software Development"
@@ -464,15 +475,12 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
             result['industry'] = m.group(1).strip().rstrip('*').strip()
 
     if not result.get('employee_count'):
-        # Same-line: "Company size: 51-200 employees"
+        # ONLY extract from Company size label — never from loose "N employees" mentions
         m = re.search(r'Company\s*size\s*[:\|]\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
         if not m:
-            # Next-line: "Company size\n51-200 employees"
             m = re.search(r'Company\s*size\s*\n\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
         if not m:
-            m = re.search(r'([\d,]+\s*[-–]\s*[\d,]+\s*employees)', md, re.I)
-        if not m:
-            m = re.search(r'([\d,]+\+?\s*employees)', md, re.I)
+            m = re.search(r'\*{1,2}Company\s*size\*{1,2}\s*:?\s*\n?\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
         if m:
             result['employee_count'] = m.group(1).strip()
 
@@ -501,7 +509,9 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
                 result['location'] = val
 
     if not result.get('founded'):
-        m = re.search(r'Founded\s*[:\|]?\s*(\d{4})', md, re.I)
+        m = re.search(r'Founded\s*[:\|]\s*(\d{4})', md, re.I)
+        if not m:
+            m = re.search(r'Founded\*{0,2}\s*\n\s*\*{0,2}(\d{4})', md, re.I)
         if m:
             result['founded'] = m.group(1)
 
