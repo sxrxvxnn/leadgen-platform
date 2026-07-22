@@ -2843,6 +2843,36 @@ async def analyze_company_website(
         else:
             result["company_type_confidence"] = "AI"
 
+        # ── Service evidence guard ─────────────────────────────────────────
+        # "Service" requires explicit service language (consulting, agency, etc.).
+        # If AI returned "Service" but the page/description has no such vocabulary,
+        # override to "Product" — tech startups with sparse/SPA websites are almost
+        # always products, not service firms. This prevents JS-heavy apps (FinTech,
+        # personal finance SPAs, etc.) from being misclassified as Service.
+        if final_type == "Service" and rule_confidence not in ("High", "Medium"):
+            _srv_ev = [
+                'consulting', 'consultancy', 'outsourcing', 'staff augmentation',
+                'agency', 'digital agency', 'marketing agency', 'creative agency',
+                'request a quote', 'get a quote', 'request a proposal',
+                'managed services', 'client projects', 'case studies',
+                'professional services', 'implementation services', 'we build for',
+                'philanthropic', 'grant-making', 'nonprofit', 'non-profit',
+                'hire developers', 'hire our team', 'dedicated team',
+                'it consulting', 'technology consulting',
+                'digital transformation services', 'software development services',
+                'system integration', 'offshore development',
+            ]
+            _svc_page = " ".join(filter(None, [
+                (website_data.get("full_text", "") if website_data else ""),
+                (website_data.get("meta_description", "") if website_data else ""),
+                (website_data.get("title", "") if website_data else ""),
+                company.get("description", ""),
+            ])).lower()
+            if not any(w in _svc_page for w in _srv_ev):
+                final_type = "Product"
+                result["company_type"] = "Product"
+                result["company_type_confidence"] = "Inferred"
+
         # ── is_saas determination ──────────────────────────────────
         # Logic: SaaS = product delivered over internet with recurring billing.
         # Key insight: web login and mobile apps ARE the delivery mechanism.
@@ -5292,6 +5322,28 @@ async def bulk_analyze_companies(
             ai_type = ai_result.get("company_type", "")
             if ai_type == "Services": ai_type = "Service"
             final_type = rule_type if rule_confidence in ("High", "Medium") and rule_type else (ai_type or rule_type)
+
+            # Service evidence guard (mirrors single-company analyze logic)
+            if final_type == "Service" and rule_confidence not in ("High", "Medium"):
+                _be_srv = [
+                    'consulting', 'consultancy', 'outsourcing', 'staff augmentation',
+                    'agency', 'digital agency', 'marketing agency', 'creative agency',
+                    'request a quote', 'get a quote', 'managed services', 'client projects',
+                    'case studies', 'professional services', 'implementation services',
+                    'we build for', 'philanthropic', 'grant-making', 'nonprofit',
+                    'hire developers', 'dedicated team', 'it consulting',
+                    'technology consulting', 'digital transformation services',
+                    'software development services', 'system integration',
+                ]
+                _be_page = " ".join(filter(None, [
+                    (website_data.get("full_text", "") if website_data else ""),
+                    (website_data.get("meta_description", "") if website_data else ""),
+                    (website_data.get("title", "") if website_data else ""),
+                    company.get("description", ""),
+                ])).lower()
+                if not any(w in _be_page for w in _be_srv):
+                    final_type = "Product"
+                    ai_result["company_type"] = "Product"
 
             # Merge compliance
             scraped_compliance = website_data.get("compliance_detected") or []
