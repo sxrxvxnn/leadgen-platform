@@ -2773,6 +2773,21 @@ async def analyze_company_website(
                 except Exception:
                     pass
 
+        # ── Step 1d: Evidence-based industry classification ───────────────────
+        # Derives business industry from website/product signals before any AI or
+        # LinkedIn data runs. This is the highest-priority industry source.
+        try:
+            from .website_analyzer import classify_industry_from_evidence as _cls_ind_sa
+            _sa_industry = _cls_ind_sa(
+                website_data,
+                company.get("description", ""),
+                company.get("tagline", ""),
+            )
+            if _sa_industry:
+                update_data["industry"] = _sa_industry
+        except Exception:
+            pass
+
         # ── Step 2: rule-based product/service classification ──────
         # Don't pass company description to classifier if it came from a potentially wrong
         # LinkedIn match — trust website signals over stored description text.
@@ -3383,9 +3398,13 @@ async def autofill_company_from_linkedin(
             # knows "we looked and found nothing" vs "we never checked"
             update_data["linkedin_website"] = ""
 
-        # Save raw LinkedIn industry value (always overwrite — Fill LI is authoritative)
+        # LinkedIn's raw category is lowest-priority for industry — only use as fallback.
+        # Website-evidence-derived industry (classify_industry_from_evidence) should
+        # already be in update_data["industry"] when it runs before this point.
+        # Never overwrite a website-evidence industry with LinkedIn's generic category.
         if li.get("industry"):
-            update_data["industry"] = li["industry"]
+            if not update_data.get("industry") and not company.get("industry"):
+                update_data["industry"] = li["industry"]
 
         # Classification from LinkedIn industry (mirrors _LI_CLASS_MAP in _autofill_one)
         current_class = company.get("classification") or "Unclassified"
@@ -4511,6 +4530,23 @@ async def bulk_autofill_companies(
                     update_data["revenue_model"]   = _cls.get("revenue_model", "")
                     update_data["delivery_model"]  = _cls.get("delivery_model", "")
 
+            # ── Step 3d: Evidence-based industry classification ──────────────────
+            # Derives business industry from website/product evidence.
+            # Runs BEFORE LinkedIn enrichment so website evidence (highest priority)
+            # fills the industry field first — LinkedIn's raw category never overwrites it.
+            try:
+                from .website_analyzer import classify_industry_from_evidence as _cls_ind
+                _ev_desc = _fw_clean_desc(
+                    update_data.get("description") or company.get("description") or ""
+                )
+                _ev_tagline = update_data.get("tagline") or company.get("tagline") or ""
+                _ev_industry = _cls_ind(website_data, _ev_desc, _ev_tagline)
+                if _ev_industry:
+                    update_data["industry"] = _track("industry", _ev_industry, "website_evidence")
+                    print(f"[classify] {company_name}: industry={_ev_industry} (website evidence)", flush=True)
+            except Exception:
+                pass
+
             # ── Step 4: LinkedIn URL ──────────────────────────────────────────────
             # li_url_confirmed = URLs from real sources (stored / website HTML)
             # li_url           = also includes name-guessed slug for lookups only
@@ -4705,8 +4741,21 @@ async def bulk_autofill_companies(
                             update_data["tagline"] = li_res["tagline"]
                         if li_res.get("industry") and li_res["industry"].strip().lower() not in _BAD_IND \
                                 and _is_valid_industry(li_res["industry"]):
-                            update_data["industry"] = _track("industry", li_res["industry"], "linkedin_page")
-                            _ind = li_res["industry"].lower()
+                            _li_raw_ind = li_res["industry"]
+                            # Store LinkedIn's raw category in enrichment_meta for reference.
+                            # LinkedIn uses its own internal category system ("Technology,
+                            # Information and Internet", "Software Development") which is NOT
+                            # the same as business industry. Never let it overwrite a
+                            # website-evidence-derived industry (highest priority source).
+                            _meta["linkedin_industry"] = {
+                                "value": _li_raw_ind,
+                                "confidence": 60,
+                                "source": "linkedin_page",
+                            }
+                            # Only fill industry from LinkedIn when evidence engine found nothing
+                            if not update_data.get("industry") and not company.get("industry"):
+                                update_data["industry"] = _track("industry", _li_raw_ind, "linkedin_page")
+                            _ind = _li_raw_ind.lower()
                             _mapped = next((v for k, v in _LI_MAP.items() if k in _ind), None)
                             if _mapped and (not company.get("classification") or
                                             company.get("classification") == "Unclassified"):
