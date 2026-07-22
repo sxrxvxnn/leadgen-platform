@@ -471,6 +471,9 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
         if not m:
             # Bold variant
             m = re.search(r'\*{1,2}Industry\*{1,2}\s*:?\s*\n?\s*([A-Z][^\n*]{2,80}?)(?:\n|$)', md, re.I | re.M)
+        if not m:
+            # Double-space format (LinkedIn 2025): " Industry  Technology, Information and Internet "
+            m = re.search(r'(?:^|\n)\s*Industry\s{2,}(.+?)(?:\s*\n|$)', md, re.I | re.M)
         if m:
             result['industry'] = m.group(1).strip().rstrip('*').strip()
 
@@ -481,6 +484,9 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
             m = re.search(r'Company\s*size\s*\n\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
         if not m:
             m = re.search(r'\*{1,2}Company\s*size\*{1,2}\s*:?\s*\n?\s*([\d,\s\-–]+\+?\s*employees)', md, re.I)
+        if not m:
+            # Double-space format: " Company size  11-50 employees "
+            m = re.search(r'(?:^|\n)\s*Company\s+size\s{2,}([\d,\s\-–]+\+?\s*employees)', md, re.I | re.M)
         if m:
             result['employee_count'] = m.group(1).strip()
 
@@ -523,16 +529,22 @@ def _parse_jina_linkedin_md(md: str, result: dict) -> None:
                 result['specialties'] = val
 
     if not result.get('website'):
-        m = re.search(r'Website\s*[:\|]?\s*(https?://[^\s\)>\]]+)', md, re.I)
+        m = re.search(r'Website\s*[:\|]?\s*(https?://[^\s\[\)>\]]+)', md, re.I)
         if not m:
             m = re.search(r'Website\s*[:\|]?\s*\[([^\]]+)\]\((https?://[^\)]+)\)', md, re.I)
         if m:
-            ws = m.group(2) if m.lastindex and m.lastindex >= 2 else m.group(1)
+            if m.lastindex and m.lastindex >= 2:
+                href, display = m.group(2), m.group(1)
+                # LinkedIn wraps external URLs in redir links — use display text
+                ws = display if 'linkedin.com' in href else href
+            else:
+                ws = m.group(1)
+            ws = ws.split('?')[0] if '?trk=' in ws else ws
             if ws and 'linkedin.com' not in ws:
                 result['website'] = ws
 
     if not result.get('description'):
-        m = re.search(r'(?:About us|Overview|About)\s*\n+(.{30,500}?)(?:\n\n|\n##|$)', md, re.I | re.S)
+        m = re.search(r'(?:About us|Overview|About)\s*\n+(.{30,800}?)(?:\n\n|\n##|\Z)', md, re.I | re.S)
         if m:
             result['description'] = _html.unescape(m.group(1).strip())
 

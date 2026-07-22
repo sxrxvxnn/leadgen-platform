@@ -188,6 +188,8 @@ def _parse_linkedin_markdown(md: str) -> dict:
         r'(?:^|\n)\s*[*\-]?\s*Industry\s*[:\|]\s*(.+?)(?:\n|$)',
         r'\bIndustry\b\s*\n\s*([A-Z][^\n]{2,80}?)(?:\n|$)',
         r'\*{1,2}Industry\*{1,2}\s*:?\s*\n?\s*([A-Z][^\n*]{2,80}?)(?:\n|$)',
+        # Double-space format: " Industry  Technology, Information and Internet "
+        r'(?:^|\n)\s*Industry\s{2,}(.+?)(?:\s*\n|$)',
     ], md)
 
     # Company size — ONLY from "Company size" label; never from loose employee mentions
@@ -195,6 +197,8 @@ def _parse_linkedin_markdown(md: str) -> dict:
         r'Company\s*size\s*[:\|]\s*([\d,\s\-–]+\+?\s*employees)',
         r'Company\s*size\s*\n\s*([\d,\s\-–]+\+?\s*employees)',
         r'\*{1,2}Company\s*size\*{1,2}\s*:?\s*\n?\s*([\d,\s\-–]+\+?\s*employees)',
+        # Double-space format: " Company size  11-50 employees "
+        r'(?:^|\n)\s*Company\s+size\s{2,}([\d,\s\-–]+\+?\s*employees)',
     ], md)
 
     # Headquarters
@@ -226,16 +230,25 @@ def _parse_linkedin_markdown(md: str) -> dict:
             result['specialties'] = val
 
     # Website
-    wm = re.search(r'Website\s*[:\|]?\s*(https?://[^\s\)>\]]+)', md, re.I)
+    # LinkedIn wraps external URLs in redir: [https://example.com](https://linkedin.com/redir/...?url=https://...)
+    # When the href is a LinkedIn redirect, use the display text (group 1) instead.
+    wm = re.search(r'Website\s*[:\|]?\s*(https?://[^\s\[\)>\]]+)', md, re.I)
     if not wm:
         wm = re.search(r'Website\s*[:\|]?\s*\[([^\]]+)\]\((https?://[^\)]+)\)', md, re.I)
     if wm:
-        ws = wm.group(2) if wm.lastindex and wm.lastindex >= 2 else wm.group(1)
+        if wm.lastindex and wm.lastindex >= 2:
+            href, display = wm.group(2), wm.group(1)
+            # LinkedIn redir URLs contain the real URL as query param — use display text
+            ws = display if 'linkedin.com' in href else href
+        else:
+            ws = wm.group(1)
+        # Final safety: strip any trailing LinkedIn tracking junk, ensure not a LI URL
+        ws = ws.split('?')[0] if '?trk=' in ws else ws
         if ws and 'linkedin.com' not in ws:
             result['website'] = ws
 
-    # Overview / About description
-    dm = re.search(r'(?:About us|Overview|About)\s*\n+(.{30,500}?)(?:\n\n|\n##|$)', md, re.I | re.S)
+    # Overview / About description (cap at 800 chars — some companies write long About sections)
+    dm = re.search(r'(?:About us|Overview|About)\s*\n+(.{30,800}?)(?:\n\n|\n##|\Z)', md, re.I | re.S)
     if dm:
         import html as _html
         result['description'] = _html.unescape(dm.group(1).strip())
