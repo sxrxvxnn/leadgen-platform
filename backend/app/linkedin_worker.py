@@ -297,19 +297,38 @@ _IDENTITY_STOP = {
 def verify_company_identity(md: str, company_name: str) -> bool:
     """
     Quality gate: return True if the scraped LinkedIn page belongs to this company.
-    Checks that at least one significant word from the company name appears in the
-    first 3 000 chars of the markdown.  Prevents cross-company data contamination
-    when a guessed slug resolves to a different company's page.
+
+    Rules (in order of strictness):
+    - 2+ significant words: at least 1 must appear near the top of the page
+      (first 600 chars — the company name/tagline area), OR 2+ must appear
+      anywhere in the first 3 000 chars.
+    - 1 significant word: the word must appear in the FIRST 600 chars
+      (the company name / headline region) — not just anywhere on the page.
+      This prevents single-word names like "Safebox" from matching a page that
+      merely mentions the word in passing as a product or feature.
+    - 0 significant words: cannot verify, give benefit of the doubt.
+
+    Note: website domain cross-check (_domains_match) is the STRONGER gate and
+    runs separately in run_linkedin_worker after raw field extraction.
     """
     if not md or not company_name:
-        return True  # cannot verify — give benefit of the doubt
+        return True
     words = re.sub(r'[^a-z0-9 ]', ' ', company_name.lower()).split()
     sig = [w for w in words if len(w) > 3 and w not in _IDENTITY_STOP]
     if not sig:
-        return True  # no discriminating words to check
-    sample = md[:3000].lower()
-    match = sum(1 for w in sig[:4] if w in sample)
-    return match >= 1
+        return True
+
+    headline = md[:600].lower()   # company name / tagline area
+    full_sample = md[:3000].lower()
+
+    if len(sig) == 1:
+        # Single discriminating word: must appear in the headline region
+        return sig[0] in headline
+
+    # Multiple words: at least 1 in headline, OR 2+ anywhere in first 3 000 chars
+    headline_match = sum(1 for w in sig[:4] if w in headline)
+    full_match = sum(1 for w in sig[:4] if w in full_sample)
+    return headline_match >= 1 or full_match >= 2
 
 
 # ── Normalization ──────────────────────────────────────────────────────────────
@@ -396,6 +415,28 @@ def normalize_hq(text: str) -> dict:
     }
 
 
+# ── Domain helpers ───────────────────────────────────────────────────────────
+
+def _root_domain(url: str) -> str:
+    """Return the root domain (e.g. 'safebox.life') from any URL or bare domain."""
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlparse
+        h = urlparse(url if "://" in url else "https://" + url).netloc
+        h = h.lower().replace("www.", "").split(":")[0]
+        parts = h.split(".")
+        return ".".join(parts[-2:]) if len(parts) >= 2 else h
+    except Exception:
+        return ""
+
+
+def _domains_match(url_a: str, url_b: str) -> bool:
+    """True when two URLs share the same root domain."""
+    a, b = _root_domain(url_a), _root_domain(url_b)
+    return bool(a and b and a == b)
+
+
 # ── Main worker ───────────────────────────────────────────────────────────────
 
 def run_linkedin_worker(
@@ -472,6 +513,24 @@ def run_linkedin_worker(
         if not raw:
             result["error"] = "No structured fields extracted"
             return result
+
+        # Step 3b: Website domain cross-check (strongest identity gate)
+        # If the LinkedIn page lists a website that doesn't match the company's
+        # known website, this is the wrong page — reject immediately.
+        # Example: searching for "Safebox" finds Beagle Security's page which
+        # lists beaglesecurity.com — domain mismatch → reject all data.
+        li_listed_website = raw.get("website", "")
+        if li_listed_website and website:
+            if not _domains_match(li_listed_website, website):
+                li_dom = _root_domain(li_listed_website)
+                co_dom = _root_domain(website)
+                result["error"] = f"Wrong LinkedIn page: page site={li_dom}, company site={co_dom}"
+                print(
+                    f"[linkedin_worker] {company_name}: DOMAIN MISMATCH "
+                    f"linkedin_site={li_dom} vs company_site={co_dom} — rejecting {li_url}",
+                    flush=True,
+                )
+                return result
 
         # Step 4: Validate + normalize before accepting each field
         _CONFIDENCE = 88

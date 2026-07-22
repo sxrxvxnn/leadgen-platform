@@ -418,6 +418,66 @@ def fetch_website_content(url: str, fast: bool = False) -> dict:
         return None
 
 
+def fetch_extended_evidence(base_url: str, website_data: dict) -> dict:
+    """Fetch key subpages when homepage evidence is weak and merge signals.
+
+    Tries /pricing, /plans, /features, /product, /about in order.
+    Stops once pricing signals are found.  Uses fast=True (no Firecrawl)
+    to keep latency low — subpages are a quick HTTP pass only.
+
+    Returns the updated website_data dict (mutates in place and returns it).
+    """
+    if not base_url:
+        return website_data
+
+    try:
+        from urllib.parse import urlparse as _up
+        parsed = _up(base_url if "://" in base_url else "https://" + base_url)
+        base = f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return website_data
+
+    _SUBPAGES = [
+        "/pricing", "/plans", "/plan",
+        "/features", "/feature",
+        "/product", "/products",
+        "/about", "/about-us",
+        "/security", "/compliance",
+    ]
+
+    extra_text = ""
+    for path in _SUBPAGES:
+        if website_data.get("has_pricing_detected") and len(extra_text) > 3000:
+            break
+        try:
+            sub = fetch_website_content(base + path, fast=True)
+            if not sub or len(sub.get("full_text", "")) < 100:
+                continue
+            extra_text += " " + sub["full_text"][:1500]
+            if sub.get("has_pricing_detected"):
+                website_data["has_pricing_detected"] = True
+                website_data["pricing"] = (
+                    (website_data.get("pricing") or "") + " " + sub.get("pricing", "")
+                ).strip()
+            if sub.get("has_login_detected"):
+                website_data["has_login_detected"] = True
+            if sub.get("has_web_app_link"):
+                website_data["has_web_app_link"] = True
+            if sub.get("compliance_detected"):
+                existing = website_data.get("compliance_detected") or []
+                merged = list(dict.fromkeys(existing + sub["compliance_detected"]))
+                website_data["compliance_detected"] = merged
+        except Exception:
+            continue
+
+    if extra_text.strip():
+        website_data["full_text"] = (
+            (website_data.get("full_text") or "") + extra_text
+        )[:6000]
+
+    return website_data
+
+
 def build_content_block(website_data: dict) -> str:
     """Build the sanitized website content section for the AI prompt."""
     return (
