@@ -4619,10 +4619,20 @@ async def bulk_autofill_companies(
                         # Gate 1: website domain cross-check (strongest signal)
                         # If the LinkedIn page lists a website that doesn't match
                         # the company's website, this is the wrong page — discard all.
+                        # Also reject when LinkedIn page has NO website listed but our
+                        # target has one — can't verify it's the right company.
                         _li_page_website = li_res.get("website", "")
                         _co_website = company.get("website") or ws_url or ""
                         _domain_gate_ok = True
-                        if _li_page_website and _co_website:
+                        if _co_website and not _li_page_website:
+                            # LinkedIn page lists no website — unverifiable against our target
+                            _domain_gate_ok = False
+                            print(
+                                f"[bulk_enrich] {company_name}: UNVERIFIABLE — LinkedIn page {li_url} "
+                                f"has no website listed but target={_li_root_dom(_co_website)} — discarding",
+                                flush=True,
+                            )
+                        elif _li_page_website and _co_website:
                             if not _li_domains_match(_li_page_website, _co_website):
                                 _domain_gate_ok = False
                                 print(

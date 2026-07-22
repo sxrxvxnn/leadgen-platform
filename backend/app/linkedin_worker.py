@@ -520,6 +520,21 @@ def run_linkedin_worker(
         # Example: searching for "Safebox" finds Beagle Security's page which
         # lists beaglesecurity.com — domain mismatch → reject all data.
         li_listed_website = raw.get("website", "")
+        if website and not li_listed_website:
+            # Target has a known website but LinkedIn page lists nothing.
+            # Without a website to cross-check, we cannot confirm this is the right
+            # company — there may be many companies sharing the same name on LinkedIn.
+            # Reject to prevent cross-company data contamination.
+            result["error"] = (
+                f"LinkedIn page lists no website — cannot verify identity "
+                f"against target domain {_root_domain(website)}"
+            )
+            print(
+                f"[linkedin_worker] {company_name}: UNVERIFIABLE — {li_url} "
+                f"has no website listed but target={_root_domain(website)} — rejecting",
+                flush=True,
+            )
+            return result
         if li_listed_website and website:
             if not _domains_match(li_listed_website, website):
                 li_dom = _root_domain(li_listed_website)
