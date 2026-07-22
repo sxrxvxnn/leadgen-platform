@@ -329,6 +329,18 @@ CASES = [
         True, "Product", "SaaS",
     ),
     (
+        "Safebox-SPA",
+        "",
+        _page(
+            full_text="",
+            title="",
+            meta="SEBI-regulated. Organise investments, insurance, and documents in one secure place. Give your family access so they are never left searching.",
+        ),
+        "https://safebox.life",
+        "",
+        True, "Product", "SaaS",
+    ),
+    (
         "Mobile P2P Lender",
         "Peer-to-peer lending app for investors and borrowers. Transaction fee on loans.",
         _page(

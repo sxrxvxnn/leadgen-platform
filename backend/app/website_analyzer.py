@@ -1126,6 +1126,14 @@ def classify_website_saas(
         'cloud storage': 5,
         'automatic sync': 4, 'auto-sync': 4, 'sync across': 4,
         'continuous updates': 3, 'automatic updates': 3,
+        # Personal finance / wealth management / document vault apps
+        # These are often SPAs with no pricing page but are clearly SaaS products.
+        'personal finance': 5, 'personal savings': 4, 'financial wellness': 3,
+        'portfolio tracking': 5, 'investment tracking': 4,
+        'organise investments': 5, 'organize investments': 5,
+        'digital locker': 6, 'document locker': 5, 'digital vault': 6,
+        'in one secure place': 3, 'family access': 3,
+        'sebi-regulated': 4, 'sebi registered': 4,
     }
 
     # ── 2. Marketplace signals (P2P / commission / FinTech lending) ──────────
