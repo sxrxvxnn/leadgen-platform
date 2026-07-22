@@ -1029,6 +1029,82 @@ def classify_company_type_rules(website_data: dict | None, description: str = ""
     return None, "Low"
 
 
+_INDUSTRY_SIGNALS: dict[str, list[str]] = {
+    "Financial Technology (FinTech)": [
+        "sebi", "rbi ", "rbi-", "sebi-regulated", "sebi registered", "investment advisory",
+        "wealth management", "wealth protection", "personal finance", "fintech",
+        "financial technology", "insurance polic", "portfolio tracking", "portfolio management",
+        "account aggregator", "financial information", "digital banking", "neobank",
+        "payment gateway", "payment processing", "digital payments", "mutual fund",
+        "stock market", "equity market", "income tax", "tax filing",
+    ],
+    "Cybersecurity": [
+        "cybersecurity", "cyber security", "penetration testing", "pentest", "vapt",
+        "vulnerability assessment", "security testing", "threat detection", "zero-day",
+        "malware", "endpoint security", "siem", "security operations center",
+        "application security", "appsec", "web application firewall",
+    ],
+    "Healthcare Technology": [
+        "healthcare platform", "health platform", "clinical", "patient management",
+        "electronic health record", "ehr", "emr", "telemedicine", "telehealth",
+        "hospital management", "pharmacy", "healthtech", "medical records",
+    ],
+    "Education Technology": [
+        "learning management", "e-learning", "edtech", "lms", "education platform",
+        "online learning", "mooc", "course platform", "student management", "edtech",
+    ],
+    "E-commerce": [
+        "add to cart", "online store", "product catalog", "shopify", "woocommerce",
+        "ecommerce", "e-commerce platform", "online marketplace", "retail platform",
+    ],
+    "Logistics & Supply Chain": [
+        "logistics platform", "supply chain", "last-mile delivery", "freight management",
+        "fleet management", "dispatch software", "warehouse management",
+    ],
+    "Real Estate Technology": [
+        "real estate platform", "proptech", "property management software",
+        "rental platform", "mortgage platform", "commercial property management",
+    ],
+    "Marketing Technology": [
+        "marketing automation", "email marketing platform", "seo platform",
+        "ad tech", "adtech", "demand-side platform", "crm software",
+    ],
+    "Human Resources Technology": [
+        "hr platform", "hris", "human resource", "payroll software", "ats",
+        "applicant tracking", "talent management platform", "workforce management",
+    ],
+}
+
+
+def classify_industry_from_evidence(
+    website_data: dict | None,
+    description: str = "",
+    tagline: str = "",
+) -> str | None:
+    """Derive business industry from website/product evidence.
+
+    Returns the most specific matching industry label, or None when evidence
+    is insufficient. LinkedIn's raw category must never be passed here — this
+    function exclusively uses product/website signals (highest-priority source).
+    """
+    text = " ".join(filter(None, [
+        (website_data.get("full_text", "") if website_data else "")[:8000],
+        (website_data.get("meta_description", "") if website_data else ""),
+        (website_data.get("title", "") if website_data else ""),
+        description,
+        tagline,
+    ])).lower()
+
+    if not text.strip():
+        return None
+
+    for industry, signals in _INDUSTRY_SIGNALS.items():
+        if any(s in text for s in signals):
+            return industry
+
+    return None
+
+
 def classify_website_saas(
     website_data: dict | None,
     url: str = "",
