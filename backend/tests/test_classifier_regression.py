@@ -313,6 +313,34 @@ CASES = [
         True, "Product", "API Platform",
     ),
 
+    # ── 6b. Mobile-first / freemium SaaS (spec Safebox failure case) ────────────
+    # These companies have no traditional pricing page but are clearly SaaS.
+
+    (
+        "Safebox",
+        "Personal finance and savings app. Free plan available. Premium plan upgrade.",
+        _page(
+            has_mobile=True,
+            full_text="personal finance savings app free plan premium plan upgrade create account",
+            title="Safebox | Personal Finance App",
+        ),
+        "https://safebox.life",
+        "",
+        True, "Product", "SaaS",
+    ),
+    (
+        "Mobile P2P Lender",
+        "Peer-to-peer lending app for investors and borrowers. Transaction fee on loans.",
+        _page(
+            has_mobile=True,
+            full_text="peer-to-peer lending marketplace investors borrowers transaction fee funded loans",
+            title="P2P Lender | Mobile App",
+        ),
+        "https://p2plender.example.com",
+        "",
+        False, "Product", "FinTech Platform",
+    ),
+
     # ── 7. IT consulting false-positive prevention (spec: BEYONGEN-type) ──────
     # Companies that use cloud/cyber/platform terms because they BUILD software
     # for clients — not because they sell SaaS subscriptions.

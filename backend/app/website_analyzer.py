@@ -1058,6 +1058,14 @@ def classify_website_saas(
         'project management': 4, 'performance management': 4,
         'talent management': 4, 'employee engagement': 4,
         'built for teams': 3,
+        # Mobile-first / freemium SaaS signals (spec: Free Plan +40, Premium Plan +40, etc.)
+        # These don't appear on lending portals or IT consulting sites
+        'free plan': 10, 'free-plan': 10,
+        'premium plan': 8, 'premium plans': 8, 'premium subscription': 9,
+        'freemium': 10, 'upgrade to premium': 8,
+        'cloud storage': 5,
+        'automatic sync': 4, 'auto-sync': 4, 'sync across': 4,
+        'continuous updates': 3, 'automatic updates': 3,
     }
 
     # ── 2. Marketplace signals (P2P / commission / FinTech lending) ──────────
@@ -1134,6 +1142,9 @@ def classify_website_saas(
         'desktop application': 4, 'desktop app': 4,
         'license key': 5, 'perpetual license': 5,
         'cdn.shopify.com': 5, 'woocommerce': 5,
+        # Spec negative signals
+        'one-time license': 5, 'offline installer': 5,
+        'physical catalogue': 7, 'physical catalog': 7, 'hardware device': 6,
     }
 
     # Keyword scoring
@@ -1173,9 +1184,12 @@ def classify_website_saas(
     if website_data:
         if website_data.get('has_pricing_detected'):  scores['subscription'] += 6
         if website_data.get('has_web_app_link'):      scores['subscription'] += 3
-        if website_data.get('has_mobile_app'):        scores['subscription'] += 2
-        if website_data.get('has_app_store_link'):    scores['subscription'] += 3
-        if website_data.get('has_play_store_link'):   scores['subscription'] += 3
+        # Mobile app is the primary distribution channel for mobile-first SaaS —
+        # weight higher than before (was 2/3) to reflect that App Store presence
+        # is equivalent to a pricing page for mobile-first companies.
+        if website_data.get('has_mobile_app'):        scores['subscription'] += 4
+        if website_data.get('has_app_store_link'):    scores['subscription'] += 5
+        if website_data.get('has_play_store_link'):   scores['subscription'] += 5
         # login/dashboard do NOT add subscription points (client portals have these too)
 
     # ── 5. Tech stack fingerprints ────────────────────────────────────────────
@@ -1299,6 +1313,29 @@ def classify_website_saas(
         company_type = 'Service'
     else:
         company_type = 'Product'
+
+    # ── Non-SaaS validation gate ──────────────────────────────────────────────
+    # Per spec: only classify Non-SaaS when there is explicit non-cloud evidence
+    # OR marketplace revenue dominates. Mobile-first and freemium SaaS companies
+    # often lack a pricing page and therefore under-score on subscription signals.
+    if not is_saas and company_type == 'Product':
+        _gate_non_cloud = scores['hardware'] > 8 or any(s in page_text for s in [
+            'on-premise', 'on-prem', 'perpetual license', 'one-time license',
+            'offline installer', 'desktop application', 'installed locally',
+        ])
+        _gate_marketplace = (
+            scores['marketplace'] > 0 and scores['marketplace'] >= scores['subscription']
+        )
+        _gate_mobile_freemium = bool(
+            (website_data and (
+                website_data.get('has_mobile_app') or website_data.get('has_web_app_link')
+            )) or
+            any(s in page_text for s in ['free plan', 'premium plan', 'freemium', 'subscription app'])
+        )
+        if _gate_mobile_freemium and not _gate_non_cloud and not _gate_marketplace:
+            is_saas = True
+            if business_model in ('Other', None):
+                business_model = 'SaaS'
 
     # ── Stage 2: Service subtype (spec requirement) ───────────────────────────
     company_subtype = None
