@@ -2761,6 +2761,18 @@ async def analyze_company_website(
                 website_data['has_app_store_link'] = True
                 website_data['_itunes_app_name']   = app_check.get('app_name', '')
 
+        # ── Step 1c: multi-page evidence when homepage signals are weak ───────
+        # Scrapes /pricing, /features, /plans, /about to collect richer signals
+        # before running the classifier. Prevents homepage-only mis-classifications.
+        if website_data and website:
+            from .website_analyzer import classify_website_saas as _cls_quick, fetch_extended_evidence as _ext_ev_sa
+            _quick = _cls_quick(website_data, website, "")
+            if _quick.get("confidence", 0) < 55:
+                try:
+                    website_data = _ext_ev_sa(website, website_data)
+                except Exception:
+                    pass
+
         # ── Step 2: rule-based product/service classification ──────
         # Don't pass company description to classifier if it came from a potentially wrong
         # LinkedIn match — trust website signals over stored description text.
@@ -4441,7 +4453,24 @@ async def bulk_autofill_companies(
                     update_data.get("description") or company.get("description") or ""
                 )
                 _cls = classify_website_saas(website_data, ws_url, _desc_for_type)
-                _type_threshold = 20  # only runs when company has no type yet
+
+                # Multi-page evidence: when homepage confidence is low, scrape
+                # /pricing, /features, /plans, /about for richer signal coverage.
+                # Prevents mis-classifications from homepage-only evidence.
+                if _cls.get("confidence", 0) < 55 and ws_url and website_data:
+                    try:
+                        from .website_analyzer import fetch_extended_evidence as _ext_ev
+                        _ws_ext = _ext_ev(ws_url, dict(website_data))
+                        _cls2 = classify_website_saas(_ws_ext, ws_url, _desc_for_type)
+                        if _cls2.get("confidence", 0) > _cls.get("confidence", 0):
+                            _cls = _cls2
+                            website_data = _ws_ext
+                            print(f"[classify] {company_name}: multi-page evidence improved confidence "
+                                  f"{_cls.get('confidence')} is_saas={_cls['is_saas']}", flush=True)
+                    except Exception as _ext_ex:
+                        print(f"[classify] {company_name}: multi-page fetch error: {_ext_ex}", flush=True)
+
+                _type_threshold = 40  # raised from 20 — don't write low-confidence guesses
                 if _cls["confidence"] >= _type_threshold:
                     update_data["company_type"]    = _cls["company_type"]
                     update_data["is_saas"]         = _cls["is_saas"]
@@ -4541,22 +4570,49 @@ async def bulk_autofill_companies(
                         li_res = {}
                         _parse_jina_linkedin_md(li_md, li_res)
 
-                        # Company identity gate — reject wrong LinkedIn page
+                        # ── Identity gates (applied before ANY field is written) ──────
                         try:
                             from .linkedin_worker import (
                                 verify_company_identity as _verify_identity,
                                 validate_employee_range as _val_emp_range,
                                 validate_followers_count as _val_fol_count,
+                                _root_domain as _li_root_dom,
+                                _domains_match as _li_domains_match,
                             )
-                            _identity_ok = _verify_identity(li_md, company_name)
                         except Exception:
-                            _identity_ok = True
+                            _verify_identity = lambda md, n: True
                             _val_emp_range = lambda x: True
                             _val_fol_count = lambda x: True
+                            _li_root_dom = lambda u: ""
+                            _li_domains_match = lambda a, b: True
+
+                        # Gate 1: website domain cross-check (strongest signal)
+                        # If the LinkedIn page lists a website that doesn't match
+                        # the company's website, this is the wrong page — discard all.
+                        _li_page_website = li_res.get("website", "")
+                        _co_website = company.get("website") or ws_url or ""
+                        _domain_gate_ok = True
+                        if _li_page_website and _co_website:
+                            if not _li_domains_match(_li_page_website, _co_website):
+                                _domain_gate_ok = False
+                                print(
+                                    f"[bulk_enrich] {company_name}: DOMAIN MISMATCH "
+                                    f"linkedin_site={_li_root_dom(_li_page_website)} "
+                                    f"vs company_site={_li_root_dom(_co_website)} — discarding",
+                                    flush=True,
+                                )
+
+                        # Gate 2: name-word identity check
+                        _identity_ok = _domain_gate_ok and _verify_identity(li_md, company_name)
 
                         if not _identity_ok:
-                            print(f"[bulk_enrich] {company_name}: Jina identity mismatch on {li_url} — skipping", flush=True)
+                            if _domain_gate_ok:
+                                print(f"[bulk_enrich] {company_name}: Jina identity mismatch on {li_url} — skipping", flush=True)
                             li_res = {}  # discard all extracted fields
+                            # Also invalidate the guessed LinkedIn URL if domain mismatches
+                            if not _domain_gate_ok:
+                                update_data.pop("linkedin_url", None)
+                                li_url_confirmed = ""
 
                         # If Jina returned real data from a guessed URL, the URL is valid — save it
                         if not li_url_confirmed and li_res and any(li_res.get(f) for f in
@@ -11442,6 +11498,143 @@ async def classify_website_endpoint(request: Request):
             results[r.get("url", futures[f])] = r
 
     return JSONResponse({"results": results, "total": len(results)})
+
+
+# ── Retroactive re-classification endpoint ────────────────────────────────────
+
+@router.post("/admin/reclassify")
+async def reclassify_companies(request: Request, authorization: str = Header(...)):
+    """Re-run the SaaS classifier on all companies that have low/null confidence.
+
+    For each company:
+    - Uses stored description + re-fetches website (homepage + subpages)
+    - Only updates the DB when the new confidence is higher than the stored one
+    - Returns a summary of what changed
+
+    Safe to run at any time — only overwrites when we have better evidence.
+    """
+    from .website_analyzer import fetch_website_content, classify_website_saas, fetch_extended_evidence
+    from concurrent.futures import ThreadPoolExecutor, as_completed as _arc
+    import time as _time
+
+    user_id = get_user_id(authorization)
+
+    # Fetch all companies that need re-classification:
+    # - null type_confidence (never classified)
+    # - confidence < 60 (low-confidence classification)
+    # - Product + Non-SaaS (most likely to be wrong based on old classifier)
+    try:
+        res = supabase.table("companies").select(
+            "id,name,website,description,company_type,is_saas,business_model,type_confidence"
+        ).eq("user_id", user_id).execute()
+        all_companies = res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Filter: null confidence, low confidence, or Product+Non-SaaS (old mis-classification pattern)
+    targets = [
+        c for c in all_companies
+        if (
+            c.get("type_confidence") is None or
+            (c.get("type_confidence") or 0) < 60 or
+            (c.get("company_type") == "Product" and c.get("is_saas") is False)
+        )
+    ]
+
+    print(f"[reclassify] user={user_id}: {len(targets)}/{len(all_companies)} companies need re-classification", flush=True)
+
+    updated = 0
+    skipped = 0
+    errors = 0
+
+    def _reclassify_one(company: dict) -> dict:
+        ws = (company.get("website") or "").strip()
+        desc = (company.get("description") or "").strip()
+        cid = company["id"]
+        name = company.get("name", cid)
+
+        website_data = None
+        if ws:
+            try:
+                website_data = fetch_website_content(ws, fast=False)
+            except Exception:
+                pass
+            # Multi-page evidence when homepage signals are weak
+            if website_data:
+                initial = classify_website_saas(website_data, ws, desc)
+                if initial.get("confidence", 0) < 55:
+                    try:
+                        website_data = fetch_extended_evidence(ws, dict(website_data))
+                    except Exception:
+                        pass
+
+        cls = classify_website_saas(website_data, ws, desc)
+        old_conf = company.get("type_confidence") or 0
+
+        return {
+            "id": cid,
+            "name": name,
+            "old_type": company.get("company_type"),
+            "old_saas": company.get("is_saas"),
+            "old_conf": old_conf,
+            "new_type": cls["company_type"],
+            "new_saas": cls["is_saas"],
+            "new_conf": cls["confidence"],
+            "new_model": cls.get("business_model", ""),
+            "new_reason": cls.get("classification_reason", ""),
+        }
+
+    results = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {pool.submit(_reclassify_one, c): c for c in targets}
+        for f in _arc(futures):
+            try:
+                r = f.result()
+                results.append(r)
+            except Exception as ex:
+                errors += 1
+                print(f"[reclassify] error: {ex}", flush=True)
+
+    # Write updates: only when new confidence is strictly better
+    changed = []
+    for r in results:
+        if r["new_conf"] < 40:
+            skipped += 1
+            continue
+        old_conf = r["old_conf"] or 0
+        changed_type = r["new_type"] != r["old_type"]
+        changed_saas = r["new_saas"] != r["old_saas"]
+        higher_conf  = r["new_conf"] > old_conf + 5  # require meaningful improvement
+
+        if changed_type or changed_saas or higher_conf:
+            try:
+                supabase.table("companies").update({
+                    "company_type":    r["new_type"],
+                    "is_saas":         r["new_saas"],
+                    "business_model":  r["new_model"],
+                    "type_confidence": r["new_conf"],
+                    "type_reason":     r["new_reason"],
+                }).eq("id", r["id"]).eq("user_id", user_id).execute()
+                changed.append({
+                    "name":     r["name"],
+                    "old":      f"{r['old_type']} · {'SaaS' if r['old_saas'] else 'Non-SaaS'} ({old_conf}%)",
+                    "new":      f"{r['new_type']} · {'SaaS' if r['new_saas'] else 'Non-SaaS'} ({r['new_conf']}%)",
+                })
+                updated += 1
+            except Exception as ex:
+                errors += 1
+                print(f"[reclassify] DB update error for {r['name']}: {ex}", flush=True)
+        else:
+            skipped += 1
+
+    print(f"[reclassify] done: updated={updated} skipped={skipped} errors={errors}", flush=True)
+    return {
+        "total_checked": len(targets),
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "changes": changed,
+    }
 
 
 # ── People (contacts) endpoints ────────────────────────────────────────────────
