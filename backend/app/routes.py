@@ -4540,6 +4540,24 @@ async def bulk_autofill_companies(
                     if li_md:
                         li_res = {}
                         _parse_jina_linkedin_md(li_md, li_res)
+
+                        # Company identity gate — reject wrong LinkedIn page
+                        try:
+                            from .linkedin_worker import (
+                                verify_company_identity as _verify_identity,
+                                validate_employee_range as _val_emp_range,
+                                validate_followers_count as _val_fol_count,
+                            )
+                            _identity_ok = _verify_identity(li_md, company_name)
+                        except Exception:
+                            _identity_ok = True
+                            _val_emp_range = lambda x: True
+                            _val_fol_count = lambda x: True
+
+                        if not _identity_ok:
+                            print(f"[bulk_enrich] {company_name}: Jina identity mismatch on {li_url} — skipping", flush=True)
+                            li_res = {}  # discard all extracted fields
+
                         # If Jina returned real data from a guessed URL, the URL is valid — save it
                         if not li_url_confirmed and li_res and any(li_res.get(f) for f in
                                 ("followers","employee_count","industry","description")):
@@ -4564,11 +4582,19 @@ async def bulk_autofill_companies(
                         if li_res.get("followers") and not update_data.get("followers"):
                             _fv2 = _re_mod.sub(r'\s*followers?\b.*', '', str(li_res["followers"]), flags=_re_mod.I).strip().replace(',', '')
                             if _fv2:
-                                update_data["followers"] = _expand_km(_fv2)
+                                if _val_fol_count(_fv2):
+                                    update_data["followers"] = _expand_km(_fv2)
+                                    print(f"[bulk_enrich] {company_name}: followers={_fv2} ✓", flush=True)
+                                else:
+                                    print(f"[bulk_enrich] {company_name}: followers '{_fv2}' failed validation — skipped", flush=True)
                         if li_res.get("employee_count") and not update_data.get("size"):
                             _sv2 = _re_mod.sub(r'\s*employees?\b.*', '', str(li_res["employee_count"]), flags=_re_mod.I).strip().replace(',', '').replace(' ', '')
                             if _sv2 and _re_mod.match(r'^\d+(?:[-–]\d+|\+)?$', _sv2):
-                                update_data["size"] = _track("size", _sv2, "linkedin_page")
+                                if _val_emp_range(li_res["employee_count"]):
+                                    update_data["size"] = _track("size", _sv2, "linkedin_page")
+                                    print(f"[bulk_enrich] {company_name}: size={_sv2} ✓", flush=True)
+                                else:
+                                    print(f"[bulk_enrich] {company_name}: employee_count '{li_res['employee_count']}' failed validation — skipped", flush=True)
                         if li_res.get("location") and needs_hq and not update_data.get("headquarters"):
                             update_data["headquarters"] = _track("headquarters", li_res["location"], "linkedin_page")
                         if li_res.get("description") and needs_desc and not update_data.get("description"):
