@@ -5039,13 +5039,27 @@ async def bulk_autofill_companies(
 
             supabase.table("companies").update(update_data).eq("id", company["id"]).eq("user_id", user_id).execute()
 
-            # ── Auto-discover decision makers ──────────────────────────────────────
+            # ── Auto-discover decision makers (V1: search-only) ───────────────────
             _dm_ws = update_data.get("website") or company.get("website") or ""
-            if _dm_ws and _gemini_key_bulk:
+            if _gemini_key_bulk:
                 try:
-                    from .people_collector import discover_people as _discover_people
-                    _dm_co = {"id": company["id"], "name": company_name, "website": _dm_ws}
-                    _dm_people = _discover_people(_dm_co, _gemini_key_bulk)
+                    from .dm_discovery import discover_decision_makers as _dm_v1
+                    try:
+                        from urllib.parse import urlparse as _dm_urlparse
+                        _dm_domain = _dm_urlparse(_dm_ws).netloc.replace("www.", "") if _dm_ws else ""
+                    except Exception:
+                        _dm_domain = ""
+                    _dm_people = _dm_v1(company_name, _gemini_key_bulk, _dm_domain)
+
+                    # V2 fallback: crawl team/leadership pages if V1 returned nothing
+                    if not _dm_people and _dm_ws:
+                        from .people_collector import discover_people as _dm_v2
+                        _dm_people = _dm_v2(
+                            {"id": company["id"], "name": company_name, "website": _dm_ws},
+                            _gemini_key_bulk,
+                        )
+                        print(f"[auto_people] {company_name}: V1 empty → V2 fallback: {len(_dm_people)} found", flush=True)
+
                     if _dm_people:
                         supabase.table("decision_makers").delete().eq("company_id", company["id"]).eq("user_id", user_id).execute()
                         supabase.table("decision_makers").insert([
@@ -5058,7 +5072,7 @@ async def bulk_autofill_companies(
                                 "email": p.get("email") or "",
                                 "linkedin_url": p.get("linkedin_url") or "",
                                 "confidence": p.get("confidence", 50),
-                                "source": p.get("source", "website"),
+                                "source": p.get("source", "Search Result"),
                                 "source_url": (p.get("source_urls") or [p.get("source_url") or ""])[0],
                                 "source_urls": p.get("source_urls") or ([p.get("source_url")] if p.get("source_url") else []),
                                 "is_decision_maker": p.get("is_decision_maker", True),
@@ -5066,6 +5080,8 @@ async def bulk_autofill_companies(
                             for p in _dm_people
                         ]).execute()
                         print(f"[auto_people] {company_name}: {len(_dm_people)} people inserted", flush=True)
+                    else:
+                        print(f"[auto_people] {company_name}: no decision makers found (V1+V2)", flush=True)
                 except Exception as _dm_ex:
                     print(f"[auto_people] {company_name} EXCEPTION: {_dm_ex}", flush=True)
 
