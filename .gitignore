@@ -25,6 +25,7 @@ Thumbs.db
 # Tool temp files
 .playwright-mcp/
 .firecrawl/
+.mcp.json
 *.docx
 CLAUDE_CODE_HANDOFF.md
 DESIGN.md
