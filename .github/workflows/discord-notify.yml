@@ -17,10 +17,11 @@ jobs:
       - name: Deploy started
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          COMMIT_MSG=$(echo "$HEAD_COMMIT_MSG" | head -1)
           AUTHOR="${{ github.event.head_commit.author.name }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
@@ -51,10 +52,11 @@ jobs:
       - name: Deploy complete
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          COMMIT_MSG=$(echo "$HEAD_COMMIT_MSG" | head -1)
 
           curl -s -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
@@ -147,10 +149,11 @@ jobs:
         if: steps.ui-check.outputs.changed == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_DESIGN_WEBHOOK_URL }}
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          COMMIT_MSG=$(echo "$HEAD_COMMIT_MSG" | head -1)
           AUTHOR="${{ github.event.head_commit.author.name }}"
           FILES="${{ steps.ui-check.outputs.files }}"
 
@@ -178,9 +181,10 @@ jobs:
     steps:
       - name: Check for feature commit
         id: feat-check
+        env:
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          if echo "$COMMIT_MSG" | grep -qiE '^feat(\(.+\))?:'; then
+          if echo "$HEAD_COMMIT_MSG" | grep -qiE '^feat(\(.+\))?:'; then
             echo "is_feat=true" >> $GITHUB_OUTPUT
           else
             echo "is_feat=false" >> $GITHUB_OUTPUT
@@ -190,10 +194,11 @@ jobs:
         if: steps.feat-check.outputs.is_feat == 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_PRODUCT_WEBHOOK_URL }}
+          HEAD_COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          COMMIT_MSG=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          COMMIT_MSG=$(echo "$HEAD_COMMIT_MSG" | head -1)
           AUTHOR="${{ github.event.head_commit.author.name }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
