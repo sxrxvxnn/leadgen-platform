@@ -41,9 +41,12 @@ function ShimmerButton({ children, style, href, as: Tag = 'button', ...rest }) {
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         style={{
           position: 'absolute',
-          top: 0, left: 0,
-          width: '60%', height: '100%',
-          background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)',
+          top: 0,
+          left: 0,
+          width: '60%',
+          height: '100%',
+          background:
+            'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)',
           pointerEvents: 'none',
           zIndex: 1,
         }}
@@ -82,9 +85,7 @@ function GlowButton({ children, style, href, as: Tag = 'button', ...rest }) {
         textDecoration: 'none',
         transition: 'border-color 0.15s, color 0.15s, box-shadow 0.25s',
         borderColor: hovered ? 'var(--accent)' : 'var(--border)',
-        boxShadow: hovered
-          ? '0 0 0 1px rgba(231,0,11,0.2), 0 0 12px rgba(231,0,11,0.08)'
-          : 'none',
+        boxShadow: hovered ? '0 0 0 1px rgba(231,0,11,0.2), 0 0 12px rgba(231,0,11,0.08)' : 'none',
         ...style,
       }}
       {...rest}
@@ -104,7 +105,7 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
     if (!ref.current) return
     const { width, height, left, top } = ref.current.getBoundingClientRect()
     const cx = left + width / 2
-    const cy = top  + height / 2
+    const cy = top + height / 2
     setDelta({ x: (e.clientX - cx) * 0.28, y: (e.clientY - cy) * 0.28 })
   }
 
@@ -138,8 +139,8 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
           transition: 'border-color 0.15s',
           ...style,
         }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}
-        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+        onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
+        onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
         {...rest}
       >
         {children}
@@ -149,7 +150,7 @@ function MagneticButton({ children, style, href, as: Tag = 'button', ...rest }) 
 }
 
 export function AnimatedButton({ variant = 'shimmer', ...props }) {
-  if (variant === 'glow')     return <GlowButton {...props} />
+  if (variant === 'glow') return <GlowButton {...props} />
   if (variant === 'magnetic') return <MagneticButton {...props} />
   return <ShimmerButton {...props} />
 }

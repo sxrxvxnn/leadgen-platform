@@ -1,7 +1,14 @@
 import { useEffect } from 'react'
 import { motion, stagger, useAnimate } from 'motion/react'
 
-export function TextGenerateEffect({ text, style, wordStyle, delay = 0, duration = 0.4, staggerDelay = 0.08 }) {
+export function TextGenerateEffect({
+  text,
+  style,
+  wordStyle,
+  delay = 0,
+  duration = 0.4,
+  staggerDelay = 0.08,
+}) {
   const [scope, animate] = useAnimate()
 
   useEffect(() => {

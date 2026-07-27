@@ -33,10 +33,14 @@ export function PageLoader({ onDone }) {
           key="loader"
           initial={{ opacity: 1 }}
           style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
             background: '#0A0A0A',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'flex-start', justifyContent: 'flex-end',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-end',
             padding: '48px 56px',
           }}
         >
@@ -46,7 +50,9 @@ export function PageLoader({ onDone }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
             style={{
-              position: 'absolute', top: 48, left: 56,
+              position: 'absolute',
+              top: 48,
+              left: 56,
               fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
               fontWeight: 700,
               fontSize: 22,
@@ -80,10 +86,20 @@ export function PageLoader({ onDone }) {
           </motion.div>
 
           {/* Progress bar */}
-          <div style={{ width: '100%', height: 1, background: '#2A2A2A', position: 'relative', marginBottom: 16 }}>
+          <div
+            style={{
+              width: '100%',
+              height: 1,
+              background: '#2A2A2A',
+              position: 'relative',
+              marginBottom: 16,
+            }}
+          >
             <motion.div
               style={{
-                position: 'absolute', left: 0, top: 0,
+                position: 'absolute',
+                left: 0,
+                top: 0,
                 height: '100%',
                 background: '#E7000B',
                 width: `${count}%`,
@@ -115,7 +131,9 @@ export function PageLoader({ onDone }) {
           animate={{ y: '-100%' }}
           transition={{ duration: 0.75, ease: [0.76, 0, 0.24, 1] }}
           style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
             background: '#0A0A0A',
           }}
         />

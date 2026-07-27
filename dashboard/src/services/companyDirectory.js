@@ -1,8 +1,11 @@
 const KEY = 'leadgen_company_directory'
 
 export function getDirectory() {
-  try { return JSON.parse(localStorage.getItem(KEY) || '[]') }
-  catch { return [] }
+  try {
+    return JSON.parse(localStorage.getItem(KEY) || '[]')
+  } catch {
+    return []
+  }
 }
 
 export function syncToDirectory(companies) {
@@ -26,7 +29,7 @@ export function syncToDirectory(companies) {
   } catch (e) {
     // Storage quota exceeded — trim oldest 20% and retry
     const vals = Object.values(byId)
-    vals.sort((a, b) => (a._savedAt || '') < (b._savedAt || '') ? -1 : 1)
+    vals.sort((a, b) => ((a._savedAt || '') < (b._savedAt || '') ? -1 : 1))
     const trimmed = vals.slice(Math.floor(vals.length * 0.2))
     localStorage.setItem(KEY, JSON.stringify(trimmed))
   }
@@ -36,9 +39,20 @@ export function searchDirectory(query) {
   const dir = getDirectory()
   if (!query.trim()) return dir
   const q = query.toLowerCase()
-  return dir.filter(c =>
-    [c.name, c.website, c.industry, c.headquarters, c.description,
-     c.classification, c.prospect_status, c.size].join(' ').toLowerCase().includes(q)
+  return dir.filter((c) =>
+    [
+      c.name,
+      c.website,
+      c.industry,
+      c.headquarters,
+      c.description,
+      c.classification,
+      c.prospect_status,
+      c.size,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(q)
   )
 }
 

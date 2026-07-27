@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
-function easeOut(t) { return 1 - Math.pow(1 - t, 3) }
+function easeOut(t) {
+  return 1 - Math.pow(1 - t, 3)
+}
 
 export function CountUp({ to, duration = 1.2, delay = 0 }) {
   const [count, setCount] = useState(0)
@@ -12,7 +14,10 @@ export function CountUp({ to, duration = 1.2, delay = 0 }) {
       const ms = duration * 1000
       const frame = () => {
         const elapsed = (Date.now() - startTime) / ms
-        if (elapsed >= 1) { setCount(to); return }
+        if (elapsed >= 1) {
+          setCount(to)
+          return
+        }
         setCount(Math.floor(to * easeOut(elapsed)))
         requestAnimationFrame(frame)
       }

@@ -3,7 +3,12 @@ import { useScroll, useTransform, motion } from 'motion/react'
 
 // MacBook-style lid-open scroll reveal for landing sections.
 // The card starts at rotateX(-28deg) + compressed scale, opens to flat as you scroll.
-export function SectionReveal({ title, children, cardBg = 'transparent', borderColor = '#2a2a2a' }) {
+export function SectionReveal({
+  title,
+  children,
+  cardBg = 'transparent',
+  borderColor = '#2a2a2a',
+}) {
   const ref = useRef(null)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -18,11 +23,11 @@ export function SectionReveal({ title, children, cardBg = 'transparent', borderC
 
   // Hold closed briefly, then open — mirrors MacBook lid timing
   const rotate = useTransform(scrollYProgress, [0.08, 0.12, 0.4], [-28, -28, 0])
-  const scale  = useTransform(scrollYProgress, [0, 0.4], [isMobile ? 0.65 : 0.88, 1])
+  const scale = useTransform(scrollYProgress, [0, 0.4], [isMobile ? 0.65 : 0.88, 1])
 
   // Title fades up and out as the card opens (same as MacBook title)
   const titleTranslateY = useTransform(scrollYProgress, [0, 0.3], [0, 100])
-  const titleOpacity    = useTransform(scrollYProgress, [0, 0.2], [1, 0])
+  const titleOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0])
 
   return (
     <div
@@ -67,7 +72,8 @@ export function SectionReveal({ title, children, cardBg = 'transparent', borderC
             borderRadius: 20,
             overflow: 'hidden',
             padding: isMobile ? 12 : 24,
-            boxShadow: '0 0 #0000004d, 0 9px 20px #0000004a, 0 37px 37px #00000042, 0 84px 50px #00000026, 0 149px 60px #0000000a, 0 233px 65px #00000003',
+            boxShadow:
+              '0 0 #0000004d, 0 9px 20px #0000004a, 0 37px 37px #00000042, 0 84px 50px #00000026, 0 149px 60px #0000000a, 0 233px 65px #00000003',
           }}
         >
           {children}

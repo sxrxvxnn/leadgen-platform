@@ -3,22 +3,22 @@ import { useAuth } from '../context/AuthContext'
 import { useState, useEffect } from 'react'
 
 const NAV_LINKS = [
-  { label: 'Overview',   path: '/dashboard' },
-  { label: 'Discovery',  path: '/directory' },
-  { label: 'Companies',  path: '/companies' },
-  { label: 'Targeting',  path: '/targeting' },
-  { label: 'Leads',      path: '/leads' },
-  { label: 'Sequences',  path: '/sequences' },
-  { label: 'Settings',   path: '/settings' },
+  { label: 'Overview', path: '/dashboard' },
+  { label: 'Discovery', path: '/directory' },
+  { label: 'Companies', path: '/companies' },
+  { label: 'Targeting', path: '/targeting' },
+  { label: 'Leads', path: '/leads' },
+  { label: 'Sequences', path: '/sequences' },
+  { label: 'Settings', path: '/settings' },
 ]
 
-const DARK    = '#FFFFFF'
-const BORDER  = '#E5E7EB'
-const INK     = '#0A0A0A'
-const STEEL   = '#6B7280'
-const ACCENT  = '#E7000B'
+const DARK = '#FFFFFF'
+const BORDER = '#E5E7EB'
+const INK = '#0A0A0A'
+const STEEL = '#6B7280'
+const ACCENT = '#E7000B'
 const LOGO_BG = '#E7000B'
-const SANS    = "'Host Grotesk', 'Roboto', sans-serif"
+const SANS = "'Host Grotesk', 'Roboto', sans-serif"
 const DISPLAY = "'Barlow Condensed', 'Arial Narrow', sans-serif"
 
 export default function Navbar() {
@@ -29,7 +29,7 @@ export default function Navbar() {
 
   useEffect(() => {
     function updateName() {
-      const key   = user?.id ? `fullName_${user.id}` : 'fullName'
+      const key = user?.id ? `fullName_${user.id}` : 'fullName'
       const saved = localStorage.getItem(key) || localStorage.getItem('fullName')
       setDisplayName(saved || user?.email?.split('@')[0] || '')
     }
@@ -39,40 +39,80 @@ export default function Navbar() {
   }, [user])
 
   const isActive = (path) => location.pathname === path
-  const handleLogout = () => { logout(); navigate('/') }
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
   const isAdmin = profile?.role === 'admin'
 
   return (
-    <header style={{
-      position: 'sticky', top: 0, zIndex: 100,
-      background: DARK,
-      borderBottom: `1px solid ${BORDER}`,
-    }}>
-      <div style={{
-        padding: '0 32px',
-        height: '56px',
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center',
-        gap: '16px',
-      }}>
-
+    <header
+      style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        background: DARK,
+        borderBottom: `1px solid ${BORDER}`,
+      }}
+    >
+      <div
+        style={{
+          padding: '0 32px',
+          height: '56px',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
+          alignItems: 'center',
+          gap: '16px',
+        }}
+      >
         {/* Logo - left */}
-        <Link to="/dashboard" style={{ textDecoration: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '9px' }}>
-          <div style={{ width: '28px', height: '28px', background: LOGO_BG, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Link
+          to="/dashboard"
+          style={{
+            textDecoration: 'none',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '9px',
+          }}
+        >
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              background: LOGO_BG,
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
-              <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
-              <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
-              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
+              <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5" />
+              <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85" />
+              <circle cx="8" cy="8" r="1.5" fill="#FFFFFF" />
+              <line
+                x1="9.1"
+                y1="6.9"
+                x2="13"
+                y2="3"
+                stroke="#FFFFFF"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
-          <span style={{
-            fontFamily: DISPLAY,
-            fontSize: '18px', fontWeight: '700',
-            color: INK, letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-          }}>
+          <span
+            style={{
+              fontFamily: DISPLAY,
+              fontSize: '18px',
+              fontWeight: '700',
+              color: INK,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
             Sonar
           </span>
         </Link>
@@ -97,8 +137,12 @@ export default function Navbar() {
                 borderBottom: isActive(path) ? `1px solid ${ACCENT}` : '1px solid transparent',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive(path)) e.currentTarget.style.color = INK }}
-              onMouseLeave={e => { if (!isActive(path)) e.currentTarget.style.color = STEEL }}
+              onMouseEnter={(e) => {
+                if (!isActive(path)) e.currentTarget.style.color = INK
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive(path)) e.currentTarget.style.color = STEEL
+              }}
             >
               {label}
             </Link>
@@ -108,8 +152,10 @@ export default function Navbar() {
               to="/admin"
               style={{
                 fontFamily: SANS,
-                fontSize: '11px', fontWeight: '500',
-                letterSpacing: '0.07em', textTransform: 'uppercase',
+                fontSize: '11px',
+                fontWeight: '500',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
                 color: isActive('/admin') ? INK : STEEL,
                 padding: '5px 12px',
                 textDecoration: 'none',
@@ -117,8 +163,12 @@ export default function Navbar() {
                 borderBottom: isActive('/admin') ? `1px solid ${ACCENT}` : '1px solid transparent',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { if (!isActive('/admin')) e.currentTarget.style.color = INK }}
-              onMouseLeave={e => { if (!isActive('/admin')) e.currentTarget.style.color = STEEL }}
+              onMouseEnter={(e) => {
+                if (!isActive('/admin')) e.currentTarget.style.color = INK
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive('/admin')) e.currentTarget.style.color = STEEL
+              }}
             >
               Admin
             </Link>
@@ -126,9 +176,13 @@ export default function Navbar() {
         </nav>
 
         {/* Right actions - right */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'flex-end' }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '16px', justifyContent: 'flex-end' }}
+        >
           {displayName && (
-            <span style={{ fontFamily: SANS, fontSize: '12px', color: STEEL, letterSpacing: '0.04em' }}>
+            <span
+              style={{ fontFamily: SANS, fontSize: '12px', color: STEEL, letterSpacing: '0.04em' }}
+            >
               {displayName}
             </span>
           )}
@@ -136,8 +190,10 @@ export default function Navbar() {
             onClick={handleLogout}
             style={{
               fontFamily: SANS,
-              fontSize: '11px', fontWeight: '500',
-              letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: '11px',
+              fontWeight: '500',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               padding: '6px 14px',
               background: 'transparent',
               color: INK,
@@ -146,8 +202,14 @@ export default function Navbar() {
               cursor: 'pointer',
               transition: 'border-color 0.15s, box-shadow 0.2s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = ACCENT; e.currentTarget.style.boxShadow = `0 0 10px rgba(231,0,11,0.15)` }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.boxShadow = 'none' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = ACCENT
+              e.currentTarget.style.boxShadow = `0 0 10px rgba(231,0,11,0.15)`
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = BORDER
+              e.currentTarget.style.boxShadow = 'none'
+            }}
           >
             Sign out
           </button>

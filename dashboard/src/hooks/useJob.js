@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getJob } from '../services/api'
 
-const POLL_INTERVAL_MS = 2000   // poll every 2 s while running
+const POLL_INTERVAL_MS = 2000 // poll every 2 s while running
 const TERMINAL = new Set(['completed', 'failed'])
 
 /**
@@ -14,9 +14,9 @@ const TERMINAL = new Set(['completed', 'failed'])
  * progress:  job.completed / job.total  (0–1)
  */
 export function useJob(jobId) {
-  const [job,       setJob]       = useState(null)
+  const [job, setJob] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [error,     setError]     = useState(null)
+  const [error, setError] = useState(null)
   const timerRef = useRef(null)
   const cancelled = useRef(false)
 
@@ -74,32 +74,47 @@ export function JobProgress({ jobId, onDone, label = 'Processing' }) {
   const failed = job.status === 'failed'
 
   return (
-    <div style={{
-      padding: '12px 16px',
-      background: 'var(--surface)',
-      border: '1px solid var(--border)',
-      borderRadius: '8px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-    }}>
+    <div
+      style={{
+        padding: '12px 16px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '13px', color: 'var(--text-soft)', fontWeight: 500 }}>
           {failed ? 'Failed' : done ? `${label} complete` : `${label}…`}
         </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        <span
+          style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+        >
           {job.completed}/{job.total}
-          {job.errors > 0 && <span style={{ color: 'var(--danger, #c0392b)', marginLeft: 6 }}>{job.errors} err</span>}
+          {job.errors > 0 && (
+            <span style={{ color: 'var(--danger, #c0392b)', marginLeft: 6 }}>{job.errors} err</span>
+          )}
         </span>
       </div>
-      <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%',
-          width: `${pct}%`,
-          background: failed ? 'var(--danger, #c0392b)' : 'var(--accent)',
+      <div
+        style={{
+          height: '4px',
+          background: 'var(--border)',
           borderRadius: '2px',
-          transition: 'width 0.4s ease',
-        }} />
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: failed ? 'var(--danger, #c0392b)' : 'var(--accent)',
+            borderRadius: '2px',
+            transition: 'width 0.4s ease',
+          }}
+        />
       </div>
       {failed && job.error_message && (
         <p style={{ fontSize: '12px', color: 'var(--danger, #c0392b)', margin: 0 }}>

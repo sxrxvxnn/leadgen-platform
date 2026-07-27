@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'motion/react'
 
 function getDirection(e, el) {
   const { width, height, left, top } = el.getBoundingClientRect()
-  const x = e.clientX - left - width  / 2
-  const y = e.clientY - top  - height / 2
+  const x = e.clientX - left - width / 2
+  const y = e.clientY - top - height / 2
 
   // Angle from center: atan2 returns radians, convert to 0-360 deg
   const angle = (Math.atan2(y, x) * 180) / Math.PI
   // Normalise to 0-360, then offset so 0 = top
-  const deg = ((angle + 90 + 360) % 360)
+  const deg = (angle + 90 + 360) % 360
 
   if (deg < 45 || deg >= 315) return 'top'
   if (deg < 135) return 'right'
@@ -18,10 +18,10 @@ function getDirection(e, el) {
 }
 
 const INITIAL = {
-  top:    { x: '0%',    y: '-100%' },
-  bottom: { x: '0%',    y: '100%'  },
-  left:   { x: '-100%', y: '0%'    },
-  right:  { x: '100%',  y: '0%'    },
+  top: { x: '0%', y: '-100%' },
+  bottom: { x: '0%', y: '100%' },
+  left: { x: '-100%', y: '0%' },
+  right: { x: '100%', y: '0%' },
 }
 
 export function DirectionAwareHover({ children, overlay, style }) {

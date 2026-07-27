@@ -38,9 +38,7 @@ export default function AuthCallback() {
         body: JSON.stringify({
           email: session.user.email || '',
           full_name:
-            session.user.user_metadata?.full_name ||
-            session.user.user_metadata?.name ||
-            '',
+            session.user.user_metadata?.full_name || session.user.user_metadata?.name || '',
         }),
       }).catch(() => {})
       // Hard reload so AuthProvider re-initialises from localStorage
@@ -51,7 +49,9 @@ export default function AuthCallback() {
     // PKCE code in the URL during createClient(). Calling exchangeCodeForSession
     // manually races with that internal call and fails. Instead, listen for the
     // session Supabase creates.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         complete(session)
       }
@@ -73,9 +73,27 @@ export default function AuthCallback() {
   }, [])
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFFFF', fontFamily: SANS }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#FFFFFF',
+        fontFamily: SANS,
+      }}
+    >
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-        <div style={{ width: 22, height: 22, border: '2px solid #E5E7EB', borderTop: '2px solid #E7000B', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            border: '2px solid #E5E7EB',
+            borderTop: '2px solid #E7000B',
+            borderRadius: '50%',
+            animation: 'spin 0.7s linear infinite',
+          }}
+        />
         <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>{status}</p>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>

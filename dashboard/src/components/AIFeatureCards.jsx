@@ -39,16 +39,16 @@ const FEATURES = [
 
 // Stacked: slightly offset + rotated so cards look piled
 const STACKED = [
-  { x: -10, y: 7,  rotate: -5,  zIndex: 1 },
-  { x:   0, y: 2,  rotate: -1.5, zIndex: 3 },
-  { x:  10, y: 5,  rotate:  3,  zIndex: 2 },
+  { x: -10, y: 7, rotate: -5, zIndex: 1 },
+  { x: 0, y: 2, rotate: -1.5, zIndex: 3 },
+  { x: 10, y: 5, rotate: 3, zIndex: 2 },
 ]
 
 // Fanned: spread evenly with symmetric tilt
 const FANNED = [
-  { x: -220, y: 6,  rotate: -9,  zIndex: 1 },
-  { x:    0, y: -10, rotate: 0,   zIndex: 3 },
-  { x:  220, y: 6,  rotate:  9,  zIndex: 2 },
+  { x: -220, y: 6, rotate: -9, zIndex: 1 },
+  { x: 0, y: -10, rotate: 0, zIndex: 3 },
+  { x: 220, y: 6, rotate: 9, zIndex: 2 },
 ]
 
 function GradientText({ text, colors, active, id }) {
@@ -89,19 +89,39 @@ export default function AIFeatureCards() {
   const [hovered, setHovered] = useState(false)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0 32px' }}>
-      <p style={{
-        fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase',
-        fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', opacity: 0.5,
-        margin: '0 0 18px',
-      }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '2px 0 32px',
+      }}
+    >
+      <p
+        style={{
+          fontSize: '10px',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text-muted)',
+          opacity: 0.5,
+          margin: '0 0 18px',
+        }}
+      >
         AI Features — hover to explore
       </p>
 
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        style={{ position: 'relative', height: '156px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          position: 'relative',
+          height: '156px',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         {FEATURES.map((feat, i) => {
           const pos = hovered ? FANNED[i] : STACKED[i]
@@ -123,14 +143,45 @@ export default function AIFeatureCards() {
                 willChange: 'transform',
               }}
             >
-              <div style={{ fontSize: '19px', lineHeight: 1, marginBottom: '10px' }}>{feat.icon}</div>
-              <GradientText text={feat.headline} colors={feat.colors} active={hovered} id={feat.id} />
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '5px 0 0', lineHeight: 1.45, opacity: 0.75 }}>
+              <div style={{ fontSize: '19px', lineHeight: 1, marginBottom: '10px' }}>
+                {feat.icon}
+              </div>
+              <GradientText
+                text={feat.headline}
+                colors={feat.colors}
+                active={hovered}
+                id={feat.id}
+              />
+              <p
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  margin: '5px 0 0',
+                  lineHeight: 1.45,
+                  opacity: 0.75,
+                }}
+              >
                 {feat.sub}
               </p>
               <div style={{ marginTop: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: feat.dot, flexShrink: 0 }} />
-                <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <span
+                  style={{
+                    width: '5px',
+                    height: '5px',
+                    borderRadius: '50%',
+                    background: feat.dot,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-muted)',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
                   {feat.title}
                 </span>
               </div>

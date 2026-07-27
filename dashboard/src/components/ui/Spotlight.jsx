@@ -15,8 +15,12 @@ export function useSpotlight() {
   const spotlightEl = (
     <motion.div
       style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-        background: bg, borderRadius: 'inherit',
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 0,
+        background: bg,
+        borderRadius: 'inherit',
       }}
     />
   )

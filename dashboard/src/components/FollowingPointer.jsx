@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { motion, useSpring, useMotionValue } from 'motion/react'
 
 export function FollowingPointer({ children, label = 'Explore', style }) {
-  const ref        = useRef(null)
+  const ref = useRef(null)
   const [visible, setVisible] = useState(false)
 
   const rawX = useMotionValue(0)
@@ -44,33 +44,37 @@ export function FollowingPointer({ children, label = 'Explore', style }) {
         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Cursor dot */}
-        <div style={{
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          background: 'var(--color-ink-violet, #01011b)',
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-        }}/>
+        <div
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            background: 'var(--color-ink-violet, #01011b)',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
 
         {/* Label pill */}
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '100%',
-          transform: 'translate(8px, -50%)',
-          background: 'var(--color-ink-violet, #01011b)',
-          color: '#fffcfc',
-          fontFamily: "'IBM Plex Sans', sans-serif",
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: '0.02em',
-          padding: '4px 10px',
-          borderRadius: 20,
-          whiteSpace: 'nowrap',
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '100%',
+            transform: 'translate(8px, -50%)',
+            background: 'var(--color-ink-violet, #01011b)',
+            color: '#fffcfc',
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            padding: '4px 10px',
+            borderRadius: 20,
+            whiteSpace: 'nowrap',
+          }}
+        >
           {label}
         </div>
       </motion.div>

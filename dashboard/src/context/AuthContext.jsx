@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { login as loginApi, signup as signupApi, forgotPassword as forgotPasswordApi, resetPassword as resetPasswordApi } from '../services/api'
+import {
+  login as loginApi,
+  signup as signupApi,
+  forgotPassword as forgotPasswordApi,
+  resetPassword as resetPasswordApi,
+} from '../services/api'
 import api from '../services/api'
 import posthog from '../lib/posthog'
 
@@ -9,14 +14,18 @@ async function _loadProfile() {
   try {
     const res = await api.get('/profile')
     return res.data
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 function _tokenExpiresAt(token) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
     return (payload.exp || 0) * 1000
-  } catch { return 0 }
+  } catch {
+    return 0
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -60,10 +69,15 @@ export function AuthProvider({ children }) {
       posthog.identify(parsedUser.id, { email: parsedUser.email })
       _scheduleRefresh(savedToken)
       setProfileLoading(true)
-      _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
+      _loadProfile().then((p) => {
+        setProfile(p)
+        setProfileLoading(false)
+      })
     }
     setLoading(false)
-    return () => { if (refreshTimer.current) clearTimeout(refreshTimer.current) }
+    return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current)
+    }
   }, [])
 
   const login = async (email, password) => {
@@ -78,7 +92,10 @@ export function AuthProvider({ children }) {
     posthog.identify(user.id, { email })
     _scheduleRefresh(access_token)
     setProfileLoading(true)
-    _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
+    _loadProfile().then((p) => {
+      setProfile(p)
+      setProfileLoading(false)
+    })
     return response
   }
 
@@ -98,7 +115,10 @@ export function AuthProvider({ children }) {
     posthog.identify(user.id, { email: user.email })
     _scheduleRefresh(access_token)
     setProfileLoading(true)
-    _loadProfile().then(p => { setProfile(p); setProfileLoading(false) })
+    _loadProfile().then((p) => {
+      setProfile(p)
+      setProfileLoading(false)
+    })
   }
 
   const forgotPassword = async (email) => {
@@ -118,8 +138,18 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('user')
     localStorage.removeItem('userEmail')
     // Clear legacy unscoped keys so they don't bleed into the next account on this browser
-    ;['fullName','smtpHost','smtpPort','smtpUser','smtpPass','smtpFromName','smtpFromEmail',
-      'agreedTerms','wantsUpdates','savedICPs'].forEach(k => localStorage.removeItem(k))
+    ;[
+      'fullName',
+      'smtpHost',
+      'smtpPort',
+      'smtpUser',
+      'smtpPass',
+      'smtpFromName',
+      'smtpFromEmail',
+      'agreedTerms',
+      'wantsUpdates',
+      'savedICPs',
+    ].forEach((k) => localStorage.removeItem(k))
     posthog.reset()
     setToken(null)
     setUser(null)
@@ -128,7 +158,21 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, profile, profileLoading, loading, login, loginWithSession, signup, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        profile,
+        profileLoading,
+        loading,
+        login,
+        loginWithSession,
+        signup,
+        logout,
+        forgotPassword,
+        resetPassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

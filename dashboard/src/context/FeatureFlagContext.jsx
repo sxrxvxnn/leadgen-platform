@@ -11,8 +11,9 @@ export function FeatureFlagProvider({ children }) {
 
   useEffect(() => {
     function fetchFlags() {
-      api.get('/feature-flags')
-        .then(res => {
+      api
+        .get('/feature-flags')
+        .then((res) => {
           const map = {}
           for (const f of res.data?.flags || []) map[f.name] = f.enabled
           setFlags(map)
