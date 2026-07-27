@@ -16,16 +16,30 @@ export function TracingBeam({ children, style }) {
   }, [])
 
   const y1 = useSpring(useTransform(scrollYProgress, [0, 0.8], [50, svgHeight]), {
-    stiffness: 500, damping: 90,
+    stiffness: 500,
+    damping: 90,
   })
   const y2 = useSpring(useTransform(scrollYProgress, [0, 1], [50, svgHeight - 200]), {
-    stiffness: 500, damping: 90,
+    stiffness: 500,
+    damping: 90,
   })
 
   return (
-    <motion.div ref={ref} style={{ position: 'relative', margin: '0 auto', width: '100%', ...style }}>
+    <motion.div
+      ref={ref}
+      style={{ position: 'relative', margin: '0 auto', width: '100%', ...style }}
+    >
       {/* Beam track — sits left of content */}
-      <div style={{ position: 'absolute', top: 12, left: -36, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          left: -36,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
         {/* Top dot */}
         <motion.div
           animate={{
@@ -33,10 +47,13 @@ export function TracingBeam({ children, style }) {
           }}
           transition={{ duration: 0.2, delay: 0.5 }}
           style={{
-            width: 16, height: 16,
+            width: 16,
+            height: 16,
             borderRadius: '50%',
             border: '1px solid #dbd7da',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             background: '#fffcfc',
             marginBottom: 0,
             marginLeft: 2,
@@ -77,8 +94,10 @@ export function TracingBeam({ children, style }) {
             <motion.linearGradient
               id="tracing-gradient"
               gradientUnits="userSpaceOnUse"
-              x1="0" x2="0"
-              y1={y1} y2={y2}
+              x1="0"
+              x2="0"
+              y1={y1}
+              y2={y2}
             >
               <stop stopColor="#9e91d6" stopOpacity="0" />
               <stop stopColor="#6f63b7" />

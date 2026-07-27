@@ -24,7 +24,9 @@ function injectCss() {
 }
 
 export function Skeleton({ w = '100%', h = 14, r = 4, style: extra }) {
-  useEffect(() => { injectCss() }, [])
+  useEffect(() => {
+    injectCss()
+  }, [])
   return (
     <span
       className="sk"
@@ -36,7 +38,15 @@ export function Skeleton({ w = '100%', h = 14, r = 4, style: extra }) {
 // Pre-built row for table-style skeletons
 export function SkeletonRow({ cols = [2, 3, 2, 1], height = 13 }) {
   return (
-    <div style={{ display: 'flex', padding: '14px 0', borderBottom: '1px solid rgba(196,193,189,0.4)', alignItems: 'center', gap: 0 }}>
+    <div
+      style={{
+        display: 'flex',
+        padding: '14px 0',
+        borderBottom: '1px solid rgba(196,193,189,0.4)',
+        alignItems: 'center',
+        gap: 0,
+      }}
+    >
       {cols.map((flex, i) => (
         <div key={i} style={{ flex }}>
           <Skeleton w="70%" h={height} />
@@ -49,7 +59,16 @@ export function SkeletonRow({ cols = [2, 3, 2, 1], height = 13 }) {
 // Pre-built card skeleton for company cards
 export function SkeletonCard() {
   return (
-    <div style={{ padding: '18px 20px', border: '1px solid rgba(196,193,189,0.5)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div
+      style={{
+        padding: '18px 20px',
+        border: '1px solid rgba(196,193,189,0.5)',
+        borderRadius: 6,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
       <Skeleton w="55%" h={14} />
       <Skeleton w="35%" h={11} />
       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>

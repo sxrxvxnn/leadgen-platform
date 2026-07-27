@@ -1,5 +1,11 @@
 import { useRef } from 'react'
-import { motion, useAnimationFrame, useMotionTemplate, useMotionValue, useTransform } from 'motion/react'
+import {
+  motion,
+  useAnimationFrame,
+  useMotionTemplate,
+  useMotionValue,
+  useTransform,
+} from 'motion/react'
 
 function MovingBorderTrack({ duration = 2800, color = '#6f63b7', rx = '30%', ry = '30%' }) {
   const pathRef = useRef(null)
@@ -43,7 +49,20 @@ function MovingBorderTrack({ duration = 2800, color = '#6f63b7', rx = '30%', ry 
   )
 }
 
-export function MovingBorderButton({ children, as: Tag = 'button', duration, borderColor, borderRadius = '3px', style, innerStyle, onClick, to, href, download, ...rest }) {
+export function MovingBorderButton({
+  children,
+  as: Tag = 'button',
+  duration,
+  borderColor,
+  borderRadius = '3px',
+  style,
+  innerStyle,
+  onClick,
+  to,
+  href,
+  download,
+  ...rest
+}) {
   const props = { onClick, href, download, ...rest }
   if (to) props.to = to
 

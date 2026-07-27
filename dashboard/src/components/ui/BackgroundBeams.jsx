@@ -56,7 +56,10 @@ export const BackgroundBeams = memo(({ style }) => (
             key={i}
             id={`beam-grad-${i}`}
             gradientUnits="userSpaceOnUse"
-            x1="0%" x2="0%" y1="0%" y2="0%"
+            x1="0%"
+            x2="0%"
+            y1="0%"
+            y2="0%"
             initial={{ x1: '0%', x2: '0%', y1: '0%', y2: '0%' }}
             animate={{
               x1: ['0%', '100%'],
@@ -80,7 +83,9 @@ export const BackgroundBeams = memo(({ style }) => (
 
         <radialGradient
           id="beams-radial"
-          cx="0" cy="0" r="1"
+          cx="0"
+          cy="0"
+          r="1"
           gradientUnits="userSpaceOnUse"
           gradientTransform="translate(352 34) rotate(90) scale(555 1560.62)"
         >

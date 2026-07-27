@@ -15,13 +15,20 @@ export function CardSpotlight({ children, style, radius = 260, color = 'rgba(0,0
   return (
     <motion.div
       onMouseMove={onMouseMove}
-      onMouseLeave={() => { mouseX.set(-1000); mouseY.set(-1000) }}
+      onMouseLeave={() => {
+        mouseX.set(-1000)
+        mouseY.set(-1000)
+      }}
       style={{ position: 'relative', ...style }}
     >
       <motion.div
         style={{
-          position: 'absolute', inset: 0, borderRadius: 'inherit',
-          background: bg, pointerEvents: 'none', zIndex: 1,
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 'inherit',
+          background: bg,
+          pointerEvents: 'none',
+          zIndex: 1,
         }}
       />
       <div style={{ position: 'relative', zIndex: 2 }}>{children}</div>

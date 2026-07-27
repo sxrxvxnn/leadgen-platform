@@ -21,8 +21,8 @@ export function FloatingNavbar({ items = [], logo, cta }) {
       {visible && (
         <motion.nav
           initial={{ y: -80, opacity: 0 }}
-          animate={{ y: 0,   opacity: 1 }}
-          exit={{   y: -80,  opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 340, damping: 30 }}
           style={{
             position: 'fixed',
@@ -45,29 +45,50 @@ export function FloatingNavbar({ items = [], logo, cta }) {
           {/* Logo */}
           {logo && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginRight: 8 }}>
-              <div style={{ width: 22, height: 22, background: '#E7000B', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  background: '#E7000B',
+                  borderRadius: 5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
                 <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5"/>
-                  <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85"/>
-                  <circle cx="8" cy="8" r="1.5" fill="#FFFFFF"/>
-                  <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round"/>
+                  <circle cx="8" cy="8" r="7" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.5" />
+                  <circle cx="8" cy="8" r="4" stroke="#FFFFFF" strokeWidth="1.2" opacity="0.85" />
+                  <circle cx="8" cy="8" r="1.5" fill="#FFFFFF" />
+                  <line
+                    x1="9.1"
+                    y1="6.9"
+                    x2="13"
+                    y2="3"
+                    stroke="#FFFFFF"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </div>
-              <span style={{
-                fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
-                fontSize: 16,
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: '#0A0A0A',
-              }}>
+              <span
+                style={{
+                  fontFamily: "'Barlow Condensed', 'Arial Narrow', sans-serif",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: '#0A0A0A',
+                }}
+              >
                 {logo}
               </span>
             </div>
           )}
 
           {/* Nav items */}
-          {items.map(item => (
+          {items.map((item) => (
             <a
               key={item.label}
               href={item.href}
@@ -83,8 +104,12 @@ export function FloatingNavbar({ items = [], logo, cta }) {
                 borderRadius: 9999,
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#0A0A0A' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#6B7280' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#0A0A0A'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#6B7280'
+              }}
             >
               {item.label}
             </a>
@@ -109,8 +134,12 @@ export function FloatingNavbar({ items = [], logo, cta }) {
                 transition: 'background 0.15s, box-shadow 0.2s',
                 whiteSpace: 'nowrap',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#C50009' }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#E7000B' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#C50009'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#E7000B'
+              }}
             >
               {cta.label}
             </a>

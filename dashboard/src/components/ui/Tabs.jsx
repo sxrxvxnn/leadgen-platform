@@ -6,7 +6,7 @@ export function Tabs({ tabs, value, onChange, style }) {
   const [pill, setPill] = useState({ left: 0, width: 0 })
 
   useEffect(() => {
-    const idx = tabs.findIndex(t => t.value === value)
+    const idx = tabs.findIndex((t) => t.value === value)
     const el = tabRefs.current[idx]
     if (el) setPill({ left: el.offsetLeft, width: el.offsetWidth })
   }, [value, tabs])
@@ -30,7 +30,7 @@ export function Tabs({ tabs, value, onChange, style }) {
       {tabs.map((tab, i) => (
         <button
           key={tab.value}
-          ref={el => (tabRefs.current[i] = el)}
+          ref={(el) => (tabRefs.current[i] = el)}
           onClick={() => onChange(tab.value)}
           style={{
             fontFamily: 'var(--font-mono, monospace)',
@@ -50,16 +50,18 @@ export function Tabs({ tabs, value, onChange, style }) {
         >
           {tab.label}
           {tab.count != null && (
-            <span style={{
-              marginLeft: 6,
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: 9,
-              color: value === tab.value ? 'var(--text-secondary)' : 'var(--text-muted)',
-              background: 'var(--bg-secondary, rgba(0,0,0,0.05))',
-              border: '1px solid var(--border, rgba(0,0,0,0.1))',
-              borderRadius: 4,
-              padding: '1px 5px',
-            }}>
+            <span
+              style={{
+                marginLeft: 6,
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: 9,
+                color: value === tab.value ? 'var(--text-secondary)' : 'var(--text-muted)',
+                background: 'var(--bg-secondary, rgba(0,0,0,0.05))',
+                border: '1px solid var(--border, rgba(0,0,0,0.1))',
+                borderRadius: 4,
+                padding: '1px 5px',
+              }}
+            >
               {tab.count}
             </span>
           )}

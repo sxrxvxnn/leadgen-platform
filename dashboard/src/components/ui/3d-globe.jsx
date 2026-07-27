@@ -2,19 +2,19 @@ import { useRef, useEffect, useState } from 'react'
 
 // Stable portrait URLs — swap out for real customer photos when available
 const MARKERS = [
-  { lat: 40.7128,  lng: -74.006,  img: 'https://randomuser.me/api/portraits/men/32.jpg'   },
-  { lat: 51.5074,  lng: -0.1278,  img: 'https://randomuser.me/api/portraits/women/44.jpg' },
-  { lat: 48.8566,  lng: 2.3522,   img: 'https://randomuser.me/api/portraits/men/68.jpg'   },
-  { lat: 1.3521,   lng: 103.8198, img: 'https://randomuser.me/api/portraits/women/22.jpg' },
-  { lat: 35.6762,  lng: 139.6503, img: 'https://randomuser.me/api/portraits/men/11.jpg'   },
+  { lat: 40.7128, lng: -74.006, img: 'https://randomuser.me/api/portraits/men/32.jpg' },
+  { lat: 51.5074, lng: -0.1278, img: 'https://randomuser.me/api/portraits/women/44.jpg' },
+  { lat: 48.8566, lng: 2.3522, img: 'https://randomuser.me/api/portraits/men/68.jpg' },
+  { lat: 1.3521, lng: 103.8198, img: 'https://randomuser.me/api/portraits/women/22.jpg' },
+  { lat: 35.6762, lng: 139.6503, img: 'https://randomuser.me/api/portraits/men/11.jpg' },
   { lat: -23.5505, lng: -46.6333, img: 'https://randomuser.me/api/portraits/women/55.jpg' },
 ]
 
 const ARCS = [
-  { startLat: 51.5074,  startLng: -0.1278,  endLat: 40.7128,  endLng: -74.006  },
-  { startLat: 48.8566,  startLng: 2.3522,   endLat: 1.3521,   endLng: 103.8198 },
-  { startLat: 40.7128,  startLng: -74.006,  endLat: -23.5505, endLng: -46.6333 },
-  { startLat: 1.3521,   startLng: 103.8198, endLat: 35.6762,  endLng: 139.6503 },
+  { startLat: 51.5074, startLng: -0.1278, endLat: 40.7128, endLng: -74.006 },
+  { startLat: 48.8566, startLng: 2.3522, endLat: 1.3521, endLng: 103.8198 },
+  { startLat: 40.7128, startLng: -74.006, endLat: -23.5505, endLng: -46.6333 },
+  { startLat: 1.3521, startLng: 103.8198, endLat: 35.6762, endLng: 139.6503 },
 ]
 
 function makeMarker(imgSrc) {
@@ -69,9 +69,9 @@ function makeMarker(imgSrc) {
 }
 
 export default function Globe({ style }) {
-  const wrapRef  = useRef(null)
+  const wrapRef = useRef(null)
   const globeRef = useRef(null)
-  const [size,    setSize]    = useState(0)
+  const [size, setSize] = useState(0)
   const [GlobeGL, setGlobeGL] = useState(null)
 
   useEffect(() => {
@@ -83,19 +83,17 @@ export default function Globe({ style }) {
   }, [])
 
   useEffect(() => {
-    import('react-globe.gl')
-      .then(m => setGlobeGL(() => m.default))
-      .catch(() => {})
+    import('react-globe.gl').then((m) => setGlobeGL(() => m.default)).catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!globeRef.current || !GlobeGL) return
     const ctrl = globeRef.current.controls()
-    ctrl.autoRotate      = true
+    ctrl.autoRotate = true
     ctrl.autoRotateSpeed = 0.45
-    ctrl.enableZoom      = false
-    ctrl.minPolarAngle   = Math.PI * 0.2
-    ctrl.maxPolarAngle   = Math.PI * 0.8
+    ctrl.enableZoom = false
+    ctrl.minPolarAngle = Math.PI * 0.2
+    ctrl.maxPolarAngle = Math.PI * 0.8
     globeRef.current.pointOfView({ lat: 20, lng: 10, altitude: 1.75 }, 1000)
   }, [GlobeGL, size])
 
@@ -127,7 +125,7 @@ export default function Globe({ style }) {
           arcDashGap={0.2}
           arcDashAnimateTime={2500}
           htmlElementsData={MARKERS}
-          htmlElement={d => makeMarker(d.img)}
+          htmlElement={(d) => makeMarker(d.img)}
           htmlAltitude={0}
         />
       )}

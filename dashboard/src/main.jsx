@@ -35,5 +35,5 @@ if (savedTheme === 'light') cursor.style.background = '#0a0a0a'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
-  </StrictMode>,
+  </StrictMode>
 )

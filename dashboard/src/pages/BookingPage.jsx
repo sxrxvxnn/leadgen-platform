@@ -3,18 +3,19 @@ import { useParams } from 'react-router-dom'
 import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-const DISPLAY  = "var(--font-display, 'Barlow Condensed', sans-serif)"
-const MONO     = "var(--font-mono, 'IBM Plex Mono', monospace)"
+const DISPLAY = "var(--font-display, 'Barlow Condensed', sans-serif)"
+const MONO = "var(--font-mono, 'IBM Plex Mono', monospace)"
 
 export default function BookingPage() {
-  const { slug }  = useParams()
-  const [data,    setData]    = useState(null)
+  const { slug } = useParams()
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
-    axios.get(`${BASE_URL}/public/book/${slug}`)
-      .then(r => setData(r.data))
+    axios
+      .get(`${BASE_URL}/public/book/${slug}`)
+      .then((r) => setData(r.data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
   }, [slug])
@@ -22,7 +23,14 @@ export default function BookingPage() {
   if (loading) {
     return (
       <div style={s.page}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100vh',
+          }}
+        >
           <div style={s.spinner} />
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
@@ -37,7 +45,9 @@ export default function BookingPage() {
           <p style={s.eyebrow}>404</p>
           <h1 style={{ ...s.title, fontSize: 48 }}>Booking page not found.</h1>
           <p style={s.sub}>This link may have expired or the slug is incorrect.</p>
-          <a href="https://sonarleads.vercel.app" style={s.link}>Go to Sonar →</a>
+          <a href="https://sonarleads.vercel.app" style={s.link}>
+            Go to Sonar →
+          </a>
         </div>
       </div>
     )
@@ -53,15 +63,38 @@ export default function BookingPage() {
               <circle cx="8" cy="8" r="7" stroke="#fff" strokeWidth="1.2" opacity="0.5" />
               <circle cx="8" cy="8" r="4" stroke="#fff" strokeWidth="1.2" opacity="0.85" />
               <circle cx="8" cy="8" r="1.5" fill="#fff" />
-              <line x1="9.1" y1="6.9" x2="13" y2="3" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" />
+              <line
+                x1="9.1"
+                y1="6.9"
+                x2="13"
+                y2="3"
+                stroke="#fff"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
-          <span style={{ fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: 'var(--text)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Sonar</span>
+          <span
+            style={{
+              fontFamily: DISPLAY,
+              fontSize: 15,
+              fontWeight: 700,
+              color: 'var(--text)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Sonar
+          </span>
         </div>
 
         {/* Content */}
         <p style={s.eyebrow}>Meeting request</p>
-        <h1 style={s.title}>Book a time with<br />{data.full_name}.</h1>
+        <h1 style={s.title}>
+          Book a time with
+          <br />
+          {data.full_name}.
+        </h1>
         <p style={s.sub}>Pick a time that works for you — it only takes 30 seconds.</p>
 
         <a
@@ -69,14 +102,20 @@ export default function BookingPage() {
           target="_blank"
           rel="noreferrer"
           style={s.cta}
-          onMouseEnter={e => e.currentTarget.style.background = '#c40009'}
-          onMouseLeave={e => e.currentTarget.style.background = '#E7000B'}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#c40009')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#E7000B')}
         >
           Open calendar →
         </a>
 
         <p style={s.footer}>
-          Powered by <a href="https://sonarleads.vercel.app" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Sonar</a>
+          Powered by{' '}
+          <a
+            href="https://sonarleads.vercel.app"
+            style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
+          >
+            Sonar
+          </a>
         </p>
       </div>
 

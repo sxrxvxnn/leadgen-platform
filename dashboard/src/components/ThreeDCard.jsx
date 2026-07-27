@@ -19,7 +19,9 @@ export function CardContainer({ children, style, ...rest }) {
     setRotateY(((e.clientX - cx) / width) * MAX * 2)
   }
 
-  function onMouseEnter() { setActive(true) }
+  function onMouseEnter() {
+    setActive(true)
+  }
 
   function onMouseLeave() {
     setActive(false)
@@ -62,13 +64,7 @@ export function CardBody({ children, style, ...rest }) {
 }
 
 // Individual elements at a given Z depth
-export function CardItem({
-  as: Tag = 'div',
-  translateZ = 0,
-  children,
-  style,
-  ...rest
-}) {
+export function CardItem({ as: Tag = 'div', translateZ = 0, children, style, ...rest }) {
   const ctx = useContext(Context)
   return (
     <Tag

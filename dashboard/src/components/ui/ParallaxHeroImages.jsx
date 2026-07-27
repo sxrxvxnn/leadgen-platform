@@ -2,25 +2,29 @@ import { useEffect, useMemo, memo } from 'react'
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react'
 
 const positionStyles = {
-  'top-left':     { top: '8%',  left: '4%' },
-  'top-right':    { top: '8%',  right: '4%' },
-  'mid-left':     { top: '38%', left: '2%' },
-  'mid-right':    { top: '38%', right: '2%' },
-  'bottom-left':  { top: '68%', left: '4%' },
+  'top-left': { top: '8%', left: '4%' },
+  'top-right': { top: '8%', right: '4%' },
+  'mid-left': { top: '38%', left: '2%' },
+  'mid-right': { top: '38%', right: '2%' },
+  'bottom-left': { top: '68%', left: '4%' },
   'bottom-right': { top: '68%', right: '4%' },
-  'far-left':     { top: '52%', left: '1%' },
-  'far-right':    { top: '52%', right: '1%' },
+  'far-left': { top: '52%', left: '1%' },
+  'far-right': { top: '52%', right: '1%' },
 }
 
 const positionOrder = [
-  'top-left', 'top-right',
-  'mid-left', 'mid-right',
-  'bottom-left', 'bottom-right',
-  'far-left', 'far-right',
+  'top-left',
+  'top-right',
+  'mid-left',
+  'mid-right',
+  'bottom-left',
+  'bottom-right',
+  'far-left',
+  'far-right',
 ]
 
 const depthValuesByVariant = {
-  default:      [0.3, 0.35, 0.9, 0.85, 0.4, 0.45, 0.25, 0.2],
+  default: [0.3, 0.35, 0.9, 0.85, 0.4, 0.45, 0.25, 0.2],
   'edge-focus': [0.85, 0.9, 0.3, 0.35, 0.8, 0.85, 0.4, 0.45],
 }
 
@@ -53,7 +57,15 @@ export function ParallaxHeroImages({ images, variant = 'default', style = {} }) 
   }, [mouseX, mouseY])
 
   return (
-    <div style={{ pointerEvents: 'none', position: 'absolute', inset: 0, overflow: 'hidden', ...style }}>
+    <div
+      style={{
+        pointerEvents: 'none',
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
       {positions.map((pos, i) => (
         <ParallaxImage
           key={`${pos.src}-${i}`}
@@ -69,7 +81,14 @@ export function ParallaxHeroImages({ images, variant = 'default', style = {} }) 
   )
 }
 
-const ParallaxImage = memo(function ParallaxImage({ src, position, depth, delay, smoothMouseX, smoothMouseY }) {
+const ParallaxImage = memo(function ParallaxImage({
+  src,
+  position,
+  depth,
+  delay,
+  smoothMouseX,
+  smoothMouseY,
+}) {
   const maxOffset = 40
   const translateX = useTransform(smoothMouseX, [-1, 1], [-maxOffset * depth, maxOffset * depth])
   const translateY = useTransform(smoothMouseY, [-1, 1], [-maxOffset * depth, maxOffset * depth])
@@ -79,7 +98,9 @@ const ParallaxImage = memo(function ParallaxImage({ src, position, depth, delay,
     <motion.div
       style={{
         position: 'absolute',
-        top, left, right,
+        top,
+        left,
+        right,
         x: translateX,
         y: translateY,
         zIndex: Math.round(depth * 10),
