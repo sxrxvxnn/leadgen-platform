@@ -1,1 +1,5 @@
 cd dashboard && npx lint-staged
+# Scan for secrets if ggshield is installed (optional local install: pip install ggshield)
+if command -v ggshield &>/dev/null; then
+  ggshield secret scan pre-commit
+fi
